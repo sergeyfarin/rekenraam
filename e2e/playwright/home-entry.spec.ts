@@ -232,29 +232,49 @@ test('saving over a report refreshes it in place', async ({ page }) => {
   await expect(spent.first()).toBeVisible();
 });
 
-test('a failed session refresh keeps the unsaved entry until the owner cancels', async ({ page }) => {
+test('a failed session refresh keeps the unsaved entry, and focus has somewhere to return', async ({ page }) => {
   await readyForLedger(page);
   const description = `Shell failure ${Date.now()}`;
+  const sessionFails = () => page.route('**/api/v1/auth/session', route => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: { code: 'INTERNAL_ERROR', message: 'synthetic' } }) }));
+  // The session query refetches whenever the window regains focus.
+  const refocus = (status: number) => Promise.all([
+    page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/auth/session' && response.status() === status),
+    page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')))
+  ]);
   await page.goto('/app');
   await addTile(page).click();
   const dialog = entryDialog(page);
   await dialog.getByLabel('Description', { exact: true }).fill(description);
   await dialog.getByLabel('Amount', { exact: true }).fill('-7.50');
 
-  await page.route('**/api/v1/auth/session', route => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: { code: 'INTERNAL_ERROR', message: 'synthetic' } }) }));
-  const failed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/auth/session' && response.status() === 500);
-  // The session query refetches whenever the window regains focus.
-  await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
-  await failed;
+  await sessionFails();
+  await refocus(500);
   await expect(page.getByText('The app shell could not load')).toBeAttached();
   await expect(dialog).toBeVisible();
   await expect(dialog.getByLabel('Description', { exact: true })).toHaveValue(description);
   await expect(dialog.getByLabel('Amount', { exact: true })).toHaveValue('-7.50');
 
-  await page.unroute('**/api/v1/auth/session');
+  // Cancelled over the shell error, focus goes to its Retry, not <body>.
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).last().click();
   await expect(dialog).toHaveCount(0);
-  await page.getByRole('button', { name: 'Retry shell', exact: true }).click();
+  const retry = page.getByRole('button', { name: 'Retry shell', exact: true });
+  await expect(retry).toBeFocused();
+  await page.unroute('**/api/v1/auth/session');
+  await retry.click();
   await expect(addTile(page)).toBeVisible();
-  await expect(entryDialog(page)).toHaveCount(0);
+
+  // Recovered while the entry stays open: the opener was re-rendered away,
+  // so Cancel returns focus to the page's main content.
+  await addTile(page).click();
+  await dialog.getByLabel('Description', { exact: true }).fill(description);
+  await sessionFails();
+  await refocus(500);
+  await expect(page.getByText('The app shell could not load')).toBeAttached();
+  await page.unroute('**/api/v1/auth/session');
+  await refocus(200);
+  await expect(page.getByText('The app shell could not load')).toHaveCount(0);
+  await expect(dialog.getByLabel('Description', { exact: true })).toHaveValue(description);
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).last().click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator('#main-content')).toBeFocused();
 });

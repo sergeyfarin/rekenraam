@@ -356,11 +356,14 @@ replaces an open working copy. Cancel and Escape discard it without asking;
 backdrop clicks do nothing, and nothing in flight can be dismissed: the whole
 save chain, including a payee the owner confirmed creating first, keeps the
 editor busy, and a dismissed editor never continues to a save. Focus returns
-to the opener. Payee and category suggestions are comboboxes (arrows, Enter,
+to the opener, or, when a shell error or its recovery re-rendered the page
+behind the dialog, to the page's main content (the shell error's Retry while
+it shows). Payee and category suggestions are comboboxes (arrows, Enter,
 Escape closes the list, not the dialog) whose options are not Tab stops, so
 entry works by keyboard alone. Saving closes the dialog, refreshes every read
 a transaction can change — transaction lists, registers, balances, reports,
-budgets, forecast, reconciliation and brokerage cash reads, so the page
+budgets, forecast, reconciliation, brokerage cash reads and Prices coverage
+(a posting in a new currency needs its exchange rate), so the page
 beneath updates in place, plus Home and the attention count — and announces
 *Transaction added* with a link to the transaction. Nothing posts without the
 editor's own save.

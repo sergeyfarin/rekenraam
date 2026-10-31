@@ -27,6 +27,13 @@
     closeTransactionEntry(transaction);
   }
 
+  // The opener can leave while the dialog is open: a shell error and recovery
+  // re-render the page behind it. Focus then returns to the page's main
+  // content, or to the shell error's own controls while it shows.
+  function fallbackFocus() {
+    return document.getElementById('main-content') ?? document.querySelector<HTMLElement>('main button, main a[href]');
+  }
+
   afterNavigate(() => {
     transactionEntry.saved = undefined;
   });
@@ -40,6 +47,7 @@
   <ModalDialog
     label={m.transactions_form_create_title()}
     onCancel={() => closeTransactionEntry()}
+    {fallbackFocus}
     class="max-w-2xl p-4 sm:p-6 max-md:m-0! max-md:h-dvh max-md:max-h-dvh! max-md:w-full! max-md:max-w-none! max-md:rounded-none! max-md:border-0"
   >
     <TransactionEditor

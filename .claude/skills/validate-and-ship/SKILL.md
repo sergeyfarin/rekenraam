@@ -895,8 +895,9 @@ non-trivial diff (yours or reviewed):
     (#477). Busy (`aria-busy`, which `ModalDialog`/`phoneModal` honour) spans
     every write that leads to the commit, and an unmounted form never continues
     to its own save. Related in the same review: a write from a dialog over any
-    page refreshes every read it can change (`invalidateTransactionReads`), and
-    a shell error state must not unmount an open working copy. Suggestion-list
+    page refreshes every read it can change (`invalidateTransactionReads`,
+    Prices coverage included), and a shell error state must not unmount an open
+    working copy; a dialog that outlives its opener needs `fallbackFocus`. Suggestion-list
     options are never Tab stops: one that closes on blur drops focus out of the
     dialog. Named checks: `home-entry.spec.ts` (payee chain, report refresh,
     failed session refresh, keyboard category), `invalidate.test.ts`,

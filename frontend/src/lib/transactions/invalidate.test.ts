@@ -15,6 +15,8 @@ describe('invalidateTransactionReads', () => {
       ['api', 'account-register', 7],
       ['api', 'forecasts', 'balances', {}],
       ['api', 'reconciliation', 'checkpoints', 7, 1],
+      // Prices lists the rates posted exposure needs, created or removed by a write.
+      ['api', 'pricing', 'management', 'workspace', '2026-10-31'],
       ['api', 'investments', 'returns', {}]
     ];
     const untouched = [authSessionQueryKey, categoriesQueryKey];
