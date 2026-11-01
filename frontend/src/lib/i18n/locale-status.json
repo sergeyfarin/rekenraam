@@ -1,0 +1,5 @@
+{
+  "$comment": "Owner decision 2026-11-01 (#493). Maintained locales get every new or changed message in the same change; partial locales may lack new ones, which then render in English. Run `pnpm run catalogs:missing` after editing catalogs. See docs/conventions.md (i18n).",
+  "maintained": ["en", "nl", "ru"],
+  "partial": ["es", "fr", "de"]
+}

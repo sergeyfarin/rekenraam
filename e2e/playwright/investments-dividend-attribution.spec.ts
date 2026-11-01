@@ -4,6 +4,7 @@ import { readyForLedger } from './support/ledger';
 import { daysFromTodayISO, todayISO } from './support/dates';
 import { expectNoAccessibilityViolations } from './support/a11y';
 import { readFileSync } from 'node:fs';
+import { translationLocales } from './support/locales';
 
 test.use({ viewport: { width: 390, height: 844 } });
 test.describe.configure({ mode: 'parallel' });
@@ -59,7 +60,7 @@ for (const theme of ['light', 'dark']) {
   });
 }
 
-for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of translationLocales) {
   for (const shape of ['dividend', 'embedded_tax', 'separate_tax']) {
   test(`${shape} payer entry, assignment and clearing work in ${locale}`, async ({ page }) => {
     const { csrfToken, currencyID } = await readyForLedger(page);

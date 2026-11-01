@@ -367,6 +367,24 @@
   "language_select_legend": "Sprache der Oberfläche",
   "language_translation_progress_title": "Vorläufige Übersetzung",
   "language_translation_progress_copy": "Diese Übersetzungen wurden anhand eines Terminologie-Glossars erstellt und noch nicht von Muttersprachlern geprüft. Noch nicht Übersetztes wird auf Englisch angezeigt und bleibt nicht leer.",
+  "language_partial": "Teilweise",
+  "language_partial_missing": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} unübersetzter Text",
+        "countPlural=*": "{n} unübersetzte Texte"
+      }
+    }
+  ],
+  "language_partial_option": "{language} · teilweise übersetzt",
   "import_rules_title": "Importregeln",
   "import_rules_copy": "Beim Bereitstellen einer neuen Datei wird die erste passende Regel angewendet. Alle Ergebnisse können vor dem Buchen geprüft werden.",
   "import_rules_add": "Regel hinzufügen",

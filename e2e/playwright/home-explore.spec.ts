@@ -3,6 +3,7 @@ import { apiJSON, csrfTokenFor } from './support/api';
 import { createCashAccount, readyForLedger } from './support/ledger';
 import { expectNoAccessibilityViolations } from './support/a11y';
 import { daysFromTodayISO, todayISO } from './support/dates';
+import { translationLocales } from './support/locales';
 
 // More to explore (#479): every widget not on My Home, at real size, read from
 // the same Home read and the shell's attention read. An owned book, because
@@ -91,7 +92,7 @@ for (const theme of ['light', 'dark'] as const) {
 test('More to explore reflows at 320px in every locale', async ({ page }) => {
   await bookWithCashflow(page);
   await page.setViewportSize({ width: 320, height: 720 });
-  for (const locale of ['en', 'nl', 'de', 'fr', 'es', 'ru']) {
+  for (const locale of translationLocales) {
     await page.evaluate(value => localStorage.setItem('PARAGLIDE_LOCALE', value), locale);
     await page.goto('/app');
     await expect(page.getByTestId('explore-widget-cashflow')).toHaveAttribute('data-state', 'ready');

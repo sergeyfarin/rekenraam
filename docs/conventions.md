@@ -643,8 +643,12 @@ has actual installations, its migration files are immutable.
   A generated list tracks what partial locales lack; they are caught up in one
   batch when a slice settles, and must be complete (or hidden) before the
   v0.1.0 tag. The translation boundary, locale-aware formatting and per-message
-  fallback are never relaxed. Until #493 changes `catalogs:check`, it still
-  requires all six.
+  fallback are never relaxed. The split lives in
+  `frontend/src/lib/i18n/locale-status.json`; `pnpm --dir frontend run
+  catalogs:missing` writes `frontend/src/lib/i18n/missing.json` (per-locale counts
+  and keys), which `catalogs:check` rejects when stale and the language
+  settings page reads for its *Partial* note. A partial locale's existing keys
+  still need matching placeholders, plural inputs and nonempty text.
 - A message whose wording depends on a count is one Paraglide plural variant
   (`declarations` with `input count`, `input n` and
   `local countPlural = count: plural`; `match` keyed `countPlural=one`,

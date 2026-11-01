@@ -367,6 +367,24 @@
   "language_select_legend": "Idioma de la interfaz",
   "language_translation_progress_title": "Traducción provisional",
   "language_translation_progress_copy": "Estas traducciones se han redactado a partir de un glosario terminológico y todavía no las ha revisado un hablante nativo. Lo que aún no está traducido se muestra en inglés en lugar de quedar en blanco.",
+  "language_partial": "Parcial",
+  "language_partial_missing": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} texto sin traducir",
+        "countPlural=*": "{n} textos sin traducir"
+      }
+    }
+  ],
+  "language_partial_option": "{language} · parcial",
   "import_rules_title": "Reglas de importación",
   "import_rules_copy": "Se aplica la primera regla coincidente al preparar un archivo nuevo. Puedes revisar cada resultado antes de contabilizarlo.",
   "import_rules_add": "Añadir regla",

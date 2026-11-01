@@ -4,11 +4,12 @@ import { readyForLedger } from './support/ledger';
 import { apiJSON, csrfTokenFor } from './support/api';
 import { secretFromOTPAuthURI } from './support/totp';
 import { activateBrowserMFA } from './support/mfa-enrollment';
+import { nonEnglishTranslationLocales } from './support/locales';
 
 test.use({ viewport: { width: 390, height: 844 } });
 const messages = (domain: string, locale: string) => JSON.parse(readFileSync(new URL(`../../frontend/messages/${domain}/${locale}.json`, import.meta.url), 'utf8'));
 
-for (const locale of ['es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of nonEnglishTranslationLocales) {
   test(`[acceptance] CSV mapping creation, reuse, editing and deletion render in ${locale} at 390px`, async ({ page }) => {
     await readyForLedger(page);
     const m = messages('app', locale);

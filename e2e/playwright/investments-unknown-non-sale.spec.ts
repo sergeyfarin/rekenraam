@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { apiJSON } from './support/api';
 import { readyForLedger } from './support/ledger';
 import { todayISO } from './support/dates';
+import { translationLocales } from './support/locales';
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -13,7 +14,7 @@ function ago(days: number) {
   return todayISO(date);
 }
 
-for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of translationLocales) {
   const settings = JSON.parse(readFileSync(new URL(`../../frontend/messages/settings/${locale}.json`, import.meta.url), 'utf8'));
   const app = JSON.parse(readFileSync(new URL(`../../frontend/messages/app/${locale}.json`, import.meta.url), 'utf8'));
 

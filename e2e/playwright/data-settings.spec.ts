@@ -4,6 +4,7 @@ import { apiJSON } from './support/api';
 import { createCashAccount, readyForLedger } from './support/ledger';
 import { todayISO } from './support/dates';
 import { test as ownedBookTest } from './support/owned-book';
+import { translationLocales } from './support/locales';
 
 // [acceptance] R3 slice 7 — the Settings → Data screen, mapped to the
 // validation matrix in docs/plans/data-portability-plan.md. Run this subset
@@ -217,7 +218,7 @@ function ago(days: number) {
 // run status is book-wide, so the test owns its book (#398): the unknown-basis
 // lots below are the only thing the run can report, and the result is exactly
 // incomplete rather than whatever another spec's state makes it.
-for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of translationLocales) {
   ownedBookTest(`[acceptance] the health check discloses unknown basis as incomplete in ${locale}`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     const settings = JSON.parse(

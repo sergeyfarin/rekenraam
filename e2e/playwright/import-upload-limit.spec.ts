@@ -5,10 +5,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readyForLedger } from './support/ledger';
 import { apiJSON } from './support/api';
+import { translationLocales } from './support/locales';
 
 test.use({ viewport: { width: 390, height: 844 } });
 
-for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of translationLocales) {
   for (const format of ['qif', 'csv']) {
     test(`[acceptance] oversized ${format} shows the size error and recovers in ${locale} at 390px`, async ({ page }) => {
       await readyForLedger(page);
