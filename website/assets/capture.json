@@ -1,5 +1,5 @@
 {
-  "source_revision": "e16cd88240fa046211bc20f26510267b8f74a1ec",
+  "source_revision": "604d00752e33fe1f01f9dcce2c45945e96bc05e9",
   "fixture": "fixtures/reference-book.json",
   "language": "en",
   "viewport": {
@@ -8,11 +8,15 @@
   },
   "files": [
     {
-      "file": "transactions.png",
-      "route": "/app/transactions?account_id=66"
+      "file": "docs/images/reports-spending.png",
+      "route": "/app/reports/spending?start_date=2026-01-01&end_date=2026-03-31&group_by=category"
     },
     {
-      "file": "investments.png",
+      "file": "website/assets/transactions.png",
+      "route": "/app/ledger/transactions?account_id=66"
+    },
+    {
+      "file": "website/assets/investments.png",
       "route": "/app/investments"
     }
   ],
