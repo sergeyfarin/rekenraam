@@ -1231,7 +1231,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 
 	version, err := EmbeddedMigrationVersion()
 	require.NoError(t, err)
-	assert.Equal(t, int64(2), version, "the unused v0.1 baseline plus #417's category-version delete guard")
+	assert.Equal(t, int64(3), version, "the unused v0.1 baseline, #417's category-version delete guard and #481's transfer sides")
 
 	ctx := context.Background()
 	database, err := Open(ctx, SQLiteFileURL(filepath.Join(t.TempDir(), "schema.sqlite")))

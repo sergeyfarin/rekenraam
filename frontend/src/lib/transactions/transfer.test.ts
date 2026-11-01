@@ -14,7 +14,8 @@ describe('transferFields', () => {
         receiving: side(2, 2, '10700', '2026-06-03'),
         fee: { account_id: 9, commodity_id: 2, quantity_value: '100', quantity_scale: 2, paid_by: 'receiving', line_key: 'lfee', memo: '' },
         conversion_side: 'sending',
-        entry_memo: 'wire'
+        entry_memo: 'wire',
+        entry_kind: 'exchange'
       }
     });
     expect(fields).toEqual({
@@ -24,8 +25,22 @@ describe('transferFields', () => {
       received: { value: '10700', scale: 2 },
       fee: { accountID: 9, amount: { value: '100', scale: 2 }, paidBy: 'receiving', lineKey: 'lfee', memo: '' },
       conversionSide: 'sending',
-      entryMemo: 'wire'
+      entryMemo: 'wire',
+      entryKind: 'exchange'
     });
+  });
+
+  it('is null for a refund line, which the form would turn into a fee', () => {
+    expect(transferFields({
+      transaction_date: '2026-06-01',
+      transfer: {
+        sending: side(1, 1, '-10000', '2026-06-01'),
+        receiving: side(2, 1, '11000', '2026-06-01'),
+        fee: { account_id: 9, commodity_id: 1, quantity_value: '-1000', quantity_scale: 2, paid_by: 'sending', line_key: 'lfee', memo: '' },
+        entry_memo: '',
+        entry_kind: 'ordinary'
+      }
+    })).toBeNull();
   });
 
   it('is null without a server shape', () => {
@@ -66,6 +81,7 @@ describe('transferEntry', () => {
     expect(transferEntry(base, '2026-06-01')).toEqual({
       entry_kind: 'exchange',
       conversion_side: 'receiving',
+      fee_paid_by: 'receiving',
       memo: 'wire',
       postings: [
         { line_key: 'a', account_id: 1, commodity_id: 1, quantity_value: '-10000', quantity_scale: 2, memo: 'out', posted_on: undefined },
@@ -79,6 +95,13 @@ describe('transferEntry', () => {
     const entry = transferEntry({ ...base, to: { ...base.to, commodityID: 1 }, fee: undefined, conversionSide: undefined }, '2026-06-01');
     expect(entry.entry_kind).toBeUndefined();
     expect(entry.conversion_side).toBeUndefined();
+    expect(entry.fee_paid_by).toBeUndefined();
+  });
+
+  it('keeps a saved one-currency kind and names the fee payer', () => {
+    const entry = transferEntry({ ...base, to: { ...base.to, commodityID: 1 }, fee: { ...base.fee!, paidBy: 'sending' }, conversionSide: undefined, entryKind: 'transfer_leg' }, '2026-06-01');
+    expect(entry.entry_kind).toBe('transfer_leg');
+    expect(entry.fee_paid_by).toBe('sending');
   });
 });
 

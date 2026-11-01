@@ -1943,5 +1943,8 @@
   "transactions_transfer_statements_hint": "Introduce cada importe tal como lo muestra el extracto de esa cuenta; la comisión se descuenta antes del tipo.",
   "transactions_transfer_conversion_side": "Cambio",
   "transactions_transfer_conversion_sending": "Al salir (cambia el banco de origen)",
-  "transactions_transfer_conversion_receiving": "Al llegar (cambia el banco de destino)"
+  "transactions_transfer_conversion_receiving": "Al llegar (cambia el banco de destino)",
+  "transactions_locked_title": "Los importes no se pueden editar aquí",
+  "transactions_locked_body": "Este asiento tiene apuntes que el editor reconstruiría de otra forma, como un importe que sigue en tránsito. Puedes cambiar la descripción, el beneficiario, el tipo, las etiquetas y la nota; para cambiar importes, cuentas o fechas, anúlalo y vuelve a introducirlo.",
+  "transactions_locked_correct": "Este asiento tiene apuntes que el editor reconstruiría de otra forma, como un importe que sigue en tránsito, así que no se puede corregir aquí. Anúlalo y vuelve a introducirlo."
 }

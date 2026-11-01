@@ -263,3 +263,138 @@ test('an unchanged transfer save keeps its memos, fee and days', async ({ page }
   const after = await apiJSON<Created>(page, 'GET', `/api/v1/transactions/${created.id}`);
   expect(lines(after)).toEqual(before);
 });
+
+// The second #481 review's preservation gates: an editor's read → edit →
+// save keeps every amount, day, account, currency, memo and recorded choice
+// of any journal it opens, and switching mode keeps them too.
+test.describe('a description edit or a mode switch changes no financial fact', () => {
+  type Saved = {
+    id: number; version_id: number; description: string; transfer?: unknown; editable_entry?: unknown;
+    exchange_conversion?: { conversion_date: string };
+    journal_entries: Array<{ entry_date: string; conversion_side?: string; fee_paid_by?: string; postings: Array<{ account_id: number; commodity_id: number; quantity_value: string; memo: string }> }>;
+  };
+  const facts = (journal: Saved) => journal.journal_entries.flatMap(e => e.postings.map(p =>
+    [e.entry_date, p.account_id, p.commodity_id, p.quantity_value, p.memo].join('|'))).sort();
+  const choices = (journal: Saved) => journal.journal_entries.map(e => [e.conversion_side ?? '', e.fee_paid_by ?? ''].join('|'));
+
+  async function setup(page: Page) {
+    const { csrfToken, currencyID } = await readyForLedger(page);
+    const suffix = Date.now();
+    const sender = await createCashAccount(page, csrfToken, `Keep sender ${suffix}`, currencyID);
+    const receiver = await createCashAccount(page, csrfToken, `Keep receiver ${suffix}`, currencyID);
+    const { categories } = await apiJSON<{ categories: Array<{ id: number; builtin_key?: string }> }>(page, 'GET', '/api/v1/categories');
+    const fee = categories.find(c => c.builtin_key === 'expense.financial.bank_fees')!;
+    await page.setViewportSize({ width: 1280, height: 900 });
+    return { csrfToken, currencyID, sender, receiver, fee };
+  }
+  async function openEditor(page: Page, id: number) {
+    await page.goto(`/app/ledger/transactions?transaction_id=${id}`);
+    const panel = page.getByRole('complementary', { name: 'Actions' });
+    await panel.getByRole('button', { name: 'Edit', exact: true }).click();
+    return panel;
+  }
+  async function save(page: Page, panel: ReturnType<Page['getByRole']>, id: number): Promise<Saved> {
+    const patch = page.waitForResponse(r => r.request().method() === 'PATCH' && new URL(r.url()).pathname === `/api/v1/transactions/${id}`);
+    await panel.getByRole('button', { name: 'Save transaction', exact: true }).click();
+    expect((await patch).status()).toBe(200);
+    return apiJSON<Saved>(page, 'GET', `/api/v1/transactions/${id}`);
+  }
+
+  test('a refund line stays a split and keeps its sign', async ({ page }) => {
+    const f = await setup(page);
+    const post = (id: number, value: string) => ({ account_id: id, commodity_id: f.currencyID, quantity_value: value, quantity_scale: 2 });
+    const created = await apiJSON<Saved>(page, 'POST', '/api/v1/transactions', f.csrfToken, {
+      transaction_date: todayISO(), description: 'Refund preservation',
+      journal_entries: [{ postings: [post(f.sender.id, '-10000'), post(f.receiver.id, '11000'), post(f.fee.id, '-1000')] }]
+    });
+    expect(created.transfer).toBeUndefined();
+    const panel = await openEditor(page, created.id);
+    await expect(panel.getByRole('button', { name: 'Use split entry', exact: true })).toHaveCount(0);
+    await panel.getByLabel('Description', { exact: true }).fill('Refund preservation edited');
+    const after = await save(page, panel, created.id);
+    expect(after.description).toBe('Refund preservation edited');
+    expect(facts(after)).toEqual(facts(created));
+  });
+
+  test('a residual in clearing is locked to what it describes and kept exactly', async ({ page }) => {
+    const f = await setup(page);
+    const day = todayISO();
+    const arrival = daysFromTodayISO(2);
+    const eur = await ensureCurrency(page, f.csrfToken, 'EUR', 'Euro');
+    const euro = await createCashAccount(page, f.csrfToken, `Keep euro ${Date.now()}`, eur);
+    const { accounts } = await apiJSON<{ accounts: Array<{ id: number; system_role?: string | null }> }>(page, 'GET', '/api/v1/accounts?include_system=true');
+    const trading = accounts.find(a => a.system_role === 'commodity_trading')!;
+    const clearing = accounts.find(a => a.system_role === 'transfer_clearing')!;
+    const p = (id: number, ccy: number, value: string) => ({ account_id: id, commodity_id: ccy, quantity_value: value, quantity_scale: 2 });
+    const created = await apiJSON<Saved>(page, 'POST', '/api/v1/transactions', f.csrfToken, {
+      transaction_date: day, description: 'Clearing preservation',
+      journal_entries: [
+        { entry_date: day, postings: [p(euro.id, eur, '-10000'), p(trading.id, eur, '9900'), p(clearing.id, eur, '100'), p(trading.id, f.currencyID, '-10800'), p(clearing.id, f.currencyID, '10800')] },
+        { entry_date: arrival, postings: [p(f.receiver.id, f.currencyID, '10800'), p(clearing.id, f.currencyID, '-10800')] }
+      ]
+    });
+    expect(created.transfer).toBeUndefined();
+    expect(created.editable_entry).toBeUndefined();
+    const panel = await openEditor(page, created.id);
+    await expect(panel.getByRole('note', { name: "Amounts can't be edited here" })).toBeVisible();
+    await expect(panel.getByLabel('Date', { exact: true })).toBeDisabled();
+    await expectNoAccessibilityViolations(page, 'locked journal editor');
+    await panel.getByLabel('Description', { exact: true }).fill('Clearing preservation edited');
+    const after = await save(page, panel, created.id);
+    expect(after.description).toBe('Clearing preservation edited');
+    expect(facts(after)).toEqual(facts(created));
+  });
+
+  test('switching a delayed-fee transfer to split keeps its days and memos', async ({ page }) => {
+    const f = await setup(page);
+    const p = (id: number, value: string, memo: string, posted_on: string) => ({ account_id: id, commodity_id: f.currencyID, quantity_value: value, quantity_scale: 2, memo, posted_on });
+    const created = await apiJSON<Saved>(page, 'POST', '/api/v1/transactions', f.csrfToken, {
+      transaction_date: todayISO(), description: 'Split preservation',
+      journal_entries: [{ postings: [p(f.sender.id, '-10100', 'sender reference', daysFromTodayISO(1)), p(f.receiver.id, '10000', 'receiver reference', daysFromTodayISO(2)), p(f.fee.id, '100', 'fee reference', daysFromTodayISO(1))] }]
+    });
+    expect(created.transfer).toBeTruthy();
+    const panel = await openEditor(page, created.id);
+    await panel.getByRole('button', { name: 'Use split entry', exact: true }).click();
+    const after = await save(page, panel, created.id);
+    expect(facts(after)).toEqual(facts(created));
+    // The fee posted with the sender, which the save now records as its payer.
+    expect(choices(after)).toEqual(['|sending', '|sending']);
+  });
+
+  test('switching a receiving-bank exchange to split keeps its conversion day', async ({ page }) => {
+    const f = await setup(page);
+    const arrival = daysFromTodayISO(2);
+    const eur = await ensureCurrency(page, f.csrfToken, 'EUR', 'Euro');
+    const euro = await createCashAccount(page, f.csrfToken, `Convert euro ${Date.now()}`, eur);
+    const created = await apiJSON<Saved>(page, 'POST', '/api/v1/transactions', f.csrfToken, {
+      transaction_date: todayISO(), description: 'Conversion side preservation',
+      journal_entries: [{ entry_kind: 'exchange', conversion_side: 'receiving', postings: [
+        { account_id: euro.id, commodity_id: eur, quantity_value: '-10000', quantity_scale: 2 },
+        { account_id: f.receiver.id, commodity_id: f.currencyID, quantity_value: '10800', quantity_scale: 2, posted_on: arrival }
+      ] }]
+    });
+    const before = await apiJSON<Saved>(page, 'GET', `/api/v1/transactions/${created.id}`);
+    expect(before.exchange_conversion?.conversion_date).toBe(arrival);
+    const panel = await openEditor(page, created.id);
+    await panel.getByRole('button', { name: 'Use split entry', exact: true }).click();
+    const after = await save(page, panel, created.id);
+    expect(after.exchange_conversion?.conversion_date).toBe(arrival);
+    expect(facts(after)).toEqual(facts(before));
+  });
+
+  test('a same-day receiving choice reopens as chosen', async ({ page }) => {
+    const f = await setup(page);
+    const p = (id: number, value: string) => ({ account_id: id, commodity_id: f.currencyID, quantity_value: value, quantity_scale: 2 });
+    const created = await apiJSON<Saved>(page, 'POST', '/api/v1/transactions', f.csrfToken, {
+      transaction_date: todayISO(), description: 'Fee payer preservation',
+      journal_entries: [{ fee_paid_by: 'receiving', postings: [p(f.sender.id, '-11000'), p(f.receiver.id, '10000'), p(f.fee.id, '1000')] }]
+    });
+    const panel = await openEditor(page, created.id);
+    await expect(panel.getByLabel('Amount', { exact: true })).toHaveValue('110.00');
+    await expect(panel.getByRole('combobox', { name: 'Fee charged by', exact: true })).toHaveValue('receiving');
+    await panel.getByLabel('Description', { exact: true }).fill('Fee payer preservation edited');
+    const after = await save(page, panel, created.id);
+    expect(facts(after)).toEqual(facts(created));
+    expect(choices(after)).toEqual(['|receiving']);
+  });
+});

@@ -151,6 +151,14 @@ JournalEntryResponse:
     metadata:
       type: object
       additionalProperties: true
+    conversion_side:
+      type: string
+      enum: [sending, receiving]
+      description: A currency exchange's recorded converting side (#481).
+    fee_paid_by:
+      type: string
+      enum: [sending, receiving]
+      description: A transfer's recorded fee payer (#481).
     postings:
       type: array
       items:
@@ -252,6 +260,13 @@ TransactionResponse:
       items:
         type: integer
         format: int64
+    editable_entry:
+      $ref: "../../openapi.yaml#/components/schemas/EditableEntry"
+      description: >-
+        The journal as the split editor restates it (#481): absent when no
+        edit can restate it exactly (a residual in clearing, a system posting
+        the server would not build). Such a transaction is edited only in
+        what it describes, with keep_journal.
     transfer:
       $ref: "../../openapi.yaml#/components/schemas/TransferShape"
       description: >-
@@ -277,7 +292,7 @@ TransferSide:
     memo: {type: string}
 TransferShape:
   type: object
-  required: [sending, receiving, entry_memo]
+  required: [sending, receiving, entry_memo, entry_kind]
   properties:
     sending:
       $ref: "../../openapi.yaml#/components/schemas/TransferSide"
@@ -300,6 +315,49 @@ TransferShape:
       description: Which side converted, for an exchange; absent in one currency.
     entry_memo:
       type: string
+    entry_kind:
+      $ref: "../../openapi.yaml#/components/schemas/JournalEntryKind"
+EditablePosting:
+  type: object
+  required: [line_key, account_id, commodity_id, quantity_value, quantity_scale, memo, metadata, tag_ids]
+  properties:
+    line_key: {type: string}
+    account_id: {type: integer, format: int64}
+    commodity_id: {type: integer, format: int64}
+    quantity_value: {type: string}
+    quantity_scale: {type: integer}
+    posted_on:
+      type: string
+      format: date
+      description: >-
+        The posting's day where the posted-date rule would not choose it by
+        itself; a category's day included, which the editor keeps unshown.
+    memo: {type: string}
+    metadata:
+      type: object
+      additionalProperties: true
+    tag_ids:
+      type: array
+      items: {type: integer, format: int64}
+EditableEntry:
+  type: object
+  required: [entry_kind, memo, metadata, postings]
+  description: >-
+    One journal entry request that rebuilds the stored journal exactly
+    (#481): every posting but the system ones the server builds.
+  properties:
+    entry_kind:
+      $ref: "../../openapi.yaml#/components/schemas/JournalEntryKind"
+    memo: {type: string}
+    metadata:
+      type: object
+      additionalProperties: true
+    conversion_side: {type: string, enum: [sending, receiving]}
+    fee_paid_by: {type: string, enum: [sending, receiving]}
+    postings:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/EditablePosting"
 ExchangeQuantity:
   type: object
   required: [commodity_id, quantity_value, quantity_scale]
@@ -633,7 +691,15 @@ JournalEntryRequest:
       description: >-
         For an exchange entry only (#481): which side converted. The exchange
         legs post on that side's day; sending (the default) means the money
-        in transit is in the receiving currency.
+        in transit is in the receiving currency. Stored with the entry.
+    fee_paid_by:
+      type: string
+      enum: [sending, receiving]
+      description: >-
+        Which side of a transfer between two accounts paid its one fee
+        charged on top (#481). The fee must be positive and in that side's
+        currency, and posts on its day. Stored with the entry, so the choice
+        survives when both sides post on one day.
     memo:
       type: string
     metadata:
@@ -705,6 +771,13 @@ TransactionRequest:
         refused with 409 TRANSACTION_VERSION_STALE and nothing is written. The
         update reconciliation-impact preview checks it the same way when given.
         Create and correct ignore it.
+    keep_journal:
+      type: boolean
+      description: >-
+        PATCH and its reconciliation-impact preview only (#481): keep the
+        stored journal exactly and change only what the transaction
+        describes. journal_entries must then be omitted. Create and correct
+        refuse it.
   additionalProperties: false
 TransactionLifecycleRequest:
   type: object

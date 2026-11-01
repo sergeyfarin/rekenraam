@@ -34,6 +34,9 @@ export type TransferFields = {
   /** Which side converted; only for two currencies. */
   conversionSide?: TransferSideName;
   entryMemo?: string;
+  /** The saved entries' kind, sent back so an edit keeps it; absent for a
+   *  new transfer. */
+  entryKind?: TransferRequestEntry['entry_kind'];
 };
 
 const magnitude = (value: string, scale: number): ScaledAmount => ({
@@ -48,6 +51,9 @@ const negated = (amount: ScaledAmount): ScaledAmount => ({ value: negateCoeffici
 export function transferFields(transaction: Pick<TransactionResponse, 'transfer' | 'transaction_date'>): TransferFields | null {
   const shape = transaction.transfer;
   if (!shape) return null;
+  // The form's fee is a cost charged on top. The server never offers a
+  // refund line as one; a form that read one would turn it into its opposite.
+  if (shape.fee && coefficientSign(shape.fee.quantity_value) <= 0) return null;
   const day = (postedOn: string) => (postedOn === transaction.transaction_date ? '' : postedOn);
   const side = (s: typeof shape.sending): TransferSide => ({
     accountID: s.account_id, commodityID: s.commodity_id, postedOn: day(s.posted_on), lineKey: s.line_key, memo: s.memo
@@ -67,7 +73,8 @@ export function transferFields(transaction: Pick<TransactionResponse, 'transfer'
         }
       : undefined,
     conversionSide: shape.conversion_side,
-    entryMemo: shape.entry_memo
+    entryMemo: shape.entry_memo,
+    entryKind: shape.entry_kind
   };
 }
 
@@ -109,8 +116,9 @@ export type TransferPosting = {
 };
 
 export type TransferRequestEntry = {
-  entry_kind?: 'exchange';
+  entry_kind?: 'ordinary' | 'transfer_leg' | 'exchange' | 'investment' | 'opening_balance' | 'adjustment';
   conversion_side?: TransferSideName;
+  fee_paid_by?: TransferSideName;
   memo?: string;
   postings: TransferPosting[];
 };
@@ -118,8 +126,10 @@ export type TransferRequestEntry = {
 /**
  * The journal entry a transfer sends. Days are each side's posting day ('' =
  * the transaction date); the fee posts on its payer's day, and only a day that
- * differs from the transaction date is sent. Memos and line keys travel back
- * unchanged, so an unchanged save keeps them.
+ * differs from the transaction date is sent. The payer and the converting side
+ * are sent as choices the server stores, so they survive a day on which both
+ * sides post. Memos, line keys and the saved kind travel back unchanged, so an
+ * unchanged save keeps them.
  */
 export function transferEntry(fields: TransferFields, transactionDate: string): TransferRequestEntry {
   const exchange = fields.from.commodityID !== fields.to.commodityID;
@@ -141,9 +151,12 @@ export function transferEntry(fields: TransferFields, transactionDate: string): 
     });
   }
   const entry: TransferRequestEntry = { memo: fields.entryMemo || undefined, postings };
+  if (fields.fee) entry.fee_paid_by = fields.fee.paidBy;
   if (exchange) {
     entry.entry_kind = 'exchange';
     entry.conversion_side = fields.conversionSide ?? 'sending';
+  } else if (fields.entryKind && fields.entryKind !== 'exchange') {
+    entry.entry_kind = fields.entryKind;
   }
   return entry;
 }

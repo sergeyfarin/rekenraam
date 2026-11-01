@@ -1943,5 +1943,8 @@
   "transactions_transfer_statements_hint": "Voer elk bedrag in zoals het afschrift van die rekening het toont; kosten worden vóór de koers eruit gehaald.",
   "transactions_transfer_conversion_side": "Omgewisseld",
   "transactions_transfer_conversion_sending": "Bij afschrijving (de verzendende bank wisselt)",
-  "transactions_transfer_conversion_receiving": "Bij bijschrijving (de ontvangende bank wisselt)"
+  "transactions_transfer_conversion_receiving": "Bij bijschrijving (de ontvangende bank wisselt)",
+  "transactions_locked_title": "Bedragen zijn hier niet te bewerken",
+  "transactions_locked_body": "Deze boeking heeft regels die de editor anders zou opbouwen, zoals een bedrag dat nog onderweg is. Je kunt de omschrijving, begunstigde, soort, tags en notitie wijzigen; om bedragen, rekeningen of datums te wijzigen, maak je haar ongedaan en voer je haar opnieuw in.",
+  "transactions_locked_correct": "Deze boeking heeft regels die de editor anders zou opbouwen, zoals een bedrag dat nog onderweg is, dus ze kan hier niet worden gecorrigeerd. Maak haar ongedaan en voer haar opnieuw in."
 }

@@ -314,7 +314,7 @@ func transactionTagIDs(ctx context.Context, queryer queryer, transactionID int64
 
 func journalEntriesForVersion(ctx context.Context, queryer queryer, transactionVersionID int64) ([]JournalEntryRecord, error) {
 	rows, err := queryer.QueryContext(ctx, `
-		SELECT id, book_id, transaction_version_id, entry_seq, entry_date, entry_kind, memo, metadata_json
+		SELECT id, book_id, transaction_version_id, entry_seq, entry_date, entry_kind, memo, metadata_json, conversion_side, fee_paid_by
 		FROM journal_entries
 		WHERE transaction_version_id = ?
 		ORDER BY entry_seq
@@ -327,7 +327,7 @@ func journalEntriesForVersion(ctx context.Context, queryer queryer, transactionV
 	var entries []JournalEntryRecord
 	for rows.Next() {
 		var entry JournalEntryRecord
-		if err := rows.Scan(&entry.ID, &entry.BookID, &entry.TransactionVersionID, &entry.EntrySeq, &entry.EntryDate, &entry.EntryKind, &entry.Memo, &entry.MetadataJSON); err != nil {
+		if err := rows.Scan(&entry.ID, &entry.BookID, &entry.TransactionVersionID, &entry.EntrySeq, &entry.EntryDate, &entry.EntryKind, &entry.Memo, &entry.MetadataJSON, &entry.ConversionSide, &entry.FeePaidBy); err != nil {
 			return nil, fmt.Errorf("scan journal entry: %w", err)
 		}
 		entries = append(entries, entry)
@@ -537,6 +537,8 @@ func accountRegisterSelect(extraConditions string) string {
 			je.entry_kind,
 			je.memo,
 			je.metadata_json,
+			je.conversion_side,
+			je.fee_paid_by,
 			pv.id,
 			pv.book_id,
 			pv.transaction_version_id,
@@ -663,6 +665,8 @@ func scanAccountRegisterEntry(scanner interface{ Scan(dest ...any) error }, entr
 		&entry.JournalEntry.EntryKind,
 		&entry.JournalEntry.Memo,
 		&entry.JournalEntry.MetadataJSON,
+		&entry.JournalEntry.ConversionSide,
+		&entry.JournalEntry.FeePaidBy,
 		&entry.Posting.ID,
 		&entry.Posting.BookID,
 		&entry.Posting.TransactionVersionID,

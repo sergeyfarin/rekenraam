@@ -261,13 +261,16 @@ func (s *TransactionService) cleanTransactionSpec(ctx context.Context, input Tra
 		return db.TransactionSpec{}, err
 	}
 
-	input, err = s.buildExchangeLegs(ctx, input, transactionDate)
-	if err != nil {
-		return db.TransactionSpec{}, err
-	}
-	journalEntries, err := s.groupPostingsByPostedOn(ctx, input, transactionDate)
-	if err != nil {
-		return db.TransactionSpec{}, err
+	journalEntries := input.JournalEntries
+	if !input.storedJournal {
+		input, err = s.buildExchangeLegs(ctx, input, transactionDate)
+		if err != nil {
+			return db.TransactionSpec{}, err
+		}
+		journalEntries, err = s.groupPostingsByPostedOn(ctx, input, transactionDate)
+		if err != nil {
+			return db.TransactionSpec{}, err
+		}
 	}
 	entries := make([]db.JournalEntrySpec, 0, len(journalEntries))
 	for entryIndex, entryInput := range journalEntries {
@@ -359,12 +362,23 @@ func (s *TransactionService) cleanJournalEntry(ctx context.Context, input Journa
 		postings = append(postings, posting)
 	}
 
+	for _, side := range []string{input.ConversionSide, input.FeePaidBy} {
+		if side != "" && side != conversionSending && side != conversionReceiving {
+			return db.JournalEntrySpec{}, ValidationError{Message: "a transfer side must be 'sending' or 'receiving'"}
+		}
+	}
+	if input.ConversionSide != "" && entryKind != exchangeEntryKind {
+		return db.JournalEntrySpec{}, ValidationError{Message: "a conversion side applies only to a currency exchange"}
+	}
+
 	return db.JournalEntrySpec{
-		EntryDate:    entryDate,
-		EntryKind:    entryKind,
-		Memo:         memo,
-		MetadataJSON: metadataJSON,
-		Postings:     postings,
+		EntryDate:      entryDate,
+		EntryKind:      entryKind,
+		Memo:           memo,
+		MetadataJSON:   metadataJSON,
+		ConversionSide: input.ConversionSide,
+		FeePaidBy:      input.FeePaidBy,
+		Postings:       postings,
 	}, nil
 }
 
@@ -728,11 +742,13 @@ func transactionInputFromTransaction(transaction Transaction) TransactionInput {
 			})
 		}
 		entries = append(entries, JournalEntryInput{
-			EntryDate:    entry.EntryDate,
-			EntryKind:    entry.EntryKind,
-			Memo:         entry.Memo,
-			MetadataJSON: entry.MetadataJSON,
-			Postings:     postings,
+			EntryDate:      entry.EntryDate,
+			EntryKind:      entry.EntryKind,
+			Memo:           entry.Memo,
+			MetadataJSON:   entry.MetadataJSON,
+			ConversionSide: entry.ConversionSide,
+			FeePaidBy:      entry.FeePaidBy,
+			Postings:       postings,
 		})
 	}
 
@@ -749,4 +765,15 @@ func transactionInputFromTransaction(transaction Transaction) TransactionInput {
 		TagIDs:          transaction.TagIDs,
 		JournalEntries:  entries,
 	}
+}
+
+// storedTransactionInput restates a stored transaction for a write of its
+// journal exactly as stored — a draft's promotion, a kept journal (#481) —
+// so the writer validates its exchange legs and bridges without building
+// them again. A caller that edits the journal uses
+// transactionInputFromTransaction, which is a request again.
+func storedTransactionInput(transaction Transaction) TransactionInput {
+	input := transactionInputFromTransaction(transaction)
+	input.storedJournal = true
+	return input
 }

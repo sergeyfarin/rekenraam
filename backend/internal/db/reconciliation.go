@@ -838,11 +838,13 @@ func transactionSpecFromRecord(record TransactionRecord) TransactionSpec {
 			})
 		}
 		entries = append(entries, JournalEntrySpec{
-			EntryDate:    entry.EntryDate,
-			EntryKind:    entry.EntryKind,
-			Memo:         entry.Memo,
-			MetadataJSON: entry.MetadataJSON,
-			Postings:     postings,
+			EntryDate:      entry.EntryDate,
+			EntryKind:      entry.EntryKind,
+			Memo:           entry.Memo,
+			MetadataJSON:   entry.MetadataJSON,
+			ConversionSide: entry.ConversionSide.String,
+			FeePaidBy:      entry.FeePaidBy.String,
+			Postings:       postings,
 		})
 	}
 	return TransactionSpec{

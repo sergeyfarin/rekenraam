@@ -1943,5 +1943,8 @@
   "transactions_transfer_statements_hint": "Saisissez chaque montant tel que le relevé du compte l’affiche ; les frais sont déduits avant le taux.",
   "transactions_transfer_conversion_side": "Conversion",
   "transactions_transfer_conversion_sending": "Au débit (la banque émettrice convertit)",
-  "transactions_transfer_conversion_receiving": "Au crédit (la banque destinataire convertit)"
+  "transactions_transfer_conversion_receiving": "Au crédit (la banque destinataire convertit)",
+  "transactions_locked_title": "Les montants ne sont pas modifiables ici",
+  "transactions_locked_body": "Cette écriture contient des lignes que l’éditeur reconstruirait autrement, comme un montant resté en transit. Vous pouvez modifier la description, le bénéficiaire, le type, les étiquettes et la note ; pour changer les montants, les comptes ou les dates, annulez-la et saisissez-la à nouveau.",
+  "transactions_locked_correct": "Cette écriture contient des lignes que l’éditeur reconstruirait autrement, comme un montant resté en transit ; elle ne peut donc pas être corrigée ici. Annulez-la et saisissez-la à nouveau."
 }

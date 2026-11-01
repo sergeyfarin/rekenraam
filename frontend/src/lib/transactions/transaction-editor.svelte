@@ -16,6 +16,7 @@
   import { isOrdinaryEntryAccount } from './entry-account';
   import { suggestionKey } from './suggestion-keys.ts';
   import { editablePostings, hasPostingDay, postedOnForRequest } from './posted-on';
+  import { simpleFormKeeps, splitEntryCarry, splitEntryRequest, type SplitEntryCarry, type SplitPosting } from './editable-entry';
   import {
     convertedAmounts,
     sameCurrencyAmount,
@@ -24,6 +25,7 @@
     transferFeeCategoryKey,
     transferFields,
     transferProblem,
+    type TransferFields,
     type TransferProblem,
     type TransferSideName
   } from './transfer';
@@ -78,7 +80,9 @@
   const ownerToday = useOwnerToday();
 
   // ── Tier types ────────────────────────────────────────────────────
-  type Tier = 'simple' | 'split' | 'transfer';
+  // `locked`: a journal no editor restates exactly; only what it describes
+  // is edited, and the save keeps the stored journal (#481).
+  type Tier = 'simple' | 'split' | 'transfer' | 'locked';
 
   // A single editable posting leg in the split editor.
   type SplitLeg = {
@@ -90,6 +94,11 @@
     /** The day this account posting posts on, '' when it follows the
      *  transaction date (#187). */
     postedOn: string;
+    /** Carried, never shown (#481): the day a category was restated on, its
+     *  tags and its metadata. */
+    followsDay?: string;
+    tagIDs?: number[];
+    metadata?: Record<string, unknown>;
   };
 
   // ── Props ─────────────────────────────────────────────────────────
@@ -246,6 +255,11 @@
   let noteMarkdown = $state('');
   let externalRefHint = $state('');
 
+  // What the split editor carries for the entry and never shows (#481).
+  let splitCarry = $state<SplitEntryCarry>({});
+  // The simple form's two lines, kept so an edit keeps their identity.
+  let simpleLineKeys = $state<{ account?: string; category?: string }>({});
+
   // Tier 3: split legs
   let splitLegs = $state<SplitLeg[]>([
     { accountID: '', commodityID: '', amountStr: '', memo: '', postedOn: '' },
@@ -272,6 +286,8 @@
   let arrivesOn = $state('');
   let showTransferDays = $state(false);
   let transferLineKeys = $state<{ from?: string; to?: string; fee?: string }>({});
+  // The saved entries' kind, sent back so an edit keeps it.
+  let transferEntryKind = $state<TransferFields['entryKind']>(undefined);
   // Why the transfer cannot be saved yet, translated; '' when it can.
   let transferMessage = $state('');
 
@@ -398,10 +414,26 @@
 
   const isVoided = $derived(transaction?.status === 'voided');
 
+  // A locked journal is shown as it is stored, system postings included.
+  const lockedPostings = $derived(
+    tier === 'locked'
+      ? (transaction?.journal_entries ?? []).flatMap((entry) =>
+          entry.postings.map((posting) => ({
+            key: `${entry.entry_seq}-${posting.line_key}`,
+            date: entry.entry_date,
+            label: posting.account_system_role ? systemRoleLabel(posting.account_system_role) : (posting.account_name ?? String(posting.account_id)),
+            amount: joinCommodityAmount(posting.commodity_code ?? '', formatQuantity(posting.quantity_value, posting.quantity_scale, getLocale()))
+          }))
+        )
+      : []
+  );
+
   // ── Initialise from existing transaction (edit mode) ──────────────
   $effect(() => {
     tagIDs = [...(transaction?.tag_ids ?? initialValues?.tag_ids ?? [])];
     splitPostedOnOpen = {};
+    splitCarry = {};
+    simpleLineKeys = {};
     if (mode === 'template' && initialValues) {
       transactionDate = initialValues.transaction_date ?? untrack(ownerToday);
       payeeID = initialValues.payee_id ?? undefined;
@@ -495,6 +527,7 @@
       conversionSide = transfer.conversionSide ?? 'sending';
       transferLineKeys = { from: transfer.from.lineKey, to: transfer.to.lineKey, fee: transfer.fee?.lineKey };
       transferMemos = { from: transfer.from.memo, to: transfer.to.memo, fee: transfer.fee?.memo, entry: transfer.entryMemo };
+      transferEntryKind = transfer.entryKind;
       if (transfer.fee) {
         feeStr = formatEditableAmount(transfer.fee.amount.value, transfer.fee.amount.scale);
         feePaidBy = transfer.fee.paidBy;
@@ -503,12 +536,23 @@
       return;
     }
 
-    // The simple form is one account and one category; anything else opens
-    // as splits.
-    if (!preservePostings && shown.length <= 2 && assetLegs.length <= 1 && categoryLegs.length <= 1 && assetLegs.length + categoryLegs.length === shown.length) {
+    // Everything else is edited as the server restates it; a journal it
+    // cannot restate exactly is locked to what it describes (#481).
+    const editable = preservePostings ? undefined : transaction.editable_entry;
+    if (!preservePostings && !editable) {
+      tier = 'locked';
+      return;
+    }
+    if (editable) splitCarry = splitEntryCarry(editable);
+    const accountIDs = new Set(loaded.filter(({ posting }) => hasPostingDay(posting)).map(({ posting }) => posting.account_id));
+
+    // The simple form is one account and one category, with nothing it would
+    // drop; anything else opens as splits.
+    if (editable && simpleFormKeeps(editable, (id) => accountIDs.has(id)) && shown.length <= 2 && assetLegs.length <= 1 && categoryLegs.length <= 1 && assetLegs.length + categoryLegs.length === shown.length) {
       tier = 'simple';
       const assetLeg = assetLegs[0];
       const catLeg = categoryLegs[0]?.posting;
+      simpleLineKeys = { account: assetLeg?.posting.line_key, category: catLeg?.line_key };
       if (assetLeg) {
         accountID = assetLeg.posting.account_id;
         simpleCommodityID = assetLeg.posting.commodity_id;
@@ -526,6 +570,22 @@
         const cat = allCats?.find((c: CategoryResponse) => c.id === catLeg.account_id);
         categoryLabel = cat ? categoryDisplayName(cat) : allCats ? String(catLeg.account_id) : '';
       }
+    } else if (editable) {
+      tier = 'split';
+      splitLegs = editable.postings.map((p) => {
+        const isAccount = accountIDs.has(p.account_id);
+        return {
+          accountID: String(p.account_id),
+          commodityID: String(p.commodity_id),
+          amountStr: formatEditableAmount(p.quantity_value, p.quantity_scale),
+          memo: p.memo,
+          lineKey: p.line_key,
+          postedOn: isAccount ? (p.posted_on ?? '') : '',
+          followsDay: isAccount ? undefined : p.posted_on,
+          tagIDs: p.tag_ids,
+          metadata: p.metadata
+        };
+      });
     } else {
       tier = 'split';
       splitLegs = shown.map(({ posting: p, postedOn }) => ({
@@ -752,6 +812,8 @@
       // it was saved with.
       if (mode === 'create') payload.transaction_kind = 'transfer';
       payload.journal_entries = buildTransferJournalEntries();
+    } else if (tier === 'locked') {
+      payload.keep_journal = true;
     } else if (tier === 'simple') {
       payload.journal_entries = buildSimpleJournalEntries();
     } else {
@@ -786,6 +848,7 @@
         entry_date: transactionDate,
         postings: [
           {
+            line_key: simpleLineKeys.account,
             account_id: accountID,
             posted_on: mode === 'template' ? undefined : postedOnForRequest(accountPostedOn, transactionDate, account),
             commodity_id: effectiveCommodityID,
@@ -794,6 +857,7 @@
             memo: ''
           },
           {
+            line_key: simpleLineKeys.category,
             account_id: categoryID,
             commodity_id: effectiveCommodityID,
             quantity_value: catLedgerValue,
@@ -810,30 +874,36 @@
       (leg) => leg.accountID !== '' && leg.commodityID !== '' && leg.amountStr.trim() !== ''
     );
 
-    const postings: JournalEntryPostingRequest[] = [];
+    const postings: SplitPosting[] = [];
     for (const leg of legs) {
       const parsed = parseDecimalAmount(leg.amountStr);
       // A leg the user filled in but we cannot parse must not silently become a
       // zero posting — refuse to build the payload, as the simple tier does.
       if (parsed === null) return [];
+      const account = accountForLeg(leg.accountID);
+      const isAccount = hasPostingDay(account);
       postings.push({
-        line_key: leg.lineKey,
-        account_id: Number(leg.accountID),
-        posted_on: mode === 'template' ? undefined : postedOnForRequest(leg.postedOn, transactionDate, accountForLeg(leg.accountID)),
-        commodity_id: Number(leg.commodityID),
-        quantity_value: parsed.value,
-        quantity_scale: parsed.scale,
-        memo: leg.memo.trim()
+        lineKey: leg.lineKey,
+        accountID: Number(leg.accountID),
+        commodityID: Number(leg.commodityID),
+        value: parsed.value,
+        scale: parsed.scale,
+        memo: leg.memo.trim(),
+        isAccount,
+        postedOn: mode === 'template' || !isAccount ? '' : leg.postedOn.trim(),
+        followsDay: mode === 'template' ? undefined : leg.followsDay,
+        tagIDs: leg.tagIDs,
+        metadata: leg.metadata
       });
     }
 
     if (postings.length === 0) return [];
 
     // Account postings in two currencies are an exchange: the server adds
-    // the commodity_trading legs the editor never shows (#481).
-    const commodities = new Set(postings.map((posting) => posting.commodity_id));
-    const exchange = commodities.size > 1 && postings.every((posting) => !accountForLeg(String(posting.account_id))?.system_role);
-    return [{ entry_date: transactionDate, entry_kind: exchange ? 'exchange' : undefined, postings }];
+    // the commodity_trading legs the editor never shows (#481). What the
+    // editor carries goes back while it still fits.
+    const hasSystemAccount = postings.some((posting) => !!accountForLeg(String(posting.accountID))?.system_role);
+    return [splitEntryRequest(postings, splitCarry, transactionDate, hasSystemAccount)];
   }
 
   function resetTransfer() {
@@ -852,6 +922,7 @@
     arrivesOn = '';
     showTransferDays = false;
     transferLineKeys = {};
+    transferEntryKind = undefined;
     transferMessage = '';
   }
 
@@ -908,23 +979,38 @@
       received: statements.received,
       fee: fee && feeCategory ? { accountID: feeCategory, amount: fee.amount, paidBy: fee.paidBy, lineKey: transferLineKeys.fee, memo: transferMemos.fee } : undefined,
       conversionSide: transferIsExchange ? conversionSide : undefined,
-      entryMemo: transferMemos.entry
+      entryMemo: transferMemos.entry,
+      entryKind: transferEntryKind
     }, transactionDate);
     return [{ entry_date: transactionDate, ...entry }];
   }
 
   function switchTransferToSplit() {
     const built = buildTransferJournalEntries() ?? [];
-    const postings = built[0]?.postings ?? [];
+    const entry = built[0];
+    const postings = entry?.postings ?? [];
     if (postings.length >= 2) {
-      splitLegs = postings.map((p: JournalEntryPostingRequest) => ({
-        accountID: String(p.account_id),
-        commodityID: String(p.commodity_id),
-        amountStr: formatEditableAmount(p.quantity_value ?? '0', p.quantity_scale ?? 0),
-        memo: '',
-        lineKey: p.line_key,
-        postedOn: p.posted_on ?? ''
-      }));
+      // The transfer's days, memos and choices travel into the split: a fee's
+      // day is carried, as the split shows no day for a category (#481).
+      splitLegs = postings.map((p: JournalEntryPostingRequest) => {
+        const isAccount = hasPostingDay(accountForLeg(String(p.account_id)));
+        return {
+          accountID: String(p.account_id),
+          commodityID: String(p.commodity_id),
+          amountStr: formatEditableAmount(p.quantity_value ?? '0', p.quantity_scale ?? 0),
+          memo: p.memo ?? '',
+          lineKey: p.line_key,
+          postedOn: isAccount ? (p.posted_on ?? '') : '',
+          followsDay: isAccount ? undefined : p.posted_on
+        };
+      });
+      splitCarry = {
+        entryKind: entry.entry_kind ?? splitCarry.entryKind,
+        memo: entry.memo,
+        metadata: splitCarry.metadata,
+        conversionSide: entry.conversion_side,
+        feePaidBy: entry.fee_paid_by
+      };
     }
     tier = 'split';
   }
@@ -1153,7 +1239,7 @@
           bind:value={transactionDate}
           class={inputClass}
           required
-          disabled={isVoided && mode === 'edit'}
+          disabled={(isVoided && mode === 'edit') || tier === 'locked'}
         />
       </label>
       {#if tier === 'simple'}
@@ -1453,6 +1539,22 @@
           {m.transactions_tier_switch_split()}
         </button>
       </div>
+    </div>
+  {:else if tier === 'locked'}
+    <div class="space-y-2 rounded-[var(--radius-control)] border border-border bg-surface px-3 py-3" role="note" aria-labelledby="locked-journal-title">
+      <p id="locked-journal-title" class="text-sm font-semibold text-foreground">{m.transactions_locked_title()}</p>
+      <p class="text-sm text-muted">{mode === 'correct' ? m.transactions_locked_correct() : m.transactions_locked_body()}</p>
+      <ul class="space-y-1">
+        {#each lockedPostings as row (row.key)}
+          <li class="flex items-center justify-between gap-3 text-sm">
+            <span class="min-w-0">
+              <span class="block truncate text-foreground">{row.label}</span>
+              <span class="block text-xs tabular-nums text-muted">{row.date}</span>
+            </span>
+            <span class="shrink-0 font-medium tabular-nums text-foreground">{row.amount}</span>
+          </li>
+        {/each}
+      </ul>
     </div>
   {:else if tier === 'simple'}
     <!-- ── Tier 1: simple two-posting form ─────────────────────────── -->
@@ -1799,7 +1901,7 @@
       {m.transactions_form_cancel()}
     </button>
 
-    {#if !(isVoided && mode === 'edit')}
+    {#if !(isVoided && mode === 'edit') && !(tier === 'locked' && mode === 'correct')}
       <button
         type="submit"
         class="inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"

@@ -119,6 +119,8 @@ type JournalEntryRecord struct {
 	EntryKind            string
 	Memo                 string
 	MetadataJSON         string
+	ConversionSide       sql.NullString
+	FeePaidBy            sql.NullString
 	Postings             []PostingRecord
 }
 
@@ -163,7 +165,11 @@ type JournalEntrySpec struct {
 	EntryKind    string
 	Memo         string
 	MetadataJSON string
-	Postings     []PostingSpec
+	// ConversionSide and FeePaidBy are a transfer's recorded choices (#481);
+	// empty is none and stores NULL.
+	ConversionSide string
+	FeePaidBy      string
+	Postings       []PostingSpec
 }
 
 type PostingSpec struct {

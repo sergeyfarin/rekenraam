@@ -1943,5 +1943,8 @@
   "transactions_transfer_statements_hint": "Enter each amount as that account's statement shows it; a fee is taken out before the rate.",
   "transactions_transfer_conversion_side": "Converted",
   "transactions_transfer_conversion_sending": "When it leaves (the sending bank converts)",
-  "transactions_transfer_conversion_receiving": "When it arrives (the receiving bank converts)"
+  "transactions_transfer_conversion_receiving": "When it arrives (the receiving bank converts)",
+  "transactions_locked_title": "Amounts can't be edited here",
+  "transactions_locked_body": "This transaction has postings the editor would rebuild differently, such as an amount left in transit. You can change the description, payee, kind, tags and note; to change amounts, accounts or dates, void it and enter it again.",
+  "transactions_locked_correct": "This transaction has postings the editor would rebuild differently, such as an amount left in transit, so it can't be corrected here. Void it and enter it again."
 }

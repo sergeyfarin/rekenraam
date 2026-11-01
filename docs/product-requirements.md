@@ -174,6 +174,11 @@ These apply across all feature phases.
   charged on top by the account that paid it, on that account's day. Unlike
   an investment trade's charges, it never enters any basis. A multi-currency
   provider keeps one account per currency (#486).
+- Editing a transaction never changes a financial fact the owner did not
+  change: amounts, days, accounts, currencies, memos and recorded choices
+  survive any editor's read and save, and switching between editing modes.
+  A journal an editor cannot represent exactly is edited only in what it
+  describes (#481).
 - Same-day ordering is explicit and independently editable for the global
   transaction list and each account's posting register. A transfer may occupy a
   different same-day position in each account. Account-posting order, together

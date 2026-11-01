@@ -32,6 +32,9 @@ import (
 func (s *TransactionService) groupPostingsByPostedOn(ctx context.Context, input TransactionInput, transactionDate string) ([]JournalEntryInput, error) {
 	usesPostedOn := false
 	for _, entry := range input.JournalEntries {
+		if strings.TrimSpace(entry.FeePaidBy) != "" {
+			usesPostedOn = true
+		}
 		for _, posting := range entry.Postings {
 			if strings.TrimSpace(posting.PostedOn) != "" {
 				usesPostedOn = true
@@ -42,7 +45,7 @@ func (s *TransactionService) groupPostingsByPostedOn(ctx context.Context, input 
 		return input.JournalEntries, nil
 	}
 	if len(input.JournalEntries) != 1 {
-		return nil, ValidationError{Message: "posted dates require exactly one journal entry"}
+		return nil, ValidationError{Message: "posted dates and a fee payer require exactly one journal entry"}
 	}
 	entry := input.JournalEntries[0]
 	entryDate := strings.TrimSpace(entry.EntryDate)
@@ -101,6 +104,12 @@ type postingDayRole struct {
 func groupPostingsByDay(entry JournalEntryInput, entryDate string, roles []postingDayRole, clearing func() (int64, error)) ([]JournalEntryInput, error) {
 	if err := validatePostingsBalanced(entry.Postings); err != nil {
 		return nil, err
+	}
+	if strings.TrimSpace(entry.FeePaidBy) != "" {
+		var err error
+		if entry, err = feeOnItsPayersDay(entry, entryDate, roles); err != nil {
+			return nil, err
+		}
 	}
 
 	dates := make([]string, len(entry.Postings))
@@ -174,14 +183,74 @@ func groupPostingsByDay(entry JournalEntryInput, entryDate string, roles []posti
 			return nil, err
 		}
 		entries = append(entries, JournalEntryInput{
-			EntryDate:    date,
-			EntryKind:    entry.EntryKind,
-			Memo:         entry.Memo,
-			MetadataJSON: entry.MetadataJSON,
-			Postings:     append(postings, bridges...),
+			EntryDate:      date,
+			EntryKind:      entry.EntryKind,
+			Memo:           entry.Memo,
+			MetadataJSON:   entry.MetadataJSON,
+			ConversionSide: entry.ConversionSide,
+			FeePaidBy:      entry.FeePaidBy,
+			Postings:       append(postings, bridges...),
 		})
 	}
 	return entries, nil
+}
+
+// feeOnItsPayersDay applies a named fee payer (#481): the entry is a
+// transfer between two accounts, one amount out and one in, and its one
+// other non-system posting is a positive fee in the payer's currency that
+// posts on the payer's day. A refund or a second category is not a fee
+// charged on top, so the choice is refused rather than reinterpreted.
+func feeOnItsPayersDay(entry JournalEntryInput, entryDate string, roles []postingDayRole) (JournalEntryInput, error) {
+	var accounts []int
+	fee := -1
+	for index := range entry.Postings {
+		switch {
+		case roles[index].account:
+			accounts = append(accounts, index)
+		case roles[index].system:
+		case fee >= 0:
+			return entry, ValidationError{Message: "a fee payer applies to a transfer with one fee"}
+		default:
+			fee = index
+		}
+	}
+	if len(accounts) != 2 || fee < 0 {
+		return entry, ValidationError{Message: "a fee payer applies to a transfer between two accounts with one fee"}
+	}
+	sending, receiving := accounts[0], accounts[1]
+	if entry.Postings[sending].QuantityValue.Sign() > 0 {
+		sending, receiving = receiving, sending
+	}
+	if entry.Postings[sending].QuantityValue.Sign() >= 0 || entry.Postings[receiving].QuantityValue.Sign() <= 0 ||
+		entry.Postings[sending].AccountID == entry.Postings[receiving].AccountID {
+		return entry, ValidationError{Message: "a fee payer applies to a transfer out of one account and into another"}
+	}
+	payer := sending
+	switch strings.TrimSpace(entry.FeePaidBy) {
+	case conversionSending:
+	case conversionReceiving:
+		payer = receiving
+	default:
+		return entry, ValidationError{Message: "fee payer must be 'sending' or 'receiving'"}
+	}
+	feePosting := entry.Postings[fee]
+	if feePosting.QuantityValue.Sign() <= 0 {
+		return entry, ValidationError{Message: "a fee charged on top must be positive"}
+	}
+	if feePosting.CommodityID != entry.Postings[payer].CommodityID {
+		return entry, ValidationError{Message: "a fee is in the currency of the account that paid it"}
+	}
+	payerDay := strings.TrimSpace(entry.Postings[payer].PostedOn)
+	if payerDay == "" {
+		payerDay = entryDate
+	}
+	if postedOn := strings.TrimSpace(feePosting.PostedOn); postedOn != "" && postedOn != payerDay {
+		return entry, ValidationError{Message: "a fee posts on the day of the account that paid it"}
+	}
+	postings := append([]PostingInput{}, entry.Postings...)
+	postings[fee].PostedOn = payerDay
+	entry.Postings = postings
+	return entry, nil
 }
 
 // isPostedOnAccount reports whether a posting's account has its own posting
@@ -393,10 +462,12 @@ func postedOnSpec(transaction Transaction) (TransactionInput, bool) {
 	}
 	first := spec.JournalEntries[0]
 	bridged := len(transaction.JournalEntries) > 1
-	merged := JournalEntryInput{EntryDate: transaction.TransactionDate, EntryKind: first.EntryKind, Memo: first.Memo, MetadataJSON: first.MetadataJSON}
+	merged := JournalEntryInput{EntryDate: transaction.TransactionDate, EntryKind: first.EntryKind, Memo: first.Memo, MetadataJSON: first.MetadataJSON,
+		ConversionSide: first.ConversionSide, FeePaidBy: first.FeePaidBy}
 	for entryIndex, entry := range transaction.JournalEntries {
 		input := spec.JournalEntries[entryIndex]
-		if input.EntryKind != first.EntryKind || input.Memo != first.Memo || input.MetadataJSON != first.MetadataJSON {
+		if input.EntryKind != first.EntryKind || input.Memo != first.Memo || input.MetadataJSON != first.MetadataJSON ||
+			input.ConversionSide != first.ConversionSide || input.FeePaidBy != first.FeePaidBy {
 			return spec, false
 		}
 		for postingIndex, posting := range entry.Postings {

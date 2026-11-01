@@ -30459,6 +30459,16 @@ export interface components {
             metadata: {
                 [key: string]: unknown;
             };
+            /**
+             * @description A currency exchange's recorded converting side (#481).
+             * @enum {string}
+             */
+            conversion_side?: "sending" | "receiving";
+            /**
+             * @description A transfer's recorded fee payer (#481).
+             * @enum {string}
+             */
+            fee_paid_by?: "sending" | "receiving";
             postings: components["schemas"]["PostingResponse"][];
         };
         TransactionResponse: {
@@ -30514,6 +30524,8 @@ export interface components {
              */
             system_label?: "split_adjustment" | "transfer_bridge" | "share_exchange" | "cash_and_stock_merger" | "spin_off";
             invalidated_checkpoint_ids: number[];
+            /** @description The journal as the split editor restates it (#481): absent when no edit can restate it exactly (a residual in clearing, a system posting the server would not build). Such a transaction is edited only in what it describes, with keep_journal. */
+            editable_entry?: components["schemas"]["EditableEntry"];
             /** @description Present when the transaction is a transfer Transfer entry edits (#481): restating it as a transfer request and rebuilding it with the writer's rules reproduces the stored journal exactly. Absent for any other journal, which stays in split entry. */
             transfer?: components["schemas"]["TransferShape"];
             /** @description Only on GET /transactions/{transaction_id}, and only for a currency exchange (#481): the deal against the market rate, computed on read. */
@@ -30553,6 +30565,39 @@ export interface components {
              */
             conversion_side?: "sending" | "receiving";
             entry_memo: string;
+            entry_kind: components["schemas"]["JournalEntryKind"];
+        };
+        EditablePosting: {
+            line_key: string;
+            /** Format: int64 */
+            account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            quantity_value: string;
+            quantity_scale: number;
+            /**
+             * Format: date
+             * @description The posting's day where the posted-date rule would not choose it by itself; a category's day included, which the editor keeps unshown.
+             */
+            posted_on?: string;
+            memo: string;
+            metadata: {
+                [key: string]: unknown;
+            };
+            tag_ids: number[];
+        };
+        /** @description One journal entry request that rebuilds the stored journal exactly (#481): every posting but the system ones the server builds. */
+        EditableEntry: {
+            entry_kind: components["schemas"]["JournalEntryKind"];
+            memo: string;
+            metadata: {
+                [key: string]: unknown;
+            };
+            /** @enum {string} */
+            conversion_side?: "sending" | "receiving";
+            /** @enum {string} */
+            fee_paid_by?: "sending" | "receiving";
+            postings: components["schemas"]["EditablePosting"][];
         };
         ExchangeQuantity: {
             /** Format: int64 */
@@ -30706,10 +30751,15 @@ export interface components {
             entry_date?: string;
             entry_kind?: components["schemas"]["JournalEntryKind"];
             /**
-             * @description For an exchange entry only (#481): which side converted. The exchange legs post on that side's day; sending (the default) means the money in transit is in the receiving currency.
+             * @description For an exchange entry only (#481): which side converted. The exchange legs post on that side's day; sending (the default) means the money in transit is in the receiving currency. Stored with the entry.
              * @enum {string}
              */
             conversion_side?: "sending" | "receiving";
+            /**
+             * @description Which side of a transfer between two accounts paid its one fee charged on top (#481). The fee must be positive and in that side's currency, and posts on its day. Stored with the entry, so the choice survives when both sides post on one day.
+             * @enum {string}
+             */
+            fee_paid_by?: "sending" | "receiving";
             memo?: string;
             metadata?: {
                 [key: string]: unknown;
@@ -30746,6 +30796,8 @@ export interface components {
              * @description The transaction version this form was composed against (#296). Required by PATCH, which replaces the whole spec: a different current version is refused with 409 TRANSACTION_VERSION_STALE and nothing is written. The update reconciliation-impact preview checks it the same way when given. Create and correct ignore it.
              */
             expected_version_id?: number;
+            /** @description PATCH and its reconciliation-impact preview only (#481): keep the stored journal exactly and change only what the transaction describes. journal_entries must then be omitted. Create and correct refuse it. */
+            keep_journal?: boolean;
         };
         TransactionLifecycleRequest: {
             change_reason?: string;

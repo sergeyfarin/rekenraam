@@ -76,7 +76,11 @@ type JournalEntry struct {
 	EntryKind    string
 	Memo         string
 	MetadataJSON string
-	Postings     []Posting
+	// ConversionSide and FeePaidBy are a transfer's recorded choices (#481),
+	// "sending", "receiving" or empty; see JournalEntryInput.
+	ConversionSide string
+	FeePaidBy      string
+	Postings       []Posting
 }
 
 type Posting struct {
@@ -210,6 +214,10 @@ type UpdateTransactionInput struct {
 	// they did not derive from a prior read may leave it zero; promotion may
 	// not.
 	ExpectedVersionID int64
+	// KeepJournal writes the version's stored journal unchanged with Spec's
+	// descriptive fields (#481): the edit of a journal no editor can restate
+	// exactly. Spec then names no journal entries.
+	KeepJournal bool
 }
 
 type PostTransactionInput struct {
@@ -277,6 +285,11 @@ type TransactionInput struct {
 	NeedsReview             bool
 	TagIDs                  []int64
 	JournalEntries          []JournalEntryInput
+	// storedJournal marks JournalEntries as a stored journal restated as it
+	// is (storedTransactionInput): its exchange legs and clearing
+	// bridges are already built, so the writer validates it without building
+	// them again. Unexported, so no request can claim it.
+	storedJournal bool
 }
 
 type JournalEntryInput struct {
@@ -286,9 +299,15 @@ type JournalEntryInput struct {
 	MetadataJSON string
 	// ConversionSide says which side of a currency exchange converted (#481):
 	// "sending" (the default, empty) or "receiving". The exchange legs post on
-	// that side's day. Not stored: a reader derives it from where they post.
+	// that side's day, and the choice is stored, so it survives an edit or a
+	// moved day even when both sides post on one day.
 	ConversionSide string
-	Postings       []PostingInput
+	// FeePaidBy says which side of a transfer between two accounts paid a fee
+	// charged on top (#481): "sending" or "receiving". Every posting that is
+	// neither an account's nor a system one is then that side's fee, in its
+	// currency and on its day. Stored like ConversionSide; empty is none.
+	FeePaidBy string
+	Postings  []PostingInput
 }
 
 type PostingInput struct {
@@ -394,6 +413,8 @@ type UpdateReconciliationImpactInput struct {
 	// ExpectedVersionID, when positive, is the version the form was composed
 	// against; a preview of a newer transaction is refused as stale (#296).
 	ExpectedVersionID int64
+	// KeepJournal previews an edit that keeps the stored journal (#481).
+	KeepJournal bool
 }
 
 type cleanTransactionOptions struct {

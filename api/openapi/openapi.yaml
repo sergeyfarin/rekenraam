@@ -1170,6 +1170,10 @@ components:
       $ref: "./components/schemas/transactions.yaml#/TransferSide"
     TransferShape:
       $ref: "./components/schemas/transactions.yaml#/TransferShape"
+    EditablePosting:
+      $ref: "./components/schemas/transactions.yaml#/EditablePosting"
+    EditableEntry:
+      $ref: "./components/schemas/transactions.yaml#/EditableEntry"
     ExchangeQuantity:
       $ref: "./components/schemas/transactions.yaml#/ExchangeQuantity"
     ExchangeConversion:

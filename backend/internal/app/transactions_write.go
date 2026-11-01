@@ -214,6 +214,10 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, input Update
 	if err := s.rejectInvestmentLinkedMutation(ctx, input.TransactionID); err != nil {
 		return Transaction{}, err
 	}
+	input.Spec, err = keptJournalSpec(input.Spec, current, input.KeepJournal)
+	if err != nil {
+		return Transaction{}, err
+	}
 
 	// The transaction's current lifecycle state decides the final effective
 	// status, not whatever the request body's Status field claims: a draft
@@ -305,6 +309,20 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, input Update
 	return s.enrichOne(ctx, toTransaction(record))
 }
 
+// keptJournalSpec gives an edit that keeps the journal (#481) the version's
+// stored journal, restated as it is, beside the request's descriptive fields.
+func keptJournalSpec(spec TransactionInput, current db.TransactionRecord, keep bool) (TransactionInput, error) {
+	if !keep {
+		return spec, nil
+	}
+	if len(spec.JournalEntries) > 0 {
+		return spec, ValidationError{Message: "an edit that keeps the journal names no journal entries"}
+	}
+	stored := storedTransactionInput(toTransaction(current))
+	spec.JournalEntries, spec.storedJournal = stored.JournalEntries, true
+	return spec, nil
+}
+
 func (s *TransactionService) PostTransaction(ctx context.Context, input PostTransactionInput) (Transaction, error) {
 	if input.OwnerUserID <= 0 {
 		return Transaction{}, ValidationError{Message: "owner user is required"}
@@ -326,7 +344,7 @@ func (s *TransactionService) PostTransaction(ctx context.Context, input PostTran
 		return Transaction{}, err
 	}
 
-	spec := transactionInputFromTransaction(current)
+	spec := storedTransactionInput(current)
 	spec.Status = "posted"
 	return s.UpdateTransaction(ctx, UpdateTransactionInput{
 		// This spec is this read of the draft, so the promotion is bound to the

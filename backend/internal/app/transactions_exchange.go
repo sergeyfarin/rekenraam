@@ -172,6 +172,16 @@ func exchangeLegs(entry JournalEntryInput, entryDate string, kinds []exchangeLeg
 			return entry, ValidationError{Message: "an exchange fee posts on the day of the account that paid it"}
 		}
 		postings[fee].PostedOn = day(payer)
+		payerSide := conversionSending
+		if payer == receiving {
+			payerSide = conversionReceiving
+		}
+		if paidBy := strings.TrimSpace(entry.FeePaidBy); paidBy != "" && paidBy != payerSide {
+			return entry, ValidationError{Message: "an exchange fee is in the currency of the account that paid it"}
+		}
+		entry.FeePaidBy = payerSide
+	} else if strings.TrimSpace(entry.FeePaidBy) != "" {
+		return entry, ValidationError{Message: "a fee payer applies to a transfer with one fee"}
 	}
 
 	// With the fee on top, each currency still moves one way: what left is
@@ -184,11 +194,11 @@ func exchangeLegs(entry JournalEntryInput, entryDate string, kinds []exchangeLeg
 		}
 	}
 
-	converting := sending
+	converting, side := sending, conversionSending
 	switch strings.TrimSpace(entry.ConversionSide) {
 	case "", conversionSending:
 	case conversionReceiving:
-		converting = receiving
+		converting, side = receiving, conversionReceiving
 	default:
 		return entry, ValidationError{Message: "conversion side must be 'sending' or 'receiving'"}
 	}
@@ -206,7 +216,8 @@ func exchangeLegs(entry JournalEntryInput, entryDate string, kinds []exchangeLeg
 		})
 	}
 	entry.EntryKind = exchangeEntryKind
-	entry.ConversionSide = ""
+	// Stored, so the choice outlives a day on which both sides post (#481).
+	entry.ConversionSide = side
 	entry.Postings = postings
 	return entry, nil
 }

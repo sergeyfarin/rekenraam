@@ -23,6 +23,10 @@ import (
 // opening and saving it never reshapes it silently. Posting tags and posting
 // metadata, which the transfer form does not carry, also leave it without a
 // shape; memos and line keys are carried so an unchanged save keeps them.
+// The fee must be a positive cost: a refund line is not a fee charged on
+// top, and the form would turn it into one. The side that converted and the
+// side that paid the fee are the recorded choices when the entries carry
+// them, so they survive a day on which both sides post.
 type TransferShape struct {
 	Sending   TransferShapeSide
 	Receiving TransferShapeSide
@@ -31,9 +35,9 @@ type TransferShape struct {
 	// one currency.
 	ConversionSide string
 	EntryMemo      string
-	// entryKind is the stored kind of a one-currency transfer's entries,
-	// kept so a restated write does not change it.
-	entryKind string
+	// EntryKind is the stored kind of the entries, sent back so a restated
+	// write does not change it.
+	EntryKind string
 }
 
 // TransferShapeSide is one account's posting as its statement shows it.
@@ -70,7 +74,8 @@ func TransferShapeOf(transaction Transaction) *TransferShape {
 	var trading, clearing int64
 	tradingDays := map[string]bool{}
 	for _, entry := range transaction.JournalEntries {
-		if entry.EntryKind != first.EntryKind || entry.Memo != first.Memo || !emptyJSON(entry.MetadataJSON) {
+		if entry.EntryKind != first.EntryKind || entry.Memo != first.Memo || !emptyJSON(entry.MetadataJSON) ||
+			entry.ConversionSide != first.ConversionSide || entry.FeePaidBy != first.FeePaidBy {
 			return nil
 		}
 		for _, posting := range entry.Postings {
@@ -117,11 +122,19 @@ func TransferShapeOf(transaction Transaction) *TransferShape {
 		Sending:   sideOf(sending),
 		Receiving: sideOf(receiving),
 		EntryMemo: first.Memo,
-		entryKind: first.EntryKind,
+		EntryKind: first.EntryKind,
 	}
 	if fee != nil {
-		paidBy := ""
+		// The form's fee is a cost charged on top; a refund line is not one,
+		// and turning it into its magnitude would change both balances.
+		if fee.posting.QuantityValue.Sign() <= 0 {
+			return nil
+		}
+		// The recorded payer, else the side the fee posts with. With both
+		// sides on one day either fits; the rebuild below checks the choice.
+		paidBy := first.FeePaidBy
 		switch {
+		case paidBy != "":
 		case fee.posting.CommodityID == sending.posting.CommodityID && fee.date == sending.date:
 			paidBy = conversionSending
 		case fee.posting.CommodityID == receiving.posting.CommodityID && fee.date == receiving.date:
@@ -140,6 +153,8 @@ func TransferShapeOf(transaction Transaction) *TransferShape {
 			return nil
 		}
 		switch {
+		case first.ConversionSide != "":
+			shape.ConversionSide = first.ConversionSide
 		case tradingDays[sending.date]:
 			shape.ConversionSide = conversionSending
 		case tradingDays[receiving.date]:
@@ -177,7 +192,7 @@ func emptyJSON(value string) bool {
 // entry restates the shape as the transfer request that wrote it: each side
 // on its day, the fee on its payer's day, the conversion side named.
 func (shape *TransferShape) entry(transactionDate string) (JournalEntryInput, []postingDayRole, []exchangeLegKind) {
-	entry := JournalEntryInput{EntryDate: transactionDate, EntryKind: shape.entryKind, Memo: shape.EntryMemo}
+	entry := JournalEntryInput{EntryDate: transactionDate, EntryKind: shape.EntryKind, Memo: shape.EntryMemo}
 	postings := []PostingInput{
 		{LineKey: shape.Sending.LineKey, AccountID: shape.Sending.AccountID, CommodityID: shape.Sending.CommodityID,
 			QuantityValue: shape.Sending.QuantityValue, QuantityScale: shape.Sending.QuantityScale, PostedOn: shape.Sending.PostedOn, Memo: shape.Sending.Memo},
@@ -195,6 +210,7 @@ func (shape *TransferShape) entry(transactionDate string) (JournalEntryInput, []
 			QuantityValue: shape.Fee.QuantityValue, QuantityScale: shape.Fee.QuantityScale, PostedOn: payerDay, Memo: shape.Fee.Memo})
 		roles = append(roles, postingDayRole{})
 		kinds = append(kinds, exchangeFeeLeg)
+		entry.FeePaidBy = shape.Fee.PaidBy
 	}
 	if shape.ConversionSide != "" {
 		entry.EntryKind = exchangeEntryKind
@@ -216,22 +232,7 @@ func (shape *TransferShape) input(base TransactionInput) TransactionInput {
 // stored system accounts, without touching the database.
 func (shape *TransferShape) rebuild(transactionDate string, trading, clearing int64) ([]JournalEntryInput, error) {
 	entry, roles, kinds := shape.entry(transactionDate)
-	if entry.EntryKind == exchangeEntryKind {
-		built, err := exchangeLegs(entry, transactionDate, kinds, trading)
-		if err != nil {
-			return nil, err
-		}
-		for range built.Postings[len(roles):] {
-			roles = append(roles, postingDayRole{system: true})
-		}
-		entry = built
-	}
-	return groupPostingsByDay(entry, transactionDate, roles, func() (int64, error) {
-		if clearing == 0 {
-			return 0, ValidationError{Message: "the stored journal has no bridge to rebuild"}
-		}
-		return clearing, nil
-	})
+	return rebuildRestatement(entry, transactionDate, roles, kinds, trading, clearing)
 }
 
 // sameJournal reports whether stored and rebuilt post exactly the same

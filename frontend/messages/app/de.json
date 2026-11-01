@@ -1943,5 +1943,8 @@
   "transactions_transfer_statements_hint": "Geben Sie jeden Betrag so ein, wie ihn der Kontoauszug zeigt; eine Gebühr wird vor dem Kurs herausgerechnet.",
   "transactions_transfer_conversion_side": "Umgetauscht",
   "transactions_transfer_conversion_sending": "Beim Abgang (die sendende Bank tauscht um)",
-  "transactions_transfer_conversion_receiving": "Beim Eingang (die empfangende Bank tauscht um)"
+  "transactions_transfer_conversion_receiving": "Beim Eingang (die empfangende Bank tauscht um)",
+  "transactions_locked_title": "Beträge sind hier nicht bearbeitbar",
+  "transactions_locked_body": "Diese Buchung enthält Posten, die der Editor anders aufbauen würde, etwa einen Betrag, der noch unterwegs ist. Beschreibung, Empfänger, Art, Tags und Notiz lassen sich ändern; um Beträge, Konten oder Daten zu ändern, storniere sie und erfasse sie neu.",
+  "transactions_locked_correct": "Diese Buchung enthält Posten, die der Editor anders aufbauen würde, etwa einen Betrag, der noch unterwegs ist, daher lässt sie sich hier nicht korrigieren. Storniere sie und erfasse sie neu."
 }
