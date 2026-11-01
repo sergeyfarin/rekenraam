@@ -1,109 +1,89 @@
 import { describe, expect, it } from 'vitest';
-import { transferEntry, transferFields, transferProblem, type TransferFields } from './transfer';
+import { convertedAmounts, sameCurrencyAmount, sameCurrencyStatements, transferEntry, transferFields, transferProblem, type TransferFields } from './transfer';
 
-const account = (id: number, value: string, commodity = 1, scale = 2) => ({
-  account_id: id, account_class: 'asset', commodity_id: commodity, quantity_value: value, quantity_scale: scale, line_key: `l${id}`
-});
-const fee = (value: string, commodity = 1) => ({
-  account_id: 9, account_class: 'expense', commodity_id: commodity, quantity_value: value, quantity_scale: 2, line_key: 'lfee'
-});
-const trading = (value: string, commodity: number) => ({
-  account_id: 99, account_class: 'equity', account_system_role: 'commodity_trading', commodity_id: commodity, quantity_value: value, quantity_scale: 2
-});
-const clearing = (value: string, commodity: number) => ({
-  account_id: 98, account_class: 'asset', account_system_role: 'transfer_clearing', commodity_id: commodity, quantity_value: value, quantity_scale: 2
+const side = (account_id: number, commodity_id: number, quantity_value: string, posted_on: string) => ({
+  account_id, commodity_id, quantity_value, quantity_scale: 2, posted_on, line_key: `l${account_id}`, memo: `memo ${account_id}`
 });
 
 describe('transferFields', () => {
-  it('reads a same-day transfer in one currency', () => {
-    const fields = transferFields([{ entry_date: '2026-06-01', postings: [account(1, '-10000'), account(2, '10000')] }], '2026-06-01');
+  it('maps the server shape, keeping memos and line keys, days relative to the date', () => {
+    const fields = transferFields({
+      transaction_date: '2026-06-01',
+      transfer: {
+        sending: side(1, 1, '-10000', '2026-06-01'),
+        receiving: side(2, 2, '10700', '2026-06-03'),
+        fee: { account_id: 9, commodity_id: 2, quantity_value: '100', quantity_scale: 2, paid_by: 'receiving', line_key: 'lfee', memo: '' },
+        conversion_side: 'sending',
+        entry_memo: 'wire'
+      }
+    });
     expect(fields).toEqual({
-      from: { accountID: 1, commodityID: 1, postedOn: '', lineKey: 'l1' },
-      to: { accountID: 2, commodityID: 1, postedOn: '', lineKey: 'l2' },
+      from: { accountID: 1, commodityID: 1, postedOn: '', lineKey: 'l1', memo: 'memo 1' },
+      to: { accountID: 2, commodityID: 2, postedOn: '2026-06-03', lineKey: 'l2', memo: 'memo 2' },
       sent: { value: '10000', scale: 2 },
-      received: { value: '10000', scale: 2 },
-      fee: undefined
+      received: { value: '10700', scale: 2 },
+      fee: { accountID: 9, amount: { value: '100', scale: 2 }, paidBy: 'receiving', lineKey: 'lfee', memo: '' },
+      conversionSide: 'sending',
+      entryMemo: 'wire'
     });
   });
 
-  it('keeps each side on its own day and drops the bridge', () => {
-    const fields = transferFields([
-      { entry_date: '2026-06-01', postings: [account(1, '-10000'), clearing('10000', 1)] },
-      { entry_date: '2026-06-03', postings: [account(2, '10000'), clearing('-10000', 1)] }
-    ], '2026-06-01');
-    expect(fields?.from.postedOn).toBe('');
-    expect(fields?.to.postedOn).toBe('2026-06-03');
+  it('is null without a server shape', () => {
+    expect(transferFields({ transaction_date: '2026-06-01', transfer: undefined })).toBeNull();
+  });
+});
+
+describe('amounts', () => {
+  it('takes the fee back out of the side that paid it to show what converted', () => {
+    expect(convertedAmounts({ sent: { value: '10000', scale: 2 }, received: { value: '10700', scale: 2 }, fee: { amount: { value: '100', scale: 2 }, paidBy: 'receiving' } }))
+      .toEqual({ sent: { value: '10000', scale: 2 }, received: { value: '10800', scale: 2 } });
+    expect(convertedAmounts({ sent: { value: '10250', scale: 2 }, received: { value: '10800', scale: 2 }, fee: { amount: { value: '25', scale: 1 }, paidBy: 'sending' } }))
+      .toEqual({ sent: { value: '10000', scale: 2 }, received: { value: '10800', scale: 2 } });
+    expect(convertedAmounts({ sent: { value: '100', scale: 2 }, received: { value: '100', scale: 2 }, fee: { amount: { value: '100', scale: 2 }, paidBy: 'sending' } })).toBeNull();
   });
 
-  it('reads an exchange with a fee on top, without its trading legs', () => {
-    const fields = transferFields([{ entry_date: '2026-06-01', entry_kind: 'exchange', postings: [
-      account(1, '-10250', 1), account(2, '10800', 2), fee('250', 1), trading('10000', 1), trading('-10800', 2)
-    ] }], '2026-06-01');
-    expect(fields?.sent).toEqual({ value: '10000', scale: 2 });
-    expect(fields?.received).toEqual({ value: '10800', scale: 2 });
-    expect(fields?.fee).toEqual({ accountID: 9, amount: { value: '250', scale: 2 }, paidBy: 'from', lineKey: 'lfee' });
-  });
-
-  it('reads a fee the arriving side pays', () => {
-    const fields = transferFields([{ entry_date: '2026-06-01', entry_kind: 'exchange', postings: [
-      account(1, '-10000', 1), account(2, '10700', 2), fee('100', 2), trading('10000', 1), trading('-10800', 2)
-    ] }], '2026-06-01');
-    expect(fields?.received).toEqual({ value: '10800', scale: 2 });
-    expect(fields?.fee?.paidBy).toBe('to');
-  });
-
-  it('refuses anything else', () => {
-    const one = (postings: object[]) => transferFields([{ entry_date: '2026-06-01', postings: postings as never }], '2026-06-01');
-    expect(one([account(1, '-100'), fee('100')])).toBeNull();
-    expect(one([account(1, '-100'), account(2, '50'), account(3, '50')])).toBeNull();
-    expect(one([account(1, '-100'), account(2, '90'), fee('5'), fee('5')])).toBeNull();
-    expect(one([account(1, '-100'), account(2, '100'), { ...fee('-1'), account_class: 'income' }])).toBeNull();
-    expect(one([account(1, '-100'), account(2, '-100')])).toBeNull();
-    expect(one([account(1, '-100'), account(2, '100'), trading('1', 1)])).toBeNull();
+  it('puts a one-currency fee on the paying statement, and reads the amount back', () => {
+    const amount = { value: '5000', scale: 2 };
+    expect(sameCurrencyStatements(amount, { amount: { value: '150', scale: 2 }, paidBy: 'sending' })).toEqual({ sent: { value: '5150', scale: 2 }, received: amount });
+    expect(sameCurrencyStatements(amount, { amount: { value: '150', scale: 2 }, paidBy: 'receiving' })).toEqual({ sent: amount, received: { value: '4850', scale: 2 } });
+    expect(sameCurrencyAmount({ sent: { value: '5150', scale: 2 }, fee: { accountID: 9, amount: { value: '150', scale: 2 }, paidBy: 'sending' } })).toEqual(amount);
+    expect(sameCurrencyAmount({ sent: amount, fee: { accountID: 9, amount: { value: '150', scale: 2 }, paidBy: 'receiving' } })).toEqual(amount);
   });
 });
 
 describe('transferEntry', () => {
   const base: TransferFields = {
-    from: { accountID: 1, commodityID: 1, postedOn: '' },
-    to: { accountID: 2, commodityID: 1, postedOn: '' },
+    from: { accountID: 1, commodityID: 1, postedOn: '', lineKey: 'a', memo: 'out' },
+    to: { accountID: 2, commodityID: 2, postedOn: '2026-06-03', lineKey: 'b', memo: 'in' },
     sent: { value: '10000', scale: 2 },
-    received: { value: '10000', scale: 2 }
+    received: { value: '10700', scale: 2 },
+    fee: { accountID: 9, amount: { value: '100', scale: 2 }, paidBy: 'receiving', lineKey: 'c', memo: '' },
+    conversionSide: 'receiving',
+    entryMemo: 'wire'
   };
 
-  it('sends one currency as an ordinary entry, fee on top of From', () => {
-    expect(transferEntry({ ...base, fee: { accountID: 9, amount: { value: '25', scale: 1 }, paidBy: 'to' } })).toEqual({
+  it('sends statement amounts, the fee on its payer\'s day, memos and the conversion side', () => {
+    expect(transferEntry(base, '2026-06-01')).toEqual({
+      entry_kind: 'exchange',
+      conversion_side: 'receiving',
+      memo: 'wire',
       postings: [
-        { line_key: undefined, account_id: 1, commodity_id: 1, quantity_value: '-10250', quantity_scale: 2 },
-        { line_key: undefined, account_id: 2, commodity_id: 1, quantity_value: '10000', quantity_scale: 2 },
-        { line_key: undefined, account_id: 9, commodity_id: 1, quantity_value: '25', quantity_scale: 1 }
+        { line_key: 'a', account_id: 1, commodity_id: 1, quantity_value: '-10000', quantity_scale: 2, memo: 'out', posted_on: undefined },
+        { line_key: 'b', account_id: 2, commodity_id: 2, quantity_value: '10700', quantity_scale: 2, memo: 'in', posted_on: '2026-06-03' },
+        { line_key: 'c', account_id: 9, commodity_id: 2, quantity_value: '100', quantity_scale: 2, memo: '', posted_on: '2026-06-03' }
       ]
     });
   });
 
-  it('sends two currencies as an exchange with both amounts exact', () => {
-    const entry = transferEntry({ ...base, to: { accountID: 2, commodityID: 2, postedOn: '' }, received: { value: '108', scale: 0 } });
-    expect(entry.entry_kind).toBe('exchange');
-    expect(entry.postings.map((p) => [p.quantity_value, p.quantity_scale])).toEqual([['-10000', 2], ['108', 0]]);
-  });
-
-  it('takes a fee the arriving side pays out of what arrived', () => {
-    const entry = transferEntry({ ...base, to: { accountID: 2, commodityID: 2, postedOn: '' }, received: { value: '10800', scale: 2 }, fee: { accountID: 9, amount: { value: '100', scale: 2 }, paidBy: 'to' } });
-    expect(entry.postings.map((p) => [p.account_id, p.commodity_id, p.quantity_value])).toEqual([[1, 1, '-10000'], [2, 2, '10700'], [9, 2, '100']]);
-  });
-
-  it('round-trips through transferFields', () => {
-    const fields: TransferFields = { ...base, to: { accountID: 2, commodityID: 2, postedOn: '' }, received: { value: '10800', scale: 2 }, fee: { accountID: 9, amount: { value: '250', scale: 2 }, paidBy: 'from' } };
-    const entry = transferEntry(fields);
-    const loaded = transferFields([{ entry_date: '2026-06-01', entry_kind: entry.entry_kind, postings: entry.postings.map((p) => ({ ...p, account_class: p.account_id === 9 ? 'expense' : 'asset' })) }], '2026-06-01');
-    expect(loaded?.sent).toEqual(fields.sent);
-    expect(loaded?.received).toEqual(fields.received);
-    expect(loaded?.fee?.amount).toEqual(fields.fee?.amount);
+  it('sends one currency as an ordinary entry, the conversion side left out', () => {
+    const entry = transferEntry({ ...base, to: { ...base.to, commodityID: 1 }, fee: undefined, conversionSide: undefined }, '2026-06-01');
+    expect(entry.entry_kind).toBeUndefined();
+    expect(entry.conversion_side).toBeUndefined();
   });
 });
 
 describe('transferProblem', () => {
-  const ok = { fromAccountID: 1, toAccountID: 2, sent: { value: '100', scale: 2 }, received: null, exchange: false, leavesOn: '2026-06-01', arrivesOn: '2026-06-02', fee: null, feePaidBy: 'from' as const };
+  const ok = { fromAccountID: 1, toAccountID: 2, sent: { value: '100', scale: 2 }, received: null, exchange: false, leavesOn: '2026-06-01', arrivesOn: '2026-06-02', fee: null, feePaidBy: 'sending' as const };
   it('names each refusal before any write', () => {
     expect(transferProblem(ok)).toBeNull();
     expect(transferProblem({ ...ok, toAccountID: undefined })).toBe('missing_account');
@@ -112,6 +92,7 @@ describe('transferProblem', () => {
     expect(transferProblem({ ...ok, exchange: true })).toBe('missing_received');
     expect(transferProblem({ ...ok, arrivesOn: '2026-05-31' })).toBe('arrives_before_leaves');
     expect(transferProblem({ ...ok, fee: { value: '-1', scale: 2 } })).toBe('invalid_fee');
-    expect(transferProblem({ ...ok, exchange: true, received: { value: '100', scale: 2 }, fee: { value: '100', scale: 2 }, feePaidBy: 'to' })).toBe('fee_exceeds_amount');
+    expect(transferProblem({ ...ok, fee: { value: '100', scale: 2 }, feePaidBy: 'receiving' })).toBe('fee_exceeds_amount');
+    expect(transferProblem({ ...ok, exchange: true, received: { value: '100', scale: 2 }, fee: { value: '100', scale: 2 }, feePaidBy: 'sending' })).toBe('fee_exceeds_amount');
   });
 });

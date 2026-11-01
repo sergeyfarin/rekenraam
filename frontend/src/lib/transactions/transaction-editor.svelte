@@ -16,9 +16,19 @@
   import { isOrdinaryEntryAccount } from './entry-account';
   import { suggestionKey } from './suggestion-keys.ts';
   import { editablePostings, hasPostingDay, postedOnForRequest } from './posted-on';
-  import { transferEntry, transferFeeCategoryKey, transferFields, transferProblem, type TransferProblem } from './transfer';
+  import {
+    convertedAmounts,
+    sameCurrencyAmount,
+    sameCurrencyStatements,
+    transferEntry,
+    transferFeeCategoryKey,
+    transferFields,
+    transferProblem,
+    type TransferProblem,
+    type TransferSideName
+  } from './transfer';
   import { getLocale } from '#lib/paraglide/runtime.js';
-  import { formatRatio } from '#lib/money/format.ts';
+  import { formatQuantity, formatRatio, joinCommodityAmount } from '#lib/money/format.ts';
   import { m } from '#lib/paraglide/messages.js';
   import { accountsQueryOptions } from '#lib/api/accounts.ts';
   import { categoriesQueryOptions } from '#lib/api/categories.ts';
@@ -242,8 +252,9 @@
     { accountID: '', commodityID: '', amountStr: '', memo: '', postedOn: '' }
   ]);
 
-  // Transfer between two of the owner's accounts (#481): what left From and,
-  // in another currency, what arrived in To; a fee on top on Bank fees.
+  // Transfer between two of the owner's accounts (#481). In one currency the
+  // amount transferred; in two, what left From and what reached To as their
+  // statements show them. A fee on top, on Bank fees, posts with its payer.
   let transferFromID = $state<number | undefined>(undefined);
   let transferToID = $state<number | undefined>(undefined);
   // Chosen currency for a side whose account has no default commodity.
@@ -252,7 +263,10 @@
   let sentStr = $state('');
   let receivedStr = $state('');
   let feeStr = $state('');
-  let feePaidBy = $state<'from' | 'to'>('from');
+  let feePaidBy = $state<TransferSideName>('sending');
+  let conversionSide = $state<TransferSideName>('sending');
+  // Memos the form does not show, kept so a save leaves them as they were.
+  let transferMemos = $state<{ from?: string; to?: string; fee?: string; entry?: string }>({});
   let feeAccountID = $state<number | undefined>(undefined);
   let leavesOn = $state('');
   let arrivesOn = $state('');
@@ -340,13 +354,22 @@
   const bankFeesCategoryID = $derived(
     (categoriesQuery.data?.categories ?? []).find((c: CategoryResponse) => c.builtin_key === transferFeeCategoryKey && c.status === 'active')?.id
   );
-  // Display only: the rate the two amounts imply, never used to fill one in.
-  const transferImpliedRate = $derived.by(() => {
+  // Display only: what converted (the statement amounts with the fee taken
+  // back out of its payer) and the rate those imply, never used to fill one in.
+  const transferConversion = $derived.by(() => {
     if (!transferIsExchange) return null;
     const sent = parseDecimalAmount(sentStr);
     const received = parseDecimalAmount(receivedStr);
-    if (!sent || !received || sent.value.startsWith('-') || sent.value === '0') return null;
-    return formatRatio(received, sent, 6, getLocale());
+    if (!sent || !received) return null;
+    const fee = parsedFee();
+    const converted = convertedAmounts({ sent, received, fee: fee ? { amount: fee, paidBy: feePaidBy } : undefined });
+    if (!converted) return null;
+    const locale = getLocale();
+    return {
+      sent: joinCommodityAmount(commodityCode(transferFromCommodity), formatQuantity(converted.sent.value, converted.sent.scale, locale)),
+      received: joinCommodityAmount(commodityCode(transferToCommodity), formatQuantity(converted.received.value, converted.received.scale, locale)),
+      rate: formatRatio(converted.received, converted.sent, 6, locale)
+    };
   });
   const commodityCode = (id: number | undefined) => (id === undefined ? '' : currenciesByID.get(id)?.code ?? '');
 
@@ -454,7 +477,7 @@
 
     // A transfer between two accounts, in one currency or two, with or
     // without a fee, opens in Transfer mode (#481).
-    const transfer = preservePostings ? null : transferFields(entries, transaction.transaction_date);
+    const transfer = preservePostings ? null : transferFields(transaction);
     resetTransfer();
     if (transfer) {
       tier = 'transfer';
@@ -462,12 +485,16 @@
       transferToID = transfer.to.accountID;
       transferFromCommodityID = transfer.from.commodityID;
       transferToCommodityID = transfer.to.commodityID;
-      sentStr = formatEditableAmount(transfer.sent.value, transfer.sent.scale);
-      receivedStr = transfer.from.commodityID !== transfer.to.commodityID ? formatEditableAmount(transfer.received.value, transfer.received.scale) : '';
+      const twoCurrencies = transfer.from.commodityID !== transfer.to.commodityID;
+      const amount = twoCurrencies ? transfer.sent : sameCurrencyAmount(transfer);
+      sentStr = formatEditableAmount(amount.value, amount.scale);
+      receivedStr = twoCurrencies ? formatEditableAmount(transfer.received.value, transfer.received.scale) : '';
       leavesOn = transfer.from.postedOn;
       arrivesOn = transfer.to.postedOn;
-      showTransferDays = transfer.from.postedOn !== '' || transfer.to.postedOn !== '';
+      showTransferDays = transfer.from.postedOn !== '' || transfer.to.postedOn !== '' || transfer.conversionSide === 'receiving';
+      conversionSide = transfer.conversionSide ?? 'sending';
       transferLineKeys = { from: transfer.from.lineKey, to: transfer.to.lineKey, fee: transfer.fee?.lineKey };
+      transferMemos = { from: transfer.from.memo, to: transfer.to.memo, fee: transfer.fee?.memo, entry: transfer.entryMemo };
       if (transfer.fee) {
         feeStr = formatEditableAmount(transfer.fee.amount.value, transfer.fee.amount.scale);
         feePaidBy = transfer.fee.paidBy;
@@ -817,7 +844,9 @@
     sentStr = '';
     receivedStr = '';
     feeStr = '';
-    feePaidBy = 'from';
+    feePaidBy = 'sending';
+    conversionSide = 'sending';
+    transferMemos = {};
     feeAccountID = undefined;
     leavesOn = '';
     arrivesOn = '';
@@ -861,31 +890,27 @@
   }
 
   function buildTransferJournalEntries(): TransactionRequest['journal_entries'] {
-    const sent = parseDecimalAmount(sentStr);
-    if (!transferFromID || !transferToID || transferFromCommodity === undefined || transferToCommodity === undefined || !sent) return [];
-    const received = transferIsExchange ? parseDecimalAmount(receivedStr) : sent;
-    if (!received) return [];
-    const fee = parsedFee();
+    const amount = parseDecimalAmount(sentStr);
+    if (!transferFromID || !transferToID || transferFromCommodity === undefined || transferToCommodity === undefined || !amount) return [];
+    const parsed = parsedFee();
     const feeCategory = feeAccountID ?? bankFeesCategoryID;
+    const fee = parsed && parsed.value !== '0' && feeCategory ? { amount: parsed, paidBy: feePaidBy } : undefined;
+    let statements = sameCurrencyStatements(amount, fee);
+    if (transferIsExchange) {
+      const received = parseDecimalAmount(receivedStr);
+      if (!received) return [];
+      statements = { sent: amount, received };
+    }
     const entry = transferEntry({
-      from: { accountID: transferFromID, commodityID: transferFromCommodity, postedOn: '', lineKey: transferLineKeys.from },
-      to: { accountID: transferToID, commodityID: transferToCommodity, postedOn: '', lineKey: transferLineKeys.to },
-      sent,
-      received,
-      fee: fee && fee.value !== '0' && feeCategory ? { accountID: feeCategory, amount: fee, paidBy: feePaidBy, lineKey: transferLineKeys.fee } : undefined
-    });
-    const postedOnFor = (accountID: number, day: string) =>
-      mode === 'template' ? undefined : postedOnForRequest(day, transactionDate, accountForLeg(String(accountID)));
-    return [{
-      entry_date: transactionDate,
-      entry_kind: entry.entry_kind,
-      postings: entry.postings.map((posting) => ({
-        ...posting,
-        memo: '',
-        posted_on: posting.account_id === transferFromID ? postedOnFor(transferFromID, leavesOn)
-          : posting.account_id === transferToID ? postedOnFor(transferToID, arrivesOn) : undefined
-      }))
-    }];
+      from: { accountID: transferFromID, commodityID: transferFromCommodity, postedOn: mode === 'template' ? '' : leavesOn, lineKey: transferLineKeys.from, memo: transferMemos.from },
+      to: { accountID: transferToID, commodityID: transferToCommodity, postedOn: mode === 'template' ? '' : arrivesOn, lineKey: transferLineKeys.to, memo: transferMemos.to },
+      sent: statements.sent,
+      received: statements.received,
+      fee: fee && feeCategory ? { accountID: feeCategory, amount: fee.amount, paidBy: fee.paidBy, lineKey: transferLineKeys.fee, memo: transferMemos.fee } : undefined,
+      conversionSide: transferIsExchange ? conversionSide : undefined,
+      entryMemo: transferMemos.entry
+    }, transactionDate);
+    return [{ entry_date: transactionDate, ...entry }];
   }
 
   function switchTransferToSplit() {
@@ -915,7 +940,12 @@
     [transferFromCommodityID, transferToCommodityID] = [transferToCommodityID, transferFromCommodityID];
     [leavesOn, arrivesOn] = [arrivesOn, leavesOn];
     if (transferIsExchange) [sentStr, receivedStr] = [receivedStr, sentStr];
-    feePaidBy = feePaidBy === 'from' ? 'to' : 'from';
+    [transferLineKeys, transferMemos] = [
+      { from: transferLineKeys.to, to: transferLineKeys.from, fee: transferLineKeys.fee },
+      { ...transferMemos, from: transferMemos.to, to: transferMemos.from }
+    ];
+    feePaidBy = feePaidBy === 'sending' ? 'receiving' : 'sending';
+    conversionSide = conversionSide === 'sending' ? 'receiving' : 'sending';
   }
 
   // ── Helpers ───────────────────────────────────────────────────────
@@ -1351,16 +1381,18 @@
           <span class={labelClass}>
             {transferIsExchange ? m.transactions_transfer_sent({ currency: commodityCode(transferFromCommodity) }) : m.transactions_field_amount()}
           </span>
-          <input type="text" bind:value={sentStr} class={inputClass} inputmode="decimal" placeholder={formatEditableAmount('0', 2)} required disabled={isVoided && mode === 'edit'} />
+          <input type="text" bind:value={sentStr} class={inputClass} inputmode="decimal" placeholder={formatEditableAmount('0', 2)} required aria-describedby={transferIsExchange ? 'transfer-statements-hint' : undefined} disabled={isVoided && mode === 'edit'} />
         </label>
         {#if transferIsExchange}
           <label>
             <span class={labelClass}>{m.transactions_transfer_received({ currency: commodityCode(transferToCommodity) })}</span>
-            <input type="text" bind:value={receivedStr} class={inputClass} inputmode="decimal" placeholder={formatEditableAmount('0', 2)} required aria-describedby="transfer-rate" disabled={isVoided && mode === 'edit'} />
+            <input type="text" bind:value={receivedStr} class={inputClass} inputmode="decimal" placeholder={formatEditableAmount('0', 2)} required aria-describedby="transfer-statements-hint transfer-rate" disabled={isVoided && mode === 'edit'} />
           </label>
+          <p id="transfer-statements-hint" class="text-xs text-muted sm:col-span-2">{m.transactions_transfer_statements_hint()}</p>
           <p id="transfer-rate" class="text-xs text-muted sm:col-span-2" aria-live="polite">
-            {#if transferImpliedRate}
-              {m.transactions_transfer_rate({ rate: transferImpliedRate, from: commodityCode(transferFromCommodity), to: commodityCode(transferToCommodity) })}
+            {#if transferConversion}
+              {m.transactions_transfer_converted({ sent: transferConversion.sent, received: transferConversion.received })}
+              · {m.transactions_transfer_rate({ rate: transferConversion.rate, from: commodityCode(transferFromCommodity), to: commodityCode(transferToCommodity) })}
             {:else}
               {m.transactions_transfer_rate_hint()}
             {/if}
@@ -1376,12 +1408,12 @@
           </label>
           <span id="transfer-fee-hint" class="mt-1 block text-xs text-muted">{m.transactions_transfer_fee_hint()}</span>
         </div>
-        {#if transferIsExchange && feeStr.trim()}
+        {#if feeStr.trim()}
           <label>
             <span class={labelClass}>{m.transactions_transfer_fee_paid_by()}</span>
             <select bind:value={feePaidBy} class={inputClass} disabled={isVoided && mode === 'edit'}>
-              <option value="from">{m.transactions_transfer_fee_paid_by_from({ currency: commodityCode(transferFromCommodity) })}</option>
-              <option value="to">{m.transactions_transfer_fee_paid_by_to({ currency: commodityCode(transferToCommodity) })}</option>
+              <option value="sending">{m.transactions_transfer_fee_paid_by_from({ currency: commodityCode(transferFromCommodity) })}</option>
+              <option value="receiving">{m.transactions_transfer_fee_paid_by_to({ currency: commodityCode(transferToCommodity) })}</option>
             </select>
           </label>
         {/if}
@@ -1399,6 +1431,15 @@
               <input type="date" value={arrivesOn || transactionDate} oninput={(e) => { arrivesOn = e.currentTarget.value; }} class={inputClass} aria-describedby="transfer-days-hint" disabled={isVoided && mode === 'edit'} />
             </label>
             <p id="transfer-days-hint" class="text-xs text-muted sm:col-span-2">{m.transactions_transfer_days_hint()}</p>
+            {#if transferIsExchange}
+              <label class="sm:col-span-2">
+                <span class={labelClass}>{m.transactions_transfer_conversion_side()}</span>
+                <select bind:value={conversionSide} class={inputClass} disabled={isVoided && mode === 'edit'}>
+                  <option value="sending">{m.transactions_transfer_conversion_sending()}</option>
+                  <option value="receiving">{m.transactions_transfer_conversion_receiving()}</option>
+                </select>
+              </label>
+            {/if}
           </div>
         {:else}
           <button type="button" class="min-h-10 text-xs font-medium text-accent underline-offset-2 hover:underline" onclick={() => { showTransferDays = true; }} disabled={isVoided && mode === 'edit'}>

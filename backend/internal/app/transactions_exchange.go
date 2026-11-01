@@ -15,20 +15,30 @@ import (
 // owner's accounts in different currencies (#481).
 const exchangeEntryKind = "exchange"
 
+// Conversion sides of a currency exchange (#481).
+const (
+	conversionSending   = "sending"
+	conversionReceiving = "receiving"
+)
+
 // buildExchangeLegs completes a currency exchange: a request whose one
 // journal entry has entry_kind "exchange" names the two account postings —
-// the exact amount that left and the exact amount that arrived — and at most
-// one expense posting for a fee charged on top, and the service adds one
-// commodity_trading posting per currency so each balances.
+// what left the sending account and what reached the receiving one, as their
+// statements show them — and at most one expense posting for a fee charged
+// on top, in the currency of the account that paid it, and the service adds
+// one commodity_trading posting per currency so each balances.
 //
 // Both amounts are facts; no rate is stored or used. The difference against
 // any market rate stays in commodity_trading, which reports exclude, and no
 // FX gain or loss is posted. The client never names a system account here,
 // as it never sends the #187 transfer_clearing bridge: the server owns both
-// and rebuilds them on every save. The legs are built before the posted-date
-// rule groups postings by day, so an exchange whose sides post on different
-// days is bridged per currency like any other transfer, with the exchange
-// legs on the transaction date (the conversion day).
+// and rebuilds them on every save.
+//
+// Days compose through the posted-date rule: the fee posts on the day of the
+// account that paid it, and the trading legs on the day of the side that
+// converted — the sending account's by default, the receiving account's
+// when the receiving bank converted — so the currency in transit, the
+// cashflow of the fee and the market comparison all follow from the journal.
 //
 // A request without an exchange entry passes through untouched.
 func (s *TransactionService) buildExchangeLegs(ctx context.Context, input TransactionInput, transactionDate string) (TransactionInput, error) {
@@ -36,6 +46,8 @@ func (s *TransactionService) buildExchangeLegs(ctx context.Context, input Transa
 	for _, entry := range input.JournalEntries {
 		if strings.TrimSpace(entry.EntryKind) == exchangeEntryKind {
 			exchange = true
+		} else if strings.TrimSpace(entry.ConversionSide) != "" {
+			return input, ValidationError{Message: "a conversion side applies only to a currency exchange"}
 		}
 	}
 	if !exchange {
@@ -53,8 +65,8 @@ func (s *TransactionService) buildExchangeLegs(ctx context.Context, input Transa
 		entryDate = transactionDate
 	}
 
-	var accounts, fees []PostingInput
-	for _, posting := range entry.Postings {
+	kinds := make([]exchangeLegKind, len(entry.Postings))
+	for index, posting := range entry.Postings {
 		date := entryDate
 		if postedOn := strings.TrimSpace(posting.PostedOn); postedOn != "" {
 			date = postedOn
@@ -63,7 +75,7 @@ func (s *TransactionService) buildExchangeLegs(ctx context.Context, input Transa
 		if err != nil {
 			if errors.Is(err, db.ErrNotFound) {
 				// cleanPosting explains a missing or not-yet-open account.
-				accounts = append(accounts, posting)
+				kinds[index] = exchangeAccountLeg
 				continue
 			}
 			return input, fmt.Errorf("read posting account rule: %w", err)
@@ -72,39 +84,11 @@ func (s *TransactionService) buildExchangeLegs(ctx context.Context, input Transa
 		case rule.IsSystem:
 			return input, ValidationError{Message: "a currency exchange names no system account: the server adds the exchange postings"}
 		case isPostedOnAccount(rule):
-			accounts = append(accounts, posting)
+			kinds[index] = exchangeAccountLeg
 		case rule.AccountClass == "expense":
-			fees = append(fees, posting)
+			kinds[index] = exchangeFeeLeg
 		default:
 			return input, ValidationError{Message: "a currency exchange takes two account postings and at most one fee"}
-		}
-	}
-	if len(accounts) != 2 || len(fees) > 1 {
-		return input, ValidationError{Message: "a currency exchange takes two account postings and at most one fee"}
-	}
-	if accounts[0].CommodityID == accounts[1].CommodityID {
-		return input, ValidationError{Message: "a currency exchange moves between two currencies; a same-currency transfer is an ordinary entry"}
-	}
-	if accounts[0].QuantityValue.Sign()*accounts[1].QuantityValue.Sign() >= 0 {
-		return input, ValidationError{Message: "a currency exchange takes one amount out of one account and one into the other"}
-	}
-	if len(fees) == 1 {
-		fee := fees[0]
-		if fee.CommodityID != accounts[0].CommodityID && fee.CommodityID != accounts[1].CommodityID {
-			return input, ValidationError{Message: "an exchange fee is in the currency of one of its accounts"}
-		}
-		if fee.QuantityValue.Sign() <= 0 {
-			return input, ValidationError{Message: "an exchange fee must be positive"}
-		}
-	}
-
-	// With the fee on top, each currency still moves one way: what left is
-	// negative, what arrived positive. A fee larger than its side's amount
-	// flips that sign and is refused rather than converted into its opposite.
-	sums, commodities := sumPostingsByCommodity(entry.Postings)
-	for _, account := range accounts {
-		if sums[account.CommodityID].Sign() != account.QuantityValue.Sign() {
-			return input, ValidationError{Message: "an exchange fee exceeds the amount it is charged on"}
 		}
 	}
 
@@ -112,23 +96,119 @@ func (s *TransactionService) buildExchangeLegs(ctx context.Context, input Transa
 	if err != nil {
 		return input, fmt.Errorf("read commodity trading account: %w", err)
 	}
+	built, err := exchangeLegs(entry, entryDate, kinds, tradingAccountID)
+	if err != nil {
+		return input, err
+	}
+	input.JournalEntries = []JournalEntryInput{built}
+	return input, nil
+}
+
+type exchangeLegKind int
+
+const (
+	exchangeAccountLeg exchangeLegKind = iota + 1
+	exchangeFeeLeg
+)
+
+// exchangeLegs is the exchange rule without its account lookups, shared by
+// the writer and by TransferShape's rebuild of a stored journal.
+func exchangeLegs(entry JournalEntryInput, entryDate string, kinds []exchangeLegKind, tradingAccountID int64) (JournalEntryInput, error) {
+	var accounts []int
+	fee := -1
+	for index, kind := range kinds {
+		switch kind {
+		case exchangeAccountLeg:
+			accounts = append(accounts, index)
+		case exchangeFeeLeg:
+			if fee >= 0 {
+				return entry, ValidationError{Message: "a currency exchange takes two account postings and at most one fee"}
+			}
+			fee = index
+		}
+	}
+	if len(accounts) != 2 {
+		return entry, ValidationError{Message: "a currency exchange takes two account postings and at most one fee"}
+	}
+	first, second := entry.Postings[accounts[0]], entry.Postings[accounts[1]]
+	if first.AccountID == second.AccountID {
+		return entry, ValidationError{Message: "a currency exchange moves between two accounts; a multi-currency provider keeps one account per currency"}
+	}
+	if first.CommodityID == second.CommodityID {
+		return entry, ValidationError{Message: "a currency exchange moves between two currencies; a same-currency transfer is an ordinary entry"}
+	}
+	if first.QuantityValue.Sign()*second.QuantityValue.Sign() >= 0 {
+		return entry, ValidationError{Message: "a currency exchange takes one amount out of one account and one into the other"}
+	}
+	sending, receiving := accounts[0], accounts[1]
+	if entry.Postings[sending].QuantityValue.Sign() > 0 {
+		sending, receiving = receiving, sending
+	}
+	day := func(index int) string {
+		if postedOn := strings.TrimSpace(entry.Postings[index].PostedOn); postedOn != "" {
+			return postedOn
+		}
+		return entryDate
+	}
+
 	postings := append([]PostingInput{}, entry.Postings...)
+	if fee >= 0 {
+		feePosting := postings[fee]
+		payer := -1
+		for _, account := range []int{sending, receiving} {
+			if entry.Postings[account].CommodityID == feePosting.CommodityID {
+				payer = account
+			}
+		}
+		if payer < 0 {
+			return entry, ValidationError{Message: "an exchange fee is in the currency of the account that paid it"}
+		}
+		if feePosting.QuantityValue.Sign() <= 0 {
+			return entry, ValidationError{Message: "an exchange fee must be positive"}
+		}
+		// The fee posts with the account that paid it, so cashflow sees the
+		// payment and the fee together on that account's day.
+		if postedOn := strings.TrimSpace(feePosting.PostedOn); postedOn != "" && postedOn != day(payer) {
+			return entry, ValidationError{Message: "an exchange fee posts on the day of the account that paid it"}
+		}
+		postings[fee].PostedOn = day(payer)
+	}
+
+	// With the fee on top, each currency still moves one way: what left is
+	// negative, what arrived positive. A fee larger than its side's amount
+	// flips that sign and is refused rather than converted into its opposite.
+	sums, commodities := sumPostingsByCommodity(entry.Postings)
+	for _, account := range accounts {
+		if sums[entry.Postings[account].CommodityID].Sign() != entry.Postings[account].QuantityValue.Sign() {
+			return entry, ValidationError{Message: "an exchange fee exceeds the amount it is charged on"}
+		}
+	}
+
+	converting := sending
+	switch strings.TrimSpace(entry.ConversionSide) {
+	case "", conversionSending:
+	case conversionReceiving:
+		converting = receiving
+	default:
+		return entry, ValidationError{Message: "conversion side must be 'sending' or 'receiving'"}
+	}
 	for _, commodityID := range commodities {
 		value, err := sums[commodityID].Negated().Coefficient()
 		if err != nil {
-			return input, ValidationError{Message: "posting amounts exceed the coefficient range"}
+			return entry, ValidationError{Message: "posting amounts exceed the coefficient range"}
 		}
 		postings = append(postings, PostingInput{
 			AccountID:     tradingAccountID,
 			CommodityID:   commodityID,
 			QuantityValue: value,
 			QuantityScale: sums[commodityID].Scale(),
+			PostedOn:      day(converting),
 		})
 	}
 	entry.EntryKind = exchangeEntryKind
+	entry.ConversionSide = ""
 	entry.Postings = postings
-	input.JournalEntries = []JournalEntryInput{entry}
-	return input, nil
+	return entry, nil
 }
 
 // isExchangeTradingLeg reports whether a stored posting is one of an
@@ -187,11 +267,14 @@ type ExchangeMarket struct {
 // implied rate.
 func (s *TransactionService) ExchangeConversion(ctx context.Context, transaction Transaction) (*ExchangeConversion, error) {
 	var sent, received *ExchangeQuantity
+	conversionDate := ""
 	for _, entry := range transaction.JournalEntries {
 		for _, posting := range entry.Postings {
 			if !isExchangeTradingLeg(entry, posting) {
 				continue
 			}
+			// The trading legs post on the day the conversion happened.
+			conversionDate = entry.EntryDate
 			// The trading leg mirrors the account: positive where money left.
 			leg := &ExchangeQuantity{CommodityID: posting.CommodityID, QuantityValue: posting.QuantityValue, QuantityScale: posting.QuantityScale}
 			if posting.QuantityValue.Sign() > 0 {
@@ -214,7 +297,7 @@ func (s *TransactionService) ExchangeConversion(ctx context.Context, transaction
 		return nil, fmt.Errorf("exchange implied rate: %w", err)
 	}
 	conversion := &ExchangeConversion{
-		ConversionDate: transaction.TransactionDate,
+		ConversionDate: conversionDate,
 		Sent:           *sent,
 		Received:       *received,
 		ImpliedRate:    ExchangeQuantity{CommodityID: received.CommodityID, QuantityValue: impliedValue, QuantityScale: exchangeRateScale},

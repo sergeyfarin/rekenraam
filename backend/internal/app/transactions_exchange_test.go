@@ -412,3 +412,247 @@ func TestExchangeConversionUsesThePairStoredTheOtherWayRound(t *testing.T) {
 	assert.Equal(t, "9908", conversion.Market.MarketValue.QuantityValue.String(), "108.00 ÷ 1.09 = 99.0826… → 99.08 EUR")
 	assert.Equal(t, "92", conversion.Market.Cost.QuantityValue.String())
 }
+
+// #481 repair: days compose. A fee posts with the account that paid it, the
+// trading legs with the side that converted, and a stored journal is a
+// transfer shape only if the writer's rules rebuild it exactly.
+
+func (f exchangeFixture) exchangeEntry(t *testing.T, date string, side string, postings ...PostingInput) (Transaction, error) {
+	t.Helper()
+	return f.create(t, TransactionInput{
+		TransactionKind: "transfer",
+		TransactionDate: date,
+		JournalEntries:  []JournalEntryInput{{EntryKind: "exchange", ConversionSide: side, Postings: postings}},
+	})
+}
+
+func (f exchangeFixture) eur(value int64, postedOn string) PostingInput {
+	return PostingInput{AccountID: f.cashAccountID, PostedOn: postedOn, CommodityID: f.eurCommodityID, QuantityValue: exact.New(value), QuantityScale: 2}
+}
+
+func (f exchangeFixture) usd(value int64, postedOn string) PostingInput {
+	return PostingInput{AccountID: f.usdAccountID, PostedOn: postedOn, CommodityID: f.usdCommodityID, QuantityValue: exact.New(value), QuantityScale: 2}
+}
+
+func (f exchangeFixture) fee(value int64, commodityID int64) PostingInput {
+	return PostingInput{AccountID: f.feesAccountID, CommodityID: commodityID, QuantityValue: exact.New(value), QuantityScale: 2}
+}
+
+func (f exchangeFixture) cashflowMonth(t *testing.T, start, end string) CashflowBucket {
+	t.Helper()
+	report, err := f.transactionService.Cashflow(context.Background(), CashflowInput{StartDate: start, EndDate: end, Bucket: "month"})
+	require.NoError(t, err)
+	require.Len(t, report.Buckets, 1)
+	return report.Buckets[0]
+}
+
+func requireCents(t *testing.T, amounts []BalanceQuantity, commodityID int64, value int64, measure string) {
+	t.Helper()
+	amount, found := amountFor(t, amounts, commodityID)
+	require.True(t, found, measure)
+	requireScaled(t, value, 2, exact.ScaledIntFromCoefficient(amount.QuantityValue, amount.QuantityScale), measure)
+}
+
+func TestExchangeDelayedReceivingFeeIsSpendingOnTheArrivalDay(t *testing.T) {
+	t.Parallel()
+	f := newExchangeFixture(t)
+
+	// €100 leaves June 1 and converts to $108; $107 arrives June 3 after the
+	// receiving bank's $1 fee.
+	created, err := f.exchangeEntry(t, "2026-06-01", "", f.eur(-10000, ""), f.usd(10700, "2026-06-03"), f.fee(100, f.usdCommodityID))
+	require.NoError(t, err)
+	assert.Contains(t, journalShape(created), datedPosting{"2026-06-03", f.feesAccountID, "100"}, "the fee posts with the account that paid it")
+
+	june := f.cashflowMonth(t, "2026-06-01", "2026-06-30")
+	requireCents(t, june.TransferIn, f.usdCommodityID, 10800, "the converted $108 arrived")
+	requireCents(t, june.Outflow, f.usdCommodityID, 100, "the $1 fee is spending")
+	requireCents(t, june.TransferOut, f.eurCommodityID, 10000, "the €100 left")
+}
+
+func TestExchangeDelayedFeesFollowTheirPayerAcrossAMonthBoundary(t *testing.T) {
+	t.Parallel()
+	f := newExchangeFixture(t)
+
+	// Sent May 31 with a €2.50 fee on top; $108 arrives June 2.
+	_, err := f.exchangeEntry(t, "2026-05-31", "", f.eur(-10250, ""), f.usd(10800, "2026-06-02"), f.fee(250, f.eurCommodityID))
+	require.NoError(t, err)
+	// Sent June 29, but the sending bank debits July 1 with its €1 fee;
+	// $54 arrives June 30.
+	_, err = f.exchangeEntry(t, "2026-06-29", "", f.eur(-5100, "2026-07-01"), f.usd(5400, "2026-06-30"), f.fee(100, f.eurCommodityID))
+	require.NoError(t, err)
+
+	may := f.cashflowMonth(t, "2026-05-01", "2026-05-31")
+	requireCents(t, may.Outflow, f.eurCommodityID, 250, "May: the sending fee with the debit")
+	requireCents(t, may.TransferOut, f.eurCommodityID, 10000, "May: the €100 that left")
+	june := f.cashflowMonth(t, "2026-06-01", "2026-06-30")
+	requireCents(t, june.TransferIn, f.usdCommodityID, 10800+5400, "June: both arrivals")
+	_, juneFee := amountFor(t, june.Outflow, f.eurCommodityID)
+	assert.False(t, juneFee, "June: no fee — the second was debited in July")
+	july := f.cashflowMonth(t, "2026-07-01", "2026-07-31")
+	requireCents(t, july.Outflow, f.eurCommodityID, 100, "July: the delayed debit's fee")
+	requireCents(t, july.TransferOut, f.eurCommodityID, 5000, "July: the delayed €50")
+}
+
+func TestExchangeBothSidesLaterConvertOnThatDayAndTheComparisonUsesIt(t *testing.T) {
+	t.Parallel()
+	f := newExchangeFixture(t)
+	f.transactionService.SetPricingRepository(db.NewPricingRepository(f.database))
+	f.usdRate(t, "2026-06-01", 50) // a misleading rate on the transaction date
+	f.usdRate(t, "2026-06-03", 92)
+
+	created, err := f.exchangeEntry(t, "2026-06-01", "", f.eur(-10000, "2026-06-03"), f.usd(10800, "2026-06-03"))
+	require.NoError(t, err)
+	require.Len(t, created.JournalEntries, 1)
+	assert.Equal(t, "2026-06-03", created.JournalEntries[0].EntryDate, "trading legs and both sides on the day it happened")
+
+	conversion, err := f.transactionService.ExchangeConversion(context.Background(), created)
+	require.NoError(t, err)
+	assert.Equal(t, "2026-06-03", conversion.ConversionDate)
+	require.NotNil(t, conversion.Market)
+	assert.Equal(t, "2026-06-03", conversion.Market.ObservationDate)
+	assert.Equal(t, "64", conversion.Market.Cost.QuantityValue.String())
+}
+
+func TestExchangeConvertedByTheReceivingBankKeepsTheSendingCurrencyInTransit(t *testing.T) {
+	t.Parallel()
+	f := newExchangeFixture(t)
+	f.transactionService.SetPricingRepository(db.NewPricingRepository(f.database))
+	f.usdRate(t, "2026-06-03", 92)
+
+	created, err := f.exchangeEntry(t, "2026-06-01", "receiving", f.eur(-10000, ""), f.usd(10800, "2026-06-03"))
+	require.NoError(t, err)
+	assert.Equal(t, []datedPosting{
+		{"2026-06-01", f.cashAccountID, "-10000"},
+		{"2026-06-01", f.clearingAccountID, "10000"},
+		{"2026-06-03", f.usdAccountID, "10800"},
+		{"2026-06-03", f.tradingAccountID, "10000"},
+		{"2026-06-03", f.tradingAccountID, "-10800"},
+		{"2026-06-03", f.clearingAccountID, "-10000"},
+	}, journalShape(created), "euros in transit, converted on arrival")
+
+	conversion, err := f.transactionService.ExchangeConversion(context.Background(), created)
+	require.NoError(t, err)
+	assert.Equal(t, "2026-06-03", conversion.ConversionDate)
+
+	shape := TransferShapeOf(created)
+	require.NotNil(t, shape)
+	assert.Equal(t, "receiving", shape.ConversionSide)
+}
+
+func TestExchangeRefusesTwoCurrenciesOfOneAccountAndAFeeOffItsPayersDay(t *testing.T) {
+	t.Parallel()
+	f := newExchangeFixture(t)
+
+	_, err := f.exchangeEntry(t, "2026-06-01", "", f.eur(-10000, ""),
+		PostingInput{AccountID: f.cashAccountID, CommodityID: f.usdCommodityID, QuantityValue: exact.New(10800), QuantityScale: 2})
+	var validation ValidationError
+	assert.ErrorAs(t, err, &validation, "a multi-currency provider keeps one account per currency (#486)")
+
+	misdated := f.fee(100, f.usdCommodityID)
+	misdated.PostedOn = "2026-06-01"
+	_, err = f.exchangeEntry(t, "2026-06-01", "", f.eur(-10000, ""), f.usd(10700, "2026-06-03"), misdated)
+	assert.ErrorAs(t, err, &validation, "a fee posts on its payer's day")
+
+	_, err = f.exchangeEntry(t, "2026-06-01", "sideways", f.eur(-10000, ""), f.usd(10800, ""))
+	assert.ErrorAs(t, err, &validation)
+
+	_, err = f.create(t, TransactionInput{TransactionDate: "2026-06-01", JournalEntries: []JournalEntryInput{{ConversionSide: "sending", Postings: []PostingInput{
+		f.eur(-100, ""), {AccountID: f.savingsAccountID, CommodityID: f.eurCommodityID, QuantityValue: exact.New(100), QuantityScale: 2},
+	}}}})
+	assert.ErrorAs(t, err, &validation, "a conversion side applies only to an exchange")
+}
+
+func TestTransferShapeRestatesWhatTheWriterBuilt(t *testing.T) {
+	t.Parallel()
+	f := newExchangeFixture(t)
+
+	sameDay, err := f.create(t, TransactionInput{TransactionDate: "2026-06-01", JournalEntries: []JournalEntryInput{{Postings: []PostingInput{
+		{AccountID: f.cashAccountID, CommodityID: f.eurCommodityID, QuantityValue: exact.New(-10150), QuantityScale: 2, Memo: "to savings"},
+		{AccountID: f.savingsAccountID, PostedOn: "2026-06-02", CommodityID: f.eurCommodityID, QuantityValue: exact.New(10000), QuantityScale: 2, Memo: "ref 42"},
+		{AccountID: f.feesAccountID, PostedOn: "2026-06-01", CommodityID: f.eurCommodityID, QuantityValue: exact.New(150), QuantityScale: 2},
+	}}}})
+	require.NoError(t, err)
+	shape := TransferShapeOf(sameDay)
+	require.NotNil(t, shape)
+	assert.Equal(t, f.cashAccountID, shape.Sending.AccountID)
+	assert.Equal(t, "2026-06-02", shape.Receiving.PostedOn)
+	assert.Equal(t, "ref 42", shape.Receiving.Memo, "memos travel with the shape")
+	require.NotNil(t, shape.Fee)
+	assert.Equal(t, "sending", shape.Fee.PaidBy)
+	assert.Empty(t, shape.ConversionSide)
+
+	exchange, err := f.exchangeEntry(t, "2026-06-01", "", f.eur(-10000, ""), f.usd(10700, "2026-06-03"), f.fee(100, f.usdCommodityID))
+	require.NoError(t, err)
+	exchangeShape := TransferShapeOf(exchange)
+	require.NotNil(t, exchangeShape)
+	assert.Equal(t, "receiving", exchangeShape.Fee.PaidBy)
+	assert.Equal(t, "sending", exchangeShape.ConversionSide)
+
+	// An unchanged save through the shape writes the same journal and keeps
+	// every line key and memo.
+	updated, err := f.transactionService.UpdateTransaction(context.Background(), UpdateTransactionInput{
+		ExpectedVersionID: sameDay.VersionID, OwnerUserID: f.ownerUserID, OriginType: "browser_api",
+		TransactionID: sameDay.ID, Spec: shape.input(transactionInputFromTransaction(sameDay)), ChangeReason: "unchanged",
+	})
+	require.NoError(t, err)
+	assert.ElementsMatch(t, journalShape(sameDay), journalShape(updated))
+	for _, line := range []string{shape.Sending.LineKey, shape.Receiving.LineKey, shape.Fee.LineKey} {
+		require.NotNil(t, postingByLineKey(updated, line), "line %s kept", line)
+	}
+	assert.Equal(t, "ref 42", postingByLineKey(updated, shape.Receiving.LineKey).Memo)
+}
+
+func TestTransferShapeRefusesAJournalTheWriterWouldReshape(t *testing.T) {
+	t.Parallel()
+	f := newExchangeFixture(t)
+	explicit := func(entries ...JournalEntryInput) Transaction {
+		created, err := f.create(t, TransactionInput{TransactionDate: "2026-06-01", JournalEntries: entries})
+		require.NoError(t, err)
+		return created
+	}
+	leg := func(accountID, commodityID, value int64) PostingInput {
+		return PostingInput{AccountID: accountID, CommodityID: commodityID, QuantityValue: exact.New(value), QuantityScale: 2}
+	}
+
+	// €1 left in transit: each entry balances, the rebuild would not keep it.
+	residual := explicit(
+		JournalEntryInput{EntryDate: "2026-06-01", Postings: []PostingInput{leg(f.cashAccountID, f.eurCommodityID, -10000), leg(f.clearingAccountID, f.eurCommodityID, 10000)}},
+		JournalEntryInput{EntryDate: "2026-06-03", Postings: []PostingInput{leg(f.savingsAccountID, f.eurCommodityID, 9900), leg(f.clearingAccountID, f.eurCommodityID, -9900)}},
+	)
+	assert.Nil(t, TransferShapeOf(residual), "a residual in clearing stays a split")
+
+	// A hand-built exchange with an extra euro in trading.
+	handBuilt := explicit(JournalEntryInput{EntryDate: "2026-06-01", Postings: []PostingInput{
+		leg(f.cashAccountID, f.eurCommodityID, -10000), leg(f.tradingAccountID, f.eurCommodityID, 10000),
+		leg(f.usdAccountID, f.usdCommodityID, 10800), leg(f.tradingAccountID, f.usdCommodityID, -10800),
+	}})
+	assert.Nil(t, TransferShapeOf(handBuilt), "an ordinary entry through trading is not an exchange shape")
+
+	// A fee on a third day.
+	thirdDay := explicit(
+		JournalEntryInput{EntryDate: "2026-06-01", Postings: []PostingInput{leg(f.cashAccountID, f.eurCommodityID, -10100), leg(f.clearingAccountID, f.eurCommodityID, 10100)}},
+		JournalEntryInput{EntryDate: "2026-06-02", Postings: []PostingInput{leg(f.feesAccountID, f.eurCommodityID, 100), leg(f.clearingAccountID, f.eurCommodityID, -100)}},
+		JournalEntryInput{EntryDate: "2026-06-03", Postings: []PostingInput{leg(f.savingsAccountID, f.eurCommodityID, 10000), leg(f.clearingAccountID, f.eurCommodityID, -10000)}},
+	)
+	assert.Nil(t, TransferShapeOf(thirdDay))
+
+	// And an ordinary purchase is no transfer at all.
+	purchase, err := f.create(t, TransactionInput{TransactionDate: "2026-06-01", JournalEntries: []JournalEntryInput{{Postings: []PostingInput{
+		leg(f.cashAccountID, f.eurCommodityID, -500), leg(f.feesAccountID, f.eurCommodityID, 500),
+	}}}})
+	require.NoError(t, err)
+	assert.Nil(t, TransferShapeOf(purchase))
+}
+
+func TestExchangeMoveDayCarriesTheReceivingFeeWithItsAccount(t *testing.T) {
+	t.Parallel()
+	f := newExchangeFixture(t)
+
+	created, err := f.exchangeEntry(t, "2026-06-01", "", f.eur(-10000, ""), f.usd(10700, "2026-06-03"), f.fee(100, f.usdCommodityID))
+	require.NoError(t, err)
+	moved, err := f.moveDay(t, created, f.usdAccountID, "later", false)
+	require.NoError(t, err)
+	assert.Contains(t, journalShape(moved), datedPosting{"2026-06-04", f.usdAccountID, "10700"})
+	assert.Contains(t, journalShape(moved), datedPosting{"2026-06-04", f.feesAccountID, "100"}, "the fee moves with its payer")
+	assert.NotNil(t, TransferShapeOf(moved))
+}

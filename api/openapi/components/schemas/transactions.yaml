@@ -24,9 +24,11 @@ JournalEntryKind:
     that arrived (positive) — and at most one expense posting for a fee
     charged on top, in one side's currency, and must be the request's only
     journal entry. It names no system account: the server adds one
-    commodity_trading posting per currency so each balances, before the
-    posted_on rule bridges different posting days. Readers that edit an
-    exchange drop those legs and resend the kind.
+    commodity_trading posting per currency so each balances, on the day of
+    the side that converted (conversion_side), before the posted_on rule
+    bridges different posting days; the fee posts on the day of the account
+    that paid it. The two accounts must differ. Readers that edit an exchange
+    restate it from the response's transfer shape.
   enum:
     - ordinary
     - transfer_leg
@@ -250,11 +252,54 @@ TransactionResponse:
       items:
         type: integer
         format: int64
+    transfer:
+      $ref: "../../openapi.yaml#/components/schemas/TransferShape"
+      description: >-
+        Present when the transaction is a transfer Transfer entry edits
+        (#481): restating it as a transfer request and rebuilding it with the
+        writer's rules reproduces the stored journal exactly. Absent for any
+        other journal, which stays in split entry.
     exchange_conversion:
       $ref: "../../openapi.yaml#/components/schemas/ExchangeConversion"
       description: >-
         Only on GET /transactions/{transaction_id}, and only for a currency
         exchange (#481): the deal against the market rate, computed on read.
+TransferSide:
+  type: object
+  required: [account_id, commodity_id, quantity_value, quantity_scale, posted_on, line_key, memo]
+  properties:
+    account_id: {type: integer, format: int64}
+    commodity_id: {type: integer, format: int64}
+    quantity_value: {type: string, description: Signed, as stored; what the account's statement shows.}
+    quantity_scale: {type: integer}
+    posted_on: {type: string, format: date}
+    line_key: {type: string}
+    memo: {type: string}
+TransferShape:
+  type: object
+  required: [sending, receiving, entry_memo]
+  properties:
+    sending:
+      $ref: "../../openapi.yaml#/components/schemas/TransferSide"
+    receiving:
+      $ref: "../../openapi.yaml#/components/schemas/TransferSide"
+    fee:
+      type: object
+      required: [account_id, commodity_id, quantity_value, quantity_scale, paid_by, line_key, memo]
+      properties:
+        account_id: {type: integer, format: int64}
+        commodity_id: {type: integer, format: int64}
+        quantity_value: {type: string}
+        quantity_scale: {type: integer}
+        paid_by: {type: string, enum: [sending, receiving]}
+        line_key: {type: string}
+        memo: {type: string}
+    conversion_side:
+      type: string
+      enum: [sending, receiving]
+      description: Which side converted, for an exchange; absent in one currency.
+    entry_memo:
+      type: string
 ExchangeQuantity:
   type: object
   required: [commodity_id, quantity_value, quantity_scale]
@@ -540,13 +585,15 @@ PostingRequest:
       format: date
       description: >-
         The day this account posting appears on its statement, when it differs
-        from the entry date (#187). Allowed only on asset and liability
-        postings, and only in a request with exactly one journal entry. The
-        server builds one journal entry per date: with one account, every
-        other posting follows its date; with several, they stay on the entry
-        date, and each dated entry is balanced per commodity through
-        transfer_clearing. Not stored on the posting; responses carry the
-        resulting journal entries.
+        from the entry date (#187), in a request with exactly one journal
+        entry. On an asset or liability posting it is that posting's day. Any
+        other posting may name only the day of an account posting (a
+        category, of one in its own currency): a transfer fee then posts with
+        the account that paid it (#481). The server builds one journal entry
+        per date: with one account, every other posting follows its date;
+        with several, the rest stay on the entry date, and each dated entry
+        is balanced per commodity through transfer_clearing. Not stored on
+        the posting; responses carry the resulting journal entries.
     account_id:
       type: integer
       format: int64
@@ -580,6 +627,13 @@ JournalEntryRequest:
       description: Accounting effective date for this balanced journal entry.
     entry_kind:
       $ref: "../../openapi.yaml#/components/schemas/JournalEntryKind"
+    conversion_side:
+      type: string
+      enum: [sending, receiving]
+      description: >-
+        For an exchange entry only (#481): which side converted. The exchange
+        legs post on that side's day; sending (the default) means the money
+        in transit is in the receiving currency.
     memo:
       type: string
     metadata:

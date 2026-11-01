@@ -21,15 +21,15 @@ export function hasPostingDay(account: PostingAccount | undefined): boolean {
   return account.account_class === 'asset' || account.account_class === 'liability';
 }
 
-type LoadedEntry<P> = { entry_date: string; entry_kind?: string; postings?: P[] };
+type LoadedEntry<P> = { entry_date: string; postings?: P[] };
 
 /**
  * The postings the editor shows for a saved journal, each with its posted-on
  * field: '' when it posts on the transaction date (the field follows the
  * date), otherwise its entry date. transfer_clearing legs of a journal with
- * several entries are the server's bridge, and the commodity_trading legs of
- * a currency exchange (#481) are the server's too; both are left out and the
- * server rebuilds them on save.
+ * several entries are the server's bridge and are left out; the server
+ * rebuilds them on save. An exchange's commodity_trading legs stay: a
+ * journal Transfer entry cannot restate (#481) is edited as it is.
  */
 export function editablePostings<P extends PostingAccount>(
   entries: LoadedEntry<P>[],
@@ -39,7 +39,6 @@ export function editablePostings<P extends PostingAccount>(
   return entries.flatMap((entry) =>
     (entry.postings ?? [])
       .filter((posting) => !(bridged && posting.account_system_role === 'transfer_clearing'))
-      .filter((posting) => !(entry.entry_kind === 'exchange' && posting.account_system_role === 'commodity_trading'))
       .map((posting) => ({
         posting,
         postedOn: hasPostingDay(posting) && entry.entry_date !== transactionDate ? entry.entry_date : ''

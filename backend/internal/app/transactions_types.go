@@ -284,7 +284,11 @@ type JournalEntryInput struct {
 	EntryKind    string
 	Memo         string
 	MetadataJSON string
-	Postings     []PostingInput
+	// ConversionSide says which side of a currency exchange converted (#481):
+	// "sending" (the default, empty) or "receiving". The exchange legs post on
+	// that side's day. Not stored: a reader derives it from where they post.
+	ConversionSide string
+	Postings       []PostingInput
 }
 
 type PostingInput struct {

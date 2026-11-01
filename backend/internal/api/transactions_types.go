@@ -35,6 +35,50 @@ type transactionResponse struct {
 	InvalidatedCheckpointIDs  []int64                `json:"invalidated_checkpoint_ids"`
 	// ExchangeConversion is set only by the single-transaction read (#481).
 	ExchangeConversion *exchangeConversionResponse `json:"exchange_conversion,omitempty"`
+	// Transfer is the transaction as Transfer entry edits it, when it is one.
+	Transfer *transferShapeResponse `json:"transfer,omitempty"`
+}
+
+type transferSideResponse struct {
+	AccountID     int64             `json:"account_id"`
+	CommodityID   int64             `json:"commodity_id"`
+	QuantityValue exact.Coefficient `json:"quantity_value"`
+	QuantityScale int               `json:"quantity_scale"`
+	PostedOn      string            `json:"posted_on"`
+	LineKey       string            `json:"line_key"`
+	Memo          string            `json:"memo"`
+}
+
+type transferFeeResponse struct {
+	AccountID     int64             `json:"account_id"`
+	CommodityID   int64             `json:"commodity_id"`
+	QuantityValue exact.Coefficient `json:"quantity_value"`
+	QuantityScale int               `json:"quantity_scale"`
+	PaidBy        string            `json:"paid_by"`
+	LineKey       string            `json:"line_key"`
+	Memo          string            `json:"memo"`
+}
+
+type transferShapeResponse struct {
+	Sending        transferSideResponse `json:"sending"`
+	Receiving      transferSideResponse `json:"receiving"`
+	Fee            *transferFeeResponse `json:"fee,omitempty"`
+	ConversionSide string               `json:"conversion_side,omitempty"`
+	EntryMemo      string               `json:"entry_memo"`
+}
+
+func toTransferShapeResponse(shape *app.TransferShape) *transferShapeResponse {
+	if shape == nil {
+		return nil
+	}
+	side := func(s app.TransferShapeSide) transferSideResponse {
+		return transferSideResponse{AccountID: s.AccountID, CommodityID: s.CommodityID, QuantityValue: s.QuantityValue, QuantityScale: s.QuantityScale, PostedOn: s.PostedOn, LineKey: s.LineKey, Memo: s.Memo}
+	}
+	response := &transferShapeResponse{Sending: side(shape.Sending), Receiving: side(shape.Receiving), ConversionSide: shape.ConversionSide, EntryMemo: shape.EntryMemo}
+	if fee := shape.Fee; fee != nil {
+		response.Fee = &transferFeeResponse{AccountID: fee.AccountID, CommodityID: fee.CommodityID, QuantityValue: fee.QuantityValue, QuantityScale: fee.QuantityScale, PaidBy: fee.PaidBy, LineKey: fee.LineKey, Memo: fee.Memo}
+	}
+	return response
 }
 
 type exchangeQuantityResponse struct {
@@ -245,11 +289,12 @@ type transactionRequest struct {
 }
 
 type journalEntryRequest struct {
-	EntryDate string           `json:"entry_date"`
-	EntryKind string           `json:"entry_kind"`
-	Memo      string           `json:"memo"`
-	Metadata  json.RawMessage  `json:"metadata"`
-	Postings  []postingRequest `json:"postings"`
+	EntryDate      string           `json:"entry_date"`
+	EntryKind      string           `json:"entry_kind"`
+	ConversionSide string           `json:"conversion_side"`
+	Memo           string           `json:"memo"`
+	Metadata       json.RawMessage  `json:"metadata"`
+	Postings       []postingRequest `json:"postings"`
 }
 
 type postingRequest struct {
@@ -308,11 +353,12 @@ func toTransactionInput(request transactionRequest) app.TransactionInput {
 			})
 		}
 		entries = append(entries, app.JournalEntryInput{
-			EntryDate:    entry.EntryDate,
-			EntryKind:    entry.EntryKind,
-			Memo:         entry.Memo,
-			MetadataJSON: rawJSONText(entry.Metadata),
-			Postings:     postings,
+			EntryDate:      entry.EntryDate,
+			EntryKind:      entry.EntryKind,
+			ConversionSide: entry.ConversionSide,
+			Memo:           entry.Memo,
+			MetadataJSON:   rawJSONText(entry.Metadata),
+			Postings:       postings,
 		})
 	}
 
@@ -411,6 +457,7 @@ func toTransactionResponse(transaction app.Transaction) transactionResponse {
 		ChangeReason:              transaction.ChangeReason,
 		SystemLabel:               transaction.SystemLabel,
 		InvalidatedCheckpointIDs:  invalidatedCheckpointIDs,
+		Transfer:                  toTransferShapeResponse(app.TransferShapeOf(transaction)),
 	}
 }
 

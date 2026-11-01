@@ -29087,7 +29087,7 @@ export interface components {
         /** @enum {string} */
         TransactionKind: "ordinary" | "transfer" | "investment" | "opening_balance" | "adjustment";
         /**
-         * @description `exchange` (#481) marks a transfer between two of the owner's accounts in different currencies. A request entry of this kind names the two account postings — the exact amount that left (negative) and the exact amount that arrived (positive) — and at most one expense posting for a fee charged on top, in one side's currency, and must be the request's only journal entry. It names no system account: the server adds one commodity_trading posting per currency so each balances, before the posted_on rule bridges different posting days. Readers that edit an exchange drop those legs and resend the kind.
+         * @description `exchange` (#481) marks a transfer between two of the owner's accounts in different currencies. A request entry of this kind names the two account postings — the exact amount that left (negative) and the exact amount that arrived (positive) — and at most one expense posting for a fee charged on top, in one side's currency, and must be the request's only journal entry. It names no system account: the server adds one commodity_trading posting per currency so each balances, on the day of the side that converted (conversion_side), before the posted_on rule bridges different posting days; the fee posts on the day of the account that paid it. The two accounts must differ. Readers that edit an exchange restate it from the response's transfer shape.
          * @enum {string}
          */
         JournalEntryKind: "ordinary" | "transfer_leg" | "exchange" | "investment" | "opening_balance" | "adjustment";
@@ -30514,8 +30514,45 @@ export interface components {
              */
             system_label?: "split_adjustment" | "transfer_bridge" | "share_exchange" | "cash_and_stock_merger" | "spin_off";
             invalidated_checkpoint_ids: number[];
+            /** @description Present when the transaction is a transfer Transfer entry edits (#481): restating it as a transfer request and rebuilding it with the writer's rules reproduces the stored journal exactly. Absent for any other journal, which stays in split entry. */
+            transfer?: components["schemas"]["TransferShape"];
             /** @description Only on GET /transactions/{transaction_id}, and only for a currency exchange (#481): the deal against the market rate, computed on read. */
             exchange_conversion?: components["schemas"]["ExchangeConversion"];
+        };
+        TransferSide: {
+            /** Format: int64 */
+            account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            /** @description Signed */
+            quantity_value: string;
+            quantity_scale: number;
+            /** Format: date */
+            posted_on: string;
+            line_key: string;
+            memo: string;
+        };
+        TransferShape: {
+            sending: components["schemas"]["TransferSide"];
+            receiving: components["schemas"]["TransferSide"];
+            fee?: {
+                /** Format: int64 */
+                account_id: number;
+                /** Format: int64 */
+                commodity_id: number;
+                quantity_value: string;
+                quantity_scale: number;
+                /** @enum {string} */
+                paid_by: "sending" | "receiving";
+                line_key: string;
+                memo: string;
+            };
+            /**
+             * @description Which side converted, for an exchange; absent in one currency.
+             * @enum {string}
+             */
+            conversion_side?: "sending" | "receiving";
+            entry_memo: string;
         };
         ExchangeQuantity: {
             /** Format: int64 */
@@ -30646,7 +30683,7 @@ export interface components {
             line_key?: string;
             /**
              * Format: date
-             * @description The day this account posting appears on its statement, when it differs from the entry date (#187). Allowed only on asset and liability postings, and only in a request with exactly one journal entry. The server builds one journal entry per date: with one account, every other posting follows its date; with several, they stay on the entry date, and each dated entry is balanced per commodity through transfer_clearing. Not stored on the posting; responses carry the resulting journal entries.
+             * @description The day this account posting appears on its statement, when it differs from the entry date (#187), in a request with exactly one journal entry. On an asset or liability posting it is that posting's day. Any other posting may name only the day of an account posting (a category, of one in its own currency): a transfer fee then posts with the account that paid it (#481). The server builds one journal entry per date: with one account, every other posting follows its date; with several, the rest stay on the entry date, and each dated entry is balanced per commodity through transfer_clearing. Not stored on the posting; responses carry the resulting journal entries.
              */
             posted_on?: string;
             /** Format: int64 */
@@ -30668,6 +30705,11 @@ export interface components {
              */
             entry_date?: string;
             entry_kind?: components["schemas"]["JournalEntryKind"];
+            /**
+             * @description For an exchange entry only (#481): which side converted. The exchange legs post on that side's day; sending (the default) means the money in transit is in the receiving currency.
+             * @enum {string}
+             */
+            conversion_side?: "sending" | "receiving";
             memo?: string;
             metadata?: {
                 [key: string]: unknown;

@@ -1,98 +1,101 @@
 import { addScaledAmounts, coefficientSign, negateCoefficient, type ScaledAmount } from '#lib/money/amount.ts';
-import { editablePostings, hasPostingDay } from './posted-on';
+import type { TransactionResponse } from '#lib/api/transactions.ts';
 
 /**
  * Transfer entry (#481). A transfer moves money between two of the owner's
- * accounts: the amount that left one and the amount that arrived in the other,
- * each posting on its own day, in one currency or two. A fee comes with it but
- * is not part of it: it is its own expense posting (Bank fees by default),
- * charged on top. When the two sides are in different currencies the request
- * entry is an `exchange`, and the server adds the commodity_trading legs; the
- * client never builds them, and never converts one amount into the other.
+ * accounts: what left one and what reached the other, as each statement shows
+ * it, each posting on its own day, in one currency or two. A fee comes with it
+ * but is not part of it: it is its own expense posting (Bank fees by default),
+ * charged on top by the account that paid it and posted on that account's day.
+ * When the sides are in different currencies the request entry is an
+ * `exchange`: the server adds the commodity_trading legs on the day of the
+ * side that converted, and the client never converts one amount into the other.
  *
- * This module is the one rule for which saved transactions are transfers (so
- * they reopen in Transfer mode) and for the postings a transfer sends.
+ * Which saved transactions are transfers is the server's rule: a response
+ * carries `transfer` only when rebuilding the journal reproduces it exactly.
+ * This module maps that shape to the form and the form back to a request.
  */
 
 /** The built-in key of the category a transfer fee is recorded on. */
 export const transferFeeCategoryKey = 'expense.financial.bank_fees';
 
-type LoadedPosting = {
-  account_id: number;
-  account_class?: string | null;
-  account_system_role?: string | null;
-  commodity_id: number;
-  quantity_value: string;
-  quantity_scale: number;
-  line_key?: string;
-};
+export type TransferSideName = 'sending' | 'receiving';
 
-type LoadedEntry = { entry_date: string; entry_kind?: string; postings?: LoadedPosting[] };
-
-export type TransferSide = { accountID: number; commodityID: number; postedOn: string; lineKey?: string };
+export type TransferSide = { accountID: number; commodityID: number; postedOn: string; lineKey?: string; memo?: string };
 
 export type TransferFields = {
   from: TransferSide;
   to: TransferSide;
-  /** What left From, without the fee; a positive magnitude. */
+  /** What left From, as its statement shows it (fee included); a magnitude. */
   sent: ScaledAmount;
-  /** What arrived in To before a fee To pays; equals sent in one currency. */
+  /** What reached To, as its statement shows it (after a fee To paid). */
   received: ScaledAmount;
-  fee?: { accountID: number; amount: ScaledAmount; paidBy: 'from' | 'to'; lineKey?: string };
+  fee?: { accountID: number; amount: ScaledAmount; paidBy: TransferSideName; lineKey?: string; memo?: string };
+  /** Which side converted; only for two currencies. */
+  conversionSide?: TransferSideName;
+  entryMemo?: string;
 };
 
-const magnitude = (posting: LoadedPosting): ScaledAmount => ({
-  value: coefficientSign(posting.quantity_value) < 0 ? negateCoefficient(posting.quantity_value) : posting.quantity_value,
-  scale: posting.quantity_scale
+const magnitude = (value: string, scale: number): ScaledAmount => ({
+  value: coefficientSign(value) < 0 ? negateCoefficient(value) : value,
+  scale
 });
 
 const negated = (amount: ScaledAmount): ScaledAmount => ({ value: negateCoefficient(amount.value), scale: amount.scale });
 
-const side = (posting: LoadedPosting, postedOn: string): TransferSide => ({
-  accountID: posting.account_id,
-  commodityID: posting.commodity_id,
-  postedOn,
-  lineKey: posting.line_key
-});
+/** The form's fields for a saved transfer, or null when it is not one. Each
+ *  side's day is '' when it posts on the transaction date. */
+export function transferFields(transaction: Pick<TransactionResponse, 'transfer' | 'transaction_date'>): TransferFields | null {
+  const shape = transaction.transfer;
+  if (!shape) return null;
+  const day = (postedOn: string) => (postedOn === transaction.transaction_date ? '' : postedOn);
+  const side = (s: typeof shape.sending): TransferSide => ({
+    accountID: s.account_id, commodityID: s.commodity_id, postedOn: day(s.posted_on), lineKey: s.line_key, memo: s.memo
+  });
+  return {
+    from: side(shape.sending),
+    to: side(shape.receiving),
+    sent: magnitude(shape.sending.quantity_value, shape.sending.quantity_scale),
+    received: magnitude(shape.receiving.quantity_value, shape.receiving.quantity_scale),
+    fee: shape.fee
+      ? {
+          accountID: shape.fee.account_id,
+          amount: magnitude(shape.fee.quantity_value, shape.fee.quantity_scale),
+          paidBy: shape.fee.paid_by,
+          lineKey: shape.fee.line_key,
+          memo: shape.fee.memo
+        }
+      : undefined,
+    conversionSide: shape.conversion_side,
+    entryMemo: shape.entry_memo
+  };
+}
 
-/**
- * The transfer a saved journal is, or null when it is anything else: two
- * account postings — one out, one in — in one currency with opposite amounts,
- * or in two currencies as an exchange, plus at most one expense posting in
- * one side's currency for the fee. Each side keeps its posting day.
- */
-export function transferFields(entries: LoadedEntry[], transactionDate: string): TransferFields | null {
-  const loaded = editablePostings<LoadedPosting>(entries, transactionDate);
-  if (loaded.some(({ posting }) => posting.account_system_role)) return null;
-  const accounts = loaded.filter(({ posting }) => hasPostingDay(posting));
-  const others = loaded.filter(({ posting }) => !hasPostingDay(posting));
-  if (accounts.length !== 2 || others.length > 1) return null;
-
-  const out = accounts.find(({ posting }) => coefficientSign(posting.quantity_value) < 0);
-  const into = accounts.find(({ posting }) => coefficientSign(posting.quantity_value) > 0);
-  if (!out || !into) return null;
-  const from = side(out.posting, out.postedOn);
-  const to = side(into.posting, into.postedOn);
-  const exchange = from.commodityID !== to.commodityID;
-
-  const feePosting = others[0]?.posting;
-  let fee: TransferFields['fee'];
-  if (feePosting) {
-    if (feePosting.account_class !== 'expense' || coefficientSign(feePosting.quantity_value) <= 0) return null;
-    // In one currency the fee is shown as paid by From: the journal is the
-    // same either way.
-    const paidBy = feePosting.commodity_id === from.commodityID ? 'from' : feePosting.commodity_id === to.commodityID ? 'to' : null;
-    if (!paidBy) return null;
-    fee = { accountID: feePosting.account_id, amount: magnitude(feePosting), paidBy, lineKey: feePosting.line_key };
-  }
-
-  const fromAmount = magnitude(out.posting);
-  const toAmount = magnitude(into.posting);
-  const sent = fee?.paidBy === 'from' ? addScaledAmounts(fromAmount, negated(fee.amount)) : fromAmount;
-  const received = fee?.paidBy === 'to' ? addScaledAmounts(toAmount, fee.amount) : toAmount;
+/** What converted, for two currencies: the statement amounts with the fee
+ *  taken back out of the side that paid it. Null when either is not positive. */
+export function convertedAmounts(fields: {
+  sent: ScaledAmount;
+  received: ScaledAmount;
+  fee?: { amount: ScaledAmount; paidBy: TransferSideName };
+}): { sent: ScaledAmount; received: ScaledAmount } | null {
+  const sent = fields.fee?.paidBy === 'sending' ? addScaledAmounts(fields.sent, negated(fields.fee.amount)) : fields.sent;
+  const received = fields.fee?.paidBy === 'receiving' ? addScaledAmounts(fields.received, fields.fee.amount) : fields.received;
   if (coefficientSign(sent.value) <= 0 || coefficientSign(received.value) <= 0) return null;
-  if (!exchange && addScaledAmounts(sent, negated(received)).value !== '0') return null;
-  return { from, to, sent, received, fee };
+  return { sent, received };
+}
+
+/** In one currency the form asks for the amount transferred; the statements
+ *  show it with the fee added on the paying side. */
+export function sameCurrencyStatements(amount: ScaledAmount, fee?: { amount: ScaledAmount; paidBy: TransferSideName }): { sent: ScaledAmount; received: ScaledAmount } {
+  if (!fee) return { sent: amount, received: amount };
+  return fee.paidBy === 'sending'
+    ? { sent: addScaledAmounts(amount, fee.amount), received: amount }
+    : { sent: amount, received: addScaledAmounts(amount, negated(fee.amount)) };
+}
+
+/** The amount transferred in one currency, from the statement amounts. */
+export function sameCurrencyAmount(fields: Pick<TransferFields, 'sent' | 'fee'>): ScaledAmount {
+  return fields.fee?.paidBy === 'sending' ? addScaledAmounts(fields.sent, negated(fields.fee.amount)) : fields.sent;
 }
 
 export type TransferPosting = {
@@ -101,36 +104,48 @@ export type TransferPosting = {
   commodity_id: number;
   quantity_value: string;
   quantity_scale: number;
+  memo: string;
   posted_on?: string;
 };
 
-/**
- * The journal entry a transfer sends. In one currency `received` is ignored:
- * what left is what arrived. The fee is charged on top of the paying side.
- * Posting days are the caller's to set (`postedOnForRequest`).
- */
-export function transferEntry(fields: TransferFields): { entry_kind?: 'exchange'; postings: TransferPosting[] } {
-  const exchange = fields.from.commodityID !== fields.to.commodityID;
-  const received = exchange ? fields.received : fields.sent;
-  const feeFrom = fields.fee && (fields.fee.paidBy === 'from' || !exchange) ? fields.fee.amount : undefined;
-  const feeTo = fields.fee && fields.fee.paidBy === 'to' && exchange ? fields.fee.amount : undefined;
+export type TransferRequestEntry = {
+  entry_kind?: 'exchange';
+  conversion_side?: TransferSideName;
+  memo?: string;
+  postings: TransferPosting[];
+};
 
-  const out = feeFrom ? addScaledAmounts(fields.sent, feeFrom) : fields.sent;
-  const into = feeTo ? addScaledAmounts(received, negated(feeTo)) : received;
+/**
+ * The journal entry a transfer sends. Days are each side's posting day ('' =
+ * the transaction date); the fee posts on its payer's day, and only a day that
+ * differs from the transaction date is sent. Memos and line keys travel back
+ * unchanged, so an unchanged save keeps them.
+ */
+export function transferEntry(fields: TransferFields, transactionDate: string): TransferRequestEntry {
+  const exchange = fields.from.commodityID !== fields.to.commodityID;
+  const sendDay = (day: string) => (day && day !== transactionDate ? day : undefined);
   const postings: TransferPosting[] = [
-    { line_key: fields.from.lineKey, account_id: fields.from.accountID, commodity_id: fields.from.commodityID, quantity_value: negateCoefficient(out.value), quantity_scale: out.scale },
-    { line_key: fields.to.lineKey, account_id: fields.to.accountID, commodity_id: fields.to.commodityID, quantity_value: into.value, quantity_scale: into.scale }
+    { line_key: fields.from.lineKey, account_id: fields.from.accountID, commodity_id: fields.from.commodityID, quantity_value: negateCoefficient(fields.sent.value), quantity_scale: fields.sent.scale, memo: fields.from.memo ?? '', posted_on: sendDay(fields.from.postedOn) },
+    { line_key: fields.to.lineKey, account_id: fields.to.accountID, commodity_id: fields.to.commodityID, quantity_value: fields.received.value, quantity_scale: fields.received.scale, memo: fields.to.memo ?? '', posted_on: sendDay(fields.to.postedOn) }
   ];
   if (fields.fee) {
+    const payer = fields.fee.paidBy === 'sending' ? fields.from : fields.to;
     postings.push({
       line_key: fields.fee.lineKey,
       account_id: fields.fee.accountID,
-      commodity_id: feeTo ? fields.to.commodityID : fields.from.commodityID,
+      commodity_id: payer.commodityID,
       quantity_value: fields.fee.amount.value,
-      quantity_scale: fields.fee.amount.scale
+      quantity_scale: fields.fee.amount.scale,
+      memo: fields.fee.memo ?? '',
+      posted_on: sendDay(payer.postedOn)
     });
   }
-  return exchange ? { entry_kind: 'exchange', postings } : { postings };
+  const entry: TransferRequestEntry = { memo: fields.entryMemo || undefined, postings };
+  if (exchange) {
+    entry.entry_kind = 'exchange';
+    entry.conversion_side = fields.conversionSide ?? 'sending';
+  }
+  return entry;
 }
 
 export type TransferProblem =
@@ -142,7 +157,9 @@ export type TransferProblem =
   | 'invalid_fee'
   | 'fee_exceeds_amount';
 
-/** Why a transfer cannot be saved yet, checked before any write. */
+/** Why a transfer cannot be saved yet, checked before any write. Amounts are
+ *  what the form holds: in one currency `sent` is the amount transferred; in
+ *  two, `sent` and `received` are the statement amounts. */
 export function transferProblem(input: {
   fromAccountID?: number;
   toAccountID?: number;
@@ -152,7 +169,7 @@ export function transferProblem(input: {
   leavesOn: string;
   arrivesOn: string;
   fee: ScaledAmount | null;
-  feePaidBy: 'from' | 'to';
+  feePaidBy: TransferSideName;
 }): TransferProblem | null {
   if (!input.fromAccountID || !input.toAccountID) return 'missing_account';
   if (input.fromAccountID === input.toAccountID) return 'same_account';
@@ -160,8 +177,12 @@ export function transferProblem(input: {
   if (input.exchange && (!input.received || coefficientSign(input.received.value) <= 0)) return 'missing_received';
   if (input.leavesOn && input.arrivesOn && input.arrivesOn < input.leavesOn) return 'arrives_before_leaves';
   if (input.fee && coefficientSign(input.fee.value) <= 0) return 'invalid_fee';
-  if (input.fee && input.exchange && input.feePaidBy === 'to' && input.received) {
-    if (coefficientSign(addScaledAmounts(input.received, negated(input.fee)).value) <= 0) return 'fee_exceeds_amount';
+  if (input.fee) {
+    const fee = { amount: input.fee, paidBy: input.feePaidBy };
+    const left = input.exchange
+      ? convertedAmounts({ sent: input.sent, received: input.received!, fee })
+      : sameCurrencyStatements(input.sent, fee);
+    if (!left || coefficientSign(left.sent.value) <= 0 || coefficientSign(left.received.value) <= 0) return 'fee_exceeds_amount';
   }
   return null;
 }

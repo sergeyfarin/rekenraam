@@ -135,9 +135,13 @@ Deliver incrementally, tracked in #441, in this order:
    dialog), #478 (My Home widgets) and #479 (More to explore), all delivered;
    #437 closed 2026-10-31. The Transfer tile and transfer entry (#481: same-
    and cross-currency, posting days and a fee on Bank fees) were delivered
-   2026-11-01. Still open: the general reconciliation out-of-date rule with
-   its account-list state and Home widget (#482, configurable window, default
-   60 days). Pinned accounts on the Accounts widget arrive with #442
+   2026-11-01, reopened on review and repaired the same day (fee and
+   conversion days, server transfer shape, safe edits). Next, before the
+   remaining UI steps: statement import matching for entered transfers
+   (#485), then currency sub-accounts on demand for multi-currency providers
+   (#486). Still open: the general reconciliation out-of-date rule with its
+   account-list state and Home widget (#482, configurable window, default 60
+   days). Pinned accounts on the Accounts widget arrive with #442
    and entered values in the briefing with #454.
 3. **Pages in their new places**, in any order after #436: settings in five
    pages with Trash moved to Transactions › Deleted and export to Reports

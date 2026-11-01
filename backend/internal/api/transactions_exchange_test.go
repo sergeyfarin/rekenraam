@@ -50,6 +50,17 @@ func TestExchangeAPICreatesReadsAndExports(t *testing.T) {
 	assert.Equal(t, "64", conversion.Market.Cost.QuantityValue.String(), "0.64 EUR below the market rate")
 	assert.Equal(t, "2026-06-01", conversion.Market.ObservationDate)
 
+	// The transfer shape carries the statement amounts, days and fee payer,
+	// on the read and in lists.
+	require.NotNil(t, read.Transfer)
+	assert.Equal(t, euro.ID, read.Transfer.Sending.AccountID)
+	assert.Equal(t, "-10250", read.Transfer.Sending.QuantityValue.String())
+	assert.Equal(t, "2026-06-03", read.Transfer.Receiving.PostedOn)
+	require.NotNil(t, read.Transfer.Fee)
+	assert.Equal(t, "sending", read.Transfer.Fee.PaidBy)
+	assert.Equal(t, "sending", read.Transfer.ConversionSide)
+	require.NotNil(t, created.Transfer)
+
 	// A request naming a system account is refused before any write.
 	createTransactionForSession(t, handler, f.sessionCookie, f.csrfToken, `{
 		"transaction_date":"2026-06-01",

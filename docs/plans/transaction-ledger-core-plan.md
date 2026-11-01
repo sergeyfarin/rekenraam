@@ -907,8 +907,9 @@ Assets:Savings              +100 EUR
 ```
 
 FX exchange (entered as an `exchange` entry naming only the two account
-postings and an optional fee; the service adds the trading legs, #481; see
-`docs/conventions.md`, Currency exchange). With a 2.50 EUR fee on top:
+postings as their statements show them and an optional fee; the service adds
+the trading legs on the converting side's day, #481; see `docs/conventions.md`,
+Currency exchange and transfer shape). With a 2.50 EUR fee on top:
 
 ```text
 Assets:EUR Checking        -1002.50 EUR
