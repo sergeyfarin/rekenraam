@@ -22,22 +22,41 @@ test('capture website screens from a disposable synthetic book', async ({ browse
     });
     try {
       const page = await context.newPage();
-      const seeded = await seedReferenceBook(page);
+      // A disposable book needs no collision suffix, so fixture names stay clean.
+      const seeded = await seedReferenceBook(page, '');
+      const reportRange = 'start_date=2026-01-01&end_date=2026-03-31';
       const captures = [
-        { route: `/app/ledger/transactions?account_id=${seeded.ids.get('checking')}`, name: 'transactions', heading: 'Transactions' },
-        { route: '/app/investments', name: 'investments', heading: 'Investments' }
+        {
+          route: `/app/reports/spending?${reportRange}&group_by=category`,
+          file: 'docs/images/reports-spending.png',
+          heading: 'Spending',
+          panel: 'Where money went'
+        },
+        {
+          route: `/app/ledger/transactions?account_id=${seeded.ids.get('checking')}`,
+          file: 'website/assets/transactions.png',
+          heading: 'Transactions'
+        },
+        {
+          route: '/app/investments',
+          file: 'website/assets/investments.png',
+          heading: 'Investments'
+        }
       ];
-      for (const { route, name, heading } of captures) {
+      for (const { route, file, heading, panel } of captures) {
         await page.goto(route);
         await expect(page.getByRole('heading', { name: heading, exact: true }).first()).toBeVisible();
+        if (panel) {
+          await expect(page.getByRole('heading', { name: panel, exact: true })).toBeVisible();
+        }
         await expect(page.getByRole('table').first().locator('tbody tr').first()).toBeVisible();
-        if (name === 'investments') {
+        if (file.endsWith('/investments.png')) {
           await page.getByRole('table').first().locator('tbody tr').first().click();
           await expect(page.getByRole('complementary', { name: 'Lot detail' })).toContainText('Cost basis');
         }
         await page.evaluate(() => document.fonts.ready);
         await page.screenshot({
-          path: join(repoRoot, 'website/assets', `${name}.png`),
+          path: join(repoRoot, file),
           animations: 'disabled'
         });
       }
@@ -47,7 +66,7 @@ test('capture website screens from a disposable synthetic book', async ({ browse
         fixture: 'fixtures/reference-book.json',
         language: 'en',
         viewport: { width: 1440, height: 1050 },
-        files: captures.map(({ name, route }) => ({ file: `${name}.png`, route })),
+        files: captures.map(({ file, route }) => ({ file, route })),
         note: 'Disposable database; synthetic reference book; no live providers or owner records.'
       }, null, 2) + '\n');
     } finally {

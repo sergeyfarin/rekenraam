@@ -57,7 +57,7 @@ function renderPage(locale, t, config, notFound = false) {
   const links = languageLinks(locale, config);
   const heading = notFound ? t.notFoundTitle : t.metaTitle;
   const screenshot = (file, caption, alt, primary = false) => `<figure class="screenshot" data-gallery-slide data-caption="${e(caption)}">
-    <a class="screenshot-link" href="${asset(file)}" aria-label="${e(`${t.openScreenshot}: ${caption}`)}"><img src="${asset(file)}" alt="${e(alt)}" width="${primary ? 2880 : 1440}" height="${primary ? 2224 : 1050}" ${primary ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async"></a>
+    <a class="screenshot-link" href="${asset(file)}" aria-label="${e(`${t.openScreenshot}: ${caption}`)}"><img src="${asset(file)}" alt="${e(alt)}" width="1440" height="1050" ${primary ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async"></a>
     <figcaption><span>${e(caption)}</span><a href="${asset(file)}">${e(t.openScreenshot)} <span aria-hidden="true">↗</span></a></figcaption>
   </figure>`;
 

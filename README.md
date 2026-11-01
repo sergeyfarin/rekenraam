@@ -16,7 +16,7 @@ structures are still changing.
 
 *Rekenraam* is Dutch for abacus.
 
-![Spending report in Rekenraam, showing ten months of categorized expenses using sample data](docs/images/reports-spending.png)
+![Spending report in Rekenraam, showing categorized expenses and their share of spending in euros and US dollars](docs/images/reports-spending.png)
 
 ## What it does
 
