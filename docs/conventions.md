@@ -635,6 +635,16 @@ has actual installations, its migration files are immutable.
   blank. Configured shipping catalogs must match the base locale in keys and
   placeholders, contain nonempty text, and have unique IDs across domains.
   `catalogs:check` enforces this before frontend dev/check/build and in CI.
+- **Maintained and partial locales (owner decision 2026-11-01, #493).** While
+  screens change quickly, `en`, `nl` and `ru` are *maintained*: every new or
+  changed message lands in all three in the same change. `es`, `fr` and `de`
+  are *partial*: a new or changed message may be missing there and falls back
+  to English, but an existing key keeps matching placeholders and plural shape.
+  A generated list tracks what partial locales lack; they are caught up in one
+  batch when a slice settles, and must be complete (or hidden) before the
+  v0.1.0 tag. The translation boundary, locale-aware formatting and per-message
+  fallback are never relaxed. Until #493 changes `catalogs:check`, it still
+  requires all six.
 - A message whose wording depends on a count is one Paraglide plural variant
   (`declarations` with `input count`, `input n` and
   `local countPlural = count: plural`; `match` keyed `countPlural=one`,

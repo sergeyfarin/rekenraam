@@ -290,6 +290,9 @@ candidate needs fresh evidence for its actual baseline.
 - Record an explicit list of investment limits and resolve the retained
   image-advisory disposition (#337); track the driver prerequisite (#356)
   separately with its admission evidence.
+- Complete or hide the partial locales (`es`, `fr`, `de`): no message may
+  fall back to English in a shipped locale (#493), and native review (#102)
+  covers the batch.
 - Freeze installed-release migrations as append-only at the tag. The
   [baseline and reset contract](implemented.md) records the schema consolidation;
   later schema changes follow the release lifecycle in `docs/conventions.md`.
