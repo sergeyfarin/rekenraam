@@ -908,6 +908,22 @@ non-trivial diff (yours or reviewed):
     dialog. Named checks: `home-entry.spec.ts` (payee chain, report refresh,
     failed session refresh, keyboard category), `invalidate.test.ts`,
     `suggestion-keys.test.ts`.
+79. **An editor that restates more than the owner changed** — #481 took three
+    reviews: a journal the server could rebuild exactly was still unsafe for
+    the form (a refund read as a fee), the fallback split dropped system
+    postings, mode switches rebuilt postings without their line keys (a
+    cleared posting came back uncleared, a reconciled one asked for an
+    override), and metadata round-tripped through JavaScript objects (an
+    integer above 2^53 rounded). Acceptance for an editor is the browser's own
+    read → edit → save and every mode switch, keeping amounts, days,
+    accounts, currencies, memos, line keys, reconciliation state and recorded
+    choices; each transition applies the same eligibility and carry rules as
+    the initial load. Data the form does not show stays on the server: an
+    omitted field on an edit keeps the stored value exactly (metadata by line
+    key, the #311 pattern), never a client copy. Named checks:
+    `transfer-entry.spec.ts` (preservation gates),
+    `transaction-edit-preservation.spec.ts`,
+    `TestTransactionEditKeepsOmittedMetadataExactly`.
 
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.

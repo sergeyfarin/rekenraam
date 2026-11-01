@@ -19,6 +19,15 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, input Create
 		if err := s.rejectInvestmentLinkedMutation(ctx, *input.CorrectionOfTransactionID); err != nil {
 			return Transaction{}, err
 		}
+		// A correction restates the original: what it leaves out of the
+		// metadata the original recorded is kept, as an edit keeps it.
+		original, err := s.repository.TransactionByID(ctx, BookID, *input.CorrectionOfTransactionID)
+		if err != nil && !errors.Is(err, db.ErrNotFound) {
+			return Transaction{}, fmt.Errorf("read corrected transaction: %w", err)
+		}
+		if err == nil {
+			input.Spec = preserveOmittedMetadata(input.Spec, toTransaction(original))
+		}
 	}
 	params, err := s.prepareCreateTransactionForWrite(ctx, input)
 	if err != nil {
@@ -218,6 +227,7 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, input Update
 	if err != nil {
 		return Transaction{}, err
 	}
+	input.Spec = preserveOmittedMetadata(input.Spec, toTransaction(current))
 
 	// The transaction's current lifecycle state decides the final effective
 	// status, not whatever the request body's Status field claims: a draft
@@ -321,6 +331,47 @@ func keptJournalSpec(spec TransactionInput, current db.TransactionRecord, keep b
 	stored := storedTransactionInput(toTransaction(current))
 	spec.JournalEntries, spec.storedJournal = stored.JournalEntries, true
 	return spec, nil
+}
+
+// preserveOmittedMetadata keeps the stored metadata an edit leaves out
+// (#481, the #311 pattern): an omitted transaction metadata keeps the
+// transaction's, an omitted entry metadata keeps the entries' when they all
+// share one, and an omitted posting metadata keeps the stored posting's with
+// the same line key. The stored text is kept as recorded, so no editor that
+// cannot carry a JSON number exactly ever rewrites it; an explicit {} clears.
+func preserveOmittedMetadata(spec TransactionInput, stored Transaction) TransactionInput {
+	if strings.TrimSpace(spec.MetadataJSON) == "" {
+		spec.MetadataJSON = stored.MetadataJSON
+	}
+	entryMetadata, shared := "", true
+	postingMetadata := map[string]string{}
+	for index, entry := range stored.JournalEntries {
+		if index == 0 {
+			entryMetadata = entry.MetadataJSON
+		} else if entry.MetadataJSON != entryMetadata {
+			shared = false
+		}
+		for _, posting := range entry.Postings {
+			postingMetadata[posting.LineKey] = posting.MetadataJSON
+		}
+	}
+	entries := make([]JournalEntryInput, len(spec.JournalEntries))
+	for entryIndex, entry := range spec.JournalEntries {
+		if strings.TrimSpace(entry.MetadataJSON) == "" && shared {
+			entry.MetadataJSON = entryMetadata
+		}
+		postings := make([]PostingInput, len(entry.Postings))
+		for postingIndex, posting := range entry.Postings {
+			if recorded, ok := postingMetadata[strings.TrimSpace(posting.LineKey)]; ok && strings.TrimSpace(posting.MetadataJSON) == "" && posting.LineKey != "" {
+				posting.MetadataJSON = recorded
+			}
+			postings[postingIndex] = posting
+		}
+		entry.Postings = postings
+		entries[entryIndex] = entry
+	}
+	spec.JournalEntries = entries
+	return spec
 }
 
 func (s *TransactionService) PostTransaction(ctx context.Context, input PostTransactionInput) (Transaction, error) {

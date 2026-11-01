@@ -16,7 +16,7 @@
   import { isOrdinaryEntryAccount } from './entry-account';
   import { suggestionKey } from './suggestion-keys.ts';
   import { editablePostings, hasPostingDay, postedOnForRequest } from './posted-on';
-  import { simpleFormKeeps, splitEntryCarry, splitEntryRequest, type SplitEntryCarry, type SplitPosting } from './editable-entry';
+  import { simpleFormFits, simpleFormKeeps, splitEntryCarry, splitEntryRequest, type SplitEntryCarry, type SplitPosting } from './editable-entry';
   import {
     convertedAmounts,
     sameCurrencyAmount,
@@ -94,11 +94,10 @@
     /** The day this account posting posts on, '' when it follows the
      *  transaction date (#187). */
     postedOn: string;
-    /** Carried, never shown (#481): the day a category was restated on, its
-     *  tags and its metadata. */
+    /** Carried, never shown (#481): the day a category was restated on and
+     *  its tags. */
     followsDay?: string;
     tagIDs?: number[];
-    metadata?: Record<string, unknown>;
   };
 
   // ── Props ─────────────────────────────────────────────────────────
@@ -582,8 +581,7 @@
           lineKey: p.line_key,
           postedOn: isAccount ? (p.posted_on ?? '') : '',
           followsDay: isAccount ? undefined : p.posted_on,
-          tagIDs: p.tag_ids,
-          metadata: p.metadata
+          tagIDs: p.tag_ids
         };
       });
     } else {
@@ -869,7 +867,8 @@
     ];
   }
 
-  function buildSplitJournalEntries(): TransactionRequest['journal_entries'] {
+  /** The filled split legs as postings, or null when one cannot be parsed. */
+  function splitPostings(): SplitPosting[] | null {
     const legs = splitLegs.filter(
       (leg) => leg.accountID !== '' && leg.commodityID !== '' && leg.amountStr.trim() !== ''
     );
@@ -879,7 +878,7 @@
       const parsed = parseDecimalAmount(leg.amountStr);
       // A leg the user filled in but we cannot parse must not silently become a
       // zero posting — refuse to build the payload, as the simple tier does.
-      if (parsed === null) return [];
+      if (parsed === null) return null;
       const account = accountForLeg(leg.accountID);
       const isAccount = hasPostingDay(account);
       postings.push({
@@ -892,12 +891,15 @@
         isAccount,
         postedOn: mode === 'template' || !isAccount ? '' : leg.postedOn.trim(),
         followsDay: mode === 'template' ? undefined : leg.followsDay,
-        tagIDs: leg.tagIDs,
-        metadata: leg.metadata
+        tagIDs: leg.tagIDs
       });
     }
+    return postings;
+  }
 
-    if (postings.length === 0) return [];
+  function buildSplitJournalEntries(): TransactionRequest['journal_entries'] {
+    const postings = splitPostings();
+    if (!postings || postings.length === 0) return [];
 
     // Account postings in two currencies are an exchange: the server adds
     // the commodity_trading legs the editor never shows (#481). What the
@@ -1007,7 +1009,6 @@
       splitCarry = {
         entryKind: entry.entry_kind ?? splitCarry.entryKind,
         memo: entry.memo,
-        metadata: splitCarry.metadata,
         conversionSide: entry.conversion_side,
         feePaidBy: entry.fee_paid_by
       };
@@ -1071,6 +1072,8 @@
           commodityID: inferredCommodityID ? String(inferredCommodityID) : '',
           amountStr: formatEditableAmount(assetLedger, scale),
           memo: '',
+          // The same lines, so their reconciliation state stays theirs.
+          lineKey: simpleLineKeys.account,
           postedOn: accountPostedOn
         },
         {
@@ -1078,6 +1081,7 @@
           commodityID: inferredCommodityID ? String(inferredCommodityID) : '',
           amountStr: formatEditableAmount(negateCoefficient(assetLedger), scale),
           memo: '',
+          lineKey: simpleLineKeys.category,
           postedOn: ''
         }
       ];
@@ -1085,7 +1089,33 @@
     tier = 'split';
   }
 
+  // The split as the simple form would show it, or null when it would drop
+  // something; an untouched new split switches freely.
+  const splitIsEmpty = $derived(splitLegs.every((leg) => leg.accountID === '' && leg.amountStr.trim() === ''));
+  const simpleFit = $derived.by(() => {
+    if (tier !== 'split' || preservePostings) return null;
+    const postings = splitPostings();
+    if (!postings) return null;
+    const categoryIDs = new Set((categoriesQuery.data?.categories ?? []).map((category: CategoryResponse) => category.id));
+    return simpleFormFits(postings, splitCarry, (id) => categoryIDs.has(id));
+  });
+
   function switchToSimple() {
+    const fit = simpleFit;
+    if (fit) {
+      const account = assetLiabilityAccounts.find((a: AccountResponse) => a.id === fit.account.accountID);
+      accountID = fit.account.accountID;
+      simpleCommodityID = fit.account.commodityID;
+      amountStr = inflowPositiveAmount({ quantity_value: fit.account.value, quantity_scale: fit.account.scale, account_class: account?.account_class ?? 'asset' });
+      accountPostedOn = fit.account.postedOn;
+      showAccountPostedOn = fit.account.postedOn !== '';
+      categoryID = fit.category.accountID;
+      const category = categoriesQuery.data?.categories.find((c: CategoryResponse) => c.id === fit.category.accountID);
+      categoryLabel = category ? categoryDisplayName(category) : String(fit.category.accountID);
+      simpleLineKeys = { account: fit.account.lineKey, category: fit.category.lineKey };
+    } else if (!splitIsEmpty) {
+      return;
+    }
     tier = 'simple';
   }
 
@@ -1709,13 +1739,15 @@
     <div class="space-y-3">
       <div class="flex items-center justify-between">
         <span class={labelClass}>{m.transactions_split_title()}</span>
-        <button
-          type="button"
-          class="text-xs font-medium text-accent underline-offset-2 hover:underline"
-          onclick={switchToSimple}
-        >
-          {m.transactions_tier_switch_simple()}
-        </button>
+        {#if splitIsEmpty || simpleFit}
+          <button
+            type="button"
+            class="text-xs font-medium text-accent underline-offset-2 hover:underline"
+            onclick={switchToSimple}
+          >
+            {m.transactions_tier_switch_simple()}
+          </button>
+        {/if}
       </div>
 
       {#each splitLegs as leg, i (i)}

@@ -50,14 +50,14 @@ type editablePostingResponse struct {
 	QuantityScale int               `json:"quantity_scale"`
 	PostedOn      string            `json:"posted_on,omitempty"`
 	Memo          string            `json:"memo"`
-	Metadata      json.RawMessage   `json:"metadata"`
 	TagIDs        []int64           `json:"tag_ids"`
 }
 
+// editableEntryResponse leaves metadata out: an edit that omits it keeps the
+// stored text exactly (#481), which a browser round trip could not.
 type editableEntryResponse struct {
 	EntryKind      string                    `json:"entry_kind"`
 	Memo           string                    `json:"memo"`
-	Metadata       json.RawMessage           `json:"metadata"`
 	ConversionSide string                    `json:"conversion_side,omitempty"`
 	FeePaidBy      string                    `json:"fee_paid_by,omitempty"`
 	Postings       []editablePostingResponse `json:"postings"`
@@ -68,7 +68,7 @@ func toEditableEntryResponse(entry *app.JournalEntryInput) *editableEntryRespons
 		return nil
 	}
 	response := &editableEntryResponse{
-		EntryKind: entry.EntryKind, Memo: entry.Memo, Metadata: jsonOrEmptyObject(entry.MetadataJSON),
+		EntryKind: entry.EntryKind, Memo: entry.Memo,
 		ConversionSide: entry.ConversionSide, FeePaidBy: entry.FeePaidBy,
 		Postings: make([]editablePostingResponse, 0, len(entry.Postings)),
 	}
@@ -80,17 +80,10 @@ func toEditableEntryResponse(entry *app.JournalEntryInput) *editableEntryRespons
 		response.Postings = append(response.Postings, editablePostingResponse{
 			LineKey: posting.LineKey, AccountID: posting.AccountID, CommodityID: posting.CommodityID,
 			QuantityValue: posting.QuantityValue, QuantityScale: posting.QuantityScale, PostedOn: posting.PostedOn,
-			Memo: posting.Memo, Metadata: jsonOrEmptyObject(posting.MetadataJSON), TagIDs: tagIDs,
+			Memo: posting.Memo, TagIDs: tagIDs,
 		})
 	}
 	return response
-}
-
-func jsonOrEmptyObject(value string) json.RawMessage {
-	if value == "" {
-		return json.RawMessage("{}")
-	}
-	return json.RawMessage(value)
 }
 
 type transferSideResponse struct {

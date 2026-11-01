@@ -1,4 +1,4 @@
-import { coefficientSign } from '#lib/money/amount.ts';
+import { addScaledAmounts, coefficientSign } from '#lib/money/amount.ts';
 import type { components } from '#lib/api/schema.js';
 import type { TransactionRequest } from '#lib/api/transactions.ts';
 
@@ -6,8 +6,10 @@ import type { TransactionRequest } from '#lib/api/transactions.ts';
  * The split editor's journal (#481). The server restates a saved transaction
  * as the one journal entry that rebuilds it exactly (`editable_entry`); the
  * editor shows its postings and sends them back with what it does not show
- * carried unchanged: a category's own day, posting tags and metadata, the
- * entry's kind, memo and metadata, and a transfer's recorded choices. A
+ * carried unchanged: a category's own day, posting tags, the entry's kind and
+ * memo, and a transfer's recorded choices. Metadata never makes the trip: an
+ * edit that omits it keeps the stored JSON exactly, which a JavaScript object
+ * could not (an integer above 2^53 would round). A
  * transaction without one is edited only in what it describes
  * (`keep_journal`), never restated by the editor.
  */
@@ -21,7 +23,6 @@ export type TransferSideName = 'sending' | 'receiving';
 export type SplitEntryCarry = {
   entryKind?: JournalEntryRequest['entry_kind'];
   memo?: string;
-  metadata?: Record<string, unknown>;
   conversionSide?: TransferSideName;
   feePaidBy?: TransferSideName;
 };
@@ -41,35 +42,51 @@ export type SplitPosting = {
   postedOn: string;
   followsDay?: string;
   tagIDs?: number[];
-  metadata?: Record<string, unknown>;
 };
 
 export function splitEntryCarry(entry: EditableEntry): SplitEntryCarry {
   return {
     entryKind: entry.entry_kind,
     memo: entry.memo,
-    metadata: entry.metadata,
     conversionSide: entry.conversion_side,
     feePaidBy: entry.fee_paid_by
   };
 }
 
-const hasKeys = (value: Record<string, unknown> | undefined) => !!value && Object.keys(value).length > 0;
-
 /** Whether the simple form, which carries none of this, shows the entry
- *  without losing anything: one account and one category, no memo, tag,
- *  metadata or category day, an ordinary entry. */
+ *  without losing anything: one account and one category, no memo, tag or
+ *  category day, an ordinary entry. */
 export function simpleFormKeeps(entry: EditableEntry, isAccount: (accountID: number) => boolean): boolean {
   const accounts = entry.postings.filter((posting) => isAccount(posting.account_id));
   if (entry.postings.length !== 2 || accounts.length !== 1) return false;
-  if (entry.entry_kind !== 'ordinary' || entry.memo || hasKeys(entry.metadata) || entry.conversion_side || entry.fee_paid_by) return false;
+  if (entry.entry_kind !== 'ordinary' || entry.memo || entry.conversion_side || entry.fee_paid_by) return false;
   return entry.postings.every(
     (posting) =>
       !posting.memo &&
       !posting.tag_ids.length &&
-      !hasKeys(posting.metadata) &&
       (isAccount(posting.account_id) || !posting.posted_on)
   );
+}
+
+/**
+ * The simple form's account and category for a split that it shows without
+ * losing anything, or null: the same eligibility as opening in the simple
+ * form, applied when the owner switches to it, so preservation never depends
+ * on the route taken through the editor.
+ */
+export function simpleFormFits(
+  postings: SplitPosting[],
+  carry: SplitEntryCarry,
+  isCategory: (accountID: number) => boolean
+): { account: SplitPosting; category: SplitPosting } | null {
+  if (postings.length !== 2) return null;
+  const account = postings.find((posting) => posting.isAccount);
+  const category = postings.find((posting) => !posting.isAccount && isCategory(posting.accountID));
+  if (!account || !category || account.commodityID !== category.commodityID) return null;
+  if (coefficientSign(addScaledAmounts({ value: account.value, scale: account.scale }, { value: category.value, scale: category.scale }).value) !== 0) return null;
+  if ((carry.entryKind && carry.entryKind !== 'ordinary') || carry.memo || carry.conversionSide || carry.feePaidBy) return null;
+  if (postings.some((posting) => posting.memo || posting.tagIDs?.length || posting.followsDay)) return null;
+  return { account, category };
 }
 
 /**
@@ -117,7 +134,6 @@ export function splitEntryRequest(postings: SplitPosting[], carry: SplitEntryCar
       quantity_value: posting.value,
       quantity_scale: posting.scale,
       memo: posting.memo,
-      metadata: posting.metadata,
       tag_ids: posting.tagIDs
     };
   });
@@ -126,7 +142,6 @@ export function splitEntryRequest(postings: SplitPosting[], carry: SplitEntryCar
     entry_date: transactionDate,
     entry_kind: entryKind,
     memo: carry.memo || undefined,
-    metadata: hasKeys(carry.metadata) ? carry.metadata : undefined,
     postings: requestPostings
   };
   if (exchange && carry.conversionSide) entry.conversion_side = carry.conversionSide;

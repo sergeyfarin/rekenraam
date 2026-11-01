@@ -194,3 +194,68 @@ func requireValidationContains(t *testing.T, err error, message string) {
 	require.ErrorAs(t, err, &validation)
 	assert.Contains(t, validation.Message, message)
 }
+
+// The third #481 review: an edit that leaves metadata out keeps the stored
+// JSON exactly, so an integer above 2^53 survives a browser that cannot hold
+// it as a number (the #311 pattern).
+func TestTransactionEditKeepsOmittedMetadataExactly(t *testing.T) {
+	t.Parallel()
+	f := newExchangeFixture(t)
+	ctx := context.Background()
+	const exactJSON = `{"source":{"id":9007199254740993,"rate":0.10000000000000000555}}`
+
+	created, err := f.create(t, TransactionInput{TransactionDate: "2026-06-01", Description: "Metadata", MetadataJSON: exactJSON, JournalEntries: []JournalEntryInput{{
+		MetadataJSON: exactJSON,
+		Postings: []PostingInput{
+			{AccountID: f.cashAccountID, CommodityID: f.eurCommodityID, QuantityValue: exact.New(-500), QuantityScale: 2, MetadataJSON: exactJSON},
+			{AccountID: f.feesAccountID, CommodityID: f.eurCommodityID, QuantityValue: exact.New(500), QuantityScale: 2},
+		},
+	}}})
+	require.NoError(t, err)
+	omitted := func(transaction Transaction) TransactionInput {
+		spec := transactionInputFromTransaction(transaction)
+		spec.MetadataJSON = ""
+		for entryIndex := range spec.JournalEntries {
+			spec.JournalEntries[entryIndex].MetadataJSON = ""
+			for postingIndex := range spec.JournalEntries[entryIndex].Postings {
+				spec.JournalEntries[entryIndex].Postings[postingIndex].MetadataJSON = ""
+			}
+		}
+		return spec
+	}
+	requireExact := func(transaction Transaction) {
+		t.Helper()
+		assert.Equal(t, exactJSON, transaction.MetadataJSON)
+		assert.Equal(t, exactJSON, transaction.JournalEntries[0].MetadataJSON)
+		assert.Equal(t, exactJSON, postingByLineKey(transaction, created.JournalEntries[0].Postings[0].LineKey).MetadataJSON)
+	}
+
+	spec := omitted(created)
+	spec.Description = "Metadata edited"
+	updated, err := f.transactionService.UpdateTransaction(ctx, UpdateTransactionInput{
+		ExpectedVersionID: created.VersionID, OwnerUserID: f.ownerUserID, OriginType: "browser_api",
+		TransactionID: created.ID, Spec: spec, ChangeReason: "description only",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Metadata edited", updated.Description)
+	requireExact(updated)
+
+	// A correction restating the original keeps it by line key too.
+	corrected, err := f.transactionService.CreateTransaction(ctx, CreateTransactionInput{
+		OwnerUserID: f.ownerUserID, OriginType: "browser_api", CorrectionOfTransactionID: &updated.ID, Spec: omitted(updated),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, exactJSON, corrected.MetadataJSON)
+	assert.Equal(t, exactJSON, corrected.JournalEntries[0].MetadataJSON)
+
+	// An explicit {} clears.
+	spec = omitted(updated)
+	spec.JournalEntries[0].Postings[0].MetadataJSON = "{}"
+	cleared, err := f.transactionService.UpdateTransaction(ctx, UpdateTransactionInput{
+		ExpectedVersionID: updated.VersionID, OwnerUserID: f.ownerUserID, OriginType: "browser_api",
+		TransactionID: updated.ID, Spec: spec, ChangeReason: "clear",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "{}", postingByLineKey(cleared, created.JournalEntries[0].Postings[0].LineKey).MetadataJSON)
+	assert.Equal(t, exactJSON, cleared.MetadataJSON)
+}

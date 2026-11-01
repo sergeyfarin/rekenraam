@@ -30581,18 +30581,12 @@ export interface components {
              */
             posted_on?: string;
             memo: string;
-            metadata: {
-                [key: string]: unknown;
-            };
             tag_ids: number[];
         };
-        /** @description One journal entry request that rebuilds the stored journal exactly (#481): every posting but the system ones the server builds. */
+        /** @description One journal entry request that rebuilds the stored journal exactly (#481): every posting but the system ones the server builds. Metadata is left out: an edit that omits it keeps the stored metadata exactly. */
         EditableEntry: {
             entry_kind: components["schemas"]["JournalEntryKind"];
             memo: string;
-            metadata: {
-                [key: string]: unknown;
-            };
             /** @enum {string} */
             conversion_side?: "sending" | "receiving";
             /** @enum {string} */
@@ -30738,6 +30732,7 @@ export interface components {
             /** Format: int64 */
             commodity_id: number;
             memo?: string;
+            /** @description On PATCH or a correction, omitted keeps the stored posting's metadata with the same line_key exactly; {} clears it (#481). */
             metadata?: {
                 [key: string]: unknown;
             };
@@ -30761,6 +30756,7 @@ export interface components {
              */
             fee_paid_by?: "sending" | "receiving";
             memo?: string;
+            /** @description On PATCH or a correction, omitted keeps the stored entries' metadata exactly when they share one; {} clears it (#481). */
             metadata?: {
                 [key: string]: unknown;
             };
@@ -30780,6 +30776,7 @@ export interface components {
             description?: string;
             external_ref_hint?: string;
             note_markdown?: string;
+            /** @description On PATCH or a correction, omitted keeps the stored metadata exactly; {} clears it (#481). */
             metadata?: {
                 [key: string]: unknown;
             };

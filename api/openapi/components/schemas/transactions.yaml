@@ -319,7 +319,7 @@ TransferShape:
       $ref: "../../openapi.yaml#/components/schemas/JournalEntryKind"
 EditablePosting:
   type: object
-  required: [line_key, account_id, commodity_id, quantity_value, quantity_scale, memo, metadata, tag_ids]
+  required: [line_key, account_id, commodity_id, quantity_value, quantity_scale, memo, tag_ids]
   properties:
     line_key: {type: string}
     account_id: {type: integer, format: int64}
@@ -333,25 +333,20 @@ EditablePosting:
         The posting's day where the posted-date rule would not choose it by
         itself; a category's day included, which the editor keeps unshown.
     memo: {type: string}
-    metadata:
-      type: object
-      additionalProperties: true
     tag_ids:
       type: array
       items: {type: integer, format: int64}
 EditableEntry:
   type: object
-  required: [entry_kind, memo, metadata, postings]
+  required: [entry_kind, memo, postings]
   description: >-
     One journal entry request that rebuilds the stored journal exactly
-    (#481): every posting but the system ones the server builds.
+    (#481): every posting but the system ones the server builds. Metadata is
+    left out: an edit that omits it keeps the stored metadata exactly.
   properties:
     entry_kind:
       $ref: "../../openapi.yaml#/components/schemas/JournalEntryKind"
     memo: {type: string}
-    metadata:
-      type: object
-      additionalProperties: true
     conversion_side: {type: string, enum: [sending, receiving]}
     fee_paid_by: {type: string, enum: [sending, receiving]}
     postings:
@@ -668,6 +663,8 @@ PostingRequest:
     memo:
       type: string
     metadata:
+      description: >-
+        On PATCH or a correction, omitted keeps the stored posting's metadata with the same line_key exactly; {} clears it (#481).
       type: object
       additionalProperties: true
     tag_ids:
@@ -703,6 +700,8 @@ JournalEntryRequest:
     memo:
       type: string
     metadata:
+      description: >-
+        On PATCH or a correction, omitted keeps the stored entries' metadata exactly when they share one; {} clears it (#481).
       type: object
       additionalProperties: true
     postings:
@@ -733,6 +732,8 @@ TransactionRequest:
     note_markdown:
       type: string
     metadata:
+      description: >-
+        On PATCH or a correction, omitted keeps the stored metadata exactly; {} clears it (#481).
       type: object
       additionalProperties: true
     needs_review:
