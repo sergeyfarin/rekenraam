@@ -13,7 +13,7 @@ for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru'] as const) {
     const messages = JSON.parse(readFileSync(new URL(`../../frontend/messages/settings/${locale}.json`, import.meta.url), 'utf8'));
     const description = `Exact locale ${locale} ${Date.now()}`;
 
-    await page.goto('/app/settings/language');
+    await page.goto('/app/settings/preferences');
     await page.getByRole('button', { name: languages[locale], exact: true }).click();
     await expect(page.getByRole('button', { name: languages[locale], exact: true })).toHaveAttribute('aria-pressed', 'true');
     await page.goto('/app/ledger/transactions');

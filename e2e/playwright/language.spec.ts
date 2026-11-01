@@ -10,7 +10,7 @@ import { ensureBrowserSession } from './support/session';
 test('switches the interface language and keeps it across navigation', async ({ page }) => {
   await ensureBrowserSession(page);
 
-  await page.goto('/app/settings/language');
+  await page.goto('/app/settings/preferences');
   await expect(page.getByRole('heading', { name: 'Language' })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 
@@ -22,7 +22,7 @@ test('switches the interface language and keeps it across navigation', async ({ 
   // The two catalogs compile into one namespace but are separate files, so a
   // string from each has to be checked: 'Язык' comes from messages/app and the
   // settings-section nav from messages/settings.
-  await expect(page.getByRole('link', { name: 'Оформление' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Предпочтения' })).toBeVisible();
 
   await page.goto('/app/reports');
   await expect(page.getByRole('heading', { name: 'Отчёты', level: 1 })).toBeVisible();
@@ -33,7 +33,7 @@ test('switches the interface language and keeps it across navigation', async ({ 
   await expect(page.getByRole('heading', { name: 'Чистые активы', level: 1 })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Группировка' })).toBeVisible();
 
-  await page.goto('/app/settings/language');
+  await page.goto('/app/settings/preferences');
   await page.getByRole('button', { name: 'English' }).click();
   await expect(page.getByRole('heading', { name: 'Language' })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');

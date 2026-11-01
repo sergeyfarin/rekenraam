@@ -70,13 +70,12 @@ const routes: Route[] = [
   { name: 'spending', route: '/app/reports/spending', path: () => `/app/reports/spending?${reportRange}`, data: true },
   { name: 'cashflow', route: '/app/reports/cashflow', path: () => `/app/reports/cashflow?${reportRange}`, data: true },
   { name: 'net worth', route: '/app/reports/net-worth', path: () => `/app/reports/net-worth?${reportRange}`, data: true },
-  { name: 'settings', route: '/app/settings', path: () => '/app/settings', data: true, inlineErrors: true },
-  { name: 'appearance', route: '/app/settings/appearance', path: () => '/app/settings/appearance', data: false },
+  { name: 'reports export', route: '/app/reports/export', path: () => '/app/reports/export', data: true },
+  { name: 'settings general', route: '/app/settings', path: () => '/app/settings', data: true, inlineErrors: true },
+  { name: 'preferences', route: '/app/settings/preferences', path: () => '/app/settings/preferences', data: false },
   { name: 'currencies', route: '/app/settings/currencies', path: () => '/app/settings/currencies', data: true },
-  { name: 'language', route: '/app/settings/language', path: () => '/app/settings/language', data: false },
   { name: 'security', route: '/app/settings/security', path: () => '/app/settings/security', data: true },
-  { name: 'data', route: '/app/settings/data', path: () => '/app/settings/data', data: true },
-  { name: 'trash', route: '/app/settings/trash', path: () => '/app/settings/trash', data: true }
+  { name: 'data and backups', route: '/app/settings/data', path: () => '/app/settings/data', data: true }
 ];
 
 // Old paths only redirect (#436/#460); shell-navigation tests the browser
@@ -85,7 +84,8 @@ const legacyRoutes = new Set([
   '/app/pricing', '/app/accounts', '/app/accounts/[id]/register',
   '/app/transactions', '/app/categories', '/app/categories/[id]',
   '/app/import', '/app/import/dividends', '/app/reconcile',
-  '/app/budgets', '/app/recurring', '/app/forecast'
+  '/app/budgets', '/app/recurring', '/app/forecast',
+  '/app/settings/appearance', '/app/settings/language', '/app/settings/trash'
 ]);
 
 const reportRange = 'start_date=2026-01-01&end_date=2026-03-31&bucket=month';

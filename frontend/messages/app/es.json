@@ -362,8 +362,6 @@
   "import_fetching_cancel": "Cancelar",
   "import_fetching_failed_title": "La descarga ha fallado",
   "import_fetching_failed_copy": "Revisa la clave de API de la conexión e inténtalo de nuevo.",
-  "settings_card_language_title": "Idioma",
-  "settings_card_language_copy": "Elija el idioma en que se muestra la interfaz.",
   "language_title": "Idioma",
   "language_copy": "El idioma de la interfaz se guarda en este navegador. Los importes, las fechas y los números siguen el idioma que elija.",
   "language_select_legend": "Idioma de la interfaz",
@@ -1902,5 +1900,6 @@
   "home_backups_retry_copy": "Abre Copias para reintentar",
   "home_backups_running": "Copiando ahora",
   "home_imports_checking": "Comprobando…",
-  "home_cashflow_transfers_unconverted": "transferencias no convertidas a {currency}"
+  "home_cashflow_transfers_unconverted": "transferencias no convertidas a {currency}",
+  "reports_export_title": "Exportar"
 }

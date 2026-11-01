@@ -1234,8 +1234,8 @@
 
     <!-- Online connections panel -->
     <Panel>
-      <div class="flex items-center justify-between gap-4">
-        <div>
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="min-w-0">
           <p class="text-sm font-semibold text-foreground">{m.import_connections_title()}</p>
           <p class="mt-1 text-sm text-muted">{m.import_connections_copy()}</p>
         </div>

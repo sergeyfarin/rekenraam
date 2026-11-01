@@ -398,8 +398,6 @@
   "import_fetching_cancel": "Cancel",
   "import_fetching_failed_title": "The fetch failed",
   "import_fetching_failed_copy": "Check the connection's API key and try again.",
-  "settings_card_language_title": "Language",
-  "settings_card_language_copy": "Choose the language the interface is shown in.",
   "language_title": "Language",
   "language_copy": "The interface language is stored in this browser. Amounts, dates, and numbers follow the language you pick.",
   "language_select_legend": "Interface language",
@@ -1902,5 +1900,6 @@
   "home_backups_retry_copy": "Open Backups to retry",
   "home_backups_running": "Backing up now",
   "home_imports_checking": "Checking…",
-  "home_cashflow_transfers_unconverted": "transfers not converted to {currency}"
+  "home_cashflow_transfers_unconverted": "transfers not converted to {currency}",
+  "reports_export_title": "Export"
 }

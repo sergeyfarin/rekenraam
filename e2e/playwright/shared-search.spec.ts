@@ -233,3 +233,18 @@ test('phone Add command hands focus to transaction entry', async ({ page }) => {
   await page.keyboard.press('Escape');
   await expect(page.getByRole('heading', { name: 'Add transaction', exact: true })).toHaveCount(0);
 });
+
+test('merged Preferences is still searchable as language and appearance', async ({ page }) => {
+  await readyForLedger(page);
+  await page.goto('/app');
+  const search = page.getByRole('combobox', { name: 'Search', exact: true });
+  await expect(search).toBeVisible();
+  await search.fill('language');
+  const preferences = page.getByRole('option').filter({ hasText: 'Preferences' }).first();
+  await expect(preferences).toBeVisible();
+  await search.fill('appearance');
+  await expect(preferences).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL('/app/settings/preferences');
+  await expect(page.getByTestId('preferences-settings')).toBeVisible();
+});

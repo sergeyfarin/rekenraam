@@ -11,7 +11,7 @@ import { test as ownedBookTest } from './support/owned-book';
 // (T-61: a suite that answers "does the plan's acceptance hold" without
 // re-deriving it from several specs).
 
-test('[acceptance] the data screen exports, backs up, and checks the ledger', async ({ page }) => {
+test('[acceptance] the export, backup and health-check screens keep their jobs', async ({ page }) => {
   const { csrfToken, currencyID } = await readyForLedger(page);
   const suffix = Date.now();
 
@@ -51,14 +51,14 @@ test('[acceptance] the data screen exports, backs up, and checks the ledger', as
     ]
   });
 
-  await page.goto('/app/settings/data');
-  await expect(page.getByTestId('data-settings')).toBeVisible();
+  // Export moved to Reports (#446); backups and the health check stay here.
+  await page.goto('/app/reports/export');
+  await expect(page.getByTestId('export-settings')).toBeVisible();
 
   // Export and backup have different jobs (product decision 2026-10-18): the
   // screen says an export cannot be imported back, and that only a backup is
   // a complete copy to restore from.
   await expect(page.getByTestId('export-not-backup')).toContainText('cannot be imported back');
-  await expect(page.getByTestId('backup-complete-copy')).toContainText('only complete copy');
 
   // The export says what it holds before offering the file, so a download is
   // never a black box.
@@ -68,6 +68,10 @@ test('[acceptance] the data screen exports, backs up, and checks the ledger', as
   await page.getByTestId('export-download').click();
   const file = await download;
   expect(file.suggestedFilename()).toContain('.zip');
+
+  await page.goto('/app/settings/data');
+  await expect(page.getByTestId('data-settings')).toBeVisible();
+  await expect(page.getByTestId('backup-complete-copy')).toContainText('only complete copy');
 
   // Backups: queued, not claimed as done.
   await page.getByTestId('backup-now').click();
@@ -81,21 +85,65 @@ test('[acceptance] the data screen exports, backs up, and checks the ledger', as
   await expect(page.getByTestId('selfcheck-summary')).toContainText(/check/i);
 });
 
-// The one thing a user must not be able to do by accident: download a QIF that
-// silently omits accounts QIF cannot express.
 test('the settings side list reaches the data screen from any settings page', async ({ page }) => {
   await readyForLedger(page);
 
-  // The side list once omitted Data, leaving backups and export reachable only
-  // from the overview's cards.
+  // The side list is the same five pages as the header's settings menu.
   await page.goto('/app/settings/security');
   const nav = page.getByRole('navigation', { name: 'Settings sections' });
-  await nav.getByRole('link', { name: 'Data', exact: true }).click();
+  await expect(nav.getByRole('link')).toHaveText([
+    'General',
+    'Preferences',
+    'Currencies and FX rates',
+    'Security',
+    'Data and backups'
+  ]);
+  await nav.getByRole('link', { name: 'Data and backups', exact: true }).click();
   await expect(page).toHaveURL(/\/app\/settings\/data$/);
   await expect(page.getByTestId('data-settings')).toBeVisible();
-  await expect(nav.getByRole('link', { name: 'Data', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(nav.getByRole('link', { name: 'Data and backups', exact: true })).toHaveAttribute('aria-current', 'page');
 });
 
+test('settings has five pages, the same in the menu and side list, and old addresses redirect', async ({ page }) => {
+  await readyForLedger(page);
+  await page.goto('/app/settings');
+  await expect(page.getByTestId('general-settings')).toBeVisible();
+
+  const side = page.getByRole('navigation', { name: 'Settings sections', exact: true });
+  const names = ['General', 'Preferences', 'Currencies and FX rates', 'Security', 'Data and backups'];
+  await expect(side.getByRole('link')).toHaveText(names);
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.locator('#shell-settings-menu').getByRole('link')).toHaveText(names);
+  await page.keyboard.press('Escape');
+
+  await page.goto('/app/settings/language?keep=1#detail');
+  await expect(page).toHaveURL('/app/settings/preferences?keep=1#detail');
+  await expect(page.getByTestId('preferences-settings')).toBeVisible();
+
+  await page.goto('/app/settings/appearance');
+  await expect(page).toHaveURL('/app/settings/preferences');
+
+  await page.goto('/app/settings/trash?x=1#detail');
+  await expect(page).toHaveURL('/app/ledger/transactions?x=1&view=deleted#detail');
+  await expect(page.getByTestId('transactions-view-deleted')).toHaveAttribute('aria-current', 'page');
+
+  await page.goto('/app/settings/data?view=export&q=kept');
+  await expect(page).toHaveURL('/app/reports/export?q=kept');
+  await expect(page.getByTestId('export-settings')).toBeVisible();
+
+  await page.setViewportSize({ width: 320, height: 844 });
+  for (const path of ['/app/settings', '/app/settings/preferences', '/app/reports/export', '/app/settings/data']) {
+    await test.step(`320px ${path}`, async () => {
+      await page.goto(path);
+      await expect(page.locator('main h1, main h2').first()).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
+    });
+  }
+});
+
+// The one thing a user must not be able to do by accident: download a QIF that
+// silently omits accounts QIF cannot express.
 test('[acceptance] a QIF export names the accounts it cannot write before downloading', async ({ page }) => {
   const { csrfToken, currencyID } = await readyForLedger(page);
   const suffix = Date.now();
@@ -110,7 +158,7 @@ test('[acceptance] a QIF export names the accounts it cannot write before downlo
     allows_postings: true
   });
 
-  await page.goto('/app/settings/data');
+  await page.goto('/app/reports/export');
   await page.getByRole('radio', { name: /QIF/ }).check();
 
   // Whole-book QIF simply skips what it cannot write, so the download stays
@@ -138,9 +186,10 @@ test('an unsaved backup-policy edit does not survive as if it were saved', async
   // Leave without saving, then come back — by navigating inside the app, which
   // is what a user does. A full reload would prove nothing here: it discards
   // the client cache the unsaved edit could be hiding in.
-  await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('link', { name: 'Overview', exact: true }).click();
+  const nav = page.getByRole('navigation', { name: 'Settings sections' });
+  await nav.getByRole('link', { name: 'General', exact: true }).click();
   await expect(page).toHaveURL(/\/app\/settings$/);
-  await page.getByRole('link').filter({ hasText: 'Data' }).first().click();
+  await nav.getByRole('link', { name: 'Data and backups', exact: true }).click();
   await expect(page.getByTestId('data-settings')).toBeVisible();
 
   await expect(page.getByTestId('backup-retention')).toHaveValue(configured);
@@ -151,9 +200,9 @@ test('an unsaved backup-policy edit does not survive as if it were saved', async
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByText('Saved.')).toBeVisible();
 
-  await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('link', { name: 'Overview', exact: true }).click();
+  await nav.getByRole('link', { name: 'General', exact: true }).click();
   await expect(page).toHaveURL(/\/app\/settings$/);
-  await page.getByRole('link').filter({ hasText: 'Data' }).first().click();
+  await nav.getByRole('link', { name: 'Data and backups', exact: true }).click();
   await expect(page.getByTestId('backup-retention')).toHaveValue(edited);
 });
 

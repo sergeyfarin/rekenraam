@@ -36,13 +36,16 @@ const titles = {
   reports_view_spending: m.reports_view_spending,
   reports_view_cashflow: m.reports_view_cashflow,
   reports_view_net_worth: m.reports_view_net_worth,
-  settings_nav_overview: m.settings_nav_overview,
-  settings_nav_appearance: m.settings_nav_appearance,
-  settings_card_language_title: m.settings_card_language_title,
+  reports_export_title: m.reports_export_title,
+  settings_nav_general: m.settings_nav_general,
+  settings_nav_preferences: m.settings_nav_preferences,
   settings_nav_currencies: m.settings_nav_currencies,
   settings_data_title: m.settings_data_title,
   settings_nav_security: m.settings_nav_security,
-  settings_nav_trash: m.settings_nav_trash,
+  // Aliases for Preferences: the merged page still answers to the old pages'
+  // names in search (#446 review).
+  language_title: m.language_title,
+  appearance_title: m.appearance_title,
 };
 export type TitleKey = keyof typeof titles;
 
@@ -95,7 +98,12 @@ export const sections: readonly Section[] = [
 // Order within a section is tab order. The Ledger, Planning and Reports
 // overviews are placeholders until #448 and #450; Accounts stays a Ledger tab
 // until #448 folds it into the Ledger overview.
-const definitions: readonly Omit<RouteEntry, 'title' | 'keywords'>[] = [
+type RouteDefinition = Omit<RouteEntry, 'title' | 'keywords'> & {
+  /** Extra localized search terms this page still answers to. */
+  keywords?: readonly TitleKey[];
+};
+
+const definitions: readonly RouteDefinition[] = [
   { route: '/app/review', section: 'review', titleKey: 'attention_review', icon: 'scan-line', width: 'standard', standalone: true },
   { route: '/app', section: 'home', titleKey: 'nav_home', icon: 'house', width: 'fluid', ownHeader: true },
 
@@ -127,14 +135,19 @@ const definitions: readonly Omit<RouteEntry, 'title' | 'keywords'>[] = [
   { route: '/app/reports/spending', section: 'reports', titleKey: 'reports_view_spending', icon: 'chart-pie', width: 'standard', tab: true, queryGroup: 'reports' },
   { route: '/app/reports/cashflow', section: 'reports', titleKey: 'reports_view_cashflow', icon: 'arrow-left-right', width: 'standard', tab: true, queryGroup: 'reports' },
   { route: '/app/reports/net-worth', section: 'reports', titleKey: 'reports_view_net_worth', icon: 'chart-line', width: 'standard', tab: true, queryGroup: 'reports' },
+  { route: '/app/reports/export', section: 'reports', titleKey: 'reports_export_title', icon: 'download', width: 'standard', tab: true },
 
-  { route: '/app/settings', section: 'settings', titleKey: 'settings_nav_overview', icon: 'settings-2', width: 'standard', tab: true },
-  { route: '/app/settings/appearance', section: 'settings', titleKey: 'settings_nav_appearance', icon: 'palette', width: 'standard', tab: true },
-  { route: '/app/settings/language', section: 'settings', titleKey: 'settings_card_language_title', icon: 'languages', width: 'standard', tab: true },
+  { route: '/app/settings', section: 'settings', titleKey: 'settings_nav_general', icon: 'settings-2', width: 'standard', tab: true },
+  { route: '/app/settings/preferences', section: 'settings', titleKey: 'settings_nav_preferences', icon: 'palette', width: 'standard', tab: true, keywords: ['language_title', 'appearance_title'] },
   { route: '/app/settings/currencies', section: 'settings', titleKey: 'settings_nav_currencies', icon: 'coins', width: 'standard', tab: true },
-  { route: '/app/settings/data', section: 'settings', titleKey: 'settings_data_title', icon: 'database', width: 'standard', tab: true },
   { route: '/app/settings/security', section: 'settings', titleKey: 'settings_nav_security', icon: 'shield-check', width: 'standard', tab: true },
-  { route: '/app/settings/trash', section: 'settings', titleKey: 'settings_nav_trash', icon: 'trash-2', width: 'standard', tab: true }
+  { route: '/app/settings/data', section: 'settings', titleKey: 'settings_data_title', icon: 'database', width: 'standard', tab: true },
+
+  // Settings moved pages (#446). They redirect before rendering; the stub
+  // pages keep old bookmarks inside the app shell.
+  { route: '/app/settings/appearance', section: 'settings', titleKey: 'settings_nav_preferences', icon: 'palette', width: 'standard', legacy: true },
+  { route: '/app/settings/language', section: 'settings', titleKey: 'settings_nav_preferences', icon: 'palette', width: 'standard', legacy: true },
+  { route: '/app/settings/trash', section: 'settings', titleKey: 'settings_data_title', icon: 'database', width: 'standard', legacy: true }
 ];
 
 // Keep the old page families until old bookmarks no longer need them (#460).
@@ -151,7 +164,7 @@ const sectionRouteMoves = [
   ['/app/forecast', '/app/planning/forecast']
 ] as const;
 
-const legacyDefinitions = definitions.flatMap((entry) => {
+const legacyDefinitions: readonly RouteDefinition[] = definitions.flatMap((entry) => {
   const move = sectionRouteMoves.find(([, target]) => entry.route === target || entry.route.startsWith(`${target}/`));
   if (!move) return [];
   // Legacy paths only redirect, never appear as tabs or search results.
@@ -168,7 +181,7 @@ const legacyDefinitions = definitions.flatMap((entry) => {
 export const routes: readonly RouteEntry[] = [...definitions, ...legacyDefinitions].map((entry) => ({
   ...entry,
   title: () => titles[entry.titleKey](),
-  keywords: [entry.titleKey]
+  keywords: [entry.titleKey, ...(entry.keywords ?? [])]
 }));
 
 const patterns = routes.map((entry) => ({
@@ -245,6 +258,25 @@ export function canonicalURL(url: Pick<URL, 'href' | 'pathname' | 'search'>): UR
   }
 
   if (path === '/app/pricing') return move('/app/investments/prices');
+
+  // Settings consolidation (#446): appearance and language are one page, and
+  // Trash is a view of Transactions. Keep every other parameter.
+  if (path === '/app/settings/appearance' || path === '/app/settings/language') {
+    return move('/app/settings/preferences');
+  }
+  if (path === '/app/settings/trash') {
+    params.set('view', 'deleted');
+    return move('/app/ledger/transactions');
+  }
+  // An old link that opened Export inside Settings → Data now belongs on its
+  // own Reports page.
+  if (path === '/app/settings/data') {
+    if (params.get('view') === 'export' || params.get('export') === 'true') {
+      params.delete('view');
+      params.delete('export');
+      return move('/app/reports/export');
+    }
+  }
 
   // `/app/reports` was the net-worth report; it is now the Reports overview.
   // A link carrying any report state is a report link, so it keeps going to

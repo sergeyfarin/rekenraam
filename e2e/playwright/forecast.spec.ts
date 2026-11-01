@@ -296,12 +296,12 @@ test('forecast keeps exact currencies when constant FX is unavailable', async ({
 test('forecast renders all new messages in a non-English locale', async ({ page }) => {
   const { csrfToken, currencyID } = await readyForLedger(page);
   const account = await createCashAccount(page, csrfToken, `Forecast locale ${Date.now()}`, currencyID);
-  await page.goto('/app/settings/language');
+  await page.goto('/app/settings/preferences');
   await page.getByRole('button', { name: 'Русский' }).click();
   await page.goto(`/app/planning/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false`);
   await expect(page.getByRole('heading', { name: 'Прогноз', exact: true })).toBeVisible();
   await expect(page.getByText('В этом периоде нет запланированных изменений', { exact: true })).toBeVisible();
-  await page.goto('/app/settings/language');
+  await page.goto('/app/settings/preferences');
   await page.getByRole('button', { name: 'English' }).click();
 });
 

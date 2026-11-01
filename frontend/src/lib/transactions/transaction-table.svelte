@@ -20,7 +20,9 @@
     onLoadMore,
     error = null,
     onRetry,
-    onRowClick
+    onRowClick,
+    emptyTitle = m.transactions_empty_title(),
+    emptyCopy = m.transactions_empty_copy()
   }: {
     rows: R[];
     columns: Column<R>[];
@@ -37,6 +39,9 @@
     error?: Error | null;
     onRetry?: () => void;
     onRowClick?: (row: R) => void;
+    /** Empty-state copy for a list with a narrower meaning than "transactions". */
+    emptyTitle?: string;
+    emptyCopy?: string;
   } = $props();
 
   const columnDefs = $derived(
@@ -176,7 +181,7 @@
     </div>
   {:else if rows.length === 0}
     <div class="p-4">
-      <StatePanel title={m.transactions_empty_title()} copy={m.transactions_empty_copy()} />
+      <StatePanel title={emptyTitle} copy={emptyCopy} />
     </div>
   {:else}
     <div class="overflow-x-auto">

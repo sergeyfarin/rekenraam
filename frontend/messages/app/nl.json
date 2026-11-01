@@ -362,8 +362,6 @@
   "import_fetching_cancel": "Annuleren",
   "import_fetching_failed_title": "Het ophalen is mislukt",
   "import_fetching_failed_copy": "Controleer de API-sleutel van de koppeling en probeer het opnieuw.",
-  "settings_card_language_title": "Taal",
-  "settings_card_language_copy": "Kies de taal waarin de interface wordt getoond.",
   "language_title": "Taal",
   "language_copy": "De taal van de interface wordt in deze browser bewaard. Bedragen, datums en getallen volgen de gekozen taal.",
   "language_select_legend": "Taal van de interface",
@@ -1902,5 +1900,6 @@
   "home_backups_retry_copy": "Open Back-ups om opnieuw te proberen",
   "home_backups_running": "Back-up loopt",
   "home_imports_checking": "Controleren…",
-  "home_cashflow_transfers_unconverted": "overboekingen niet omgerekend naar {currency}"
+  "home_cashflow_transfers_unconverted": "overboekingen niet omgerekend naar {currency}",
+  "reports_export_title": "Exporteren"
 }

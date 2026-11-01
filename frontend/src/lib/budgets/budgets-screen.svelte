@@ -113,8 +113,8 @@
         {#each rows as category (category.id)}
           {@const amount = amountFor(category)}
           {@const archived = category.status === 'archived'}
-          <form class="grid gap-3 py-4 md:grid-cols-[minmax(10rem,1fr)_repeat(3,minmax(8rem,0.7fr))_auto] md:items-end" onsubmit={(event) => { event.preventDefault(); if (!archived) void saveTarget(category.id); }}>
-            <div><p class="font-semibold">{category.name || category.code}</p><p class="text-xs text-muted">{category.category_type === 'income' ? m.budgets_income() : m.budgets_expense()}{#if archived} · {m.budgets_archived()}{/if}</p>{#if archived}<p class="mt-1 text-xs text-muted">{m.budgets_archived_help()}</p>{/if}</div>
+          <form class="grid min-w-0 gap-3 py-4 md:grid-cols-[minmax(10rem,1fr)_repeat(3,minmax(8rem,0.7fr))_auto] md:items-end" onsubmit={(event) => { event.preventDefault(); if (!archived) void saveTarget(category.id); }}>
+            <div class="min-w-0"><p class="break-words font-semibold">{category.name || category.code}</p><p class="text-xs text-muted">{category.category_type === 'income' ? m.budgets_income() : m.budgets_expense()}{#if archived} · {m.budgets_archived()}{/if}</p>{#if archived}<p class="mt-1 text-xs text-muted">{m.budgets_archived_help()}</p>{/if}</div>
             {#if archived}
               <div><p class="text-xs text-muted">{m.budgets_target()}</p><p class="mt-2 font-semibold">{display(amount?.target)}</p></div>
             {:else}
