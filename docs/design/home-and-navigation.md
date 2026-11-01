@@ -333,9 +333,11 @@ acceptance; this foundation does not claim their behavior.
 
 Delivered in #477 (2026-10-31) as a fixed set: Add transaction, Import file,
 Transactions and Spending by category. Owner decision: **Transfer** waits for
-a transfer entry (#481), and the account-register tile (“Checking”) for pins
-(#442) or the layout document (#438), since nothing yet says which account it
-opens. ⋯ menus, *Add shortcut* and editing are #438. Phones show three tiles
+a transfer entry (#481, covering different posting days, cross-currency
+transfers with exact sent and received amounts, and a fee recorded on Bank
+fees rather than in the transfer), and the account-register tile
+(“Checking”) for pins (#442) or the layout document (#438), since nothing yet
+says which account it opens. ⋯ menus, *Add shortcut* and editing are #438. Phones show three tiles
 and a More disclosure listing the rest in order, so a tile moved past the
 third (Add included, once #438 allows moving) stays reachable.
 

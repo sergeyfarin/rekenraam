@@ -134,9 +134,10 @@ Deliver incrementally, tracked in #441, in this order:
    #476 (composed read and briefing), #477 (command bar, shortcuts and entry
    dialog), #478 (My Home widgets) and #479 (More to explore), all delivered;
    #437 closed 2026-10-31. Split off and still open: the Transfer tile and
-   simple transfer entry (#481), and the general reconciliation out-of-date
-   rule with its account-list state and Home widget (#482, configurable window,
-   default 60 days). Pinned accounts on the Accounts widget arrive with #442
+   transfer entry (#481: same- and cross-currency, posting days and a fee on
+   Bank fees in one version, owner decision 2026-11-01), and the general
+   reconciliation out-of-date rule with its account-list state and Home widget
+   (#482, configurable window, default 60 days). Pinned accounts on the Accounts widget arrive with #442
    and entered values in the briefing with #454.
 3. **Pages in their new places**, in any order after #436: settings in five
    pages with Trash moved to Transactions › Deleted and export to Reports
