@@ -261,6 +261,10 @@ func (s *TransactionService) cleanTransactionSpec(ctx context.Context, input Tra
 		return db.TransactionSpec{}, err
 	}
 
+	input, err = s.buildExchangeLegs(ctx, input, transactionDate)
+	if err != nil {
+		return db.TransactionSpec{}, err
+	}
 	journalEntries, err := s.groupPostingsByPostedOn(ctx, input, transactionDate)
 	if err != nil {
 		return db.TransactionSpec{}, err

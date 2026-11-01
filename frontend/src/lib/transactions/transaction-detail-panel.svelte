@@ -9,6 +9,7 @@
   import { getLocale } from '#lib/paraglide/runtime.js';
   import APIFormError from '#lib/components/api-form-error.svelte';
   import InvestmentCorrectionSection from './investment-correction-section.svelte';
+  import ExchangeConversion from './exchange-conversion.svelte';
   import StatusBadge from '#lib/components/status-badge.svelte';
   import {
     voidTransaction,
@@ -98,6 +99,8 @@
       )
     )
   );
+
+  const isExchange = $derived((transaction.journal_entries ?? []).some((e) => e.entry_kind === 'exchange'));
 
   const kindLabel = $derived.by(() => {
     switch (transaction.transaction_kind) {
@@ -463,6 +466,10 @@
         {/each}
       </ul>
     </div>
+  {/if}
+
+  {#if isExchange}
+    <ExchangeConversion {transaction} />
   {/if}
 
   <!-- Note and reference -->

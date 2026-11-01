@@ -7,7 +7,7 @@ import type { TransactionResponse } from '#lib/api/transactions.ts';
 // open the shared entry dialog the shell mounts once.
 let pageAdd = $state<(() => void) | undefined>();
 
-export type EntryDefaults = { accountID?: number; categoryID?: number };
+export type EntryDefaults = { accountID?: number; categoryID?: number; transfer?: boolean };
 
 /** The shared entry dialog: open with its prefill, and the last transaction it saved. */
 export const transactionEntry = $state<{ open: boolean; defaults?: EntryDefaults; saved?: TransactionResponse }>({ open: false });
@@ -29,6 +29,18 @@ export function addTransaction(defaults?: EntryDefaults): void {
   if (transactionEntry.open) return;
   transactionEntry.open = true;
   transactionEntry.defaults = defaults;
+  transactionEntry.saved = undefined;
+}
+
+/**
+ * Transfer between accounts (#481): the shared dialog in Transfer mode, the
+ * account as From when given. It opens the shared dialog even on a page with
+ * its own editor, which has no transfer opener of its own.
+ */
+export function addTransfer(accountID?: number): void {
+  if (transactionEntry.open) return;
+  transactionEntry.open = true;
+  transactionEntry.defaults = { accountID, transfer: true };
   transactionEntry.saved = undefined;
 }
 

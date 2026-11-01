@@ -2,11 +2,11 @@ import { m } from '#lib/paraglide/messages.js';
 
 /**
  * Home's shortcut tiles (#477). The set is fixed until personalization (#438)
- * lets the owner move, rename, remove and add them; Transfer and an account
- * register tile join once a transfer entry and pins (#442) exist. Add
- * transaction leads and is the one action; the rest are links.
+ * lets the owner move, rename, remove and add them; an account register tile
+ * joins once pins (#442) exist. Add transaction leads; it and Transfer (#481)
+ * are the actions, opening the shared entry dialog; the rest are links.
  */
-export type ShortcutID = 'add' | 'import' | 'transactions' | 'spending';
+export type ShortcutID = 'add' | 'transfer' | 'import' | 'transactions' | 'spending';
 
 export type Shortcut = { id: ShortcutID; label: string; href?: string };
 
@@ -16,6 +16,7 @@ export const phoneShortcutCount = 3;
 export function homeShortcuts(): Shortcut[] {
   return [
     { id: 'add', label: m.transactions_form_create_title() },
+    { id: 'transfer', label: m.home_shortcut_transfer() },
     { id: 'import', label: m.home_shortcut_import(), href: '/app/ledger/import' },
     { id: 'transactions', label: m.transactions_page_title(), href: '/app/ledger/transactions' },
     { id: 'spending', label: m.home_shortcut_spending(), href: '/app/reports/spending' }

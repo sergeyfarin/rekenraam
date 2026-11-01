@@ -14,7 +14,7 @@
   import { themeState, setTheme } from '#lib/theme.svelte.ts';
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
-  import { addTransaction } from '#lib/transactions/add-transaction.svelte.ts';
+  import { addTransaction, addTransfer } from '#lib/transactions/add-transaction.svelte.ts';
   import { searchItems } from './search-items.ts';
   import { createSearchIndex, searchGroups, searchResults, searchShortcut, type SearchResult, type SearchScope } from './search-model.ts';
 
@@ -132,6 +132,7 @@
       else if (item.command === 'hide-amounts') setAmountsHidden(!amountPrivacy.hidden);
       else if (item.command === 'theme') setTheme(themeState.name === 'dark' ? 'light' : 'dark');
       else if (item.command === 'add-transaction') await addTransaction();
+      else if (item.command === 'add-transfer') addTransfer();
       else if (item.href) await goto(item.href);
     } catch { open = true; navigationError = true; await tick(); input?.focus(); }
   }

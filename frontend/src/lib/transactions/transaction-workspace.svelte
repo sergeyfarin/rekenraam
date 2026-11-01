@@ -34,6 +34,7 @@
   import type { Snippet } from 'svelte';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import Plus from '@lucide/svelte/icons/plus';
+  import ArrowLeftRight from '@lucide/svelte/icons/arrow-left-right';
   import { m } from '#lib/paraglide/messages.js';
   import Panel from '#lib/components/panel.svelte';
   import PageHeader from '#lib/components/page-header.svelte';
@@ -47,7 +48,7 @@
   import TransactionDetailPanel from './transaction-detail-panel.svelte';
   import TransactionEditor from './transaction-editor.svelte';
   import InvestmentEntry from '#lib/investments/investment-entry.svelte';
-  import { providePageAdd } from './add-transaction.svelte.ts';
+  import { addTransfer, providePageAdd } from './add-transaction.svelte.ts';
 
   // The transaction workspace (#185): one list screen plus the shared side
   // panel for detail, edit, correction, creation and undo of a deletion. The
@@ -230,6 +231,7 @@
 
 {#snippet createAction()}
   {#if create.kind === 'editor'}
+    <div class="flex max-w-full flex-wrap items-center justify-end gap-2">
     <button
       type="button"
       class="inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90"
@@ -238,6 +240,18 @@
       <Plus size={16} aria-hidden="true" />
       {m.transactions_form_create_title()}
     </button>
+    {#if create.defaults?.accountID !== undefined}
+      <!-- From this account's register, the account is the transfer's From (#481). -->
+      <button
+        type="button"
+        class="inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-control-hover"
+        onclick={() => addTransfer(create.defaults?.accountID)}
+      >
+        <ArrowLeftRight size={16} aria-hidden="true" />
+        {m.home_shortcut_transfer()}
+      </button>
+    {/if}
+    </div>
   {:else if create.kind === 'investment'}
     <div class="flex max-w-full flex-wrap items-center justify-end gap-2">
       <InvestmentEntry layout="menu" prefill={create.prefill} />

@@ -33,6 +33,57 @@ type transactionResponse struct {
 	ChangeReason              string                 `json:"change_reason"`
 	SystemLabel               string                 `json:"system_label,omitempty"`
 	InvalidatedCheckpointIDs  []int64                `json:"invalidated_checkpoint_ids"`
+	// ExchangeConversion is set only by the single-transaction read (#481).
+	ExchangeConversion *exchangeConversionResponse `json:"exchange_conversion,omitempty"`
+}
+
+type exchangeQuantityResponse struct {
+	CommodityID   int64             `json:"commodity_id"`
+	QuantityValue exact.Coefficient `json:"quantity_value"`
+	QuantityScale int               `json:"quantity_scale"`
+}
+
+type exchangeMarketResponse struct {
+	Rate            exchangeQuantityResponse `json:"rate"`
+	ObservationDate string                   `json:"observation_date"`
+	Stale           bool                     `json:"stale"`
+	MarketValue     exchangeQuantityResponse `json:"market_value"`
+	Cost            exchangeQuantityResponse `json:"cost"`
+	CostPercent     exact.Coefficient        `json:"cost_percent"`
+}
+
+type exchangeConversionResponse struct {
+	ConversionDate string                   `json:"conversion_date"`
+	Sent           exchangeQuantityResponse `json:"sent"`
+	Received       exchangeQuantityResponse `json:"received"`
+	ImpliedRate    exchangeQuantityResponse `json:"implied_rate"`
+	Market         *exchangeMarketResponse  `json:"market,omitempty"`
+	MarketGap      string                   `json:"market_gap,omitempty"`
+}
+
+func toExchangeQuantityResponse(quantity app.ExchangeQuantity) exchangeQuantityResponse {
+	return exchangeQuantityResponse{CommodityID: quantity.CommodityID, QuantityValue: quantity.QuantityValue, QuantityScale: quantity.QuantityScale}
+}
+
+func toExchangeConversionResponse(conversion *app.ExchangeConversion) *exchangeConversionResponse {
+	if conversion == nil {
+		return nil
+	}
+	response := &exchangeConversionResponse{
+		ConversionDate: conversion.ConversionDate,
+		Sent:           toExchangeQuantityResponse(conversion.Sent),
+		Received:       toExchangeQuantityResponse(conversion.Received),
+		ImpliedRate:    toExchangeQuantityResponse(conversion.ImpliedRate),
+		MarketGap:      conversion.MarketGap,
+	}
+	if market := conversion.Market; market != nil {
+		response.Market = &exchangeMarketResponse{
+			Rate: toExchangeQuantityResponse(market.Rate), ObservationDate: market.ObservationDate, Stale: market.Stale,
+			MarketValue: toExchangeQuantityResponse(market.MarketValue), Cost: toExchangeQuantityResponse(market.Cost),
+			CostPercent: market.CostPercent,
+		}
+	}
+	return response
 }
 
 type journalEntryResponse struct {

@@ -120,7 +120,8 @@ test('a two-day transfer posts each leg on its day and survives an edit', async 
   await row.getByRole('button', { name: 'Edit', exact: true }).click();
   const edit = page.getByRole('complementary', { name: 'Actions' });
   await expect(edit.getByRole('heading', { name: 'Edit transaction' })).toBeVisible();
-  await expect(edit.getByLabel('Posted on')).toHaveValue(arrival);
+  // A transfer between two accounts reopens in Transfer mode (#481).
+  await expect(edit.getByLabel('Arrives on')).toHaveValue(arrival);
   await edit.getByLabel('Description').fill(`${description} edited`);
   await edit.getByRole('button', { name: 'Save transaction' }).click();
   await expect.poll(async () => (await read()).version_id).not.toBe(before);

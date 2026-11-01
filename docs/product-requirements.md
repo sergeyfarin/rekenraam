@@ -164,7 +164,13 @@ These apply across all feature phases.
 - Transactions with postings are the canonical ledger primitive. "Split" may be
   used as user-facing copy for split transaction entry, but "posting" is the
   canonical schema and service term.
-- Transfers are ordinary balanced transactions.
+- Transfers are ordinary balanced transactions. A transfer between two of the
+  owner's accounts in different currencies records both amounts exactly as
+  they left and arrived; the rate is never stored or used to derive either,
+  and no FX gain or loss is posted (owner decision 2026-11-01, #481). A
+  transfer fee is not part of the transfer: it is its own expense posting
+  (Bank fees by default), charged on top. Unlike an investment trade's
+  charges, it never enters any basis.
 - Same-day ordering is explicit and independently editable for the global
   transaction list and each account's posting register. A transfer may occupy a
   different same-day position in each account. Account-posting order, together

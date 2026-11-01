@@ -39,10 +39,12 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(page.getByRole('listbox', { name: 'Search results', exact: true })).toBeVisible();
     await page.keyboard.press('Escape');
 
-    // Add transaction leads, in the accent colour; every tile shows on desktop.
+    // Add transaction leads, in the accent colour, then Transfer (#481);
+    // every tile shows on desktop.
     const tiles = shortcuts(page).getByRole('listitem');
-    await expect(tiles).toHaveCount(4);
+    await expect(tiles).toHaveCount(5);
     await expect(tiles.first()).toHaveText('Add transaction');
+    await expect(shortcuts(page).getByRole('button', { name: 'Transfer', exact: true })).toBeVisible();
     for (const name of ['Import file', 'Transactions', 'Spending by category']) {
       await expect(shortcuts(page).getByRole('link', { name, exact: true })).toBeVisible();
     }
@@ -135,12 +137,14 @@ test.describe('on a touch phone', () => {
 
       // Three tiles plus More; More lists the rest.
       await expect(addTile(page)).toBeVisible();
+      await expect(shortcuts(page).getByRole('button', { name: 'Transfer', exact: true })).toBeVisible();
       await expect(shortcuts(page).getByRole('link', { name: 'Import file', exact: true })).toBeVisible();
-      await expect(shortcuts(page).getByRole('link', { name: 'Transactions', exact: true })).toBeVisible();
+      await expect(shortcuts(page).getByRole('link', { name: 'Transactions', exact: true })).toBeHidden();
       await expect(shortcuts(page).getByRole('link', { name: 'Spending by category', exact: true })).toBeHidden();
       const more = shortcuts(page).getByRole('button', { name: 'More', exact: true });
       await more.tap();
       await expect(more).toHaveAttribute('aria-expanded', 'true');
+      await expect(page.getByRole('group', { name: 'More', exact: true }).getByRole('link', { name: 'Transactions', exact: true })).toBeVisible();
       await expect(page.getByRole('group', { name: 'More', exact: true }).getByRole('link', { name: 'Spending by category', exact: true })).toBeVisible();
       await expectNoAccessibilityViolations(page, `phone Home ${theme}`);
       await page.keyboard.press('Escape');

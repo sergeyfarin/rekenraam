@@ -438,11 +438,10 @@ func TestQIFStatesAForeignCounterpartInTheMemoRatherThanConvertingIt(t *testing.
 	eur := createCurrencyForSession(t, handler, f.sessionCookie, f.csrfToken, `{"code":"EUR","name":"Euro"}`)
 	eurAccount := createLedgerAccount(t, handler, f.sessionCookie, f.csrfToken, "Euro Account", "asset", "checking", eur.ID, 2)
 
-	// An exchange balances per commodity through commodity_trading: the USD
-	// legs balance each other and so do the EUR legs, which is why the entry is
-	// legal and why QIF cannot state it in one currency.
-	trading := systemAccountID(t, handler, f.sessionCookie, "commodity_trading")
-	require.NotZero(t, trading)
+	// An exchange balances per commodity through commodity_trading, whose
+	// legs the server adds (#481): the USD legs balance each other and so do
+	// the EUR legs, which is why the entry is legal and why QIF cannot state
+	// it in one currency.
 	createTransactionForSession(t, handler, f.sessionCookie, f.csrfToken, `{
 		"transaction_date":"2026-07-23",
 		"transaction_kind":"transfer",
@@ -451,9 +450,7 @@ func TestQIFStatesAForeignCounterpartInTheMemoRatherThanConvertingIt(t *testing.
 			"entry_kind":"exchange",
 			"postings":[
 				`+posting(f.checking.ID, -11000, 2, f.usdID)+`,
-				`+posting(trading, 11000, 2, f.usdID)+`,
-				`+posting(eurAccount.ID, 10000, 2, eur.ID)+`,
-				`+posting(trading, -10000, 2, eur.ID)+`
+				`+posting(eurAccount.ID, 10000, 2, eur.ID)+`
 			]
 		}]
 	}`, http.StatusCreated)

@@ -405,10 +405,14 @@ func (s *ExportService) writeQIFAccount(
 
 	classByAccount := map[int64]string{}
 	systemAccounts := map[int64]bool{}
+	clearingAccounts := map[int64]bool{}
 	for _, record := range accounts {
 		classByAccount[record.AccountID] = record.AccountClass
 		if record.SystemRole.Valid && strings.TrimSpace(record.SystemRole.String) != "" {
 			systemAccounts[record.AccountID] = true
+		}
+		if record.SystemRole.Valid && record.SystemRole.String == "transfer_clearing" {
+			clearingAccounts[record.AccountID] = true
 		}
 	}
 	paths := accountExportPaths(accounts)
@@ -428,7 +432,7 @@ func (s *ExportService) writeQIFAccount(
 		if len(entry) == 0 {
 			return nil
 		}
-		records, decisive, err := writeQIFEntry(out, entry, account, layout, classByAccount, systemAccounts, paths)
+		records, decisive, err := writeQIFEntry(out, entry, account, layout, classByAccount, systemAccounts, clearingAccounts, paths)
 		if err != nil {
 			return err
 		}
@@ -465,6 +469,7 @@ func writeQIFEntry(
 	layout QIFDateLayout,
 	classByAccount map[int64]string,
 	systemAccounts map[int64]bool,
+	clearingAccounts map[int64]bool,
 	paths map[int64]string,
 ) (int64, bool, error) {
 	var own, counterparts []db.LedgerExportPostingRecord
@@ -482,7 +487,7 @@ func writeQIFEntry(
 	var records int64
 	var decisive bool
 	for _, posting := range own {
-		lines, err := qifRecordLines(posting, own, counterparts, layout, classByAccount, systemAccounts, paths)
+		lines, err := qifRecordLines(posting, own, counterparts, layout, classByAccount, systemAccounts, clearingAccounts, paths)
 		if err != nil {
 			return records, decisive, err
 		}
@@ -503,6 +508,7 @@ func qifRecordLines(
 	layout QIFDateLayout,
 	classByAccount map[int64]string,
 	systemAccounts map[int64]bool,
+	clearingAccounts map[int64]bool,
 	paths map[int64]string,
 ) ([]string, error) {
 	date, err := formatQIFDate(posting.EntryDate, layout)
@@ -539,7 +545,15 @@ func qifRecordLines(
 	}
 
 	foreign := foreignCounterparts(posting, counterparts, systemAccounts)
-	if primary, ok := primaryCounterpart(posting, counterparts, systemAccounts); ok {
+	primary, hasPrimary := primaryCounterpart(posting, counterparts, systemAccounts)
+	exchange := posting.EntryKind == exchangeEntryKind
+	if exchange {
+		if other, ok := exchangeOtherSide(posting, counterparts, systemAccounts, clearingAccounts); ok {
+			primary, hasPrimary = other, true
+			foreign = []db.LedgerExportPostingRecord{other}
+		}
+	}
+	if hasPrimary {
 		lines = append(lines, "L"+qifCounterpartLabel(primary, classByAccount, paths))
 	}
 
@@ -557,6 +571,38 @@ func qifRecordLines(
 
 	if memo != "" {
 		lines = append(lines, "M"+memo)
+	}
+
+	// An exchange with a fee in this account's currency (#481): the record is
+	// the converted amount, sent to the other side, plus the fee. The same-
+	// currency system legs (commodity_trading, and transfer_clearing when the
+	// other side arrives later) stand for the money that went across.
+	if exchange && hasPrimary && len(own) == 1 {
+		across := exact.NewScaledInt()
+		var fees []db.LedgerExportPostingRecord
+		for _, counterpart := range counterparts {
+			if counterpart.CommodityID != posting.CommodityID {
+				continue
+			}
+			if systemAccounts[counterpart.AccountID] {
+				across.AddCoefficient(counterpart.QuantityValue, counterpart.QuantityScale)
+				continue
+			}
+			fees = append(fees, counterpart)
+		}
+		if len(fees) > 0 {
+			lines = append(lines, "S"+qifCounterpartLabel(primary, classByAccount, paths), "$"+renderScaled(across.Negated()))
+			for _, fee := range fees {
+				negated := exact.NewScaledInt()
+				negated.AddCoefficient(fee.QuantityValue, fee.QuantityScale)
+				lines = append(lines, "S"+qifCounterpartLabel(fee, classByAccount, paths))
+				if splitMemo := qifField(fee.PostingMemo); splitMemo != "" {
+					lines = append(lines, "E"+splitMemo)
+				}
+				lines = append(lines, "$"+renderScaled(negated.Negated()))
+			}
+		}
+		return lines, nil
 	}
 
 	// Splits only where they are honest: several counterparts, all in this
@@ -602,6 +648,29 @@ func primaryCounterpart(
 	}
 	if len(counterparts) > 0 {
 		return counterparts[0], true
+	}
+	return db.LedgerExportPostingRecord{}, false
+}
+
+// exchangeOtherSide is the side of a currency exchange (#481) a reader means:
+// the owner's account in the other currency, or, on the day the money left
+// before it arrived, the transfer_clearing leg holding it in transit — never
+// a commodity_trading leg or a fee.
+func exchangeOtherSide(
+	posting db.LedgerExportPostingRecord,
+	counterparts []db.LedgerExportPostingRecord,
+	systemAccounts map[int64]bool,
+	clearingAccounts map[int64]bool,
+) (db.LedgerExportPostingRecord, bool) {
+	for _, counterpart := range counterparts {
+		if counterpart.CommodityID != posting.CommodityID && !systemAccounts[counterpart.AccountID] {
+			return counterpart, true
+		}
+	}
+	for _, counterpart := range counterparts {
+		if counterpart.CommodityID != posting.CommodityID && clearingAccounts[counterpart.AccountID] {
+			return counterpart, true
+		}
 	}
 	return db.LedgerExportPostingRecord{}, false
 }

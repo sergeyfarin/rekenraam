@@ -1166,6 +1166,10 @@ components:
       $ref: "./components/schemas/transactions.yaml#/JournalEntryResponse"
     TransactionResponse:
       $ref: "./components/schemas/transactions.yaml#/TransactionResponse"
+    ExchangeQuantity:
+      $ref: "./components/schemas/transactions.yaml#/ExchangeQuantity"
+    ExchangeConversion:
+      $ref: "./components/schemas/transactions.yaml#/ExchangeConversion"
     TransactionsResponse:
       $ref: "./components/schemas/transactions.yaml#/TransactionsResponse"
     AccountRegisterEntryResponse:

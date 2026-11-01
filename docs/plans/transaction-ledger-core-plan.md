@@ -906,10 +906,13 @@ Assets:Transfer Clearing    -100 EUR
 Assets:Savings              +100 EUR
 ```
 
-FX exchange:
+FX exchange (entered as an `exchange` entry naming only the two account
+postings and an optional fee; the service adds the trading legs, #481; see
+`docs/conventions.md`, Currency exchange). With a 2.50 EUR fee on top:
 
 ```text
-Assets:EUR Checking        -1000 EUR
+Assets:EUR Checking        -1002.50 EUR
+Expenses:Bank fees            +2.50 EUR
 System:Commodity Trading   +1000 EUR
 
 Assets:USD Checking        +1080 USD

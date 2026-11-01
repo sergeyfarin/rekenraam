@@ -938,9 +938,7 @@ func TestTransactionCommonLedgerScenarios(t *testing.T) {
 			"entry_kind":"exchange",
 			"postings":[
 				`+posting(checking.ID, -108000, 2, usdID)+`,
-				`+posting(commodityTrading.ID, 108000, 2, usdID)+`,
-				`+posting(eurChecking.ID, 100000, 2, eur.ID)+`,
-				`+posting(commodityTrading.ID, -100000, 2, eur.ID)+`
+				`+posting(eurChecking.ID, 100000, 2, eur.ID)+`
 			]
 		}]
 	}`, http.StatusCreated)

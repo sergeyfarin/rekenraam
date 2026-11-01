@@ -52,6 +52,15 @@ export function transactionsQueryOptions(options: TransactionListOptions = {}) {
   };
 }
 
+/** One transaction as GET /transactions/{id} reads it, with the read-only
+ *  extras only that read carries (an exchange's market comparison, #481). */
+export function transactionQueryOptions(transactionID: number) {
+  return {
+    queryKey: [...transactionsQueryKey, 'one', transactionID] as const,
+    queryFn: () => getTransaction(transactionID)
+  };
+}
+
 export function transactionsInfiniteQueryOptions(options: Omit<TransactionListOptions, 'cursor'> = {}) {
   return {
     queryKey: [...transactionsQueryKey, 'infinite', options] as const,

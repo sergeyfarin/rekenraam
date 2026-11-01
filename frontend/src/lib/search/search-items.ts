@@ -20,6 +20,7 @@ export function searchItems(catalog: SearchCatalogItem[], hidden: boolean): Sear
   }));
   const commands: SearchResult[] = [
     { id: 'command:add', group: 'command', title: m.transactions_form_create_title(), command: 'add-transaction' },
+    { id: 'command:transfer', group: 'command', title: m.home_shortcut_transfer(), command: 'add-transfer' },
     { id: 'command:amounts', group: 'command', title: hidden ? m.search_show_amounts() : m.nav_hide_amounts(), command: 'hide-amounts' },
     { id: 'command:theme', group: 'command', title: m.search_switch_theme(), command: 'theme' }
   ];

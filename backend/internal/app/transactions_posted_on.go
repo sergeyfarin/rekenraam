@@ -248,7 +248,11 @@ func (s *TransactionService) MovePostingToDay(ctx context.Context, input MovePos
 	if !ok {
 		return Transaction{}, ValidationError{Message: "this transaction's journal cannot move by day; edit it instead"}
 	}
-	rebuilt, err := s.groupPostingsByPostedOn(ctx, spec, spec.TransactionDate)
+	withExchange, err := s.buildExchangeLegs(ctx, spec, spec.TransactionDate)
+	if err != nil {
+		return Transaction{}, err
+	}
+	rebuilt, err := s.groupPostingsByPostedOn(ctx, withExchange, spec.TransactionDate)
 	if err != nil {
 		return Transaction{}, err
 	}
@@ -301,7 +305,8 @@ func (s *TransactionService) MovePostingToDay(ctx context.Context, input MovePos
 
 // postedOnSpec restates a stored transaction as one journal entry whose
 // account postings carry their posting days, leaving out the transfer_clearing
-// bridge the posted-date rule rebuilds. It reports false when the entries
+// bridge the posted-date rule rebuilds and an exchange's commodity_trading
+// legs, which the exchange rule rebuilds (#481). It reports false when the entries
 // differ in anything but their date, which one entry cannot carry.
 func postedOnSpec(transaction Transaction) (TransactionInput, bool) {
 	spec := transactionInputFromTransaction(transaction)
@@ -319,6 +324,9 @@ func postedOnSpec(transaction Transaction) (TransactionInput, bool) {
 		}
 		for postingIndex, posting := range entry.Postings {
 			if bridged && posting.AccountSystemRole != nil && *posting.AccountSystemRole == "transfer_clearing" {
+				continue
+			}
+			if isExchangeTradingLeg(entry, posting) {
 				continue
 			}
 			postingInput := input.Postings[postingIndex]

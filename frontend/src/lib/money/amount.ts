@@ -179,6 +179,13 @@ function rescale(value: bigint, from: number, to: number): bigint {
 	return value * 10n ** BigInt(to - from);
 }
 
+/** Exact sum of two amounts, aligned to the wider scale. */
+export function addScaledAmounts(left: ScaledAmount, right: ScaledAmount): ScaledAmount {
+	const scale = Math.max(left.scale, right.scale);
+	const total = rescale(BigInt(left.value), left.scale, scale) + rescale(BigInt(right.value), right.scale, scale);
+	return { value: total.toString(), scale };
+}
+
 /** Compare exact amounts with potentially different scales. */
 export function compareScaledAmounts(left: ScaledAmount, right: ScaledAmount): -1 | 0 | 1 {
 	const scale = Math.max(left.scale, right.scale);

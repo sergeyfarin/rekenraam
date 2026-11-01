@@ -45,7 +45,7 @@
 
 {#if transactionEntry.open}
   <ModalDialog
-    label={m.transactions_form_create_title()}
+    label={transactionEntry.defaults?.transfer ? m.transactions_transfer_title() : m.transactions_form_create_title()}
     onCancel={() => closeTransactionEntry()}
     {fallbackFocus}
     class="max-w-2xl p-4 sm:p-6 max-md:m-0! max-md:h-dvh max-md:max-h-dvh! max-md:w-full! max-md:max-w-none! max-md:rounded-none! max-md:border-0"

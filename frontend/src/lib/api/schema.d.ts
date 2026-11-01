@@ -29086,7 +29086,10 @@ export interface components {
         TransactionNeedsReview: boolean;
         /** @enum {string} */
         TransactionKind: "ordinary" | "transfer" | "investment" | "opening_balance" | "adjustment";
-        /** @enum {string} */
+        /**
+         * @description `exchange` (#481) marks a transfer between two of the owner's accounts in different currencies. A request entry of this kind names the two account postings — the exact amount that left (negative) and the exact amount that arrived (positive) — and at most one expense posting for a fee charged on top, in one side's currency, and must be the request's only journal entry. It names no system account: the server adds one commodity_trading posting per currency so each balances, before the posted_on rule bridges different posting days. Readers that edit an exchange drop those legs and resend the kind.
+         * @enum {string}
+         */
         JournalEntryKind: "ordinary" | "transfer_leg" | "exchange" | "investment" | "opening_balance" | "adjustment";
         /** @enum {string} */
         ReconciliationStatus: "uncleared" | "cleared" | "reconciled";
@@ -30511,6 +30514,36 @@ export interface components {
              */
             system_label?: "split_adjustment" | "transfer_bridge" | "share_exchange" | "cash_and_stock_merger" | "spin_off";
             invalidated_checkpoint_ids: number[];
+            /** @description Only on GET /transactions/{transaction_id}, and only for a currency exchange (#481): the deal against the market rate, computed on read. */
+            exchange_conversion?: components["schemas"]["ExchangeConversion"];
+        };
+        ExchangeQuantity: {
+            /** Format: int64 */
+            commodity_id: number;
+            quantity_value: string;
+            quantity_scale: number;
+        };
+        /** @description A currency exchange measured against the market (#481). Display only: nothing here is stored, and no FX gain or loss is posted. sent and received are the converted amounts (a fee charged on top is outside them); implied_rate is received per one unit sent, at six places. market is the reporting rate on the conversion day, selected as reports select it (the nearest earlier observation within the staleness window); when there is none, market is absent and market_gap names why. A rate that arrives or is corrected later shows on the next read. */
+        ExchangeConversion: {
+            /** Format: date */
+            conversion_date: string;
+            sent: components["schemas"]["ExchangeQuantity"];
+            received: components["schemas"]["ExchangeQuantity"];
+            implied_rate: components["schemas"]["ExchangeQuantity"];
+            market?: {
+                rate: components["schemas"]["ExchangeQuantity"];
+                /** Format: date */
+                observation_date: string;
+                /** @description The observation is from an earlier day than the conversion. */
+                stale: boolean;
+                /** @description The received amount valued in the sent currency at the market rate. */
+                market_value: components["schemas"]["ExchangeQuantity"];
+                /** @description Sent minus market_value, in the sent currency; positive when the deal delivered less than the market rate. */
+                cost: components["schemas"]["ExchangeQuantity"];
+                /** @description Cost as a percentage of sent, as a coefficient at scale 2. */
+                cost_percent: string;
+            };
+            market_gap?: string;
         };
         TransactionsResponse: {
             transactions: components["schemas"]["TransactionResponse"][];

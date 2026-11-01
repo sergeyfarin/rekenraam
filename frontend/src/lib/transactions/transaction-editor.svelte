@@ -16,6 +16,9 @@
   import { isOrdinaryEntryAccount } from './entry-account';
   import { suggestionKey } from './suggestion-keys.ts';
   import { editablePostings, hasPostingDay, postedOnForRequest } from './posted-on';
+  import { transferEntry, transferFeeCategoryKey, transferFields, transferProblem, type TransferProblem } from './transfer';
+  import { getLocale } from '#lib/paraglide/runtime.js';
+  import { formatRatio } from '#lib/money/format.ts';
   import { m } from '#lib/paraglide/messages.js';
   import { accountsQueryOptions } from '#lib/api/accounts.ts';
   import { categoriesQueryOptions } from '#lib/api/categories.ts';
@@ -65,7 +68,7 @@
   const ownerToday = useOwnerToday();
 
   // ── Tier types ────────────────────────────────────────────────────
-  type Tier = 'simple' | 'split';
+  type Tier = 'simple' | 'split' | 'transfer';
 
   // A single editable posting leg in the split editor.
   type SplitLeg = {
@@ -101,8 +104,9 @@
     onSaved?: (saved: TransactionResponse) => Promise<void> | void;
     initialValues?: TransactionRequest;
     /** Pre-selects the account or category a new transaction starts from,
-     *  when it is entered from that account's or category's screen (#185). */
-    createDefaults?: { accountID?: number; categoryID?: number };
+     *  when it is entered from that account's or category's screen (#185);
+     *  `transfer` opens Transfer mode, the account as From (#481). */
+    createDefaults?: { accountID?: number; categoryID?: number; transfer?: boolean };
     templateFields?: Snippet;
     saveTemplate?: (payload: TransactionRequest) => Promise<void>;
     preservePostings?: boolean;
@@ -238,6 +242,25 @@
     { accountID: '', commodityID: '', amountStr: '', memo: '', postedOn: '' }
   ]);
 
+  // Transfer between two of the owner's accounts (#481): what left From and,
+  // in another currency, what arrived in To; a fee on top on Bank fees.
+  let transferFromID = $state<number | undefined>(undefined);
+  let transferToID = $state<number | undefined>(undefined);
+  // Chosen currency for a side whose account has no default commodity.
+  let transferFromCommodityID = $state<number | undefined>(undefined);
+  let transferToCommodityID = $state<number | undefined>(undefined);
+  let sentStr = $state('');
+  let receivedStr = $state('');
+  let feeStr = $state('');
+  let feePaidBy = $state<'from' | 'to'>('from');
+  let feeAccountID = $state<number | undefined>(undefined);
+  let leavesOn = $state('');
+  let arrivesOn = $state('');
+  let showTransferDays = $state(false);
+  let transferLineKeys = $state<{ from?: string; to?: string; fee?: string }>({});
+  // Why the transfer cannot be saved yet, translated; '' when it can.
+  let transferMessage = $state('');
+
   // ── Form state ────────────────────────────────────────────────────
   let pending = $state(false);
   // The whole save chain is busy, the payee it creates first included: a
@@ -307,6 +330,26 @@
     )
   );
 
+  const transferFromAccount = $derived(assetLiabilityAccounts.find((a: AccountResponse) => a.id === transferFromID));
+  const transferToAccount = $derived(assetLiabilityAccounts.find((a: AccountResponse) => a.id === transferToID));
+  const transferFromCommodity = $derived(transferFromAccount?.default_commodity_id ?? transferFromCommodityID);
+  const transferToCommodity = $derived(transferToAccount?.default_commodity_id ?? transferToCommodityID);
+  const transferIsExchange = $derived(
+    transferFromCommodity !== undefined && transferToCommodity !== undefined && transferFromCommodity !== transferToCommodity
+  );
+  const bankFeesCategoryID = $derived(
+    (categoriesQuery.data?.categories ?? []).find((c: CategoryResponse) => c.builtin_key === transferFeeCategoryKey && c.status === 'active')?.id
+  );
+  // Display only: the rate the two amounts imply, never used to fill one in.
+  const transferImpliedRate = $derived.by(() => {
+    if (!transferIsExchange) return null;
+    const sent = parseDecimalAmount(sentStr);
+    const received = parseDecimalAmount(receivedStr);
+    if (!sent || !received || sent.value.startsWith('-') || sent.value === '0') return null;
+    return formatRatio(received, sent, 6, getLocale());
+  });
+  const commodityCode = (id: number | undefined) => (id === undefined ? '' : currenciesByID.get(id)?.code ?? '');
+
   // For Tier 3 imbalance check — summed per commodity, scale-aware, in #lib/money.
   const splitImbalance = $derived.by(() => commodityImbalance(splitLegs));
 
@@ -315,7 +358,9 @@
       ? m.transactions_form_correction_title()
       : mode === 'edit'
         ? m.transactions_form_edit_title()
-        : m.transactions_form_create_title()
+        : tier === 'transfer'
+          ? m.transactions_transfer_title()
+          : m.transactions_form_create_title()
   );
 
   const submitLabel = $derived(
@@ -369,7 +414,15 @@
       transactionKind = 'ordinary';
       noteMarkdown = '';
       externalRefHint = '';
-      tier = 'simple';
+      resetTransfer();
+      // Local, not read back from `tier`: the effect must not track the tier,
+      // or switching it would reset the form.
+      const startsAsTransfer = untrack(() => createDefaults?.transfer) === true;
+      tier = startsAsTransfer ? 'transfer' : 'simple';
+      if (startsAsTransfer) {
+        transferFromID = untrack(() => createDefaults?.accountID);
+        accountID = undefined;
+      }
       splitLegs = [
         { accountID: '', commodityID: '', amountStr: '', memo: '', postedOn: '' },
         { accountID: '', commodityID: '', amountStr: '', memo: '', postedOn: '' }
@@ -399,8 +452,32 @@
       ({ posting }) => posting.account_class === 'income' || posting.account_class === 'expense'
     );
 
-    // The simple form is one account and one category; anything else (a
-    // transfer between two accounts included) opens as splits.
+    // A transfer between two accounts, in one currency or two, with or
+    // without a fee, opens in Transfer mode (#481).
+    const transfer = preservePostings ? null : transferFields(entries, transaction.transaction_date);
+    resetTransfer();
+    if (transfer) {
+      tier = 'transfer';
+      transferFromID = transfer.from.accountID;
+      transferToID = transfer.to.accountID;
+      transferFromCommodityID = transfer.from.commodityID;
+      transferToCommodityID = transfer.to.commodityID;
+      sentStr = formatEditableAmount(transfer.sent.value, transfer.sent.scale);
+      receivedStr = transfer.from.commodityID !== transfer.to.commodityID ? formatEditableAmount(transfer.received.value, transfer.received.scale) : '';
+      leavesOn = transfer.from.postedOn;
+      arrivesOn = transfer.to.postedOn;
+      showTransferDays = transfer.from.postedOn !== '' || transfer.to.postedOn !== '';
+      transferLineKeys = { from: transfer.from.lineKey, to: transfer.to.lineKey, fee: transfer.fee?.lineKey };
+      if (transfer.fee) {
+        feeStr = formatEditableAmount(transfer.fee.amount.value, transfer.fee.amount.scale);
+        feePaidBy = transfer.fee.paidBy;
+        feeAccountID = transfer.fee.accountID;
+      }
+      return;
+    }
+
+    // The simple form is one account and one category; anything else opens
+    // as splits.
     if (!preservePostings && shown.length <= 2 && assetLegs.length <= 1 && categoryLegs.length <= 1 && assetLegs.length + categoryLegs.length === shown.length) {
       tier = 'simple';
       const assetLeg = assetLegs[0];
@@ -453,6 +530,15 @@
 
     if (isVoided) {
       return; // blocked by UI; should not happen
+    }
+
+    transferMessage = '';
+    if (tier === 'transfer') {
+      const problem = currentTransferProblem();
+      if (problem) {
+        transferMessage = problem === 'no_fee_category' ? m.transactions_transfer_problem_no_fee_category() : transferProblemMessage(problem);
+        return;
+      }
     }
 
     // A newly typed name that names no payee stops here rather than being saved
@@ -634,7 +720,12 @@
       payload.payee_name = payeeSearch.trim();
     }
 
-    if (tier === 'simple') {
+    if (tier === 'transfer') {
+      // A new transfer is one by kind; an edit or correction keeps the kind
+      // it was saved with.
+      if (mode === 'create') payload.transaction_kind = 'transfer';
+      payload.journal_entries = buildTransferJournalEntries();
+    } else if (tier === 'simple') {
       payload.journal_entries = buildSimpleJournalEntries();
     } else {
       payload.journal_entries = buildSplitJournalEntries();
@@ -711,7 +802,120 @@
 
     if (postings.length === 0) return [];
 
-    return [{ entry_date: transactionDate, postings }];
+    // Account postings in two currencies are an exchange: the server adds
+    // the commodity_trading legs the editor never shows (#481).
+    const commodities = new Set(postings.map((posting) => posting.commodity_id));
+    const exchange = commodities.size > 1 && postings.every((posting) => !accountForLeg(String(posting.account_id))?.system_role);
+    return [{ entry_date: transactionDate, entry_kind: exchange ? 'exchange' : undefined, postings }];
+  }
+
+  function resetTransfer() {
+    transferFromID = undefined;
+    transferToID = undefined;
+    transferFromCommodityID = undefined;
+    transferToCommodityID = undefined;
+    sentStr = '';
+    receivedStr = '';
+    feeStr = '';
+    feePaidBy = 'from';
+    feeAccountID = undefined;
+    leavesOn = '';
+    arrivesOn = '';
+    showTransferDays = false;
+    transferLineKeys = {};
+    transferMessage = '';
+  }
+
+  function parsedFee() {
+    return feeStr.trim() ? parseDecimalAmount(feeStr) : null;
+  }
+
+  function currentTransferProblem(): TransferProblem | 'no_fee_category' | null {
+    if (feeStr.trim() && parsedFee() === null) return 'invalid_fee';
+    const fee = parsedFee();
+    if (fee && fee.value !== '0' && feeAccountID === undefined && bankFeesCategoryID === undefined) return 'no_fee_category';
+    if (sentStr.trim() && parseDecimalAmount(sentStr) === null) return 'missing_amount';
+    return transferProblem({
+      fromAccountID: transferFromID && transferFromCommodity !== undefined ? transferFromID : undefined,
+      toAccountID: transferToID && transferToCommodity !== undefined ? transferToID : undefined,
+      sent: parseDecimalAmount(sentStr),
+      received: parseDecimalAmount(receivedStr),
+      exchange: transferIsExchange,
+      leavesOn: leavesOn || transactionDate,
+      arrivesOn: arrivesOn || transactionDate,
+      fee: parsedFee(),
+      feePaidBy
+    });
+  }
+
+  function transferProblemMessage(problem: TransferProblem): string {
+    switch (problem) {
+      case 'missing_account': return m.transactions_transfer_problem_missing_account();
+      case 'same_account': return m.transactions_transfer_problem_same_account();
+      case 'missing_amount': return m.transactions_transfer_problem_missing_amount();
+      case 'missing_received': return m.transactions_transfer_problem_missing_received();
+      case 'arrives_before_leaves': return m.transactions_transfer_problem_arrives_before_leaves();
+      case 'invalid_fee': return m.transactions_transfer_problem_invalid_fee();
+      case 'fee_exceeds_amount': return m.transactions_transfer_problem_fee_exceeds_amount();
+    }
+  }
+
+  function buildTransferJournalEntries(): TransactionRequest['journal_entries'] {
+    const sent = parseDecimalAmount(sentStr);
+    if (!transferFromID || !transferToID || transferFromCommodity === undefined || transferToCommodity === undefined || !sent) return [];
+    const received = transferIsExchange ? parseDecimalAmount(receivedStr) : sent;
+    if (!received) return [];
+    const fee = parsedFee();
+    const feeCategory = feeAccountID ?? bankFeesCategoryID;
+    const entry = transferEntry({
+      from: { accountID: transferFromID, commodityID: transferFromCommodity, postedOn: '', lineKey: transferLineKeys.from },
+      to: { accountID: transferToID, commodityID: transferToCommodity, postedOn: '', lineKey: transferLineKeys.to },
+      sent,
+      received,
+      fee: fee && fee.value !== '0' && feeCategory ? { accountID: feeCategory, amount: fee, paidBy: feePaidBy, lineKey: transferLineKeys.fee } : undefined
+    });
+    const postedOnFor = (accountID: number, day: string) =>
+      mode === 'template' ? undefined : postedOnForRequest(day, transactionDate, accountForLeg(String(accountID)));
+    return [{
+      entry_date: transactionDate,
+      entry_kind: entry.entry_kind,
+      postings: entry.postings.map((posting) => ({
+        ...posting,
+        memo: '',
+        posted_on: posting.account_id === transferFromID ? postedOnFor(transferFromID, leavesOn)
+          : posting.account_id === transferToID ? postedOnFor(transferToID, arrivesOn) : undefined
+      }))
+    }];
+  }
+
+  function switchTransferToSplit() {
+    const built = buildTransferJournalEntries() ?? [];
+    const postings = built[0]?.postings ?? [];
+    if (postings.length >= 2) {
+      splitLegs = postings.map((p: JournalEntryPostingRequest) => ({
+        accountID: String(p.account_id),
+        commodityID: String(p.commodity_id),
+        amountStr: formatEditableAmount(p.quantity_value ?? '0', p.quantity_scale ?? 0),
+        memo: '',
+        lineKey: p.line_key,
+        postedOn: p.posted_on ?? ''
+      }));
+    }
+    tier = 'split';
+  }
+
+  function switchToTransfer() {
+    resetTransfer();
+    transferFromID = accountID;
+    tier = 'transfer';
+  }
+
+  function swapTransferSides() {
+    [transferFromID, transferToID] = [transferToID, transferFromID];
+    [transferFromCommodityID, transferToCommodityID] = [transferToCommodityID, transferFromCommodityID];
+    [leavesOn, arrivesOn] = [arrivesOn, leavesOn];
+    if (transferIsExchange) [sentStr, receivedStr] = [receivedStr, sentStr];
+    feePaidBy = feePaidBy === 'from' ? 'to' : 'from';
   }
 
   // ── Helpers ───────────────────────────────────────────────────────
@@ -1067,7 +1271,149 @@
     </label>
   </div>
 
-  {#if tier === 'simple'}
+  {#if tier === 'transfer'}
+    <!-- ── Transfer between two accounts (#481) ───────────────────── -->
+    <div class="space-y-3" role="group" aria-label={m.transactions_transfer_title()}>
+      {#if transferMessage}
+        <p role="alert" class="flex items-start gap-2 rounded-[var(--radius-control)] border border-danger/40 bg-danger-soft px-3 py-2.5 text-sm text-foreground">
+          <AlertTriangle size={15} class="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
+          <span>{transferMessage}</span>
+        </p>
+      {/if}
+      <div class="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
+        <label>
+          <span class={labelClass}>{m.transactions_transfer_from()}</span>
+          <select
+            value={transferFromID ?? ''}
+            onchange={(e) => { transferFromID = Number(e.currentTarget.value) || undefined; transferFromCommodityID = undefined; }}
+            class={inputClass}
+            required
+            disabled={isVoided && mode === 'edit'}
+          >
+            <option value="">—</option>
+            {#each assetLiabilityAccounts as a (a.id)}
+              <option value={a.id}>{postingAccountLabel(a)}</option>
+            {/each}
+          </select>
+        </label>
+        <button
+          type="button"
+          class="inline-flex h-10 min-w-11 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control px-3 text-sm text-foreground transition hover:bg-control-hover"
+          onclick={swapTransferSides}
+          aria-label={m.transactions_transfer_swap()}
+          title={m.transactions_transfer_swap()}
+          disabled={isVoided && mode === 'edit'}
+        >
+          <span aria-hidden="true">⇄</span>
+        </button>
+        <label>
+          <span class={labelClass}>{m.transactions_transfer_to()}</span>
+          <select
+            value={transferToID ?? ''}
+            onchange={(e) => { transferToID = Number(e.currentTarget.value) || undefined; transferToCommodityID = undefined; }}
+            class={inputClass}
+            required
+            disabled={isVoided && mode === 'edit'}
+          >
+            <option value="">—</option>
+            {#each assetLiabilityAccounts as a (a.id)}
+              <option value={a.id}>{postingAccountLabel(a)}</option>
+            {/each}
+          </select>
+        </label>
+      </div>
+
+      {#if (transferFromID !== undefined && transferFromAccount?.default_commodity_id == null) || (transferToID !== undefined && transferToAccount?.default_commodity_id == null)}
+        <div class="grid gap-3 sm:grid-cols-2">
+          {#if transferFromID !== undefined && transferFromAccount?.default_commodity_id == null}
+            <label>
+              <span class={labelClass}>{m.transactions_transfer_from_currency()}</span>
+              <select value={transferFromCommodityID ?? ''} onchange={(e) => { transferFromCommodityID = Number(e.currentTarget.value) || undefined; }} class={inputClass} required>
+                <option value="">—</option>
+                {#each allActiveCommodities as c (c.id)}<option value={c.id}>{c.code}</option>{/each}
+              </select>
+            </label>
+          {/if}
+          {#if transferToID !== undefined && transferToAccount?.default_commodity_id == null}
+            <label>
+              <span class={labelClass}>{m.transactions_transfer_to_currency()}</span>
+              <select value={transferToCommodityID ?? ''} onchange={(e) => { transferToCommodityID = Number(e.currentTarget.value) || undefined; }} class={inputClass} required>
+                <option value="">—</option>
+                {#each allActiveCommodities as c (c.id)}<option value={c.id}>{c.code}</option>{/each}
+              </select>
+            </label>
+          {/if}
+        </div>
+      {/if}
+
+      <div class="grid gap-3 sm:grid-cols-2">
+        <label>
+          <span class={labelClass}>
+            {transferIsExchange ? m.transactions_transfer_sent({ currency: commodityCode(transferFromCommodity) }) : m.transactions_field_amount()}
+          </span>
+          <input type="text" bind:value={sentStr} class={inputClass} inputmode="decimal" placeholder={formatEditableAmount('0', 2)} required disabled={isVoided && mode === 'edit'} />
+        </label>
+        {#if transferIsExchange}
+          <label>
+            <span class={labelClass}>{m.transactions_transfer_received({ currency: commodityCode(transferToCommodity) })}</span>
+            <input type="text" bind:value={receivedStr} class={inputClass} inputmode="decimal" placeholder={formatEditableAmount('0', 2)} required aria-describedby="transfer-rate" disabled={isVoided && mode === 'edit'} />
+          </label>
+          <p id="transfer-rate" class="text-xs text-muted sm:col-span-2" aria-live="polite">
+            {#if transferImpliedRate}
+              {m.transactions_transfer_rate({ rate: transferImpliedRate, from: commodityCode(transferFromCommodity), to: commodityCode(transferToCommodity) })}
+            {:else}
+              {m.transactions_transfer_rate_hint()}
+            {/if}
+          </p>
+        {/if}
+      </div>
+
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label>
+            <span class={labelClass}>{m.transactions_transfer_fee()}</span>
+            <input type="text" bind:value={feeStr} class={inputClass} inputmode="decimal" placeholder={formatEditableAmount('0', 2)} aria-describedby="transfer-fee-hint" disabled={isVoided && mode === 'edit'} />
+          </label>
+          <span id="transfer-fee-hint" class="mt-1 block text-xs text-muted">{m.transactions_transfer_fee_hint()}</span>
+        </div>
+        {#if transferIsExchange && feeStr.trim()}
+          <label>
+            <span class={labelClass}>{m.transactions_transfer_fee_paid_by()}</span>
+            <select bind:value={feePaidBy} class={inputClass} disabled={isVoided && mode === 'edit'}>
+              <option value="from">{m.transactions_transfer_fee_paid_by_from({ currency: commodityCode(transferFromCommodity) })}</option>
+              <option value="to">{m.transactions_transfer_fee_paid_by_to({ currency: commodityCode(transferToCommodity) })}</option>
+            </select>
+          </label>
+        {/if}
+      </div>
+
+      {#if mode !== 'template'}
+        {#if showTransferDays}
+          <div class="grid gap-3 sm:grid-cols-2">
+            <label>
+              <span class={labelClass}>{m.transactions_transfer_leaves_on()}</span>
+              <input type="date" value={leavesOn || transactionDate} oninput={(e) => { leavesOn = e.currentTarget.value; }} class={inputClass} disabled={isVoided && mode === 'edit'} />
+            </label>
+            <label>
+              <span class={labelClass}>{m.transactions_transfer_arrives_on()}</span>
+              <input type="date" value={arrivesOn || transactionDate} oninput={(e) => { arrivesOn = e.currentTarget.value; }} class={inputClass} aria-describedby="transfer-days-hint" disabled={isVoided && mode === 'edit'} />
+            </label>
+            <p id="transfer-days-hint" class="text-xs text-muted sm:col-span-2">{m.transactions_transfer_days_hint()}</p>
+          </div>
+        {:else}
+          <button type="button" class="min-h-10 text-xs font-medium text-accent underline-offset-2 hover:underline" onclick={() => { showTransferDays = true; }} disabled={isVoided && mode === 'edit'}>
+            {m.transactions_transfer_days_toggle()}
+          </button>
+        {/if}
+      {/if}
+
+      <div class="flex justify-end">
+        <button type="button" class="min-h-10 text-xs font-medium text-accent underline-offset-2 hover:underline" onclick={switchTransferToSplit}>
+          {m.transactions_tier_switch_split()}
+        </button>
+      </div>
+    </div>
+  {:else if tier === 'simple'}
     <!-- ── Tier 1: simple two-posting form ─────────────────────────── -->
     <div class="grid gap-3 sm:grid-cols-2">
       <!-- Account (asset/liability leg) -->
@@ -1196,11 +1542,20 @@
       </label>
     </div>
 
-    <!-- Switch to split -->
-    <div class="flex justify-end">
+    <!-- Switch to transfer or split -->
+    <div class="flex flex-wrap justify-end gap-x-4">
+      {#if mode !== 'template'}
+        <button
+          type="button"
+          class="min-h-10 text-xs font-medium text-accent underline-offset-2 hover:underline"
+          onclick={switchToTransfer}
+        >
+          {m.transactions_tier_switch_transfer()}
+        </button>
+      {/if}
       <button
         type="button"
-        class="text-xs font-medium text-accent underline-offset-2 hover:underline"
+        class="min-h-10 text-xs font-medium text-accent underline-offset-2 hover:underline"
         onclick={switchToSplit}
       >
         {m.transactions_tier_switch_split()}
@@ -1351,8 +1706,8 @@
   <details class="rounded-[var(--radius-control)] border border-border bg-surface">
     <summary class="cursor-pointer px-3 py-2 text-sm font-semibold text-foreground">{m.form_advanced()}</summary>
     <div class="grid gap-3 border-t border-border px-3 py-3 sm:grid-cols-2">
-      <!-- Transaction kind -->
-      <label>
+      <!-- Transaction kind; a transfer is always one -->
+      <label class:hidden={tier === 'transfer'}>
         <span class={labelClass}>{m.transactions_field_kind()}</span>
         <select bind:value={transactionKind} class={inputClass} disabled={isVoided && mode === 'edit'}>
           <option value="ordinary">{m.transaction_kind_ordinary()}</option>
