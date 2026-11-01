@@ -16,7 +16,7 @@
     type TransactionQueryFilters
   } from '#lib/transactions/transaction-url-filters.ts';
 
-  const linkedTransactionID = Number(page.url.searchParams.get('transaction_id') ?? 0);
+  const linkedTransactionID = $derived(Number(page.url.searchParams.get('transaction_id') ?? 0));
   const view = $derived(parseTransactionView(page.url.searchParams));
 
   // The URL seeds the list once, so a report drill-down lands pre-filtered, and

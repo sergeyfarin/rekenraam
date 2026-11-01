@@ -31,7 +31,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { replaceState } from '$app/navigation';
-  import { onMount, type Snippet } from 'svelte';
+  import type { Snippet } from 'svelte';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import Plus from '@lucide/svelte/icons/plus';
   import { m } from '#lib/paraglide/messages.js';
@@ -91,8 +91,19 @@
   const csrfToken = $derived(sessionQuery.data?.csrf_token);
   const queryClient = useQueryClient();
 
-  onMount(() => {
-    if (Number.isSafeInteger(linkedTransactionID) && linkedTransactionID > 0) void showTransaction(linkedTransactionID);
+  // A `transaction_id` link can arrive without remounting this screen: after a
+  // save, View transaction points at the same route. Consume each new ID, not
+  // just the first one seen on mount.
+  let openedLinkedTransactionID = 0;
+  $effect(() => {
+    const transactionID = linkedTransactionID;
+    if (!Number.isSafeInteger(transactionID) || transactionID <= 0) {
+      openedLinkedTransactionID = 0;
+      return;
+    }
+    if (transactionID === openedLinkedTransactionID) return;
+    openedLinkedTransactionID = transactionID;
+    void showTransaction(transactionID);
   });
 
   // A write may change any list, every account's running balance and the

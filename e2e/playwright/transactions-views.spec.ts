@@ -103,8 +103,43 @@ test('[acceptance] Transactions separates All, Drafts and Deleted and restores f
     await row(deletedDescription).getByRole('button', { name: 'Restore', exact: true }).click();
     await expect(row(deletedDescription)).toHaveCount(0);
 
+    // Creating from Deleted uses the shared dialog. Its View transaction link
+    // navigates to this same route, so the workspace must consume the new ID
+    // without remounting the page.
+    const createdDescription = `Views created ${suffix}`;
+    await page.keyboard.press('n');
+    const dialog = page.getByRole('dialog', { name: 'Add transaction', exact: true });
+    await expect(dialog).toBeVisible();
+    await dialog.getByLabel('Date', { exact: true }).fill(today);
+    await dialog.getByLabel('Description', { exact: true }).fill(createdDescription);
+    await dialog.getByRole('combobox', { name: 'Account', exact: true }).selectOption({ label: account.name });
+    await dialog.getByLabel('Amount', { exact: true }).fill('-10.00');
+    await dialog.getByPlaceholder('Search categories').click();
+    await dialog.locator('ul[role="listbox"] button[role="option"]').first().click();
+    const created = page.waitForResponse(
+      (response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/transactions'
+    );
+    await dialog.getByRole('button', { name: 'Add transaction', exact: true }).click();
+    expect((await created).status()).toBe(201);
+    await page.getByRole('link', { name: 'View transaction', exact: true }).click();
+    await expect(page).toHaveURL(/\/app\/ledger\/transactions\?transaction_id=\d+$/);
+    await expect(page.getByTestId('transactions-view-all')).toHaveAttribute('aria-current', 'page');
+    const detail = page.getByRole('complementary', { name: 'Actions', exact: true });
+    await expect(detail).toBeVisible();
+    await expect(detail).toContainText(createdDescription);
+
+    // The All tab is a link, not a list reset: an explicit status stays in
+    // the URL and the list, so a reload or shared link sees the same rows.
+    await page.goto('/app/ledger/transactions?status=voided');
+    const status = page.getByRole('combobox', { name: 'Status', exact: true });
+    await expect(status).toHaveValue('voided');
+    await expect(row(voidedDescription)).toHaveCount(1);
     await page.getByTestId('transactions-view-all').click();
-    await expect(page).toHaveURL('/app/ledger/transactions');
+    await expect(page).toHaveURL('/app/ledger/transactions?status=voided');
+    await expect(status).toHaveValue('voided');
+    await expect(row(voidedDescription)).toHaveCount(1);
+
+    await page.goto('/app/ledger/transactions');
     await expect(row(deletedDescription)).toHaveCount(1);
   } finally {
     await apiJSON(page, 'POST', `/api/v1/recurring/templates/${template.id}/archive`, csrfToken, {});

@@ -15,9 +15,10 @@ export function parseTransactionView(params: ReadonlyURLSearchParams): Transacti
 }
 
 /**
- * A view link keeps the filters that still apply. All and Drafts share the
- * ordinary list's filters except status, which the view itself owns; Deleted
- * reads a different endpoint and keeps none of them.
+ * A view link keeps the filters that still apply. All keeps the ordinary
+ * list's filters, including an explicit status, so the URL always describes
+ * what the list shows. Drafts owns lifecycle, so it replaces status with its
+ * own filter; Deleted reads a different endpoint and keeps none of them.
  */
 export function transactionViewHref(view: TransactionView, params: ReadonlyURLSearchParams): string {
   if (view === 'deleted') {
@@ -26,8 +27,8 @@ export function transactionViewHref(view: TransactionView, params: ReadonlyURLSe
 
   const next = new URLSearchParams(params.toString());
   next.delete('view');
-  next.delete('status');
   if (view === 'drafts') {
+    next.delete('status');
     next.set('view', 'drafts');
   }
   const search = next.toString();

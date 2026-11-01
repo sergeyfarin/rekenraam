@@ -13,11 +13,15 @@ describe('transaction views', () => {
     expect(parseTransactionView(params('view=deleted'))).toBe('deleted');
   });
 
-  it('keeps the ordinary list filters between All and Drafts, but the view owns status', () => {
-    const current = params('view=drafts&status=draft&account_id=4&after_date=2026-01-01&q=rent');
+  it('keeps every All filter, including an explicit status, in its link', () => {
+    const current = params('status=voided&account_id=4&after_date=2026-01-01&q=rent');
     expect(transactionViewHref('all', current)).toBe(
-      '/app/ledger/transactions?account_id=4&after_date=2026-01-01&q=rent'
+      '/app/ledger/transactions?status=voided&account_id=4&after_date=2026-01-01&q=rent'
     );
+  });
+
+  it('keeps ordinary filters in Drafts but lets the view own status', () => {
+    const current = params('view=drafts&status=draft&account_id=4&after_date=2026-01-01&q=rent');
     expect(transactionViewHref('drafts', current)).toBe(
       '/app/ledger/transactions?account_id=4&after_date=2026-01-01&q=rent&view=drafts'
     );
