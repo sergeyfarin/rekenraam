@@ -42,6 +42,10 @@ const titles = {
   settings_nav_currencies: m.settings_nav_currencies,
   settings_data_title: m.settings_data_title,
   settings_nav_security: m.settings_nav_security,
+  // Aliases for Preferences: the merged page still answers to the old pages'
+  // names in search (#446 review).
+  language_title: m.language_title,
+  appearance_title: m.appearance_title,
 };
 export type TitleKey = keyof typeof titles;
 
@@ -94,7 +98,12 @@ export const sections: readonly Section[] = [
 // Order within a section is tab order. The Ledger, Planning and Reports
 // overviews are placeholders until #448 and #450; Accounts stays a Ledger tab
 // until #448 folds it into the Ledger overview.
-const definitions: readonly Omit<RouteEntry, 'title' | 'keywords'>[] = [
+type RouteDefinition = Omit<RouteEntry, 'title' | 'keywords'> & {
+  /** Extra localized search terms this page still answers to. */
+  keywords?: readonly TitleKey[];
+};
+
+const definitions: readonly RouteDefinition[] = [
   { route: '/app/review', section: 'review', titleKey: 'attention_review', icon: 'scan-line', width: 'standard', standalone: true },
   { route: '/app', section: 'home', titleKey: 'nav_home', icon: 'house', width: 'fluid', ownHeader: true },
 
@@ -129,7 +138,7 @@ const definitions: readonly Omit<RouteEntry, 'title' | 'keywords'>[] = [
   { route: '/app/reports/export', section: 'reports', titleKey: 'reports_export_title', icon: 'download', width: 'standard', tab: true },
 
   { route: '/app/settings', section: 'settings', titleKey: 'settings_nav_general', icon: 'settings-2', width: 'standard', tab: true },
-  { route: '/app/settings/preferences', section: 'settings', titleKey: 'settings_nav_preferences', icon: 'palette', width: 'standard', tab: true },
+  { route: '/app/settings/preferences', section: 'settings', titleKey: 'settings_nav_preferences', icon: 'palette', width: 'standard', tab: true, keywords: ['language_title', 'appearance_title'] },
   { route: '/app/settings/currencies', section: 'settings', titleKey: 'settings_nav_currencies', icon: 'coins', width: 'standard', tab: true },
   { route: '/app/settings/security', section: 'settings', titleKey: 'settings_nav_security', icon: 'shield-check', width: 'standard', tab: true },
   { route: '/app/settings/data', section: 'settings', titleKey: 'settings_data_title', icon: 'database', width: 'standard', tab: true },
@@ -155,7 +164,7 @@ const sectionRouteMoves = [
   ['/app/forecast', '/app/planning/forecast']
 ] as const;
 
-const legacyDefinitions = definitions.flatMap((entry) => {
+const legacyDefinitions: readonly RouteDefinition[] = definitions.flatMap((entry) => {
   const move = sectionRouteMoves.find(([, target]) => entry.route === target || entry.route.startsWith(`${target}/`));
   if (!move) return [];
   // Legacy paths only redirect, never appear as tabs or search results.
@@ -172,7 +181,7 @@ const legacyDefinitions = definitions.flatMap((entry) => {
 export const routes: readonly RouteEntry[] = [...definitions, ...legacyDefinitions].map((entry) => ({
   ...entry,
   title: () => titles[entry.titleKey](),
-  keywords: [entry.titleKey]
+  keywords: [entry.titleKey, ...(entry.keywords ?? [])]
 }));
 
 const patterns = routes.map((entry) => ({

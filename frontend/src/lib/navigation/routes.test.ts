@@ -1,7 +1,7 @@
 import { readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { breadcrumbs, canonicalURL, currentTab, routeFor, routes, sectionTabs, sections, tabHref } from './routes';
+import { breadcrumbs, canonicalURL, currentTab, routeFor, routeSearchKeywords, routes, sectionTabs, sections, tabHref } from './routes';
 
 const routesDir = join(import.meta.dirname, '../../routes');
 
@@ -39,6 +39,11 @@ describe('route registry', () => {
       expect(first?.route).toBe(section.overview);
       expect(routeFor(section.overview)?.section).toBe(section.id);
     }
+  });
+
+  it('keeps the old page names as search aliases for Preferences', () => {
+    const keywords = routeSearchKeywords(routeFor('/app/settings/preferences')!);
+    expect(keywords).toEqual(expect.arrayContaining(['Preferences', 'Language', 'Appearance']));
   });
 
   it('lists the five settings pages in the agreed order', () => {
