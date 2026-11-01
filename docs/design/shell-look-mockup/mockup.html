@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Task rail</title>
+<style>
+:root {
+  /* One warm olive hue (108) for every neutral, as today; the old sidebar was #f2f2e5. */
+  --page: oklch(0.973 0.011 108);      /* #f7f7ef-ish, the old page */
+  --card: oklch(0.996 0.004 108);
+  --row2: oklch(0.953 0.019 108);      /* the old sidebar tone, #f2f2e5 */
+  --row1: oklch(0.918 0.026 108);      /* one step deeper for the section row */
+  --line: oklch(0.86 0.025 108);
+  --fg: oklch(0.22 0.02 108); --muted: oklch(0.47 0.02 108);
+  --accent: oklch(0.47 0.14 154); --accent-ink: oklch(0.36 0.1 154); --accent-soft: oklch(0.93 0.05 154);
+}
+[data-theme="dark"] {
+  --page: oklch(0.19 0.012 108); --card: oklch(0.235 0.014 108);
+  --row2: oklch(0.225 0.016 108); --row1: oklch(0.265 0.02 108); --line: oklch(0.36 0.02 108);
+  --fg: oklch(0.94 0.01 108); --muted: oklch(0.72 0.015 108);
+  --accent: oklch(0.72 0.13 154); --accent-ink: oklch(0.8 0.11 154); --accent-soft: oklch(0.32 0.06 154);
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.5 Inter, system-ui, sans-serif; background: var(--page); color: var(--fg); }
+.bar1 { background: var(--row1); height: 56px; padding: 0 32px; display: flex; align-items: flex-end; gap: 2px; }
+.bar1 .sec { padding: 0 14px; height: 44px; display: flex; align-items: center; color: var(--muted); font-weight: 500; border-radius: 10px 10px 0 0; margin-bottom: 0; }
+/* The current section is a tab joined to its pages row, as in MS Money. */
+.bar1 .sec.cur { background: var(--row2); color: var(--fg); font-weight: 600; }
+.bar1 .right { margin-left: auto; align-self: center; display: flex; align-items: center; gap: 6px; }
+.bar2 { background: var(--row2); height: 42px; padding: 0 32px; display: flex; align-items: center; gap: 24px; border-bottom: 1px solid var(--line); }
+.bar2 a { position: relative; height: 42px; display: flex; align-items: center; color: var(--muted); font-size: 14px; font-weight: 500; }
+.bar2 a.cur { color: var(--fg); font-weight: 600; }
+.bar2 a.cur::after { content: ''; position: absolute; left: -2px; right: -2px; bottom: -1px; height: 3px; border-radius: 3px 3px 0 0; background: var(--accent); }
+.badge { background: var(--accent); color: var(--card); border-radius: 99px; font-size: 11px; font-weight: 600; padding: 0 6px; margin-left: 6px; }
+.review { font-weight: 600; padding: 8px 10px; }
+.pill { height: 36px; border: 1px solid var(--line); background: var(--card); border-radius: 999px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; color: var(--muted); font-size: 14px; }
+kbd { font: 12px ui-monospace, monospace; border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; color: var(--muted); }
+.ic { width: 36px; height: 36px; border-radius: 99px; display: grid; place-items: center; color: var(--muted); }
+svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 28px; padding: 24px 32px; max-width: 1440px; }
+h1 { font-size: 30px; margin: 0 0 4px; letter-spacing: -0.02em; }
+.lead { color: var(--muted); margin: 0 0 16px; }
+.sub { display: flex; gap: 28px; border-bottom: 1px solid var(--line); margin: 0 0 16px; font-size: 14px; color: var(--muted); }
+.sub span { padding: 8px 0; } .sub span.cur { color: var(--fg); font-weight: 600; box-shadow: inset 0 -2px var(--fg); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+table { width: 100%; border-collapse: collapse; font-size: 15px; }
+th, td { text-align: left; padding: 12px 18px; border-top: 1px solid var(--line); } th { font-weight: 600; font-size: 13px; color: var(--muted); border-top: 0; }
+.n { text-align: right; font-variant-numeric: tabular-nums; }
+.money { font-weight: 600; }
+/* The task rail: real commands only, grouped, readable size, never a menu. */
+.rail { align-self: start; position: sticky; top: 16px; background: var(--row2); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px 6px; }
+.rail .primary { display: flex; width: 100%; height: 44px; align-items: center; justify-content: center; gap: 6px; border-radius: 10px; background: var(--fg); color: var(--page); font-weight: 600; margin-bottom: 14px; }
+.rail section { padding: 2px 0 8px; }
+.rail h2 { font-size: 12px; text-transform: none; letter-spacing: 0; color: var(--muted); font-weight: 600; margin: 10px 0 2px; }
+.rail a { display: flex; justify-content: space-between; align-items: center; min-height: 34px; padding: 0 8px; margin: 0 -8px; border-radius: 8px; color: var(--fg); text-decoration: none; font-size: 14.5px; }
+.rail a:hover { background: var(--row1); }
+.rail a kbd { font-size: 11px; padding: 0 5px; }
+.field { display: grid; gap: 4px; margin: 8px 0; font-size: 13px; color: var(--muted); }
+.input { height: 38px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); display: flex; align-items: center; justify-content: space-between; padding: 0 10px; color: var(--fg); font-size: 14px; }
+.chips { display: flex; gap: 8px; margin: 0 0 16px; flex-wrap: wrap; }
+.chip { height: 34px; padding: 0 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--card); display: inline-flex; align-items: center; font-size: 14px; }
+.chip.on { background: var(--accent-soft); border-color: transparent; color: var(--accent-ink); font-weight: 600; }
+.tag { font-size: 12px; color: var(--muted); }
+.label { position: fixed; right: 12px; bottom: 12px; background: #000; color: #fff; padding: 4px 10px; border-radius: 6px; font: 600 13px system-ui; }
+/* Narrower than 1180px: the rail becomes a row under the title; phones get one Actions sheet button. */
+@media (max-width: 1180px) {
+  .layout { grid-template-columns: 1fr; }
+.rail { display: none; }
+  .head .acts { display: flex; }
+}
+.head { display: flex; align-items: flex-start; gap: 12px; }
+.head > div:first-child { flex: 1; min-width: 0; }
+.acts { display: none; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.acts a { height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); display: inline-flex; align-items: center; font-weight: 600; white-space: nowrap; }
+.acts a.p { background: var(--fg); color: var(--page); border-color: var(--fg); }
+.money { white-space: nowrap; }
+@media (max-width: 600px) {
+  .bar1, .bar2, .layout { padding-left: 16px; padding-right: 16px; }
+  .bar1 .sec:not(.cur), .review span.t, .pill span, .pill kbd { display: none; }
+  .head { flex-direction: column; }
+  .bar2 { gap: 18px; overflow: hidden; }
+  .hide-phone { display: none; }
+}
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+const q = new URLSearchParams(location.search);
+const page = q.get('p') || 'inv';
+if (q.get('theme') === 'dark') document.documentElement.dataset.theme = 'dark';
+const s = '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>';
+const eye = '<svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+const gear = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>';
+const sec = page === 'inv' ? 'Investments' : 'Reports';
+const tabs = page === 'inv' ? [['Overview',1],['Instruments'],['Returns'],['Income'],['Gains'],['Prices','2']] : [['Overview'],['Spending',1],['Cashflow'],['Net worth'],['Export']];
+const header = `<div class="bar1">${['Home','Ledger','Investments','Planning','Reports'].map(x => `<a class="sec ${x === sec ? 'cur' : ''}">${x}</a>`).join('')}
+<div class="right"><span class="review"><span class="t">Review</span> <span class="badge">5</span></span><span class="pill">${s}<span>Search</span><kbd>Ctrl K</kbd></span><span class="ic">${eye}</span><span class="ic">${gear}</span></div></div>
+<div class="bar2">${tabs.map(([t, c]) => `<a class="${c === 1 ? 'cur' : ''}">${t}${typeof c === 'string' ? `<span class="badge">${c}</span>` : ''}</a>`).join('')}</div>`;
+const group = (title, items) => `<section><h2>${title}</h2>${items.map(i => Array.isArray(i) ? `<a>${i[0]}<kbd>${i[1]}</kbd></a>` : `<a>${i}</a>`).join('')}</section>`;
+const inv = `<div class="layout"><div>
+<div class="head"><div><h1>Investments</h1><p class="lead">4 positions in 2 accounts · prices from 31 Mar</p></div><div class="acts"><a class="p">+ New transaction</a><a>Types…</a></div></div>
+<div class="sub"><span class="cur">Portfolio</span><span>Splits</span><span>Suggestions</span></div>
+<div class="card"><table><tr><th>Instrument</th><th class="n">Quantity</th><th class="n hide-phone">Cost basis</th><th class="n">Value</th></tr>
+<tr><td>Reference Corp <div class="tag">DEGIRO · price over 7 days old</div></td><td class="n">5.0000</td><td class="n hide-phone">€300.00</td><td class="n money">€350.00</td></tr>
+<tr><td>Reference Corp <div class="tag">Trade Republic</div></td><td class="n">6.0000</td><td class="n hide-phone">€315.00</td><td class="n money">€420.00</td></tr>
+<tr><td>Short Corp <div class="tag">DEGIRO · short</div></td><td class="n">−6.0000</td><td class="n hide-phone">€300.00</td><td class="n money">−€240.00</td></tr></table></div></div>
+<aside class="rail" aria-label="Investment tasks"><a class="primary">+ New transaction</a><h2 style="margin:0 0 2px;font-size:13px;color:var(--fg)">Transaction types</h2>
+${group('Trades', ['Buy', 'Sell', 'Short sale', 'Short cover', 'Write-off'])}
+${group('Income', ['Dividend', 'Reinvested dividend', 'Withholding tax', 'Payment in lieu', 'Return of capital'])}
+${group('Move', ['Transfer in', 'Move between holdings', 'Transfer out'])}
+${group('Corporate actions', ['Split', 'Share exchange', 'Cash-and-stock merger', 'Spin-off'])}
+</aside></div>`;
+const spend = `<div class="layout"><div>
+<div class="head"><div><h1>Spending</h1><p class="lead">1 Jan – 31 Mar 2026 · all accounts · EUR</p></div><div class="acts"><a>Filters</a><a>Download CSV</a></div></div>
+<div class="chips"><span class="chip on">Category</span><span class="chip">Payee</span><span class="chip on">Spending</span><span class="chip">Income</span></div>
+<div class="card"><table><tr><th>Category</th><th class="n">Spending</th><th class="n">Share</th></tr>
+<tr><td>Rent/Mortgage</td><td class="n money">€14,500.00</td><td class="n">57.0%</td></tr>
+<tr><td>Groceries</td><td class="n money">€3,591.14</td><td class="n">14.1%</td></tr>
+<tr><td>Utilities</td><td class="n money">€1,551.90</td><td class="n">6.1%</td></tr>
+<tr><td>Dining out</td><td class="n money">€1,457.46</td><td class="n">5.7%</td></tr></table></div></div>
+<aside class="rail" aria-label="Report filters and tasks"><a class="primary" style="background:var(--card);color:var(--fg);border:1px solid var(--line)">Download CSV</a>
+<section><h2>Period</h2><div class="field"><span class="input">1 Jan 2026 – 31 Mar 2026 <span>▾</span></span></div></section>
+<section><h2>Show amounts in</h2><div class="field"><span class="input">EUR <span>▾</span></span></div></section>
+<section><h2>Filter</h2><div class="field">Accounts<span class="input">All <span>▾</span></span></div><div class="field">Categories<span class="input">All <span>▾</span></span></div><div class="field">Payees<span class="input">All <span>▾</span></span></div></section>
+<section><h2>Tasks</h2><a>Print</a><a>Open in Transactions</a></section>
+</aside></div>`;
+document.getElementById('root').innerHTML = header + (page === 'inv' ? inv : spend) + (q.get('label') ? `<span class="label">${q.get('label')}</span>` : '');
+</script></body></html>

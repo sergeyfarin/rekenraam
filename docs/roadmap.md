@@ -147,23 +147,30 @@ Deliver incrementally, tracked in #441, in this order:
    account-list state and Home widget (#482, configurable window, default 60
    days). Pinned accounts on the Accounts widget arrive with #442
    and entered values in the briefing with #454.
-3. **Pages in their new places**, in any order after #436: settings in five
+3. **Shell look and task rail (owner, 2026-11-01), next:** olive two-tint
+   header rows with the current section as a joined tab (#489); a *Search
+   Ctrl K* button opening the centred search (#490); the right-hand
+   [task rail](design/home-and-navigation.md#task-rail) with *New transaction*
+   and a transaction-type field on Investments (#491), then report filters in
+   the rail (#492, after #491). #489 and #490 are independent of each other
+   and of the rail.
+4. **Pages in their new places**, in any order after #436: settings in five
    pages with Trash moved to Transactions › Deleted and export to Reports
    (#446) delivered 2026-10-31; Import views (#447); Ledger overview with
    accounts by institution, an Institutions view and brokerages as one account
    (#448); Planning and Reports overviews (#450); Payees page (#443); Tags view
    (#444).
-4. **Object navigation (#442):** the switcher as scoped search, pinned
+5. **Object navigation (#442):** the switcher as scoped search, pinned
    accounts and breadcrumbs, after #448 and the owner-run real-book count
    (#449).
-5. **Personalization (#438):** server-persisted layout and revision-checked
+6. **Personalization (#438):** server-persisted layout and revision-checked
    API, headline choices, Customize panel (also in Settings › Preferences),
    item actions with Undo, sizes and settings.
-6. **Search depth (#439):** payee actions with editor prefill and last-used
+7. **Search depth (#439):** payee actions with editor prefill and last-used
    category, payee filtering and full-text transaction search.
-7. **Widget depth (#440):** lazy expanded returns, allocation and forecast
+8. **Widget depth (#440):** lazy expanded returns, allocation and forecast
    charts, then further widgets for existing capabilities.
-8. **Power use**, any time after #436: compact and comfortable density for
+9. **Power use**, any time after #436: compact and comfortable density for
    registers and transactions (#451) and two-key navigation shortcuts (#452).
 
 Navigation decisions (#435) are recorded in the design, and the

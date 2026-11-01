@@ -68,6 +68,9 @@ owner-approved Home page and light application shell (2026-10-27), with its
 keep the reasoning. The
 [navigation and pages review](reviews/navigation-and-pages-options-2026-10-29.md)
 holds the options behind its navigation decisions (#435). Delivery is tracked in #441.
+The [shell look and task rail mockup](design/shell-look-mockup/README.md)
+shows the owner's 2026-11-01 revisions: olive two-tint header rows, a
+*Search Ctrl K* button and the right-hand task rail (#489–#492).
 The [navigation prototype](design/navigation-prototype/README.md) adds
 browser-openable destinations and a bounded walkthrough for implementation
 preparation; the production overhaul remains undelivered.

@@ -71,15 +71,24 @@ Background and reasoning:
 The left sidebar and the separate dark top bar are replaced by one light
 header on every page.
 
-- **Surface:** the header uses the page background, separated by space or a
-  hairline, not a coloured band. Colour is reserved for content and the
-  primary shortcut.
+- **Surface (revised 2026-11-01):** the two header rows carry two olive
+  tints from the app's one neutral hue (108), so the shell reads as two
+  levels without a heavy coloured band. The pages row uses the old sidebar
+  tone (`#f2f2e5`, about `oklch(0.953 0.019 108)`), the sections row one step
+  deeper (about `oklch(0.918 0.026 108)`), the page the old page tone
+  (`#f7f7ef`) and cards near white. The first version used the page colour
+  for the header and felt flat next to the old dark bar and tinted sidebar
+  (owner, 2026-11-01). The dark theme uses the same steps. See the
+  [shell look mockup](shell-look-mockup/README.md).
 - **Sections:** Home · Ledger · Investments · Planning · Reports, in
   sentence case. Each section is a plain link to its *Overview* page; the
   tab row under the header lists the section's pages, so there are no
   section menus (owner decision 2026-10-29, revising D2; reasoning in the
   [review](../reviews/navigation-and-pages-options-2026-10-29.md#d2-section-menus)).
-  The current section has a soft tinted pill; the current page an underline.
+  The current section is a tab in the pages-row tint, joined to the row
+  under it (as MS Money did), so a section visibly opens into its pages; the
+  current page has a green underline. Green otherwise marks only count
+  badges and selected chips.
   A page that needs attention shows a number badge on its tab (*Import 1*),
   with the full sentence for screen readers. A section is navigation only: it
   never changes account scope, currency or book.
@@ -105,26 +114,31 @@ header on every page.
   the sections and marked current on Home. The header shows no logo or app
   name; a mark alone was too small a target and too unclear, and beside
   *Home* it was redundant (owner, 2026-10-29).
-- **Look:** header 56px, tab row 40px, sticky, with a translucent blurred
-  background that turns solid under `prefers-reduced-transparency`. Content
-  (cards, widgets, menus, dialogs) is never translucent. The page background
-  is a light neutral off-white with white cards.
+- **Look:** header 56px, tab row about 42px, sticky; each row may stay
+  slightly translucent in its own tint, solid under
+  `prefers-reduced-transparency`. Content (cards, widgets, menus, dialogs) is
+  never translucent. Cards stand clearly whiter than the page.
 - **Right side:** a *Review* button with the count of items needing action
   (the total behind Home's status line, `!` when the check failed), hide
   amounts (eye), Customize (Home only), and a settings
   menu listing the settings pages (General, Preferences, Currencies and FX
   rates, Security, Data and backups), an inline Light / Dark / System theme
   choice and Sign out.
-- **Search:** on every page except Home the header has a compact search
-  field with the same behaviour as Home's command bar (below). On Home the
-  large central bar replaces it, so there is never more than one search
-  field. Keyboard: `/` and Ctrl/⌘ K focus it.
+- **Search (revised 2026-11-01):** on every page except Home the header
+  has a rounded *Search Ctrl K* button (⌘ K on macOS), not a field. It opens
+  the same large, centred, rounded search as Home's command bar (below), as
+  a dialog over the page, with room for grouped results and a scope chip.
+  On Home the central bar is the search. Keyboard: `/` and Ctrl/⌘ K open it.
+  The earlier compact field was square-cornered, truncated its placeholder
+  and dropped a narrow list under itself.
 - **Phone:** sections collapse into a menu button; search becomes an icon.
   No bottom navigation bar. The tab row scrolls horizontally, keeps the
   current tab in view and fades at the edge when more tabs follow.
-- **No sidebar:** the owner rejected an account list beside registers
-  (2026-10-29): other accounts distract from the one in hand, and Ledger
-  overview is one click away. Settings keeps its own side list.
+- **No navigation sidebar:** the owner rejected an account list beside
+  registers (2026-10-29): other accounts distract from the one in hand, and
+  Ledger overview is one click away. Settings keeps its own side list. Pages
+  with many commands or filters get a [task rail](#task-rail) on the right
+  instead; it holds that page's work, never navigation.
 - **Alignment:** the header, tab row and page content share one left edge
   at every width.
 - Every existing route stays reachable. The shell keeps the current
@@ -240,7 +254,8 @@ header count and Home's line.
 
 ## Command bar
 
-One component for Home and the compact header field.
+One component for Home's bar and the centred search dialog opened from the
+header's *Search Ctrl K* button.
 
 - Empty: suggested commands and pages.
 - Typing matches, in groups:
@@ -273,7 +288,8 @@ Searching account, category or instrument notes is later work.
 
 ### Shared search foundation (#457)
 
-The compact header field is one reusable combobox. `scope` restricts its result
+The search is one reusable combobox (delivered as a compact header field;
+the header now opens it as a centred dialog, 2026-11-01). `scope` restricts its result
 kind and `onSelect` lets a future switcher keep the current page's context;
 `variant="home"` supports Home placement, with the header instance omitted
 on Home (#477). The mounting owner registers the global
@@ -614,6 +630,45 @@ Register and category titles name the object, with the parent tab as the
 breadcrumb; the *Accounts › Brokerage* and category-tree trails and the
 switcher in the title slot remain #442.
 
+### Task rail
+
+Owner decision 2026-11-01, after comparing the old sidebar and MS Money's
+task pane. A page with many commands or report filters shows them in a rail
+on the right, so they are visible, labelled and grouped instead of a wall of
+buttons or a menu. See the [mockup](shell-look-mockup/README.md).
+
+- **Where:** only pages that need it. First: Investments overview and
+  investment account registers (transaction types), and the Spending,
+  Cashflow and Net worth reports (period, currency, filters, then Download
+  CSV and Print). Not Home, Settings, overviews or simple lists; a page
+  with three commands or fewer keeps them in the page header's action slot.
+- **Right, not left:** header, tabs and content keep one left edge, the data
+  is read first, and wide screens have spare width on the right.
+- **Look:** about 260px wide, its own panel in the pages-row tint with a
+  border and rounded corners, clearly distinct from page and cards; stays in
+  view while the page scrolls. Text 14.5–15px, rows about 34px: dense but
+  readable, unlike Money's small type.
+- **Content:** one main button on top, then groups with short headings.
+  Only this page's work: no views (tabs own them), no links elsewhere, no
+  help or promotion.
+- **Investments:** the main button is *New transaction*. It opens the
+  investment editor, where the transaction type is a field (as Money's
+  *Activity*), so one entry point covers every type. The rail also lists the
+  types, grouped (Trades: Buy, Sell, Short sale, Short cover, Write-off;
+  Income: Dividend, Reinvested dividend, Withholding tax, Payment in lieu,
+  Return of capital; Move: Transfer in, Move between holdings, Transfer out;
+  Corporate actions: Split, Share exchange, Cash-and-stock merger,
+  Spin-off), and each opens the editor with that type chosen. The rail
+  shows what is possible without opening anything. Later it may also offer
+  investment summaries and tables that are not reports; that is decided
+  separately.
+- **Narrower than about 1180px:** the rail folds away. The page header shows
+  the main button and one more (*Types…* or *Filters*), which opens the same
+  grouped list as a full-size panel, or a sheet on phones; never a small
+  dropdown.
+- Keyboard: the rail is a labelled `aside` landmark; its items are buttons
+  or links in reading order after the page content's main action.
+
 ### Objects
 
 - **Switcher = scoped search.** On a detail page the object's name is a
@@ -698,6 +753,10 @@ Sequencing belongs in the roadmap; acceptance in the issues.
 | Search depth: payee actions with prefilled editor and last-used category, full-text transaction search | #439 |
 | Widget depth: lazy expanded returns, allocation and forecast charts; further widgets | #440 |
 | Density: compact and comfortable rows | #451 |
+| Shell look: olive two-tint rows, joined section tab, green place markers, card contrast | #489 |
+| Search button with centred search dialog | #490 |
+| Task rail component; Investments *New transaction* with type field and type list | #491 |
+| Report filters in the task rail (Spending, Cashflow, Net worth) | #492 |
 | Two-key navigation shortcuts | #452 |
 
 ## Considered and dropped
@@ -706,7 +765,14 @@ Sequencing belongs in the roadmap; acceptance in the issues.
   in My Home.
 - A third briefing line for notable moves or spending pace.
 - *Add transaction* as a header button: it is the first shortcut instead.
-- The dark green top bar and the left sidebar.
+- The dark green top bar and the left navigation sidebar. A dark brand bar
+  was reconsidered on 2026-11-01 and set aside for the olive tints.
+- A header in the page colour (2026-10-29 to 2026-11-01): too flat.
+- A compact search field in the header: replaced by the *Search Ctrl K*
+  button.
+- A wall of record buttons, and folding them into a dropdown; replaced by the
+  task rail. *Record buy* as the Investments main action: *New transaction*
+  with a type field instead.
 - A fixed-order map with a separate shortlist: replaced by My Home plus More
   to explore.
 - Compact previews in More to explore: real-size widgets instead.
