@@ -172,6 +172,63 @@ ImportResolution:
       type: string
     exclude:
       type: boolean
+    match:
+      $ref: "../../openapi.yaml#/components/schemas/ImportMatchChoice"
+ImportMatchChoice:
+  type: object
+  description: >-
+    The owner's decision on a CSV or QIF row that matches a posting already in
+    the ledger (#485). A link names the posting by its transaction and stable
+    line key, with the posted_on day it was reviewed with; commit links only
+    while that posting is still posted, unlinked and unchanged. new keeps the
+    row as a new transaction.
+  required: [decision]
+  properties:
+    decision: { type: string, enum: [link, new] }
+    transaction_id: { type: integer, format: int64 }
+    line_key: { type: string }
+    posted_on: { type: string, format: date }
+ImportMatchCandidate:
+  type: object
+  description: >-
+    An unlinked posting of a current posted transaction on the row's account,
+    in its commodity, for exactly its amount, whose posted_on day is within
+    window_days of the row's date. day_offset is posted_on minus the row date.
+  required: [transaction_id, line_key, transaction_date, transaction_kind, posted_on, day_offset,
+    account_id, commodity_id, quantity_value, quantity_scale, payee_name, description]
+  properties:
+    transaction_id: { type: integer, format: int64 }
+    line_key: { type: string }
+    transaction_date: { type: string, format: date }
+    transaction_kind: { type: string }
+    posted_on: { type: string, format: date }
+    day_offset: { type: integer }
+    account_id: { type: integer, format: int64 }
+    commodity_id: { type: integer, format: int64 }
+    quantity_value: { type: string }
+    quantity_scale: { type: integer }
+    payee_name: { type: string }
+    description: { type: string }
+ImportRowMatchReview:
+  type: object
+  description: >-
+    A pending row that matches postings already in the ledger, or whose link
+    choice no longer stands. needs_decision is true while commit would hold
+    the row (no decision yet, or the chosen posting is no longer a candidate).
+  required: [row_id, row_index, candidates, choice, needs_decision, window_days]
+  properties:
+    row_id: { type: integer, format: int64 }
+    row_index: { type: integer }
+    candidates:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/ImportMatchCandidate"
+    choice:
+      oneOf:
+        - $ref: "../../openapi.yaml#/components/schemas/ImportMatchChoice"
+        - type: 'null'
+    needs_decision: { type: boolean }
+    window_days: { type: integer }
 ImportStagedRowResponse:
   type: object
   required:
@@ -524,7 +581,19 @@ CommitImportBatchResponse:
     - dividend_review_row_ids
     - reconciliation_hold_row_ids
     - reconciliation_stale_row_ids
+    - linked_count
+    - match_review_row_ids
   properties:
+    linked_count:
+      type: integer
+      description: Rows committed as links to existing postings; they wrote no journal (#485). Included in committed_count.
+    match_review_row_ids:
+      type: array
+      description: >-
+        Rows held pending because they match postings already in the ledger
+        with no standing decision, or the linked posting changed since review
+        (#485). Preview and decide again.
+      items: { type: integer, format: int64 }
     batch_id:
       type: integer
       format: int64
@@ -651,7 +720,20 @@ PreviewCommitResponse:
     - reconciliation_issues
     - reconciliation_checkpoints
     - gain_impacts
+    - match_reviews
+    - link_count
   properties:
+    match_reviews:
+      type: array
+      description: >-
+        Pending CSV and QIF rows that match postings already in the ledger
+        (#485). A row needing a decision is held at commit until the owner
+        links it or keeps it as new.
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/ImportRowMatchReview"
+    link_count:
+      type: integer
+      description: Includable rows that would commit as links, writing no journal.
     gain_impacts:
       type: array
       description: >-

@@ -1946,5 +1946,82 @@
   "transactions_transfer_conversion_receiving": "Beim Eingang (die empfangende Bank tauscht um)",
   "transactions_locked_title": "Beträge sind hier nicht bearbeitbar",
   "transactions_locked_body": "Diese Buchung enthält Posten, die der Editor anders aufbauen würde, etwa einen Betrag, der noch unterwegs ist. Beschreibung, Empfänger, Art, Tags und Notiz lassen sich ändern; um Beträge, Konten oder Daten zu ändern, storniere sie und erfasse sie neu.",
-  "transactions_locked_correct": "Diese Buchung enthält Posten, die der Editor anders aufbauen würde, etwa einen Betrag, der noch unterwegs ist, daher lässt sie sich hier nicht korrigieren. Storniere sie und erfasse sie neu."
+  "transactions_locked_correct": "Diese Buchung enthält Posten, die der Editor anders aufbauen würde, etwa einen Betrag, der noch unterwegs ist, daher lässt sie sich hier nicht korrigieren. Storniere sie und erfasse sie neu.",
+  "import_match_title": "Bereits im Hauptbuch",
+  "import_match_intro": "Diese Kontoauszugszeilen passen zu einer bereits erfassten Buchung: dasselbe Konto und dieselbe Währung, genau derselbe Betrag, gebucht innerhalb von {days} Tagen. Verknüpfen Sie eine Zeile, um sie ohne weitere Buchung zu erfassen, oder behalten Sie sie als neu.",
+  "import_match_check": "Nach bereits erfassten Buchungen suchen",
+  "import_match_checking": "Passende Buchungen werden gesucht…",
+  "import_match_empty": "Keine Kontoauszugszeile passt zu einer Buchung im Hauptbuch.",
+  "import_match_row_heading": "Zeile {row}: {date}, {amount}",
+  "import_match_link_option": "Mit {description} verknüpfen, erfasst für {date}",
+  "import_match_untitled": "einer Buchung ohne Beschreibung",
+  "import_match_reason_same_day": "Dasselbe Konto und dieselbe Währung, genau {amount}, gebucht am Auszugsdatum.",
+  "import_match_reason_after": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Dasselbe Konto und dieselbe Währung, genau {amount}, gebucht {n} Tag nach dem Auszugsdatum.",
+        "countPlural=*": "Dasselbe Konto und dieselbe Währung, genau {amount}, gebucht {n} Tage nach dem Auszugsdatum."
+      }
+    }
+  ],
+  "import_match_reason_before": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Dasselbe Konto und dieselbe Währung, genau {amount}, gebucht {n} Tag vor dem Auszugsdatum.",
+        "countPlural=*": "Dasselbe Konto und dieselbe Währung, genau {amount}, gebucht {n} Tage vor dem Auszugsdatum."
+      }
+    }
+  ],
+  "import_match_keep_new": "Als neue Buchung behalten",
+  "import_match_choose": "Mehrere Buchungen passen. Wählen Sie eine aus oder behalten Sie die Zeile als neu.",
+  "import_match_decide": "Entscheiden Sie unten über die Treffer und importieren Sie dann erneut.",
+  "import_preview_dedupe_matched": "Bereits vorhanden",
+  "import_result_linked": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} Zeile mit einer vorhandenen Buchung verknüpft",
+        "countPlural=*": "{n} Zeilen mit vorhandenen Buchungen verknüpft"
+      }
+    }
+  ],
+  "import_result_match_review": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} Zeile passt zu einer vorhandenen Buchung und wartet auf Ihre Entscheidung.",
+        "countPlural=*": "{n} Zeilen passen zu vorhandenen Buchungen und warten auf Ihre Entscheidung."
+      }
+    }
+  ]
 }

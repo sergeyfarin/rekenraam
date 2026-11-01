@@ -137,13 +137,13 @@ Deliver incrementally, tracked in #441, in this order:
    and cross-currency, posting days and a fee on Bank fees) were delivered
    2026-11-01, reopened on review and repaired twice the same day (fee and
    conversion days, server transfer shape and restatement, stored transfer
-   choices, journals no editor restates locked to what they describe). Next,
-   before the remaining UI steps: linking a statement row to a transfer
-   entered by hand (#485); pairing two imported rows into one transfer is its
-   own issue with its correction and provenance contract (#487). Currency
+   choices, journals no editor restates locked to what they describe).
+   Linking a statement row to a transfer entered by hand (#485) was delivered
+   2026-11-01 (±5-day window). Pairing two imported rows into one transfer is
+   its own issue with its correction and provenance contract (#487). Currency
    sub-accounts on demand for multi-currency providers (#486) follow once its
    parent-posting, migration, historical-reconciliation and report-total
-   questions are decided; #485 does not wait for it. Still open: the general reconciliation out-of-date rule with its
+   questions are decided. Still open: the general reconciliation out-of-date rule with its
    account-list state and Home widget (#482, configurable window, default 60
    days). Pinned accounts on the Accounts widget arrive with #442
    and entered values in the briefing with #454.

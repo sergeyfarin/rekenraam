@@ -1288,6 +1288,12 @@ components:
       $ref: "./components/schemas/imports.yaml#/ImportReconciliationIssue"
     PreviewCommitResponse:
       $ref: "./components/schemas/imports.yaml#/PreviewCommitResponse"
+    ImportMatchChoice:
+      $ref: "./components/schemas/imports.yaml#/ImportMatchChoice"
+    ImportMatchCandidate:
+      $ref: "./components/schemas/imports.yaml#/ImportMatchCandidate"
+    ImportRowMatchReview:
+      $ref: "./components/schemas/imports.yaml#/ImportRowMatchReview"
     ImportProfileResponse:
       $ref: "./components/schemas/imports.yaml#/ImportProfileResponse"
     ListImportProfilesResponse:

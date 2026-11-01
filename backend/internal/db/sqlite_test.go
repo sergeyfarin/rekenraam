@@ -265,6 +265,14 @@ func TestMigrateSeededBaselineMatchesFreshSchema(t *testing.T) {
 	before := captureLedgerState(t, seeded)
 	require.NoError(t, Migrate(ctx, seeded))
 	after := captureLedgerState(t, seeded)
+	// A table a forward migration creates (#485's import_posting_links)
+	// starts empty; it holds no figure the baseline book had.
+	for key, value := range after {
+		if _, existed := before[key]; !existed && strings.HasPrefix(key, "count:") {
+			assert.Equalf(t, "0", value, "%s is created by a forward migration and must start empty", key)
+			delete(after, key)
+		}
+	}
 	assert.Equal(t, before, after, "upgrading must not change a single durable figure")
 
 	// Stated separately from the snapshot comparison so a failure names what
@@ -1231,7 +1239,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 
 	version, err := EmbeddedMigrationVersion()
 	require.NoError(t, err)
-	assert.Equal(t, int64(3), version, "the unused v0.1 baseline, #417's category-version delete guard and #481's transfer sides")
+	assert.Equal(t, int64(4), version, "the unused v0.1 baseline, #417's category-version delete guard, #481's transfer sides and #485's posting links")
 
 	ctx := context.Background()
 	database, err := Open(ctx, SQLiteFileURL(filepath.Join(t.TempDir(), "schema.sqlite")))
@@ -1260,9 +1268,9 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 		objectCounts[kind]++
 	}
 	assert.Equal(t, map[string]int{
-		"index":   105,
-		"table":   116,
-		"trigger": 164,
+		"index":   106,
+		"table":   117,
+		"trigger": 168,
 		"view":    16,
 	}, objectCounts, "the migrated head must retain every schema object")
 	assert.Equal(t, "view", objects["valid_investment_dividend_facts"])
@@ -1293,6 +1301,9 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 	assert.Equal(t, "index", objects["posting_versions_line_once_per_version_idx"])
 	assert.Equal(t, "table", objects["investment_capital_return_effects"])
 	assert.Equal(t, "trigger", objects["investment_capital_return_facts_valid"])
+	assert.Equal(t, "table", objects["import_posting_links"])
+	assert.Equal(t, "trigger", objects["import_posting_links_same_book"])
+	assert.Equal(t, "trigger", objects["import_commit_identity_effects_not_linked"])
 	assert.Equal(t, "table", objects["import_source_revisions"])
 	assert.Equal(t, "index", objects["import_commit_identities_source_idx"])
 	assert.Equal(t, "trigger", objects["import_source_revisions_same_book"])

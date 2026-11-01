@@ -457,6 +457,22 @@ const subViews: SubView[] = [
     close: discardImport
   },
   {
+    // #485: a savings row matching the transfer entered by hand.
+    name: 'match review', group: 'import review', path: () => '/app/ledger/import',
+    writes: /\/imports(\/|$)|\/import-profiles/,
+    open: async (c) => {
+      await uploadCSV(c, `Sweep match ${Date.now()}`, undefined, undefined, '-43,21');
+      await c.page.getByRole('combobox', { name: c.t('import_preview_account_label') }).selectOption(String(c.fx.ids.get('savings')));
+      await c.page.getByRole('combobox', { name: c.t('import_preview_currency_label') }).selectOption(String(c.fx.ids.get('EUR')));
+      await c.page.getByRole('combobox', { name: c.t('import_preview_category_label') }).selectOption({ index: 1 });
+      await c.page.getByRole('button', { name: c.t('import_preview_apply_all') }).click();
+      await c.page.getByRole('button', { name: c.t('import_match_check') }).click();
+      await expect(c.page.getByTestId('import-match-row')).toBeVisible();
+      return c.page.locator('main');
+    },
+    close: discardImport
+  },
+  {
     // One row left without an account fails at commit; its review shows only that row.
     name: 'failed-row review', group: 'import review', path: () => '/app/ledger/import',
     writes: /\/imports(\/|$)|\/import-profiles|\/payees/,
@@ -517,8 +533,8 @@ function todayDMY(fx: Fixture): string {
   return `${day}/${month}/${year}`;
 }
 
-async function uploadCSV(c: Context, payee: string, rejected?: string, secondPayee?: string) {
-  const rows = [`${todayDMY(c.fx)};${payee};-12,34`, ...(rejected ? [`${todayDMY(c.fx)};${payee};${rejected}`] : []),
+async function uploadCSV(c: Context, payee: string, rejected?: string, secondPayee?: string, amount = '-12,34') {
+  const rows = [`${todayDMY(c.fx)};${payee};${amount}`, ...(rejected ? [`${todayDMY(c.fx)};${payee};${rejected}`] : []),
     ...(secondPayee ? [`${todayDMY(c.fx)};${secondPayee};-5,00`] : [])];
   await c.page.locator('input[type="file"]').setInputFiles({
     name: 'sweep.csv', mimeType: 'text/csv', buffer: Buffer.from(`Datum;Omschrijving;Bedrag\n${rows.join('\n')}\n`)
@@ -578,6 +594,14 @@ async function seedFixture(page: Page): Promise<Fixture> {
   const restoreSubject = await spend('Sweep restore subject', 700);
   await apiJSON(page, 'POST', `/api/v1/transactions/${restoreSubject.id}/soft-delete`, csrf, { change_reason: 'sweep' });
   await spend('Sweep kept', 500);
+  // A transfer entered by hand that a savings statement row matches (#485).
+  await apiJSON(page, 'POST', '/api/v1/transactions', csrf, {
+    transaction_kind: 'transfer', transaction_date: today, status: 'posted', description: 'Sweep match subject',
+    journal_entries: [{ entry_date: today, postings: [
+      { account_id: ids.get('savings'), commodity_id: ids.get('EUR'), quantity_value: '-4321', quantity_scale: 2 },
+      { account_id: ids.get('checking'), commodity_id: ids.get('EUR'), quantity_value: '4321', quantity_scale: 2 }
+    ] }]
+  });
   // The statement balance is the session's own starting balance plus every
   // candidate, so it holds whatever calendar day the server calls today.
   type Quantity = { quantity_value: string; quantity_scale: number };

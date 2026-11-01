@@ -273,6 +273,9 @@ type ImportRowResolution struct {
 	AppliedRuleID         *int64  `json:"applied_rule_id,omitempty"`
 	AppliedRuleName       string  `json:"applied_rule_name,omitempty"`
 	Exclude               bool    `json:"exclude,omitempty"`
+	// Match is the owner's decision on a CSV or QIF row that matches a
+	// posting already in the ledger (#485).
+	Match *ImportMatchChoice `json:"match,omitempty"`
 }
 
 // --- Input types for service methods ---
@@ -358,6 +361,13 @@ type CommitImportBatchResult struct {
 	// stay pending with commit_error "reconciliation impact changed after
 	// review" until another preview and commit.
 	ReconciliationStaleRowIDs []int64
+	// LinkedCount is the rows committed as links to existing postings: they
+	// wrote no journal (#485). They are included in CommittedCount.
+	LinkedCount int
+	// MatchReviewRowIDs match postings already in the ledger with no
+	// standing decision, or their linked posting changed since review. They
+	// stay pending until the owner decides again (#485).
+	MatchReviewRowIDs []int64
 }
 
 type PreviewCommitInput struct {
@@ -378,6 +388,11 @@ type PreviewCommitResult struct {
 	// ledger. Rows commit chronologically, so an earlier row in the same run
 	// can change a later row's set; that row is then held for another review.
 	GainImpacts []RowGainImpactPreview
+	// MatchReviews lists the pending CSV and QIF rows that match postings
+	// already in the ledger, with the owner's decision so far (#485).
+	MatchReviews []RowMatchReview
+	// LinkCount is how many includable rows would commit as links.
+	LinkCount int
 }
 
 type RowGainImpactPreview struct {

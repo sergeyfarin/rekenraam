@@ -80,6 +80,14 @@
   } from '#lib/imports/csv-profile.ts';
   import CSVInvestmentMappingForm from '#lib/imports/csv-investment-mapping.svelte';
   import CSVInvestmentReview from '#lib/imports/csv-investment-review.svelte';
+  import MatchReviewPanel from '#lib/imports/match-review-panel.svelte';
+  import {
+    choiceOffered,
+    initialMatchChoice,
+    matchDecisionsPending,
+    type ImportMatchChoice,
+    type ImportRowMatchReview
+  } from '#lib/imports/match-review.ts';
   import { textEncodingOptions } from '#lib/imports/text-encodings.ts';
   import {
     listImportConnections,
@@ -149,6 +157,14 @@
   let globalCommodityId = $state<number | undefined>(undefined);
   let globalCategoryId = $state<number | undefined>(undefined);
   let globalTransferAccountId = $state<number | undefined>(undefined);
+
+  // Rows matching postings already in the ledger (#485): the preview's
+  // reviews, and the owner's choice per row until it is saved.
+  let matchReviews = $state.raw<ImportRowMatchReview[] | null>(null);
+  let matchChoices = $state<Map<number, ImportMatchChoice>>(new Map());
+  let matchCheckPending = $state(false);
+  let matchCheckError = $state<unknown>(undefined);
+  let matchDecide = $state(false);
 
   // Commit step
   let committing = $state(false);
@@ -412,6 +428,7 @@
       }
       const result = await startImport(selectedFile, csrfToken, cryptoCSV ? undefined : profileId, selectedIsTextImport ? textEncoding : 'auto', cryptoCSV ? { holdingAccountId: cryptoHoldingId, cashAccountId: cryptoCashId } : undefined);
       previewData = result;
+      resetMatchReview();
       batchId = result.batch.id;
       rowResolutions = new Map(result.rows.map((row) => [row.id, parseResolution(row)]));
       step = 'preview';
@@ -530,6 +547,9 @@
 
   function applyGlobalAccount() {
     if (!previewData) return;
+    // A new account changes what each row matches.
+    matchReviews = null;
+    matchDecide = false;
     for (const row of previewData.rows) {
       if (row.dedupe_status === 'excluded' || parseNormalized(row).investment) continue;
       if (isTransferRow(row)) {
@@ -681,6 +701,61 @@
     }
   }
 
+  // ── Matches (#485) ─────────────────────────────────────────────────
+  // The owner's choices travel in each row's resolution; a row whose review
+  // has no choice carries none, so commit holds it rather than guess.
+  function resetMatchReview() {
+    matchReviews = null;
+    matchChoices = new Map();
+    matchCheckError = undefined;
+    matchDecide = false;
+  }
+
+  function applyMatchChoices() {
+    if (!matchReviews) return;
+    for (const review of matchReviews) {
+      const choice = matchChoices.get(review.row_id);
+      if (choice) {
+        updateResolution(review.row_id, { match: choice });
+      } else if (getResolution(review.row_id).match) {
+        const { match: _dropped, ...rest } = getResolution(review.row_id);
+        rowResolutions.set(review.row_id, rest);
+        rowResolutions = new Map(rowResolutions);
+      }
+    }
+  }
+
+  function adoptMatchReviews(reviews: ImportRowMatchReview[]) {
+    const next = new Map<number, ImportMatchChoice>();
+    for (const review of reviews) {
+      const kept = matchChoices.get(review.row_id);
+      const choice = choiceOffered(review, kept) ? kept : initialMatchChoice(review);
+      if (choice) next.set(review.row_id, choice);
+    }
+    matchChoices = next;
+    matchReviews = reviews;
+  }
+
+  function chooseMatch(rowId: number, choice: ImportMatchChoice) {
+    matchChoices.set(rowId, choice);
+    matchChoices = new Map(matchChoices);
+  }
+
+  async function handleCheckMatches() {
+    if (!batchId) return;
+    matchCheckPending = true;
+    matchCheckError = undefined;
+    try {
+      applyMatchChoices();
+      await savePendingResolutions();
+      adoptMatchReviews((await previewCommitImportBatch(batchId)).match_reviews);
+    } catch (err) {
+      matchCheckError = err;
+    } finally {
+      matchCheckPending = false;
+    }
+  }
+
   // ── Commit ─────────────────────────────────────────────────────────
   // A partially committed or failed batch resumes where it stopped: its
   // pending and failed rows can be re-resolved and committed again (#301).
@@ -702,8 +777,14 @@
     commitError = undefined;
 
     try {
+      applyMatchChoices();
       await savePendingResolutions();
       const preview = await previewCommitImportBatch(batchId);
+      // A match the owner has not decided is shown, never linked or posted
+      // beside (#485).
+      adoptMatchReviews(preview.match_reviews);
+      matchDecide = matchDecisionsPending(preview.match_reviews);
+      if (matchDecide) return;
       if (reconciliationOverride && !sameCheckpoints(reviewedCheckpoints, preview.reconciliation_checkpoints)) {
         // The owner has not seen this set yet: show it and wait for another
         // click rather than invalidate checkpoints nobody reviewed.
@@ -839,6 +920,7 @@
       const refreshed = await getFullImportBatch(batchId);
       previewData = { ...previewData, batch: refreshed.batch, rows: refreshed.rows, warnings: refreshed.warnings };
       rowResolutions = new Map(refreshed.rows.map((row) => [row.id, parseResolution(row)]));
+      resetMatchReview();
       commitError = undefined;
       step = 'preview';
     } catch (err) {
@@ -1706,7 +1788,9 @@
                       : row.commit_status === 'committed' && row.dedupe_status === 'needs_attention'
                       ? m.import_preview_source_revision_accepted()
                       : unsupportedFill ? m.import_preview_unsupported_fill() : row.source_changed ? m.import_preview_source_changed()
-                      : norm.parse_errors?.length ? m.import_preview_parse_error() : dedupeStatusLabel(row.dedupe_status)}
+                      : norm.parse_errors?.length ? m.import_preview_parse_error()
+                      : getResolution(row.id).match?.decision === 'link' && row.dedupe_status !== 'duplicate' ? m.import_preview_dedupe_matched()
+                      : dedupeStatusLabel(row.dedupe_status)}
                   </span>
                   {#if row.commit_status === 'pending' && row.commit_error === 'reconciliation override required'}
                     <span class="mt-1 block text-xs font-medium text-warning">{m.import_preview_row_reconciliation_held()}</span>
@@ -1926,6 +2010,20 @@
       </div>
     </Panel>
 
+    {#if batchReviewable(previewData.batch.status) && (previewData.batch.source_kind === 'csv' || previewData.batch.source_kind === 'qif')}
+      <MatchReviewPanel
+        reviews={matchReviews}
+        rows={previewData.rows}
+        choices={matchChoices}
+        {currencies}
+        pending={matchCheckPending}
+        error={matchCheckError}
+        decide={matchDecide}
+        onCheck={() => void handleCheckMatches()}
+        onChoose={chooseMatch}
+      />
+    {/if}
+
     <!-- Commit controls -->
     {#if batchReviewable(previewData.batch.status)}
     <Panel>
@@ -1977,7 +2075,7 @@
             type="button"
             class="inline-flex items-center gap-2 rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             onclick={handleCommit}
-            disabled={committing || sourceCorrectionPending || reviewedCheckpointsPending}
+            disabled={committing || sourceCorrectionPending || reviewedCheckpointsPending || matchCheckPending}
           >
             {committing ? m.import_commit_pending() : m.import_commit_button()}
           </button>
@@ -2033,6 +2131,12 @@
 
       <div class="mt-4 space-y-2 text-sm">
         <p class="text-foreground">{m.import_result_committed({ count: commitResult.committed_count })}</p>
+        {#if commitResult.linked_count > 0}
+          <p class="text-foreground">{m.import_result_linked({ count: commitResult.linked_count, n: new Intl.NumberFormat(getLocale()).format(commitResult.linked_count) })}</p>
+        {/if}
+        {#if commitResult.match_review_row_ids.length > 0}
+          <p class="text-warning">{m.import_result_match_review({ count: commitResult.match_review_row_ids.length, n: new Intl.NumberFormat(getLocale()).format(commitResult.match_review_row_ids.length) })}</p>
+        {/if}
         {#if commitResult.skipped_count > 0}
           <p class="text-muted">{m.import_result_skipped({ count: commitResult.skipped_count })}</p>
           {#if previewData?.rows.some((row) => row.source_changed)}
@@ -2051,7 +2155,7 @@
         {#if commitResult.reconciliation_stale_row_ids.length > 0}
           <p class="text-warning">{m.import_result_reconciliation_stale({ count: commitResult.reconciliation_stale_row_ids.length })}</p>
         {/if}
-        {#if commitResult.failed_count > 0 || commitResult.reconciliation_hold_row_ids.length > 0 || commitResult.reconciliation_stale_row_ids.length > 0}
+        {#if commitResult.failed_count > 0 || commitResult.reconciliation_hold_row_ids.length > 0 || commitResult.reconciliation_stale_row_ids.length > 0 || commitResult.match_review_row_ids.length > 0}
           <button type="button" disabled={reviewChangedPending} class="inline-flex min-h-11 items-center text-sm font-semibold text-foreground underline underline-offset-2 disabled:opacity-60" onclick={() => void handleReviewRemainingRows()}>
             {m.import_result_review_remaining()}
           </button>

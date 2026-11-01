@@ -1946,5 +1946,82 @@
   "transactions_transfer_conversion_receiving": "Bij bijschrijving (de ontvangende bank wisselt)",
   "transactions_locked_title": "Bedragen zijn hier niet te bewerken",
   "transactions_locked_body": "Deze boeking heeft regels die de editor anders zou opbouwen, zoals een bedrag dat nog onderweg is. Je kunt de omschrijving, begunstigde, soort, tags en notitie wijzigen; om bedragen, rekeningen of datums te wijzigen, maak je haar ongedaan en voer je haar opnieuw in.",
-  "transactions_locked_correct": "Deze boeking heeft regels die de editor anders zou opbouwen, zoals een bedrag dat nog onderweg is, dus ze kan hier niet worden gecorrigeerd. Maak haar ongedaan en voer haar opnieuw in."
+  "transactions_locked_correct": "Deze boeking heeft regels die de editor anders zou opbouwen, zoals een bedrag dat nog onderweg is, dus ze kan hier niet worden gecorrigeerd. Maak haar ongedaan en voer haar opnieuw in.",
+  "import_match_title": "Al in je grootboek",
+  "import_match_intro": "Deze afschriftregels komen overeen met een transactie die je al hebt ingevoerd: dezelfde rekening en valuta, precies hetzelfde bedrag, geboekt binnen {days} dagen. Koppel een regel om hem vast te leggen zonder nog een transactie toe te voegen, of houd hem als nieuw.",
+  "import_match_check": "Zoeken naar al ingevoerde transacties",
+  "import_match_checking": "Overeenkomende transacties zoeken…",
+  "import_match_empty": "Geen afschriftregel komt overeen met een transactie in je grootboek.",
+  "import_match_row_heading": "Regel {row}: {date}, {amount}",
+  "import_match_link_option": "Koppelen aan {description}, ingevoerd voor {date}",
+  "import_match_untitled": "een transactie zonder omschrijving",
+  "import_match_reason_same_day": "Dezelfde rekening en valuta, precies {amount}, geboekt op de afschriftdatum.",
+  "import_match_reason_after": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Dezelfde rekening en valuta, precies {amount}, geboekt {n} dag na de afschriftdatum.",
+        "countPlural=*": "Dezelfde rekening en valuta, precies {amount}, geboekt {n} dagen na de afschriftdatum."
+      }
+    }
+  ],
+  "import_match_reason_before": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Dezelfde rekening en valuta, precies {amount}, geboekt {n} dag vóór de afschriftdatum.",
+        "countPlural=*": "Dezelfde rekening en valuta, precies {amount}, geboekt {n} dagen vóór de afschriftdatum."
+      }
+    }
+  ],
+  "import_match_keep_new": "Als nieuwe transactie houden",
+  "import_match_choose": "Meerdere transacties komen overeen. Kies er een of houd de regel als nieuw.",
+  "import_match_decide": "Beslis hieronder over de overeenkomsten en importeer daarna opnieuw.",
+  "import_preview_dedupe_matched": "Al aanwezig",
+  "import_result_linked": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} regel gekoppeld aan een transactie in je grootboek",
+        "countPlural=*": "{n} regels gekoppeld aan transacties in je grootboek"
+      }
+    }
+  ],
+  "import_result_match_review": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} regel komt overeen met een transactie in je grootboek en wacht op je beslissing.",
+        "countPlural=*": "{n} regels komen overeen met transacties in je grootboek en wachten op je beslissing."
+      }
+    }
+  ]
 }

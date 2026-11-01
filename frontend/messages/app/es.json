@@ -1946,5 +1946,82 @@
   "transactions_transfer_conversion_receiving": "Al llegar (cambia el banco de destino)",
   "transactions_locked_title": "Los importes no se pueden editar aquí",
   "transactions_locked_body": "Este asiento tiene apuntes que el editor reconstruiría de otra forma, como un importe que sigue en tránsito. Puedes cambiar la descripción, el beneficiario, el tipo, las etiquetas y la nota; para cambiar importes, cuentas o fechas, anúlalo y vuelve a introducirlo.",
-  "transactions_locked_correct": "Este asiento tiene apuntes que el editor reconstruiría de otra forma, como un importe que sigue en tránsito, así que no se puede corregir aquí. Anúlalo y vuelve a introducirlo."
+  "transactions_locked_correct": "Este asiento tiene apuntes que el editor reconstruiría de otra forma, como un importe que sigue en tránsito, así que no se puede corregir aquí. Anúlalo y vuelve a introducirlo.",
+  "import_match_title": "Ya en tu libro",
+  "import_match_intro": "Estas filas del extracto coinciden con una transacción que ya registraste: la misma cuenta y moneda, exactamente el mismo importe, contabilizada en un margen de {days} días. Vincula una fila para registrarla sin añadir otra transacción, o mantenla como nueva.",
+  "import_match_check": "Buscar transacciones ya registradas",
+  "import_match_checking": "Buscando transacciones coincidentes…",
+  "import_match_empty": "Ninguna fila del extracto coincide con transacciones de tu libro.",
+  "import_match_row_heading": "Fila {row}: {date}, {amount}",
+  "import_match_link_option": "Vincular a {description}, registrada para el {date}",
+  "import_match_untitled": "una transacción sin descripción",
+  "import_match_reason_same_day": "Misma cuenta y moneda, exactamente {amount}, contabilizada en la fecha del extracto.",
+  "import_match_reason_after": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Misma cuenta y moneda, exactamente {amount}, contabilizada {n} día después de la fecha del extracto.",
+        "countPlural=*": "Misma cuenta y moneda, exactamente {amount}, contabilizada {n} días después de la fecha del extracto."
+      }
+    }
+  ],
+  "import_match_reason_before": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Misma cuenta y moneda, exactamente {amount}, contabilizada {n} día antes de la fecha del extracto.",
+        "countPlural=*": "Misma cuenta y moneda, exactamente {amount}, contabilizada {n} días antes de la fecha del extracto."
+      }
+    }
+  ],
+  "import_match_keep_new": "Mantener como transacción nueva",
+  "import_match_choose": "Coinciden varias transacciones. Elige una o mantén la fila como nueva.",
+  "import_match_decide": "Decide las coincidencias de abajo y vuelve a importar.",
+  "import_preview_dedupe_matched": "Ya existe",
+  "import_result_linked": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} fila vinculada a una transacción de tu libro",
+        "countPlural=*": "{n} filas vinculadas a transacciones de tu libro"
+      }
+    }
+  ],
+  "import_result_match_review": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} fila coincide con una transacción de tu libro y espera tu decisión.",
+        "countPlural=*": "{n} filas coinciden con transacciones de tu libro y esperan tu decisión."
+      }
+    }
+  ]
 }

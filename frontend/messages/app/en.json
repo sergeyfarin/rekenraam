@@ -1946,5 +1946,82 @@
   "transactions_transfer_conversion_receiving": "When it arrives (the receiving bank converts)",
   "transactions_locked_title": "Amounts can't be edited here",
   "transactions_locked_body": "This transaction has postings the editor would rebuild differently, such as an amount left in transit. You can change the description, payee, kind, tags and note; to change amounts, accounts or dates, void it and enter it again.",
-  "transactions_locked_correct": "This transaction has postings the editor would rebuild differently, such as an amount left in transit, so it can't be corrected here. Void it and enter it again."
+  "transactions_locked_correct": "This transaction has postings the editor would rebuild differently, such as an amount left in transit, so it can't be corrected here. Void it and enter it again.",
+  "import_match_title": "Already in your ledger",
+  "import_match_intro": "These statement rows match a transaction you already entered: the same account and currency, exactly the same amount, posted within {days} days. Link a row to record it without adding another transaction, or keep it as new.",
+  "import_match_check": "Check for transactions already entered",
+  "import_match_checking": "Checking for matching transactions…",
+  "import_match_empty": "No statement rows match transactions already in your ledger.",
+  "import_match_row_heading": "Row {row}: {date}, {amount}",
+  "import_match_link_option": "Link to {description}, entered for {date}",
+  "import_match_untitled": "a transaction without a description",
+  "import_match_reason_same_day": "Same account and currency, exactly {amount}, posted on the statement date.",
+  "import_match_reason_after": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Same account and currency, exactly {amount}, posted {n} day after the statement date.",
+        "countPlural=*": "Same account and currency, exactly {amount}, posted {n} days after the statement date."
+      }
+    }
+  ],
+  "import_match_reason_before": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Same account and currency, exactly {amount}, posted {n} day before the statement date.",
+        "countPlural=*": "Same account and currency, exactly {amount}, posted {n} days before the statement date."
+      }
+    }
+  ],
+  "import_match_keep_new": "Keep as a new transaction",
+  "import_match_choose": "Several transactions match. Choose one, or keep the row as new.",
+  "import_match_decide": "Decide the matches below, then import again.",
+  "import_preview_dedupe_matched": "Matches existing",
+  "import_result_linked": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} row linked to a transaction already in your ledger",
+        "countPlural=*": "{n} rows linked to transactions already in your ledger"
+      }
+    }
+  ],
+  "import_result_match_review": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} row matches a transaction already in your ledger and waits for your decision.",
+        "countPlural=*": "{n} rows match transactions already in your ledger and wait for your decision."
+      }
+    }
+  ]
 }

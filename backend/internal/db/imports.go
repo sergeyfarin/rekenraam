@@ -1624,7 +1624,8 @@ func (r *ImportRepository) FindCommitIdentity(ctx context.Context, bookID int64,
 	err := r.database.QueryRowContext(ctx, `
 		SELECT i.id, i.book_id, i.dedupe_fingerprint,
 			COALESCE((SELECT e.transaction_id FROM import_commit_identity_effects e
-				WHERE e.identity_id = i.id AND e.transaction_id IS NOT NULL ORDER BY e.effect_seq LIMIT 1), 0),
+				WHERE e.identity_id = i.id AND e.transaction_id IS NOT NULL ORDER BY e.effect_seq LIMIT 1),
+				(SELECT l.transaction_id FROM import_posting_links l WHERE l.identity_id = i.id), 0),
 			i.source_kind, i.account_id, i.created_at
 		FROM import_commit_identities i
 		WHERE i.book_id = ? AND i.dedupe_fingerprint = ?

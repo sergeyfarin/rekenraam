@@ -2008,5 +2008,82 @@
   "transactions_transfer_conversion_receiving": "При зачислении (обменивает банк-получатель)",
   "transactions_locked_title": "Суммы здесь изменить нельзя",
   "transactions_locked_body": "В этой проводке есть строки, которые редактор собрал бы иначе, например сумма, оставшаяся в пути. Можно изменить описание, получателя, вид, теги и заметку; чтобы изменить суммы, счета или даты, аннулируйте её и введите заново.",
-  "transactions_locked_correct": "В этой проводке есть строки, которые редактор собрал бы иначе, например сумма, оставшаяся в пути, поэтому исправить её здесь нельзя. Аннулируйте её и введите заново."
+  "transactions_locked_correct": "В этой проводке есть строки, которые редактор собрал бы иначе, например сумма, оставшаяся в пути, поэтому исправить её здесь нельзя. Аннулируйте её и введите заново.",
+  "import_match_title": "Уже в вашей книге",
+  "import_match_intro": "Эти строки выписки совпадают с уже введённой операцией: тот же счёт и валюта, точно та же сумма, проведена в пределах {days} дн. Свяжите строку, чтобы учесть её без новой операции, или оставьте её новой.",
+  "import_match_check": "Найти уже введённые операции",
+  "import_match_checking": "Поиск совпадающих операций…",
+  "import_match_empty": "Ни одна строка выписки не совпадает с операциями в вашей книге.",
+  "import_match_row_heading": "Строка {row}: {date}, {amount}",
+  "import_match_link_option": "Связать с операцией «{description}» от {date}",
+  "import_match_untitled": "без описания",
+  "import_match_reason_same_day": "Тот же счёт и валюта, точно {amount}, проведена в дату выписки.",
+  "import_match_reason_after": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Тот же счёт и валюта, точно {amount}; проведена позже даты выписки, дней: {n}.",
+        "countPlural=*": "Тот же счёт и валюта, точно {amount}; проведена позже даты выписки, дней: {n}."
+      }
+    }
+  ],
+  "import_match_reason_before": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Тот же счёт и валюта, точно {amount}; проведена раньше даты выписки, дней: {n}.",
+        "countPlural=*": "Тот же счёт и валюта, точно {amount}; проведена раньше даты выписки, дней: {n}."
+      }
+    }
+  ],
+  "import_match_keep_new": "Оставить новой операцией",
+  "import_match_choose": "Совпадает несколько операций. Выберите одну или оставьте строку новой.",
+  "import_match_decide": "Примите решения по совпадениям ниже и импортируйте снова.",
+  "import_preview_dedupe_matched": "Уже есть",
+  "import_result_linked": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Строк, связанных с операциями в книге: {n}",
+        "countPlural=*": "Строк, связанных с операциями в книге: {n}"
+      }
+    }
+  ],
+  "import_result_match_review": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Строк, совпадающих с операциями в книге и ждущих вашего решения: {n}.",
+        "countPlural=*": "Строк, совпадающих с операциями в книге и ждущих вашего решения: {n}."
+      }
+    }
+  ]
 }

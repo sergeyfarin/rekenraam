@@ -31004,6 +31004,7 @@ export interface components {
             applied_rule_id?: number;
             applied_rule_name?: string;
             exclude?: boolean;
+            match?: components["schemas"]["ImportMatchChoice"];
         };
         ImportStagedRowResponse: {
             /** Format: int64 */
@@ -31242,6 +31243,10 @@ export interface components {
         };
         CorrectTrading212SaleRequest: components["schemas"]["CorrectTrading212BuyRequest"];
         CommitImportBatchResponse: {
+            /** @description Rows committed as links to existing postings; they wrote no journal (#485). Included in committed_count. */
+            linked_count: number;
+            /** @description Rows held pending because they match postings already in the ledger with no standing decision, or the linked posting changed since review (#485). Preview and decide again. */
+            match_review_row_ids: number[];
             /** Format: int64 */
             batch_id: number;
             status: components["schemas"]["ImportBatchStatus"];
@@ -31263,6 +31268,10 @@ export interface components {
             checkpoint_ids: number[];
         };
         PreviewCommitResponse: {
+            /** @description Pending CSV and QIF rows that match postings already in the ledger (#485). A row needing a decision is held at commit until the owner links it or keeps it as new. */
+            match_reviews: components["schemas"]["ImportRowMatchReview"][];
+            /** @description Includable rows that would commit as links, writing no journal. */
+            link_count: number;
             /** @description Pending imported acquisitions whose rolled-back writer replay changes committed disposal gains against the current ledger (T-126). Rows commit chronologically, so an earlier row can change a later row's set; that row is then held for another review rather than committed. */
             gain_impacts: components["schemas"]["ImportRowGainImpact"][];
             includable_count: number;
@@ -31270,6 +31279,46 @@ export interface components {
             reconciliation_issues: components["schemas"]["ImportReconciliationIssue"][];
             /** @description The union of the active checkpoints the pending rows would invalidate, once per checkpoint in id order (#305). A commit's reconciliation_override_checkpoint_ids names these ids. entry_date is one triggering row's date. */
             reconciliation_checkpoints: components["schemas"]["ReconciliationCheckpointImpact"][];
+        };
+        /** @description The owner's decision on a CSV or QIF row that matches a posting already in the ledger (#485). A link names the posting by its transaction and stable line key, with the posted_on day it was reviewed with; commit links only while that posting is still posted, unlinked and unchanged. new keeps the row as a new transaction. */
+        ImportMatchChoice: {
+            /** @enum {string} */
+            decision: "link" | "new";
+            /** Format: int64 */
+            transaction_id?: number;
+            line_key?: string;
+            /** Format: date */
+            posted_on?: string;
+        };
+        /** @description An unlinked posting of a current posted transaction on the row's account, in its commodity, for exactly its amount, whose posted_on day is within window_days of the row's date. day_offset is posted_on minus the row date. */
+        ImportMatchCandidate: {
+            /** Format: int64 */
+            transaction_id: number;
+            line_key: string;
+            /** Format: date */
+            transaction_date: string;
+            transaction_kind: string;
+            /** Format: date */
+            posted_on: string;
+            day_offset: number;
+            /** Format: int64 */
+            account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            quantity_value: string;
+            quantity_scale: number;
+            payee_name: string;
+            description: string;
+        };
+        /** @description A pending row that matches postings already in the ledger, or whose link choice no longer stands. needs_decision is true while commit would hold the row (no decision yet, or the chosen posting is no longer a candidate). */
+        ImportRowMatchReview: {
+            /** Format: int64 */
+            row_id: number;
+            row_index: number;
+            candidates: components["schemas"]["ImportMatchCandidate"][];
+            choice: components["schemas"]["ImportMatchChoice"] | null;
+            needs_decision: boolean;
+            window_days: number;
         };
         ImportProfileResponse: {
             /** Format: int64 */

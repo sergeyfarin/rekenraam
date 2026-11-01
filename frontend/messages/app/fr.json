@@ -1946,5 +1946,82 @@
   "transactions_transfer_conversion_receiving": "Au crédit (la banque destinataire convertit)",
   "transactions_locked_title": "Les montants ne sont pas modifiables ici",
   "transactions_locked_body": "Cette écriture contient des lignes que l’éditeur reconstruirait autrement, comme un montant resté en transit. Vous pouvez modifier la description, le bénéficiaire, le type, les étiquettes et la note ; pour changer les montants, les comptes ou les dates, annulez-la et saisissez-la à nouveau.",
-  "transactions_locked_correct": "Cette écriture contient des lignes que l’éditeur reconstruirait autrement, comme un montant resté en transit ; elle ne peut donc pas être corrigée ici. Annulez-la et saisissez-la à nouveau."
+  "transactions_locked_correct": "Cette écriture contient des lignes que l’éditeur reconstruirait autrement, comme un montant resté en transit ; elle ne peut donc pas être corrigée ici. Annulez-la et saisissez-la à nouveau.",
+  "import_match_title": "Déjà dans votre grand livre",
+  "import_match_intro": "Ces lignes du relevé correspondent à une transaction déjà saisie : même compte et même devise, exactement le même montant, comptabilisée à {days} jours près. Liez une ligne pour l'enregistrer sans ajouter d'autre transaction, ou gardez-la comme nouvelle.",
+  "import_match_check": "Rechercher les transactions déjà saisies",
+  "import_match_checking": "Recherche des transactions correspondantes…",
+  "import_match_empty": "Aucune ligne du relevé ne correspond à une transaction de votre grand livre.",
+  "import_match_row_heading": "Ligne {row} : {date}, {amount}",
+  "import_match_link_option": "Lier à {description}, saisie pour le {date}",
+  "import_match_untitled": "une transaction sans description",
+  "import_match_reason_same_day": "Même compte et même devise, exactement {amount}, comptabilisée à la date du relevé.",
+  "import_match_reason_after": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Même compte et même devise, exactement {amount}, comptabilisée {n} jour après la date du relevé.",
+        "countPlural=*": "Même compte et même devise, exactement {amount}, comptabilisée {n} jours après la date du relevé."
+      }
+    }
+  ],
+  "import_match_reason_before": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Même compte et même devise, exactement {amount}, comptabilisée {n} jour avant la date du relevé.",
+        "countPlural=*": "Même compte et même devise, exactement {amount}, comptabilisée {n} jours avant la date du relevé."
+      }
+    }
+  ],
+  "import_match_keep_new": "Garder comme nouvelle transaction",
+  "import_match_choose": "Plusieurs transactions correspondent. Choisissez-en une ou gardez la ligne comme nouvelle.",
+  "import_match_decide": "Décidez des correspondances ci-dessous, puis importez à nouveau.",
+  "import_preview_dedupe_matched": "Déjà présente",
+  "import_result_linked": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} ligne liée à une transaction de votre grand livre",
+        "countPlural=*": "{n} lignes liées à des transactions de votre grand livre"
+      }
+    }
+  ],
+  "import_result_match_review": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} ligne correspond à une transaction de votre grand livre et attend votre décision.",
+        "countPlural=*": "{n} lignes correspondent à des transactions de votre grand livre et attendent votre décision."
+      }
+    }
+  ]
 }
