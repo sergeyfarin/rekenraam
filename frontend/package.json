@@ -19,7 +19,7 @@
     },
     "devDependencies": {
         "@inlang/plugin-m-function-matcher": "2.3.4",
-        "@inlang/plugin-message-format": "4.5.5",
+        "@inlang/plugin-message-format": "4.5.6",
         "@internationalized/date": "3.12.4",
         "@lucide/svelte": "1.61.0",
         "@sveltejs/adapter-static": "4.0.1",
