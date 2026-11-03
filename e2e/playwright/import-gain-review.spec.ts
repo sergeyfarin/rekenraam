@@ -59,7 +59,7 @@ async function broker(page: Page, label: string, fills: StubFill[]): Promise<Bro
  * time, "Refresh" or "Re-fetch full history" after) and waits for the fetched rows.
  */
 async function fetchFromConnection(page: Page, b: Broker, action: 'Import' | 'Refresh' | 'Re-fetch full history') {
-  await page.goto('/app/import');
+  await page.goto('/app/ledger/import');
   await page.getByRole('row').filter({ hasText: b.connection }).getByRole('button', { name: action, exact: true }).click();
   await expect(page.getByRole('button', { name: 'Commit to ledger' })).toBeVisible({ timeout: 15_000 });
 }

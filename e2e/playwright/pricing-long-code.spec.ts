@@ -5,6 +5,7 @@ import { test, expect } from './support/owned-book';
 import { apiJSON } from './support/api';
 import { todayISO } from './support/dates';
 import { readyForLedger } from './support/ledger';
+import { translationLocales } from './support/locales';
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -22,7 +23,7 @@ async function expectWrappedText(locator: Locator, text: string) {
   })).toBe(true);
 }
 
-for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of translationLocales) {
   for (const theme of ['light', 'dark']) {
     test(`[acceptance] long instrument codes and exact pricing fit 390px in ${locale} ${theme}`, async ({ page }) => {
       const { csrfToken, currencyID } = await readyForLedger(page);

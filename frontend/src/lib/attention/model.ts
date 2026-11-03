@@ -40,12 +40,12 @@ export function sourceBadge(query: AttentionState, ids: readonly AttentionSource
 }
 
 export const sourceDetails: Record<AttentionSourceID, { title: () => string; href: string }> = {
-  drafts: { title: m.attention_drafts, href: '/app/recurring' },
-  transaction_review: { title: m.attention_transactions, href: '/app/transactions?needs_review=true' },
-  recurring_blocked: { title: m.attention_recurring, href: '/app/recurring' },
-  imports: { title: m.attention_imports, href: '/app/import' },
+  drafts: { title: m.attention_drafts, href: '/app/planning/recurring' },
+  transaction_review: { title: m.attention_transactions, href: '/app/ledger/transactions?needs_review=true' },
+  recurring_blocked: { title: m.attention_recurring, href: '/app/planning/recurring' },
+  imports: { title: m.attention_imports, href: '/app/ledger/import' },
   suggestions: { title: m.attention_suggestions, href: '/app/investments?tab=suggestions' },
-  connections: { title: m.attention_connections, href: '/app/import?tab=connections' },
+  connections: { title: m.attention_connections, href: '/app/ledger/import?tab=connections' },
   refresh: { title: m.attention_refresh, href: '/app/settings/currencies' },
   backups: { title: m.attention_backups, href: '/app/settings/data' },
   self_check: { title: m.attention_self_check, href: '/app/settings/data' },

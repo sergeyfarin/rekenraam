@@ -310,6 +310,34 @@ func TestLargeBookExportAndSelfCheckStayBounded(t *testing.T) {
 	}
 	assert.Less(t, attentionUsage.Wall, 5*time.Second, "attention wall time")
 	assert.Less(t, attentionUsage.PeakHeap, uint64(64<<20), "attention peak heap")
+
+	// Home loads with the shell. Both headlines come from one ledger read and
+	// one fold, not one per headline; each default widget is one canonical
+	// read (#478), never one per account, category or schedule.
+	transactions := NewTransactionService(db.NewTransactionRepository(writer), db.NewPayeeRepository(writer), db.NewAccountRepository(writer), db.NewCommodityRepository(writer))
+	transactions.SetPricingRepository(db.NewPricingRepository(writer))
+	homeService := NewHomeService(transactions, NewBudgetService(db.NewBudgetRepository(writer), settings),
+		NewRecurringService(db.NewRecurringRepository(writer), transactions, settings),
+		NewInvestmentService(db.NewInvestmentRepository(writer), nil, transactions, nil),
+		NewBackupService(db.NewBackupRepository(writer), db.NewBackgroundWorkRepository(writer), writer, databaseURL, t.TempDir()))
+	probe = startResourceProbe()
+	composed, err := homeService.Home(context.Background(), 1)
+	homeUsage := probe.finish()
+	require.NoError(t, err)
+	t.Logf("home: wall=%s allocated=%dMiB peak-heap=%dMiB", homeUsage.Wall.Round(time.Millisecond), homeUsage.Allocated>>20, homeUsage.PeakHeap>>20)
+	for name, widgetErr := range map[string]error{"spending": composed.Spending.Err, "budgets": composed.Budgets.Err, "accounts": composed.Accounts.Err,
+		"recurring": composed.Recurring.Err, "net worth trend": composed.NetWorthTrend.Err, "cashflow": composed.Cashflow.Err, "holdings": composed.Holdings.Err,
+		"returns": composed.Returns.Err, "income": composed.Income.Err, "backups": composed.Backups.Err} {
+		assert.NoError(t, widgetErr, name)
+	}
+	home := composed.Briefing
+	require.Len(t, home.Headlines, 2)
+	for _, headline := range home.Headlines {
+		assert.Equal(t, HomeUnavailableValuationGaps, headline.Unavailable, "%s: the EUR balances have no USD rate", headline.ID)
+		assert.Equal(t, []HomeValuationInput{{CommodityID: 2, Code: "EUR", Kind: "rate"}}, headline.Missing, headline.ID)
+	}
+	assert.Less(t, homeUsage.Wall, 10*time.Second, "home wall time")
+	assert.Less(t, homeUsage.PeakHeap, uint64(256<<20), "home peak heap")
 }
 
 func BenchmarkLargeBookBundleExport(b *testing.B) {

@@ -1,4 +1,2 @@
-<script lang="ts">
-  import RecurringScreen from '#lib/recurring/recurring-screen.svelte';
-</script>
-<RecurringScreen />
+<!-- Moved to /app/planning/recurring (#460). The app layout redirects before
+     rendering, preserving the query string and fragment. Keep this route for old links. -->

@@ -17,6 +17,18 @@ TransactionKind:
     - adjustment
 JournalEntryKind:
   type: string
+  description: >-
+    `exchange` (#481) marks a transfer between two of the owner's accounts in
+    different currencies. A request entry of this kind names the two account
+    postings — the exact amount that left (negative) and the exact amount
+    that arrived (positive) — and at most one expense posting for a fee
+    charged on top, in one side's currency, and must be the request's only
+    journal entry. It names no system account: the server adds one
+    commodity_trading posting per currency so each balances, on the day of
+    the side that converted (conversion_side), before the posted_on rule
+    bridges different posting days; the fee posts on the day of the account
+    that paid it. The two accounts must differ. Readers that edit an exchange
+    restate it from the response's transfer shape.
   enum:
     - ordinary
     - transfer_leg
@@ -139,6 +151,14 @@ JournalEntryResponse:
     metadata:
       type: object
       additionalProperties: true
+    conversion_side:
+      type: string
+      enum: [sending, receiving]
+      description: A currency exchange's recorded converting side (#481).
+    fee_paid_by:
+      type: string
+      enum: [sending, receiving]
+      description: A transfer's recorded fee payer (#481).
     postings:
       type: array
       items:
@@ -240,6 +260,155 @@ TransactionResponse:
       items:
         type: integer
         format: int64
+    editable_entry:
+      $ref: "../../openapi.yaml#/components/schemas/EditableEntry"
+      description: >-
+        The journal as the split editor restates it (#481): absent when no
+        edit can restate it exactly (a residual in clearing, a system posting
+        the server would not build). Such a transaction is edited only in
+        what it describes, with keep_journal.
+    transfer:
+      $ref: "../../openapi.yaml#/components/schemas/TransferShape"
+      description: >-
+        Present when the transaction is a transfer Transfer entry edits
+        (#481): restating it as a transfer request and rebuilding it with the
+        writer's rules reproduces the stored journal exactly. Absent for any
+        other journal, which stays in split entry.
+    exchange_conversion:
+      $ref: "../../openapi.yaml#/components/schemas/ExchangeConversion"
+      description: >-
+        Only on GET /transactions/{transaction_id}, and only for a currency
+        exchange (#481): the deal against the market rate, computed on read.
+TransferSide:
+  type: object
+  required: [account_id, commodity_id, quantity_value, quantity_scale, posted_on, line_key, memo]
+  properties:
+    account_id: {type: integer, format: int64}
+    commodity_id: {type: integer, format: int64}
+    quantity_value: {type: string, description: Signed, as stored; what the account's statement shows.}
+    quantity_scale: {type: integer}
+    posted_on: {type: string, format: date}
+    line_key: {type: string}
+    memo: {type: string}
+TransferShape:
+  type: object
+  required: [sending, receiving, entry_memo, entry_kind]
+  properties:
+    sending:
+      $ref: "../../openapi.yaml#/components/schemas/TransferSide"
+    receiving:
+      $ref: "../../openapi.yaml#/components/schemas/TransferSide"
+    fee:
+      type: object
+      required: [account_id, commodity_id, quantity_value, quantity_scale, paid_by, line_key, memo]
+      properties:
+        account_id: {type: integer, format: int64}
+        commodity_id: {type: integer, format: int64}
+        quantity_value: {type: string}
+        quantity_scale: {type: integer}
+        paid_by: {type: string, enum: [sending, receiving]}
+        line_key: {type: string}
+        memo: {type: string}
+    conversion_side:
+      type: string
+      enum: [sending, receiving]
+      description: Which side converted, for an exchange; absent in one currency.
+    entry_memo:
+      type: string
+    entry_kind:
+      $ref: "../../openapi.yaml#/components/schemas/JournalEntryKind"
+EditablePosting:
+  type: object
+  required: [line_key, account_id, commodity_id, quantity_value, quantity_scale, memo, tag_ids]
+  properties:
+    line_key: {type: string}
+    account_id: {type: integer, format: int64}
+    commodity_id: {type: integer, format: int64}
+    quantity_value: {type: string}
+    quantity_scale: {type: integer}
+    posted_on:
+      type: string
+      format: date
+      description: >-
+        The posting's day where the posted-date rule would not choose it by
+        itself; a category's day included, which the editor keeps unshown.
+    memo: {type: string}
+    tag_ids:
+      type: array
+      items: {type: integer, format: int64}
+EditableEntry:
+  type: object
+  required: [entry_kind, memo, postings]
+  description: >-
+    One journal entry request that rebuilds the stored journal exactly
+    (#481): every posting but the system ones the server builds. Metadata is
+    left out: an edit that omits it keeps the stored metadata exactly.
+  properties:
+    entry_kind:
+      $ref: "../../openapi.yaml#/components/schemas/JournalEntryKind"
+    memo: {type: string}
+    conversion_side: {type: string, enum: [sending, receiving]}
+    fee_paid_by: {type: string, enum: [sending, receiving]}
+    postings:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/EditablePosting"
+ExchangeQuantity:
+  type: object
+  required: [commodity_id, quantity_value, quantity_scale]
+  properties:
+    commodity_id:
+      type: integer
+      format: int64
+    quantity_value:
+      type: string
+    quantity_scale:
+      type: integer
+ExchangeConversion:
+  type: object
+  description: >-
+    A currency exchange measured against the market (#481). Display only:
+    nothing here is stored, and no FX gain or loss is posted. sent and
+    received are the converted amounts (a fee charged on top is outside
+    them); implied_rate is received per one unit sent, at six places. market
+    is the reporting rate on the conversion day, selected as reports select
+    it (the nearest earlier observation within the staleness window); when
+    there is none, market is absent and market_gap names why. A rate that
+    arrives or is corrected later shows on the next read.
+  required: [conversion_date, sent, received, implied_rate]
+  properties:
+    conversion_date:
+      type: string
+      format: date
+    sent:
+      $ref: "../../openapi.yaml#/components/schemas/ExchangeQuantity"
+    received:
+      $ref: "../../openapi.yaml#/components/schemas/ExchangeQuantity"
+    implied_rate:
+      $ref: "../../openapi.yaml#/components/schemas/ExchangeQuantity"
+    market:
+      type: object
+      required: [rate, observation_date, stale, market_value, cost, cost_percent]
+      properties:
+        rate:
+          $ref: "../../openapi.yaml#/components/schemas/ExchangeQuantity"
+        observation_date:
+          type: string
+          format: date
+        stale:
+          type: boolean
+          description: The observation is from an earlier day than the conversion.
+        market_value:
+          $ref: "../../openapi.yaml#/components/schemas/ExchangeQuantity"
+          description: The received amount valued in the sent currency at the market rate.
+        cost:
+          $ref: "../../openapi.yaml#/components/schemas/ExchangeQuantity"
+          description: Sent minus market_value, in the sent currency; positive when the deal delivered less than the market rate.
+        cost_percent:
+          type: string
+          description: Cost as a percentage of sent, as a coefficient at scale 2.
+    market_gap:
+      type: string
 TransactionsResponse:
   type: object
   required:
@@ -469,13 +638,15 @@ PostingRequest:
       format: date
       description: >-
         The day this account posting appears on its statement, when it differs
-        from the entry date (#187). Allowed only on asset and liability
-        postings, and only in a request with exactly one journal entry. The
-        server builds one journal entry per date: with one account, every
-        other posting follows its date; with several, they stay on the entry
-        date, and each dated entry is balanced per commodity through
-        transfer_clearing. Not stored on the posting; responses carry the
-        resulting journal entries.
+        from the entry date (#187), in a request with exactly one journal
+        entry. On an asset or liability posting it is that posting's day. Any
+        other posting may name only the day of an account posting (a
+        category, of one in its own currency): a transfer fee then posts with
+        the account that paid it (#481). The server builds one journal entry
+        per date: with one account, every other posting follows its date;
+        with several, the rest stay on the entry date, and each dated entry
+        is balanced per commodity through transfer_clearing. Not stored on
+        the posting; responses carry the resulting journal entries.
     account_id:
       type: integer
       format: int64
@@ -492,6 +663,8 @@ PostingRequest:
     memo:
       type: string
     metadata:
+      description: >-
+        On PATCH or a correction, omitted keeps the stored posting's metadata with the same line_key exactly; {} clears it (#481).
       type: object
       additionalProperties: true
     tag_ids:
@@ -509,9 +682,26 @@ JournalEntryRequest:
       description: Accounting effective date for this balanced journal entry.
     entry_kind:
       $ref: "../../openapi.yaml#/components/schemas/JournalEntryKind"
+    conversion_side:
+      type: string
+      enum: [sending, receiving]
+      description: >-
+        For an exchange entry only (#481): which side converted. The exchange
+        legs post on that side's day; sending (the default) means the money
+        in transit is in the receiving currency. Stored with the entry.
+    fee_paid_by:
+      type: string
+      enum: [sending, receiving]
+      description: >-
+        Which side of a transfer between two accounts paid its one fee
+        charged on top (#481). The fee must be positive and in that side's
+        currency, and posts on its day. Stored with the entry, so the choice
+        survives when both sides post on one day.
     memo:
       type: string
     metadata:
+      description: >-
+        On PATCH or a correction, omitted keeps the stored entries' metadata exactly when they share one; {} clears it (#481).
       type: object
       additionalProperties: true
     postings:
@@ -542,6 +732,8 @@ TransactionRequest:
     note_markdown:
       type: string
     metadata:
+      description: >-
+        On PATCH or a correction, omitted keeps the stored metadata exactly; {} clears it (#481).
       type: object
       additionalProperties: true
     needs_review:
@@ -580,6 +772,13 @@ TransactionRequest:
         refused with 409 TRANSACTION_VERSION_STALE and nothing is written. The
         update reconciliation-impact preview checks it the same way when given.
         Create and correct ignore it.
+    keep_journal:
+      type: boolean
+      description: >-
+        PATCH and its reconciliation-impact preview only (#481): keep the
+        stored journal exactly and change only what the transaction
+        describes. journal_entries must then be omitted. Create and correct
+        refuse it.
   additionalProperties: false
 TransactionLifecycleRequest:
   type: object

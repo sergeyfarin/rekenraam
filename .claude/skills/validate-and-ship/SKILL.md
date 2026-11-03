@@ -44,6 +44,12 @@ checks; CI must not need a separate warm-up or skip catalog validation.
 | Changed the investment writer admission or payment-in-lieu entitlement checks | `REKENRAAM_PIL_DENSITIES=0,10,100 ./scripts/measure-payment-in-lieu-density.sh` — compare against the #379 figures (*Payment-in-lieu density measurement* in `docs/developer-workflow.md`); never on push |
 | User journeys | `./scripts/test-e2e.sh` (self-contained: builds app once, one instance + fresh SQLite per worker under `backend/var/e2e/`, ports from 127.0.0.1:16900; `E2E_SKIP_BUILD=1` to reuse the binary) |
 
+For browser diagnostics, the default failure trace is light. `--trace=on` only
+changes its mode and keeps the configured DOM/network exclusions. Use
+`E2E_FULL_TRACE=1 pnpm --dir e2e exec playwright test <spec> --grep <case>` for a
+full local trace with DOM snapshots, screenshots, sources and network records;
+keep it focused and leave CI unset (#473).
+
 Native SQLite requires CGO and a C compiler with development headers. Supported
 commands source `scripts/native-sqlite-env.sh` and enable `fts5,netgo,osusergo`.
 Use `./scripts/go-backend.sh test ...` for focused checks. Go race detection
@@ -148,6 +154,10 @@ non-trivial diff (yours or reviewed):
     run and missed four other helpers and six inline lists, so 114 call sites
     never asserted checks outside a short named list, such as #389's
     `investment_attribution` (#397).
+    Diagnostics repeat it too: Prices judged a quote by age while valuation
+    also refuses it across conflicting splits, so Home's "needs a price" link
+    hid it (#476). A screen that says whether a consumer can use something
+    asks that consumer (`RateTable.DirectGap`), never a restated rule.
     A healthy known-basis book asserts through
     `requireKnownBasisSelfCheckPasses` (or `requireInvestmentSelfCheckPasses`,
     which adds the investment oracles); never hand-list the checks that must
@@ -659,7 +669,10 @@ non-trivial diff (yours or reviewed):
     and the danger/warning confirmation buttons drew foreground text on their
     own fill (1.6:1 dark) (#324). Use only `@theme inline` tokens; text on a
     danger or warning fill is `text-background`. Named check:
-    `src/lib/theme-tokens.test.ts` scans every `.svelte`/`.ts` source.
+    `src/lib/theme-tokens.test.ts` parses every `.svelte`/`.ts` source and
+    reads markup attribute values (not `style`), `class:` directives and
+    string/template literals; CSS, comments and text are skipped, so
+    `border-radius: 0;` is not a colour (#462).
 
 53. **Sweep that audits the sign-in screen** — every Playwright test has its
     own browser context, so a spec that seeds in one test and visits routes in
@@ -855,6 +868,62 @@ non-trivial diff (yours or reviewed):
     exposure. Compare the real reporting consumer and manual-rate recovery;
     counts are not a certificate of historical or reporting-currency coverage.
     Named checks: `TestPricingPostedCurrency*` and `attention.spec.ts`.
+
+75. **A loaded empty demand treated as uninitialized** — nil is the FX
+    triangulation fallback's signal to query demand, so an empty repository
+    result must remain a non-nil loaded set (#466). Count actual demand reads
+    across failed derivations, including an empty book. Capture the owner day
+    at run start and pass that context through demand and target selection;
+    midnight must not change the selected currency versions mid-run. Named
+    checks: `TestFXRefreshEmptyDemandIsReadOnceAcrossTriangulationAttempts`
+    and `TestFXRefreshDemandUsesOwnerDayCapturedAtRunStart`.
+
+76. **Completing future demand before it becomes due** — a zero-work sweep
+    must atomically retain an owner-date wakeup (#471), with no provider attempts
+    or early latest fetch from manual/scheduled refresh. Test the real outbox
+    and worker through database reopen, local midnight/DST, cancellation and
+    replacement, repeated sweeps and new current demand while waiting. Include
+    successor-publication rollback, other-currency chunk exhaustion and the
+    eight-attempt provider retry cap (`TestFXFutureDemand*`).
+
+77. **Navigation completion clearing a newer interaction** — shared search's
+    `afterNavigate` reset and post-`await goto` close erased a query reopened on
+    Spending while its default range was being repaired (#472). Reset when
+    leaving a pathname, preserve same-page query/fragment changes, and never
+    let an older selection's completion dismiss the next search. Control input
+    at actual history updates and check retained query/results after rendering;
+    also verify genuine page departure still dismisses search
+    (`shared-search.spec.ts`, `search entered during Spending range repair … (#472)`).
+
+78. **A dismissal guard that sees only part of a write chain** — the editor's
+    busy state covered the save but not the payee it creates first, so Escape
+    closed the entry dialog mid-chain and the continuation still posted it
+    (#477). Busy (`aria-busy`, which `ModalDialog`/`phoneModal` honour) spans
+    every write that leads to the commit, and an unmounted form never continues
+    to its own save. Related in the same review: a write from a dialog over any
+    page refreshes every read it can change (`invalidateTransactionReads`,
+    Prices coverage included), and a shell error state must not unmount an open
+    working copy; a dialog that outlives its opener needs `fallbackFocus`. Suggestion-list
+    options are never Tab stops: one that closes on blur drops focus out of the
+    dialog. Named checks: `home-entry.spec.ts` (payee chain, report refresh,
+    failed session refresh, keyboard category), `invalidate.test.ts`,
+    `suggestion-keys.test.ts`.
+79. **An editor that restates more than the owner changed** — #481 took three
+    reviews: a journal the server could rebuild exactly was still unsafe for
+    the form (a refund read as a fee), the fallback split dropped system
+    postings, mode switches rebuilt postings without their line keys (a
+    cleared posting came back uncleared, a reconciled one asked for an
+    override), and metadata round-tripped through JavaScript objects (an
+    integer above 2^53 rounded). Acceptance for an editor is the browser's own
+    read → edit → save and every mode switch, keeping amounts, days,
+    accounts, currencies, memos, line keys, reconciliation state and recorded
+    choices; each transition applies the same eligibility and carry rules as
+    the initial load. Data the form does not show stays on the server: an
+    omitted field on an edit keeps the stored value exactly (metadata by line
+    key, the #311 pattern), never a client copy. Named checks:
+    `transfer-entry.spec.ts` (preservation gates),
+    `transaction-edit-preservation.spec.ts`,
+    `TestTransactionEditKeepsOmittedMetadataExactly`.
 
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.

@@ -15,7 +15,7 @@ describe('coverageMoney', () => {
 describe('coverageRepairHref', () => {
   it('sends imported cash to its batch review and named dividends to the payment', () => {
     expect(coverageRepairHref({ kind: 'imported_cash', transaction_id: 4, source: { batch_id: 9, row_id: 2, instrument: '', date: '2026-01-01', cash_amount: '1', currency: 'EUR' } }))
-      .toBe('/app/import/dividends?batch_id=9');
-    expect(coverageRepairHref({ kind: 'named_unassigned', transaction_id: 4, source: null })).toBe('/app/transactions?transaction_id=4');
+      .toBe('/app/ledger/import/dividends?batch_id=9');
+    expect(coverageRepairHref({ kind: 'named_unassigned', transaction_id: 4, source: null })).toBe('/app/ledger/transactions?transaction_id=4');
   });
 });

@@ -39,7 +39,7 @@ test('runs without Content-Security-Policy violations', async ({ page }) => {
 
   await ensureBrowserSession(page);
 
-  for (const route of ['/app/transactions', '/app/accounts', '/app/reports', '/app/settings']) {
+  for (const route of ['/app/ledger/transactions', '/app/ledger/accounts', '/app/reports', '/app/settings']) {
     await page.goto(route);
     await expect(page.locator('main')).toBeVisible();
   }

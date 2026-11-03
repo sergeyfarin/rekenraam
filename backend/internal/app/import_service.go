@@ -937,7 +937,7 @@ func validateRowResolutionPatch(patch RowResolutionPatch) error {
 	if !json.Valid([]byte(patch.ResolutionJSON)) {
 		return ValidationError{Message: "resolution is not valid JSON"}
 	}
-	return nil
+	return validateImportMatchChoice(patch.ResolutionJSON)
 }
 
 // PreviewCommit performs a dry-run of commit to report reconciliation issues and counts.
@@ -1056,6 +1056,23 @@ func (s *ImportService) PreviewCommit(ctx context.Context, input PreviewCommitIn
 			// Not yet resolved — count as includable but cannot check reconciliation.
 			result.IncludableCount++
 			continue
+		}
+
+		// A row matching a posting already in the ledger is reviewed; a
+		// standing link writes no journal and so reaches no checkpoint (#485).
+		matchReview, err := s.importMatchReview(ctx, batch, row, resolution)
+		if err != nil {
+			return PreviewCommitResult{}, err
+		}
+		if matchReview != nil {
+			result.MatchReviews = append(result.MatchReviews, *matchReview)
+			if matchReview.NeedsDecision || matchReview.Choice.Decision == ImportMatchDecisionLink {
+				result.IncludableCount++
+				if !matchReview.NeedsDecision {
+					result.LinkCount++
+				}
+				continue
+			}
 		}
 
 		spec, err := buildTransactionSpec(row, resolution)
@@ -1318,6 +1335,15 @@ func (s *ImportService) commitImportBatch(ctx context.Context, input CommitImpor
 			continue
 		}
 
+		// A row matching a posting already in the ledger links to the one the
+		// owner chose, or commits as new on their word; with no standing
+		// decision it waits for review (#485).
+		if handled, err := s.commitMatchedImportRow(ctx, &result, batch, row, resolution, commitKey, input, nowStr); err != nil {
+			return result, err
+		} else if handled {
+			continue
+		}
+
 		spec, err := buildTransactionSpec(row, resolution)
 		if err != nil {
 			if err2 := s.recordImportStagedRowTerminal(ctx, &result, db.CommitImportStagedRowParams{
@@ -1426,7 +1452,7 @@ func (s *ImportService) commitImportBatch(ctx context.Context, input CommitImpor
 	// dividend or reconciliation review are still pending, so the batch stays
 	// open even if nothing committed; a batch whose remaining rows all failed
 	// is failed. Both stay open for repair and another commit (#301).
-	held := len(result.GainReviewRowIDs) + len(result.DividendReviewRowIDs) + len(result.ReconciliationHoldRowIDs) + len(result.ReconciliationStaleRowIDs)
+	held := len(result.GainReviewRowIDs) + len(result.DividendReviewRowIDs) + len(result.ReconciliationHoldRowIDs) + len(result.ReconciliationStaleRowIDs) + len(result.MatchReviewRowIDs)
 	finalStatus := "committed"
 	switch {
 	case held > 0:
@@ -1445,6 +1471,8 @@ func (s *ImportService) commitImportBatch(ctx context.Context, input CommitImpor
 		"dividend_review": len(result.DividendReviewRowIDs),
 		"reconciliation":  len(result.ReconciliationHoldRowIDs),
 		"stale_review":    len(result.ReconciliationStaleRowIDs),
+		"linked":          result.LinkedCount,
+		"match_review":    len(result.MatchReviewRowIDs),
 	})
 
 	eventKind := finalStatus
@@ -1544,7 +1572,9 @@ func (s *ImportService) recordImportStagedRowTerminal(ctx context.Context, resul
 	if err != nil {
 		return fmt.Errorf("reload committed staged row: %w", err)
 	}
-	if row.CommitStatus != "committed" || !row.CommittedIdentityID.Valid || len(row.CommitEffects) == 0 {
+	// A row linked to an existing posting has no effects; its transaction
+	// summary names the linked transaction (#485).
+	if row.CommitStatus != "committed" || !row.CommittedIdentityID.Valid || (len(row.CommitEffects) == 0 && !row.CommittedTransactionID.Valid) {
 		return fmt.Errorf("staged row %d reported committed transition conflict but is not committed", params.RowID)
 	}
 	if expectedTransactionID != nil && *expectedTransactionID > 0 && (!row.CommittedTransactionID.Valid || row.CommittedTransactionID.Int64 != *expectedTransactionID) {

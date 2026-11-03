@@ -51,16 +51,47 @@ description: SvelteKit frontend rules for Rekenraam - static adapter constraints
   page never adds its own top-level navigation or horizontal page padding.
   A page is a route; a view inside it reads `page.url` on every navigation
   (never once with `untrack`). Moving a page keeps the old path as a `legacy`
-  entry redirected by `canonicalURL`. Rules: `docs/conventions.md` → Frontend.
+  entry redirected by `canonicalURL`, keeping all query parameters and the
+  fragment and replacing the history entry. Canonical Ledger and Planning paths
+  live under `/app/ledger/…` and `/app/planning/…` (#460); internal links and
+  browser journeys use those paths. Rules: `docs/conventions.md` → Frontend.
+- **Page header (#459):** `PageHeader` slots are `breadcrumbs`, `heading`
+  (object switcher), `scope` and `actions`. A page's main action is a visible
+  button in `actions`, never only a shortcut; transaction pages pass
+  `title`/`breadcrumbs` to `TransactionWorkspace`, which puts *Add transaction*
+  there. The registry `width` sizes the page column from the shared left edge.
+  Shortcuts: search owns `/` and Ctrl/⌘ K, the shell owns `N` and `?`; none acts
+  in an editable field or under a modal, and every shortcut is listed in
+  `shortcutList()` so `?` help shows it.
 - Shell counts come from `#lib/attention/context.ts`, one composed attention
   query for header, tabs, Home and Review (#458). Unknown/error sources never
-  become zero or all-clear. Counting rules live in the design's attention contract.
+  become zero or all-clear, and a failed refresh is an error even while TanStack
+  still holds the last data. Counting rules live in the design's attention contract.
+- Home reads one composed `GET /api/v1/home` (`#lib/api/home.ts`, keyed by
+  owner-local today); the shell's write middleware invalidates it with the
+  attention count. Briefing rules live in `#lib/home/briefing.ts`; Home
+  amounts use `formatHomeMoney`, nothing else does (#476). My Home widgets
+  are view models in `#lib/home/widgets.ts` built from that same read; a
+  widget never fetches on its own, and a failed summary stays in its card (#478). More to explore
+  (`#lib/home/explore.ts`, #479) renders the same `home-widget-card.svelte`; a card may also read the
+  shell's attention query, never a request of its own, and a widget invents no threshold or ranking:
+  it reads the owning feature's rule (or that rule is built there first). "Out of date" is the
+  pricing policy's staleness, the word Prices and Review use; a link to a
+  filtered destination must list what Home named (`?status=unusable|stale`).
 - Global search is `#lib/search/search-field.svelte` (#457). Mount one shortcut
   owner; reuse `scope`/`onSelect` and `variant="home"` for placement. Keep page
   filters independent, derive page hits from the route registry and consume every
-  catalog cursor before claiming complete search coverage. The design's
+  catalog cursor before claiming complete search coverage. Search resets when
+  leaving a pathname, never on navigation completion or same-page URL repair;
+  a completed selection must not close a newly opened search (#472). The design's
   [search contract](../../../docs/design/home-and-navigation.md#shared-search-foundation-457)
-  records retained #437/#439/#442 scope.
+  records retained #437/#439/#442 scope. Home mounts it as its command bar and
+  the header omits its own instance there (#477).
+- Adding a transaction from anywhere is `addTransaction()`
+  (`#lib/transactions/add-transaction.svelte.ts`): the page's own editor when
+  it provides one (`providePageAdd`), otherwise the shared
+  `TransactionEntryDialog` the shell mounts once (#477). Never add another
+  entry dialog or navigate away to add.
 - Every modal is `ModalDialog` (`#lib/components/modal-dialog.svelte`, #327):
   wrap it in `{#if}`, pass `onCancel` and `pending`, and keep Cancel before a
   destructive confirm. Never hand-roll a `fixed inset-0` + `aria-modal`
@@ -74,10 +105,17 @@ description: SvelteKit frontend rules for Rekenraam - static adapter constraints
   `m.some_message_id()`. Catalogs live in
   `frontend/messages/<domain>/<locale>.json`; keep message IDs flat, prefixed
   by domain/screen (`import_preview_dedupe_duplicate`).
-- Add every new key to all configured locales with the same placeholder names.
-  `pnpm --dir frontend run catalogs:check` gates dev/check/build and CI;
-  native terminology review remains separate (#102).
+- Add every new key to the maintained locales (`en`, `nl`, `ru`) with the same
+  placeholder names. `es`, `fr` and `de` are partial (#493): a new or changed
+  key may be left out there and falls back to English. After editing
+  catalogs run `pnpm --dir frontend run catalogs:missing`;
+  `pnpm --dir frontend run catalogs:check` rejects a stale
+  `src/lib/i18n/missing.json` and gates dev/check/build and CI. Native
+  terminology review remains separate (#102).
 - Never concatenate translated fragments into sentences; use message parameters.
+- A count-dependent message is one plural variant with a `countPlural=*`
+  catch-all, called as `m.key({ count, n })` (`n` locale-formatted); never pick
+  between singular/plural keys in code (`docs/conventions.md`, #476).
 - Formatting of money, dates, numbers is locale-aware (`Intl.NumberFormat`,
   `Intl.DateTimeFormat`, `date-fns` v4) and separate from translation.
   Never use the `Date` constructor or luxon/moment for financial date logic.

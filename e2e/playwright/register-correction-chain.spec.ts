@@ -37,7 +37,7 @@ async function correctedDividendRegister(page: Page): Promise<string> {
   await apiJSON(page, 'POST', `/api/v1/investments/transactions/${original.id}/replace-dividend`, csrfToken, {
     reason: 'statement shows 55.00', replacement: { ...dividend, amount_value: '5500' }
   });
-  return `/app/accounts/${cash.id}/register`;
+  return `/app/ledger/accounts/${cash.id}/register`;
 }
 
 test.describe('on a phone', () => {

@@ -43,7 +43,7 @@ test('a finished statement can be voided from the reconcile screen and reconcile
   const checkpoints = async () =>
     (await apiJSON<{ checkpoints: Checkpoint[] }>(page, 'GET', `/api/v1/accounts/${cash.id}/reconciliation-checkpoints`)).checkpoints;
 
-  await page.goto('/app/reconcile');
+  await page.goto('/app/ledger/reconcile');
   await page.getByLabel('Account').selectOption({ label: cash.name });
   const voidButton = page.getByRole('button', { name: `Void the statement of ${day}` });
   await expect(voidButton).toBeVisible();

@@ -26,7 +26,7 @@ test('[acceptance] CSV dividends and separate tax use saved mappings and reviewe
   const upload = async () => page.locator('input[type="file"]').setInputFiles({ name: 'income.csv', mimeType: 'text/csv', buffer: Buffer.from(contents) });
   const activity = () => apiJSON<{ transactions: Array<{ id: number }> }>(page, 'GET', `/api/v1/transactions?commodity_id=${instrument.commodity_id}`);
 
-  await page.goto('/app/import');
+  await page.goto('/app/ledger/import');
   await upload();
   await page.getByLabel('Mapping name').fill(profileName);
   await page.getByRole('combobox', { name: 'Date column', exact: true }).selectOption('Date');
@@ -101,7 +101,7 @@ test('CSV dividends and withholding without a payer column keep exact amounts an
     await page.getByLabel('Saved mapping').selectOption(String(profile.id));
     await page.getByRole('button', { name: 'Upload & preview' }).click();
   };
-  await page.goto('/app/import');
+  await page.goto('/app/ledger/import');
   await upload();
   for (const index of [1, 2]) {
     const row = page.getByRole('group', { name: `Investment row ${index}`, exact: true });

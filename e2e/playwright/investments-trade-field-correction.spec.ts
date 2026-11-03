@@ -56,7 +56,7 @@ test.describe('on a phone', () => {
     await trade('buy', 25, '10', '30000');
     await trade('sell', 20, '5', '15000');
 
-    await page.goto(`/app/transactions?transaction_id=${misbooked.transaction.id}`);
+    await page.goto(`/app/ledger/transactions?transaction_id=${misbooked.transaction.id}`);
     await page.getByRole('button', { name: 'Correct buy…' }).click();
     await page.getByLabel('Reason for correction').fill('bought at the other broker a day earlier');
     await page.getByLabel('Date').fill(daysFromTodayISO(-31));

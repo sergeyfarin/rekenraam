@@ -79,7 +79,7 @@ test.describe('on a phone', () => {
 
   test('reversing an internal transfer returns the units to the source holding', async ({ page }) => {
     const { source, destination, instrument, moved } = await seedTransfer(page, 'xrv');
-    await page.goto(`/app/transactions?transaction_id=${moved.transaction.id}`);
+    await page.goto(`/app/ledger/transactions?transaction_id=${moved.transaction.id}`);
     await page.getByRole('button', { name: 'Reverse transfer…' }).click();
     const dialog = page.getByRole('alertdialog');
     await expect(dialog).toContainText('Reverse this transfer');
@@ -90,14 +90,14 @@ test.describe('on a phone', () => {
     await expect.poll(() => held(page, destination.id, instrument.commodity_id)).toBe('0');
     // Reversing closes the detail, so an absence check here would pass on the
     // bare list. Reopen the reversed transfer and check its own actions.
-    await page.goto(`/app/transactions?transaction_id=${moved.transaction.id}`);
+    await page.goto(`/app/ledger/transactions?transaction_id=${moved.transaction.id}`);
     await expect(page.locator('#investment-correction-heading')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Reverse transfer…' })).toHaveCount(0);
   });
 
   test('correcting an internal transfer moves the corrected quantity', async ({ page }) => {
     const { source, destination, instrument, moved } = await seedTransfer(page, 'xcr');
-    await page.goto(`/app/transactions?transaction_id=${moved.transaction.id}`);
+    await page.goto(`/app/ledger/transactions?transaction_id=${moved.transaction.id}`);
     await page.getByRole('button', { name: 'Correct transfer…' }).click();
     const form = page.getByRole('dialog', { name: 'Correct this transfer' });
     const lot = form.getByLabel(/^Lot #/);
@@ -112,7 +112,7 @@ test.describe('on a phone', () => {
 
   test('correcting an internal transfer preserves exact unedited source evidence', async ({ page }) => {
     const { destination, instrument, moved } = await seedTransfer(page, 'xev', true);
-    await page.goto(`/app/transactions?transaction_id=${moved.transaction.id}`);
+    await page.goto(`/app/ledger/transactions?transaction_id=${moved.transaction.id}`);
     await page.getByRole('button', { name: 'Correct transfer…' }).click();
     const form = page.getByRole('dialog', { name: 'Correct this transfer' });
     await form.getByLabel('Reason for correction').fill('the statement shows six units');
@@ -141,7 +141,7 @@ test.describe('on a phone', () => {
     }))) as { transaction: { id: number } };
     await expect.poll(() => held(page, holding.id, instrument.commodity_id)).toBe('2');
 
-    await page.goto(`/app/transactions?transaction_id=${arrived.transaction.id}`);
+    await page.goto(`/app/ledger/transactions?transaction_id=${arrived.transaction.id}`);
     await page.getByRole('button', { name: 'Correct transfer…' }).click();
     const form = page.getByRole('dialog', { name: 'Correct this transfer' });
     await expect(form.getByLabel('Quantity')).toHaveValue('2');

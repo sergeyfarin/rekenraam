@@ -26,6 +26,9 @@ func createTransaction(logger *slog.Logger, authService *app.AuthService, transa
 			return
 		}
 
+		if !refuseKeptJournal(w, request) {
+			return
+		}
 		transaction, err := transactionService.CreateTransaction(r.Context(), app.CreateTransactionInput{
 			OwnerUserID:                         owner.ID,
 			AuthSessionID:                       authenticatedSessionID(r),
@@ -86,6 +89,7 @@ func updateTransaction(logger *slog.Logger, authService *app.AuthService, transa
 			ChangeReason:                        request.ChangeReason,
 			ReconciliationOverride:              request.ReconciliationOverride,
 			ReconciliationOverrideCheckpointIDs: reviewed,
+			KeepJournal:                         request.KeepJournal,
 		})
 		if err != nil {
 			writeTransactionServiceError(w, r, logger, "update transaction", err)
@@ -244,6 +248,9 @@ func correctTransaction(logger *slog.Logger, authService *app.AuthService, trans
 			return
 		}
 
+		if !refuseKeptJournal(w, request) {
+			return
+		}
 		transaction, err := transactionService.CreateTransaction(r.Context(), app.CreateTransactionInput{
 			OwnerUserID:               owner.ID,
 			AuthSessionID:             authenticatedSessionID(r),
@@ -321,4 +328,14 @@ func approveTransaction(logger *slog.Logger, authService *app.AuthService, trans
 
 		writeJSON(w, http.StatusOK, toTransactionResponse(transaction))
 	}))
+}
+
+// refuseKeptJournal answers a create or a correction that asks to keep a
+// journal: only an edit has a stored journal to keep (#481).
+func refuseKeptJournal(w http.ResponseWriter, request transactionRequest) bool {
+	if request.KeepJournal {
+		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "keep_journal applies only to an edit")
+		return false
+	}
+	return true
 }

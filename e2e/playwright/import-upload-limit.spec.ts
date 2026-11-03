@@ -5,17 +5,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readyForLedger } from './support/ledger';
 import { apiJSON } from './support/api';
+import { translationLocales } from './support/locales';
 
 test.use({ viewport: { width: 390, height: 844 } });
 
-for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of translationLocales) {
   for (const format of ['qif', 'csv']) {
     test(`[acceptance] oversized ${format} shows the size error and recovers in ${locale} at 390px`, async ({ page }) => {
       await readyForLedger(page);
       const app = JSON.parse(readFileSync(new URL(`../../frontend/messages/app/${locale}.json`, import.meta.url), 'utf8'));
       const settings = JSON.parse(readFileSync(new URL(`../../frontend/messages/settings/${locale}.json`, import.meta.url), 'utf8'));
       await page.evaluate(value => localStorage.setItem('PARAGLIDE_LOCALE', value), locale);
-      await page.goto('/app/import');
+      await page.goto('/app/ledger/import');
       const before = await apiJSON(page, 'GET', '/api/v1/imports');
       const directory = await mkdtemp(join(tmpdir(), 'rekenraam-upload-'));
       try {

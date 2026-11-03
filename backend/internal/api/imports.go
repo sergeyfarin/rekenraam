@@ -158,6 +158,11 @@ type commitImportBatchResponse struct {
 	// did not name; they stay pending, with nothing invalidated, until
 	// another preview and commit (#305).
 	ReconciliationStaleRowIDs []int64 `json:"reconciliation_stale_row_ids"`
+	// LinkedCount rows were committed as links to existing postings (#485).
+	LinkedCount int `json:"linked_count"`
+	// MatchReviewRowIDs match existing postings with no standing decision
+	// and stay pending until the owner decides (#485).
+	MatchReviewRowIDs []int64 `json:"match_review_row_ids"`
 }
 
 type previewCommitResponse struct {
@@ -167,6 +172,64 @@ type previewCommitResponse struct {
 	// ReconciliationCheckpoints is the union a commit's override names (#305).
 	ReconciliationCheckpoints []checkpointImpactResponse `json:"reconciliation_checkpoints"`
 	GainImpacts               []rowGainImpactResponse    `json:"gain_impacts"`
+	MatchReviews              []rowMatchReviewResponse   `json:"match_reviews"`
+	LinkCount                 int                        `json:"link_count"`
+}
+
+type importMatchChoiceResponse struct {
+	Decision      string `json:"decision"`
+	TransactionID int64  `json:"transaction_id,omitempty"`
+	LineKey       string `json:"line_key,omitempty"`
+	PostedOn      string `json:"posted_on,omitempty"`
+}
+
+type importMatchCandidateResponse struct {
+	TransactionID   int64  `json:"transaction_id"`
+	LineKey         string `json:"line_key"`
+	TransactionDate string `json:"transaction_date"`
+	TransactionKind string `json:"transaction_kind"`
+	PostedOn        string `json:"posted_on"`
+	DayOffset       int    `json:"day_offset"`
+	AccountID       int64  `json:"account_id"`
+	CommodityID     int64  `json:"commodity_id"`
+	QuantityValue   string `json:"quantity_value"`
+	QuantityScale   int    `json:"quantity_scale"`
+	PayeeName       string `json:"payee_name"`
+	Description     string `json:"description"`
+}
+
+type rowMatchReviewResponse struct {
+	RowID         int64                          `json:"row_id"`
+	RowIndex      int                            `json:"row_index"`
+	Candidates    []importMatchCandidateResponse `json:"candidates"`
+	Choice        *importMatchChoiceResponse     `json:"choice"`
+	NeedsDecision bool                           `json:"needs_decision"`
+	WindowDays    int                            `json:"window_days"`
+}
+
+func toRowMatchReviewResponses(reviews []app.RowMatchReview) []rowMatchReviewResponse {
+	responses := make([]rowMatchReviewResponse, 0, len(reviews))
+	for _, review := range reviews {
+		candidates := make([]importMatchCandidateResponse, 0, len(review.Candidates))
+		for _, candidate := range review.Candidates {
+			candidates = append(candidates, importMatchCandidateResponse{
+				TransactionID: candidate.TransactionID, LineKey: candidate.LineKey,
+				TransactionDate: candidate.TransactionDate, TransactionKind: candidate.TransactionKind,
+				PostedOn: candidate.PostedOn, DayOffset: candidate.DayOffset,
+				AccountID: candidate.AccountID, CommodityID: candidate.CommodityID,
+				QuantityValue: string(candidate.QuantityValue), QuantityScale: candidate.QuantityScale,
+				PayeeName: candidate.PayeeName, Description: candidate.Description,
+			})
+		}
+		response := rowMatchReviewResponse{RowID: review.RowID, RowIndex: review.RowIndex, Candidates: candidates,
+			NeedsDecision: review.NeedsDecision, WindowDays: app.ImportMatchWindowDays}
+		if review.Choice != nil {
+			response.Choice = &importMatchChoiceResponse{Decision: review.Choice.Decision, TransactionID: review.Choice.TransactionID,
+				LineKey: review.Choice.LineKey, PostedOn: review.Choice.PostedOn}
+		}
+		responses = append(responses, response)
+	}
+	return responses
 }
 
 type rowGainImpactResponse struct {
@@ -728,7 +791,9 @@ func previewCommitImportBatch(logger *slog.Logger, authService *app.AuthService,
 			ReconciliationCheckpoints: toReconciliationImpactResponse(app.ReconciliationImpact{
 				AffectedCheckpoints: result.ReconciliationCheckpoints,
 			}).AffectedCheckpoints,
-			GainImpacts: gainImpacts,
+			GainImpacts:  gainImpacts,
+			MatchReviews: toRowMatchReviewResponses(result.MatchReviews),
+			LinkCount:    result.LinkCount,
 		})
 	}
 }
@@ -784,6 +849,10 @@ func commitImportBatch(logger *slog.Logger, authService *app.AuthService, import
 		if reconciliationStaleRowIDs == nil {
 			reconciliationStaleRowIDs = []int64{}
 		}
+		matchReviewRowIDs := result.MatchReviewRowIDs
+		if matchReviewRowIDs == nil {
+			matchReviewRowIDs = []int64{}
+		}
 		writeJSON(w, http.StatusOK, commitImportBatchResponse{
 			BatchID:              result.BatchID,
 			Status:               result.Status,
@@ -796,6 +865,8 @@ func commitImportBatch(logger *slog.Logger, authService *app.AuthService, import
 
 			ReconciliationHoldRowIDs:  reconciliationHoldRowIDs,
 			ReconciliationStaleRowIDs: reconciliationStaleRowIDs,
+			LinkedCount:               result.LinkedCount,
+			MatchReviewRowIDs:         matchReviewRowIDs,
 		})
 	}))
 }

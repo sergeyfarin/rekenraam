@@ -36,7 +36,7 @@ async function seedRegister(page: Page, label: string) {
       ] }]
     });
   }
-  return { path: `/app/accounts/${account.id}/register`, descriptions };
+  return { path: `/app/ledger/accounts/${account.id}/register`, descriptions };
 }
 
 /** A holding with one bought lot; returns the instrument's display name. */
@@ -64,7 +64,7 @@ test.describe('at phone width', () => {
     const panel = page.getByRole('complementary', { name: 'Actions' });
     await expect(panel.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
     await expectFocusTrapped(page, panel, 'transaction panel', 25);
-    expect(await page.getByRole('button', { name: 'New transaction' }).evaluate((el) => el.closest('[inert]') !== null),
+    expect(await page.getByRole('button', { name: 'Add transaction' }).evaluate((el) => el.closest('[inert]') !== null),
       'the covered page is inert').toBe(true);
     await page.keyboard.press('Escape');
     await expect(panel).toHaveCount(0);

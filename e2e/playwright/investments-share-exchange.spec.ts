@@ -94,7 +94,7 @@ test('a share exchange previews exact lots and the new lots keep their original 
 
   const listed = await apiJSON<{ lots: Array<{ source_transaction_id: number }> }>(
     page, 'GET', `/api/v1/investments/lots?account_id=${s.successor.holdingID}&commodity_id=${s.successor.commodity_id}`);
-  await page.goto(`/app/transactions?transaction_id=${listed.lots[0].source_transaction_id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${listed.lots[0].source_transaction_id}`);
   const detail = page.getByRole('group', { name: 'Share exchange' });
   await expect(detail).toContainText(`${s.old.name} → ${s.successor.name}: 3 new for 2 old`);
   await expect(detail.getByRole('button', { name: 'Correct exchange…' })).toBeVisible();
@@ -116,7 +116,7 @@ test('correcting an exchange ratio revises the later sale gain on mobile', async
   const exchanged = await s.exchange();
   await s.sellNew(5, '5', '10000'); // FIFO: 5 of 10 new units, basis 50.00
 
-  await page.goto(`/app/transactions?transaction_id=${exchanged.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${exchanged.transaction.id}`);
   await page.getByRole('button', { name: 'Correct exchange…' }).click();
   const form = page.getByRole('dialog', { name: 'Correct this share exchange' });
   await expect(form.getByLabel('New units received')).toHaveValue('1');
@@ -145,7 +145,7 @@ test('reversing an exchange whose new units were sold is refused with a translat
   const exchanged = await s.exchange();
   await s.sellNew(5, '5', '10000');
 
-  await page.goto(`/app/transactions?transaction_id=${exchanged.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${exchanged.transaction.id}`);
   await page.getByRole('button', { name: 'Reverse exchange…' }).click();
   await page.getByLabel('Reason for reversal').fill('no merger happened');
   await page.getByRole('button', { name: 'Review and reverse' }).click();
@@ -157,7 +157,7 @@ test('reversing an unsold exchange restores the old holding', async ({ page }) =
   await s.buy(40, '10', '10000');
   const exchanged = await s.exchange();
 
-  await page.goto(`/app/transactions?transaction_id=${exchanged.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${exchanged.transaction.id}`);
   await page.getByRole('button', { name: 'Reverse exchange…' }).click();
   await page.getByLabel('Reason for reversal').fill('no merger happened');
   await page.getByRole('button', { name: 'Review and reverse' }).click();
@@ -181,7 +181,7 @@ test('a share exchange correction of the reference preserves exact unedited sour
     source_evidence: { reference: 'scheme document', revision: 'EXACT:9007199254740993' }
   }));
   const transactionID = (JSON.parse(created) as { transaction: { id: number } }).transaction.id;
-  await page.goto(`/app/transactions?transaction_id=${transactionID}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${transactionID}`);
   await page.getByRole('button', { name: 'Correct exchange…' }).click();
   const form = page.getByRole('dialog', { name: 'Correct this share exchange' });
   await expect(form.getByLabel('Broker or statement reference')).toHaveValue('scheme document');

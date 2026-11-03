@@ -2,6 +2,7 @@
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale, locales, setLocale, type Locale } from '#lib/paraglide/runtime.js';
   import { localeAutonym } from '#lib/settings/locales.ts';
+  import { isPartialLocale } from '#lib/i18n/locale-status.ts';
   import ThemeChoice from './theme-choice.svelte';
 
   const currentLocale = getLocale();
@@ -26,7 +27,7 @@
       class="h-10 rounded-(--radius-control) border border-border bg-control px-2 text-sm text-foreground"
     >
       {#each locales as locale (locale)}
-        <option value={locale} lang={locale}>{localeAutonym(locale)}</option>
+        <option value={locale} lang={locale}>{isPartialLocale(locale) ? m.language_partial_option({ language: localeAutonym(locale) }) : localeAutonym(locale)}</option>
       {/each}
     </select>
   </label>

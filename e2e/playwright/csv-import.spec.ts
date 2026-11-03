@@ -15,7 +15,7 @@ test('[acceptance] a bank CSV mapping is reused with payee resolution and previe
   const account = await createCashAccount(page, csrfToken, `CSV bank ${suffix}`, currencyID);
   const profileName = `Semicolon bank ${suffix}`;
 
-  await page.goto('/app/import');
+  await page.goto('/app/ledger/import');
   await page.locator('input[type="file"]').setInputFiles({
     name: 'statement.csv',
     mimeType: 'text/csv',
@@ -74,7 +74,7 @@ test('a CSV row rejected under the declared decimal comma is flagged and not com
   const suffix = Date.now();
   const account = await createCashAccount(page, csrfToken, `CSV rejected ${suffix}`, currencyID);
 
-  await page.goto('/app/import');
+  await page.goto('/app/ledger/import');
   await page.locator('input[type="file"]').setInputFiles({
     name: 'rejected.csv',
     mimeType: 'text/csv',
@@ -101,7 +101,7 @@ test('a failed import row is fixed and committed from review remaining rows', as
   const suffix = Date.now();
   const account = await createCashAccount(page, csrfToken, `CSV resume ${suffix}`, currencyID);
 
-  await page.goto('/app/import');
+  await page.goto('/app/ledger/import');
   await page.locator('input[type="file"]').setInputFiles({
     name: 'resume.csv',
     mimeType: 'text/csv',
@@ -159,7 +159,7 @@ test('the import override lists the checkpoints it will invalidate and commits a
       ]
     }]
   });
-  await page.goto('/app/reconcile');
+  await page.goto('/app/ledger/reconcile');
   await page.getByLabel('Account').selectOption({ label: account.name });
   await page.getByLabel('Statement closing date').fill('2021-05-31');
   await page.getByLabel('Statement ending balance').fill('-15.00');
@@ -173,7 +173,7 @@ test('the import override lists the checkpoints it will invalidate and commits a
   const before = await apiJSON<{ checkpoints: Array<{ id: number; status: string }> }>(page, 'GET', checkpointsPath);
   const checkpointID = before.checkpoints.find((checkpoint) => checkpoint.status === 'active')!.id;
 
-  await page.goto('/app/import');
+  await page.goto('/app/ledger/import');
   await page.locator('input[type="file"]').setInputFiles({
     name: 'reconciled.csv',
     mimeType: 'text/csv',

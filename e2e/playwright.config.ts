@@ -1,5 +1,6 @@
 import { defineConfig } from '@playwright/test';
 import process from 'node:process';
+import { defaultTrace } from './trace-options';
 
 // Without E2E_BASE_URL every worker starts its own app and database
 // (playwright/support/fixtures.ts), so workers run side by side. An external
@@ -56,9 +57,10 @@ export default defineConfig({
     // uploads on failure. Without them an intermittent failure cannot be
     // diagnosed after the run (#414). DOM snapshots and trace screenshots
     // measured 25–35% slower; this light trace measured 1–6%. The capital-return
-    // reads spec opts into DOM/network snapshots for #414. Pass --trace=on
-    // to record a full trace while reproducing.
-    trace: { mode: 'retain-on-failure', screenshots: false, snapshots: false, sources: false },
+    // reads spec opts into DOM/network snapshots for #414. --trace=on cannot
+    // make this light trace full because Playwright replaces only its mode;
+    // use E2E_FULL_TRACE=1 for a full local trace (#473).
+    trace: defaultTrace,
     screenshot: 'only-on-failure',
     // Sandboxes and CI images often ship a Chromium that is not the revision
     // this Playwright release pins, and cannot download the pinned one. Point

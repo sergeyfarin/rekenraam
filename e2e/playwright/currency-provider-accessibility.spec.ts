@@ -2,10 +2,11 @@ import { expect, test } from './support/fixtures';
 import { readFileSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
 import { ensureCurrency, readyForLedger } from './support/ledger';
+import { translationLocales } from './support/locales';
 
 test.use({ viewport: { width: 390, height: 844 } });
 
-for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of translationLocales) {
   test(`[acceptance] currency provider selects have distinct names in every direction on mobile in ${locale}`, async ({ page }) => {
     const m = JSON.parse(readFileSync(new URL(`../../frontend/messages/settings/${locale}.json`, import.meta.url), 'utf8'));
     const name = (pair: string) => {

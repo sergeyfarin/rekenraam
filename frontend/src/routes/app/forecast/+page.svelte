@@ -1,5 +1,2 @@
-<script lang="ts">
-  import ForecastScreen from '#lib/forecast/forecast-screen.svelte';
-</script>
-
-<ForecastScreen />
+<!-- Moved to /app/planning/forecast (#460). The app layout redirects before
+     rendering, preserving the query string and fragment. Keep this route for old links. -->

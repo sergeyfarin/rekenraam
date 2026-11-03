@@ -25,7 +25,7 @@ test('[acceptance] recurring template creates a reviewable draft, edits and post
  const name=`Recurring salary ${Date.now()}`;
  const account=await createCashAccount(page,csrfToken,`${name} account`,currencyID);
  const tag=await apiJSON<{id:number;name:string}>(page,'POST','/api/v1/tags',csrfToken,{name:`Recurring tag ${Date.now()}`},[201]);
- await page.goto('/app/recurring');
+ await page.goto('/app/planning/recurring');
  const dialog=await templateForm(page,name,account.name);
  await dialog.getByRole('checkbox',{name:tag.name,exact:true}).check();
  await expectNoAccessibilityViolations(page,'recurring template editor');
@@ -65,7 +65,7 @@ test('[acceptance] recurring drafts remain reachable after archive and mobile di
  const {csrfToken,currencyID}=await readyForLedger(page);
  const name=`Recurring mobile ${Date.now()}`;
  const account=await createCashAccount(page,csrfToken,`${name} account`,currencyID);
- await page.goto('/app/recurring');
+ await page.goto('/app/planning/recurring');
  const dialog=await templateForm(page,name,account.name);
  await dialog.getByRole('button',{name:'Save template',exact:true}).click();
  await expect(dialog).not.toBeVisible();
@@ -106,7 +106,7 @@ test('recurring inbox has loading, empty and recoverable error states',async({pa
   if(fail)await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{code:'RESOURCE_BUSY',message:'Busy'}})});
   else await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({items:[],next_cursor:null})});
  });
- await page.goto('/app/recurring');
+ await page.goto('/app/planning/recurring');
  await expect(page.getByText('Recurring entries unavailable')).toBeVisible({timeout:20000});
  fail=false;
  await page.getByRole('button',{name:'Refresh',exact:true}).last().click();
@@ -135,7 +135,7 @@ test('bulk review preserves completed posts when a later draft fails',async({pag
  for(const t of [first,second])await apiJSON(page,'POST',`/api/v1/recurring/templates/${t.id}/run-now`,await csrfTokenFor(page),{});
  const inbox=await apiJSON<{items:Array<{template_id:number;transaction_id:number}>}>(page,'GET','/api/v1/recurring/due');
  const secondID=inbox.items.find(i=>i.template_id===second.id)!.transaction_id;
- await page.goto('/app/recurring');
+ await page.goto('/app/planning/recurring');
  const firstCard=page.getByRole('article',{name:`${name} first`,exact:true});
  const secondCard=page.getByRole('article',{name:`${name} second`,exact:true});
  await firstCard.getByRole('checkbox').check();await secondCard.getByRole('checkbox').check();
@@ -180,7 +180,7 @@ test('blocked recurring occurrence can be repaired and explicitly retried',async
   expect(attempt,'scheduler ticks pre-empted every attempt').toBeLessThan(3);
  }
  try{
- await page.goto('/app/recurring');
+ await page.goto('/app/planning/recurring');
  const card=page.getByRole('article',{name,exact:true});
  await expect(card).toContainText('No draft was created');
  await card.getByText('Diagnostic details').click();
@@ -206,7 +206,7 @@ test('changed reconciliation impact stops posting and asks for a new review',asy
  await apiJSON(page,'POST',`/api/v1/recurring/templates/${template.id}/run-now`,await csrfTokenFor(page),{});
  const inbox=await apiJSON<{items:Array<{template_id:number;transaction_id:number}>}>(page,'GET','/api/v1/recurring/due');
  const id=inbox.items.find(i=>i.template_id===template.id)!.transaction_id;
- await page.goto('/app/recurring');
+ await page.goto('/app/planning/recurring');
  await page.getByRole('article',{name,exact:true}).getByRole('button',{name:'Post draft',exact:true}).click();
  const dialog=page.getByRole('dialog');
  await expect(dialog.getByRole('heading',{name:'Review before posting'})).toBeVisible();
@@ -233,7 +233,7 @@ test('editing a recurring template preserves payee, description and posting deta
  try {
  await apiJSON(page,'PATCH',`/api/v1/recurring/templates/${template.id}`,csrfToken,{payee_id:payee.id});
  const before=await apiJSON<{postings:unknown[]}>(page,'GET',`/api/v1/recurring/templates/${template.id}`);
- await page.goto('/app/recurring');
+ await page.goto('/app/planning/recurring');
  await page.getByRole('button',{name:'Templates',exact:true}).click();
  await page.getByRole('article',{name,exact:true}).getByRole('button',{name:'Edit template'}).click();
  const dialog=page.getByRole('dialog');

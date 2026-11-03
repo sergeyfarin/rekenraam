@@ -5,6 +5,7 @@ import { apiJSON } from './support/api';
 import { readyForLedger, ensureCurrency } from './support/ledger';
 import { todayISO } from './support/dates';
 import { useDarkTheme } from './support/session';
+import { translationLocales } from './support/locales';
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -57,7 +58,7 @@ async function open(page: Page, s: Fixture, days = 0, locale = 'en') {
   return dialog;
 }
 
-for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of translationLocales) {
   test(`[acceptance] known-basis write-off has localized loading, empty, error and success states at 390 px in ${locale}`, async ({ page }) => {
     const s = await setup(page, `wo${locale}`);
     await s.trade('buy', 40, '3', '3000');
@@ -120,7 +121,7 @@ for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
     expect(postings.some((posting: { account_id: number }) => posting.account_id === s.cash.id)).toBe(false);
     await expect(dialog).toBeHidden();
     await expect(action).toBeFocused();
-    await expect(page.getByRole('status')).toContainText(m.investments_write_off_success);
+    await expect(page.getByRole('status').filter({ hasText: m.investments_write_off_success })).toBeVisible();
     expect(await gains(page, s)).toEqual(['-1250']);
     // The already mounted portfolio reflects the invalidated holding read.
     await expect(page.locator('tbody tr').filter({ hasText: s.name })).toContainText(new Intl.NumberFormat(locale).format(1.75));
@@ -201,7 +202,7 @@ test('[acceptance] a write-off of a holding sold since names the refused depende
 test('[acceptance] write-off reviews and explicitly invalidates a holding checkpoint at 390 px', async ({ page }) => {
   const s = await setup(page, 'worc');
   await s.trade('buy', 40, '3', '3000');
-  await page.goto('/app/reconcile');
+  await page.goto('/app/ledger/reconcile');
   await page.getByLabel('Account', { exact: true }).selectOption(String(s.holding.id));
   await page.getByLabel('Statement closing date').fill(todayISO());
   await page.getByLabel('Statement ending balance').fill('3');
@@ -229,7 +230,7 @@ test('[acceptance] write-off reviews and explicitly invalidates a holding checkp
   expect(await checkpointCount()).toBe(0);
 });
 
-for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of translationLocales) {
   test(`[acceptance] unknown-basis write-off stays unresolved at 390 px in ${locale}`, async ({ page }) => {
     const s = await setup(page, `woun${locale}`);
     await apiJSON(page, 'POST', '/api/v1/investments/transfers/external/in', s.csrfToken, {

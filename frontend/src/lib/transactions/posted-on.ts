@@ -28,7 +28,8 @@ type LoadedEntry<P> = { entry_date: string; postings?: P[] };
  * field: '' when it posts on the transaction date (the field follows the
  * date), otherwise its entry date. transfer_clearing legs of a journal with
  * several entries are the server's bridge and are left out; the server
- * rebuilds them on save.
+ * rebuilds them on save. An exchange's commodity_trading legs stay: a
+ * journal Transfer entry cannot restate (#481) is edited as it is.
  */
 export function editablePostings<P extends PostingAccount>(
   entries: LoadedEntry<P>[],

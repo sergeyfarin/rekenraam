@@ -175,22 +175,9 @@ func (s *TransactionService) AccountBalances(ctx context.Context, input AccountB
 		return AccountBalancesResult{}, fmt.Errorf("read ledger postings: %w", err)
 	}
 
-	direct := aggregatePostings(postings)
-	accountMap := ledgerAccountMap(accounts)
-	if !input.IncludeSystem {
-		direct = excludeSystemAccountBalances(accountMap, direct)
-	}
-	subtree := rollupBalances(accountMap, direct)
-	resultAccounts := make([]AccountBalance, 0, len(accounts))
-	for _, account := range accounts {
-		if account.SystemRole.Valid && !input.IncludeSystem {
-			continue
-		}
-		accountBalance, err := toAccountBalance(account, direct[account.ID], subtree[account.ID])
-		if err != nil {
-			return AccountBalancesResult{}, err
-		}
-		resultAccounts = append(resultAccounts, accountBalance)
+	resultAccounts, err := accountBalancesFrom(accounts, aggregatePostings(postings), input.IncludeSystem)
+	if err != nil {
+		return AccountBalancesResult{}, err
 	}
 
 	return AccountBalancesResult{
@@ -198,6 +185,29 @@ func (s *TransactionService) AccountBalances(ctx context.Context, input AccountB
 		Status:   status,
 		Accounts: resultAccounts,
 	}, nil
+}
+
+// accountBalancesFrom turns per-account posted balances into each account's
+// direct and subtree balances. Home's briefing fold hands it the same running
+// balances (#478), so the two reads cannot disagree.
+func accountBalancesFrom(accounts []db.LedgerAccountRecord, direct map[int64]map[int64]*exact.ScaledInt, includeSystem bool) ([]AccountBalance, error) {
+	accountMap := ledgerAccountMap(accounts)
+	if !includeSystem {
+		direct = excludeSystemAccountBalances(accountMap, direct)
+	}
+	subtree := rollupBalances(accountMap, direct)
+	result := make([]AccountBalance, 0, len(accounts))
+	for _, account := range accounts {
+		if account.SystemRole.Valid && !includeSystem {
+			continue
+		}
+		accountBalance, err := toAccountBalance(account, direct[account.ID], subtree[account.ID])
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, accountBalance)
+	}
+	return result, nil
 }
 
 func (s *TransactionService) CategoryTotals(ctx context.Context, input CategoryTotalsInput) (CategoryTotalsResult, error) {
@@ -551,41 +561,58 @@ func (q namedShortQuantities) unexplainedNegative(accountID, commodityID int64, 
 // the snapshot in effect at each bucket's end. Collapsing early would bake one
 // bucket's classification into every later one.
 func netWorthSeriesTotals(ctx context.Context, ledger netWorthLedger, bounds []calendarBucketBound, filters ReportFilters) ([]netWorthBucket, error) {
+	scoped, _, err := netWorthScopedSeriesTotals(ctx, ledger, bounds, []ReportFilters{filters})
+	if err != nil || scoped == nil {
+		return nil, err
+	}
+	return scoped[0], nil
+}
+
+// netWorthScopedSeriesTotals is netWorthSeriesTotals for several account
+// scopes at once: the ledger is read and folded once, and each scope totals
+// the same running balances, so Home's two headlines cost one pass (#476).
+// It also returns the running per-account posted balances at the last
+// bucket's end, which Home's Accounts widget reads instead of a second pass
+// over the ledger (#478).
+func netWorthScopedSeriesTotals(ctx context.Context, ledger netWorthLedger, bounds []calendarBucketBound, scopes []ReportFilters) ([][]netWorthBucket, map[int64]map[int64]*exact.ScaledInt, error) {
 	if len(bounds) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	seriesEnd := bounds[len(bounds)-1].endDate
 
 	versions, err := ledger.LedgerAccountVersionsThrough(ctx, BookID, seriesEnd)
 	if err != nil {
-		return nil, fmt.Errorf("read net worth accounts: %w", err)
+		return nil, nil, fmt.Errorf("read net worth accounts: %w", err)
 	}
 	// Reports are posted-only: drafts, voided, and soft-deleted transactions are
 	// never part of financial truth.
 	postings, err := ledger.LedgerPostingsThrough(ctx, BookID, seriesEnd, "posted")
 	if err != nil {
-		return nil, fmt.Errorf("read net worth postings: %w", err)
+		return nil, nil, fmt.Errorf("read net worth postings: %w", err)
 	}
 	kinds, err := ledger.LedgerCommodityKinds(ctx, BookID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	shortEvents, err := ledger.ShortLotQuantityEventsThrough(ctx, BookID, seriesEnd)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	shorts := namedShortQuantities{}
 	nextShort := 0
 	unsettled, err := readUnsettledTrades(ctx, ledger, kinds)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	timeline := newLedgerAccountTimeline(versions)
 	running := map[int64]map[int64]*exact.ScaledInt{}
 	next := 0
 
-	bucketTotals := make([]netWorthBucket, 0, len(bounds))
+	scopedTotals := make([][]netWorthBucket, len(scopes))
+	for index := range scopes {
+		scopedTotals[index] = make([]netWorthBucket, 0, len(bounds))
+	}
 	for _, bound := range bounds {
 		// Postings arrive ordered by entry date and bucket ends ascend, so one
 		// forward cursor covers the whole series.
@@ -597,13 +624,16 @@ func netWorthSeriesTotals(ctx context.Context, ledger netWorthLedger, bounds []c
 			shorts.fold(shortEvents[nextShort])
 			nextShort++
 		}
-		totals, err := netWorthBucketTotals(timeline.snapshotThrough(bound.endDate), running, unsettled.at(bound.endDate), unsettled.accounts, kinds, filters, shorts)
-		if err != nil {
-			return nil, err
+		accounts, pending := timeline.snapshotThrough(bound.endDate), unsettled.at(bound.endDate)
+		for index, filters := range scopes {
+			totals, err := netWorthBucketTotals(accounts, running, pending, unsettled.accounts, kinds, filters, shorts)
+			if err != nil {
+				return nil, nil, err
+			}
+			scopedTotals[index] = append(scopedTotals[index], totals)
 		}
-		bucketTotals = append(bucketTotals, totals)
 	}
-	return bucketTotals, nil
+	return scopedTotals, running, nil
 }
 
 // netWorthBucketTotals sums the running per-account balances that count as net

@@ -519,7 +519,7 @@
                       <CategoryIcon icon={categoryIconName(category)} className="size-4" />
                     </span>
                     <a
-                      href="/app/categories/{category.id}"
+                      href="/app/ledger/categories/{category.id}"
                       class="min-w-0 truncate text-sm font-semibold text-foreground after:absolute after:inset-0 after:z-0"
                       aria-label={m.category_tx_action_view_transactions({ name: categoryDisplayName(category) })}
                     >

@@ -6,7 +6,7 @@ Accepted
 
 ## Date
 
-2026-06-20; amended 2026-08-31 at R9 acceptance.
+2026-06-20; amended 2026-08-31 at R9 acceptance and clarified 2026-10-30 for future-only demand (#471).
 
 ## Context
 
@@ -69,6 +69,15 @@ FX coverage is demand-driven:
   begins at the earliest of the active account's opening date and any durable
   posted journal-entry date using that currency, and extends through
   today in the book owner's time zone.
+- Future-only demand retains a durable wakeup at midnight on its earliest
+  required date in the owner's IANA time zone, independently of the daily
+  schedule. Manual, scheduled and posting-triggered refreshes all defer it;
+  current demand for the same currency still runs immediately. Completion and
+  publication of the wakeup are atomic. Waiting starts with zero provider
+  attempts, creates no provider failure and does not consume retry budget.
+  Waking re-reads current demand; the queued date is a hint, so cancellation or
+  replacement may remove or move the obligation. Equivalent waits coalesce,
+  but must never absorb newly earlier demand into a later wakeup.
 - Refresh planning compares required coverage with stored non-voided observations
   and schedules only missing dates. Existing observations make repeated work
   idempotent.

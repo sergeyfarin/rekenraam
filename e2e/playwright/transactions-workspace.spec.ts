@@ -12,7 +12,7 @@ import { createCashAccount, expectSavedTransaction, readyForLedger } from './sup
 test.use({ viewport: { width: 390, height: 844 } });
 
 async function addForm(page: Page) {
-  await page.getByRole('button', { name: 'New transaction' }).click();
+  await page.getByRole('button', { name: 'Add transaction' }).click();
   await expect(page.getByRole('heading', { name: 'Add transaction' })).toBeVisible();
   return page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction' }) });
 }
@@ -23,7 +23,7 @@ test('a transaction entered in an account register starts in that account', asyn
   const account = await createCashAccount(page, csrfToken, `Workspace checking ${suffix}`, currencyID);
   const description = `Register groceries ${suffix}`;
 
-  await page.goto(`/app/accounts/${account.id}/register`);
+  await page.goto(`/app/ledger/accounts/${account.id}/register`);
   await expect(page.getByRole('heading', { name: account.name })).toBeVisible();
   const form = await addForm(page);
   await expect(form.getByLabel('Account').locator('option:checked')).toHaveText(account.name);
@@ -49,7 +49,7 @@ test('a transaction entered in a category starts in that category', async ({ pag
   });
   const description = `Category paints ${suffix}`;
 
-  await page.goto(`/app/categories/${category.id}`);
+  await page.goto(`/app/ledger/categories/${category.id}`);
   await expect(page.getByRole('heading', { name: `Workspace hobbies ${suffix}` })).toBeVisible();
   const form = await addForm(page);
   await expect(form.getByText(`Workspace hobbies ${suffix}`)).toBeVisible();

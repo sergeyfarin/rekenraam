@@ -24,7 +24,7 @@ test('capture website screens from a disposable synthetic book', async ({ browse
       const page = await context.newPage();
       const seeded = await seedReferenceBook(page);
       const captures = [
-        { route: `/app/transactions?account_id=${seeded.ids.get('checking')}`, name: 'transactions', heading: 'Transactions' },
+        { route: `/app/ledger/transactions?account_id=${seeded.ids.get('checking')}`, name: 'transactions', heading: 'Transactions' },
         { route: '/app/investments', name: 'investments', heading: 'Investments' }
       ];
       for (const { route, name, heading } of captures) {

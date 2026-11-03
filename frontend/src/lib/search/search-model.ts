@@ -10,7 +10,7 @@ export type SearchResult = {
   detail?: string;
   keywords?: string;
   href?: string;
-  command?: 'add-transaction' | 'hide-amounts' | 'theme';
+  command?: 'add-transaction' | 'add-transfer' | 'hide-amounts' | 'theme';
   inactive?: boolean;
 };
 

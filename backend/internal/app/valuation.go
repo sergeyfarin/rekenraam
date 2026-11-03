@@ -438,15 +438,36 @@ func (t *RateTable) resolve(commodityID int64, onDate string) (resolvedRate, boo
 		return resolvedRate{identity: true}, true
 	}
 	if rate, found := t.observationOnOrBefore(t.byCommodity[commodityID], onDate); found {
-		return t.endOfDay(commodityID, resolvedRate{
-			price: big.NewInt(rate.PriceValue), priceScale: rate.PriceScale,
-			base: big.NewInt(rate.BaseQuantityValue), baseScale: rate.BaseQuantityScale,
-			use: RateUse{ObservationID: rate.ObservationID, Approximate: rate.IsApproximate,
-				CommodityID: commodityID, ObservationDate: rate.ValuationDate, RequestedDate: onDate,
-				Stale: rate.ValuationDate != onDate, Derived: rate.IsDerived},
-		}, rate.ObservationID)
+		return t.direct(commodityID, onDate, rate)
 	}
 	return t.resolveChained(commodityID, onDate)
+}
+
+func (t *RateTable) direct(commodityID int64, onDate string, rate db.ReportingRateRecord) (resolvedRate, bool) {
+	return t.endOfDay(commodityID, resolvedRate{
+		price: big.NewInt(rate.PriceValue), priceScale: rate.PriceScale,
+		base: big.NewInt(rate.BaseQuantityValue), baseScale: rate.BaseQuantityScale,
+		use: RateUse{ObservationID: rate.ObservationID, Approximate: rate.IsApproximate,
+			CommodityID: commodityID, ObservationDate: rate.ValuationDate, RequestedDate: onDate,
+			Stale: rate.ValuationDate != onDate, Derived: rate.IsDerived},
+	}, rate.ObservationID)
+}
+
+// DirectGap says whether the commodity's own observations in this table's
+// quote currency value units of onDate, under exactly the window, end-of-day
+// and split rules Convert applies, without chaining through another currency.
+// It records nothing in the table's coverage. Prices judges a pair with it,
+// so a quote reports cannot use is never listed as usable (#476).
+func (t *RateTable) DirectGap(commodityID int64, onDate string) (RateGap, bool) {
+	probe := t.withFreshCoverage()
+	if rate, found := probe.observationOnOrBefore(probe.byCommodity[commodityID], onDate); found {
+		resolved, ok := probe.direct(commodityID, onDate, rate)
+		probe.inUnits(commodityID, onDate, resolved, ok)
+	} else {
+		probe.recordGap(commodityID, onDate)
+	}
+	gap, failed := probe.gaps[commodityID]
+	return gap, failed
 }
 
 // resolveUnits is resolve for units of onDate: a security or crypto quote
@@ -455,6 +476,10 @@ func (t *RateTable) resolve(commodityID int64, onDate string) (resolvedRate, boo
 // use discloses the factor. A conflicting split day in between is a gap.
 func (t *RateTable) resolveUnits(commodityID int64, onDate string) (resolvedRate, bool) {
 	rate, ok := t.resolve(commodityID, onDate)
+	return t.inUnits(commodityID, onDate, rate, ok)
+}
+
+func (t *RateTable) inUnits(commodityID int64, onDate string, rate resolvedRate, ok bool) (resolvedRate, bool) {
 	if !ok || rate.identity || rate.use.ObservationDate == onDate {
 		return rate, ok
 	}

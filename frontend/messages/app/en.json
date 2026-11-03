@@ -398,13 +398,29 @@
   "import_fetching_cancel": "Cancel",
   "import_fetching_failed_title": "The fetch failed",
   "import_fetching_failed_copy": "Check the connection's API key and try again.",
-  "settings_card_language_title": "Language",
-  "settings_card_language_copy": "Choose the language the interface is shown in.",
   "language_title": "Language",
   "language_copy": "The interface language is stored in this browser. Amounts, dates, and numbers follow the language you pick.",
   "language_select_legend": "Interface language",
   "language_translation_progress_title": "Draft translation",
   "language_translation_progress_copy": "These translations are drafted from a terminology glossary and have not yet been reviewed by a native speaker. Anything not yet translated is shown in English rather than left blank.",
+  "language_partial": "Partial",
+  "language_partial_missing": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} untranslated text",
+        "countPlural=*": "{n} untranslated texts"
+      }
+    }
+  ],
+  "language_partial_option": "{language} · partial",
   "import_rules_title": "Import rules",
   "import_rules_copy": "Apply the first matching rule when a new file is staged. You can review every result before committing.",
   "import_rules_add": "Add rule",
@@ -1006,7 +1022,6 @@
   "search_switch_theme": "Switch light/dark theme",
   "search_navigation_error": "Could not open this result. Try again.",
   "attention_review": "Review",
-  "attention_review_label": "Review · {status}",
   "attention_count": "Items to review: {count}",
   "attention_failed": "{count} known items · a check failed",
   "attention_checking": "{count} known items · checking is incomplete",
@@ -1026,5 +1041,1005 @@
   "attention_backups": "Latest backup",
   "attention_self_check": "Latest ledger self-check",
   "attention_prices": "Missing or out-of-date prices",
-  "attention_rates": "Missing or out-of-date exchange rates"
+  "attention_rates": "Missing or out-of-date exchange rates",
+  "nav_breadcrumb": "Breadcrumb",
+  "keyboard_help_title": "Keyboard shortcuts",
+  "keyboard_help_search": "Search pages, accounts and commands",
+  "keyboard_help_help": "Show this list",
+  "keyboard_help_escape": "Close a dialog, menu or panel",
+  "keyboard_help_note": "Shortcuts never act while you type in a field.",
+  "keyboard_help_close": "Close",
+  "keyboard_help_or": "or",
+  "keyboard_key_ctrl": "Ctrl",
+  "keyboard_key_escape": "Esc",
+  "briefing_headline_net_worth": "Net worth",
+  "briefing_headline_cash": "Cash",
+  "briefing_scope_all": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} account",
+        "countPlural=*": "All {n} accounts"
+      }
+    }
+  ],
+  "briefing_scope_cash": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} cash account",
+        "countPlural=*": "{n} cash accounts"
+      }
+    }
+  ],
+  "briefing_scope_closed": "Closed accounts only",
+  "briefing_change": "{amount} in {month}",
+  "briefing_change_label": "{amount} from the end of {start} to {end}",
+  "briefing_needs_price_named": "Net worth needs a price for {code}",
+  "briefing_needs_rate_named": "Net worth needs an exchange rate for {code}",
+  "briefing_missing_price_named": "Price missing for {code}",
+  "briefing_missing_rate_named": "Exchange rate missing for {code}",
+  "briefing_stale_price_named": "Price for {code} out of date",
+  "briefing_stale_rate_named": "Exchange rate for {code} out of date",
+  "briefing_needs_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Net worth needs {n} price",
+        "countPlural=*": "Net worth needs {n} prices"
+      }
+    }
+  ],
+  "briefing_needs_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Net worth needs {n} exchange rate",
+        "countPlural=*": "Net worth needs {n} exchange rates"
+      }
+    }
+  ],
+  "briefing_needs_values": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Net worth needs {n} value",
+        "countPlural=*": "Net worth needs {n} values"
+      }
+    }
+  ],
+  "briefing_missing_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} price missing",
+        "countPlural=*": "{n} prices missing"
+      }
+    }
+  ],
+  "briefing_missing_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} exchange rate missing",
+        "countPlural=*": "{n} exchange rates missing"
+      }
+    }
+  ],
+  "briefing_missing_values": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} value missing",
+        "countPlural=*": "{n} values missing"
+      }
+    }
+  ],
+  "briefing_stale_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} price out of date",
+        "countPlural=*": "{n} prices out of date"
+      }
+    }
+  ],
+  "briefing_stale_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} exchange rate out of date",
+        "countPlural=*": "{n} exchange rates out of date"
+      }
+    }
+  ],
+  "briefing_stale_values": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} value out of date",
+        "countPlural=*": "{n} values out of date"
+      }
+    }
+  ],
+  "briefing_work_drafts": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} draft",
+        "countPlural=*": "{n} drafts"
+      }
+    }
+  ],
+  "briefing_work_transactions": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} transaction",
+        "countPlural=*": "{n} transactions"
+      }
+    }
+  ],
+  "briefing_work_recurring": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} blocked recurring entry",
+        "countPlural=*": "{n} blocked recurring entries"
+      }
+    }
+  ],
+  "briefing_work_imports": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} import",
+        "countPlural=*": "{n} imports"
+      }
+    }
+  ],
+  "briefing_work_suggestions": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} investment suggestion",
+        "countPlural=*": "{n} investment suggestions"
+      }
+    }
+  ],
+  "briefing_work_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} price",
+        "countPlural=*": "{n} prices"
+      }
+    }
+  ],
+  "briefing_work_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} exchange rate",
+        "countPlural=*": "{n} exchange rates"
+      }
+    }
+  ],
+  "briefing_work_one": "{item} to review",
+  "briefing_work_two": "{first} and {second} to review",
+  "briefing_failed_unchecked": "Some checks could not run",
+  "briefing_failed_backup": "Latest backup failed",
+  "briefing_failed_self_check": "Ledger self-check needs attention",
+  "briefing_failed_connections": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} connection download failed",
+        "countPlural=*": "{n} connection downloads failed"
+      }
+    }
+  ],
+  "briefing_failed_refresh": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} price or rate refresh failed",
+        "countPlural=*": "{n} price or rate refreshes failed"
+      }
+    }
+  ],
+  "briefing_failed_imports": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} import failed",
+        "countPlural=*": "{n} imports failed"
+      }
+    }
+  ],
+  "briefing_failed_other": "A check failed",
+  "briefing_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} more",
+        "countPlural=*": "{n} more"
+      }
+    }
+  ],
+  "briefing_more_label": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} more to review",
+        "countPlural=*": "{n} more to review"
+      }
+    }
+  ],
+  "briefing_needs_currency": "Choose a default currency to see net worth",
+  "briefing_needs_short_review": "Net worth needs a short position reviewed",
+  "briefing_check_failed": "Could not check what needs review",
+  "briefing_checking": "Checking what needs review…",
+  "briefing_review_count": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} item to review",
+        "countPlural=*": "{n} items to review"
+      }
+    }
+  ],
+  "briefing_all_clear": "All clear, nothing to review",
+  "briefing_headline_menu": "Choose the headline",
+  "briefing_headline_unavailable": "{label} unavailable",
+  "briefing_loading": "Loading your briefing…",
+  "briefing_load_error": "Could not load your briefing.",
+  "briefing_start_title": "Start with an account",
+  "briefing_start_copy": "Add the accounts you use to see your net worth and what needs attention here.",
+  "briefing_start_action": "Add an account",
+  "home_shortcuts_label": "Shortcuts",
+  "home_shortcut_import": "Import file",
+  "home_shortcut_spending": "Spending by category",
+  "home_shortcut_more": "More",
+  "transactions_entry_saved": "Transaction added.",
+  "transactions_entry_view": "View transaction",
+  "home_widgets_label": "My Home",
+  "home_widget_failed": "This summary could not be loaded.",
+  "home_widget_no_data": "No data yet",
+  "home_widget_no_data_copy": "Appears once you add an account and transactions.",
+  "home_widget_no_currency": "Set a default currency to see this in one currency.",
+  "home_widget_set_currency": "Set default currency",
+  "home_spending_title": "Spending this month",
+  "home_spending_scope": "{period} · all accounts · {currency}",
+  "home_spending_zero": "Nothing spent yet this month",
+  "home_spending_partial": "Not all spending converts to {currency}; totals by currency",
+  "home_spending_open": "Open spending report",
+  "home_budgets_title": "Budgets · {month}",
+  "home_budgets_left": "{amount} left",
+  "home_budgets_over": "{amount} over budget",
+  "home_budgets_spent": "{actual} of {target} spent",
+  "home_budgets_row": "{actual} of {target}",
+  "home_budgets_row_over": "{amount} over",
+  "home_budgets_not_set_up": "No budget this month",
+  "home_budgets_set_up": "Set a budget",
+  "home_budgets_open": "Open budgets",
+  "home_accounts_title": "Accounts",
+  "home_accounts_scope": "Largest balances · {date}",
+  "home_accounts_no_value": "No value",
+  "home_accounts_open": "All accounts",
+  "home_recurring_title": "Recurring",
+  "home_recurring_next": "Next: {name} on {date}",
+  "home_recurring_none_due": "Nothing scheduled",
+  "home_recurring_not_set_up": "No recurring schedules",
+  "home_recurring_set_up": "Set up a schedule",
+  "home_recurring_open": "Open recurring",
+  "home_trend_title": "Net worth · 12 months",
+  "home_trend_scope": "{period} · month-end values · {currency}",
+  "home_trend_unavailable": "Unavailable",
+  "home_trend_unavailable_copy": "Today’s value needs a price or rate; it is never shown partially.",
+  "home_trend_chart_label": "Net worth from {start} to {end}",
+  "home_trend_change_label": "{amount} since {date}",
+  "home_trend_open": "Open net worth report",
+  "home_spending_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} more category",
+        "countPlural=*": "+{n} more categories"
+      }
+    }
+  ],
+  "home_budgets_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} more budget",
+        "countPlural=*": "+{n} more budgets"
+      }
+    }
+  ],
+  "home_budgets_other_currencies": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "also {n} other currency",
+        "countPlural=*": "also {n} other currencies"
+      }
+    }
+  ],
+  "home_accounts_count": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} open account",
+        "countPlural=*": "{n} open accounts"
+      }
+    }
+  ],
+  "home_accounts_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} more account",
+        "countPlural=*": "+{n} more accounts"
+      }
+    }
+  ],
+  "home_recurring_active": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} active schedule",
+        "countPlural=*": "{n} active schedules"
+      }
+    }
+  ],
+  "home_recurring_drafts": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} draft to review",
+        "countPlural=*": "{n} drafts to review"
+      }
+    }
+  ],
+  "home_trend_stale": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} value out of date",
+        "countPlural=*": "{n} values out of date"
+      }
+    }
+  ],
+  "home_widgets_changing": "The book changed while Home was reading it, so cards may differ for a moment. Reading again…",
+  "home_recurring_blocked": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} blocked",
+        "countPlural=*": "{n} blocked"
+      }
+    }
+  ],
+  "home_explore_title": "More to explore",
+  "home_explore_subtitle": "Add any of the widgets below to the home page",
+  "home_explore_collapse": "Collapse",
+  "home_explore_expand": "Show all",
+  "home_explore_everyday": "Everyday",
+  "home_explore_wealth": "Wealth & investments",
+  "home_explore_planning": "Planning",
+  "home_explore_data": "Ledger & data",
+  "home_cashflow_label": "Cashflow",
+  "home_cashflow_title": "Cashflow · {month}",
+  "home_cashflow_open": "Open cashflow report",
+  "home_cashflow_no_accounts": "No cash accounts",
+  "home_cashflow_add_account": "Add an account",
+  "home_cashflow_accounts": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} cash account",
+        "countPlural=*": "{n} cash accounts"
+      }
+    }
+  ],
+  "home_cashflow_zero": "No money in or out yet this month",
+  "home_cashflow_in": "Money in",
+  "home_cashflow_out": "Money out",
+  "home_cashflow_transfers": "Transfers, net",
+  "home_cashflow_net_label": "{amount} money in minus money out",
+  "home_cashflow_partial": "Not every amount converts to {currency}; totals by currency",
+  "home_holdings_title": "Holdings",
+  "home_holdings_open": "Open investments",
+  "home_holdings_none": "No investments yet",
+  "home_holdings_set_up": "Record a buy",
+  "home_holdings_no_price": "No price",
+  "home_holdings_scope": "Largest by value · {date}",
+  "home_holdings_count": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} position",
+        "countPlural=*": "{n} positions"
+      }
+    }
+  ],
+  "home_holdings_unpriced": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} without a price",
+        "countPlural=*": "{n} without a price"
+      }
+    }
+  ],
+  "home_holdings_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} more position",
+        "countPlural=*": "+{n} more positions"
+      }
+    }
+  ],
+  "home_returns_title": "Returns",
+  "home_returns_open": "Open returns",
+  "home_returns_scope": "Time-weighted · {period}",
+  "home_returns_saved": "saved {date}",
+  "home_returns_saved_badge": "Saved run",
+  "home_returns_annualized": "Annualized",
+  "home_returns_not_saved": "No saved run yet",
+  "home_returns_not_saved_copy": "Home shows the latest run you save on Returns; it never calculates one itself.",
+  "home_returns_calculate": "Calculate returns",
+  "home_allocation_title": "Allocation",
+  "home_allocation_scope": "By asset type · {date}",
+  "home_allocation_short": "{type}, short",
+  "home_allocation_fact": "{type} {weight}",
+  "home_allocation_unknown": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} balance without a value",
+        "countPlural=*": "{n} balances without a value"
+      }
+    }
+  ],
+  "home_allocation_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} more type",
+        "countPlural=*": "+{n} more types"
+      }
+    }
+  ],
+  "home_income_title": "Dividend income",
+  "home_income_open": "Open income",
+  "home_income_zero": "No dividends recorded",
+  "home_income_instruments": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Income from {n} instrument",
+        "countPlural=*": "Income from {n} instruments"
+      }
+    }
+  ],
+  "home_income_scope": "Confirmed dividends, all time",
+  "home_income_to_assign": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} payment to assign",
+        "countPlural=*": "{n} payments to assign"
+      }
+    }
+  ],
+  "home_income_unassigned_copy": "unassigned cash is not income until you assign it",
+  "home_income_unassigned_cash": "Unassigned cash",
+  "home_income_payments": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} payment",
+        "countPlural=*": "{n} payments"
+      }
+    }
+  ],
+  "home_forecast_title": "Forecast",
+  "home_forecast_open": "Open forecast",
+  "home_forecast_badge": "Estimate",
+  "home_forecast_fact": "Next 90 days",
+  "home_forecast_scope": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Projected balances from {n} active schedule, calculated when you open it",
+        "countPlural=*": "Projected balances from {n} active schedules, calculated when you open it"
+      }
+    }
+  ],
+  "home_forecast_scope_unknown": "Projected balances, calculated when you open it",
+  "home_forecast_not_set_up": "Nothing scheduled to project",
+  "home_forecast_not_set_up_copy": "The forecast projects your recurring schedules.",
+  "home_imports_title": "Imports",
+  "home_imports_open": "Open import",
+  "home_imports_zero": "Nothing waiting for review",
+  "home_imports_review": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} batch to review",
+        "countPlural=*": "{n} batches to review"
+      }
+    }
+  ],
+  "home_imports_scope": "Staged file imports wait for your review",
+  "home_prices_title": "Prices",
+  "home_prices_open": "Open prices",
+  "home_prices_scope": "Prices and rates your net worth uses",
+  "home_prices_current": "Up to date",
+  "home_prices_price": "price",
+  "home_prices_rate": "exchange rate",
+  "home_prices_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} more",
+        "countPlural=*": "+{n} more"
+      }
+    }
+  ],
+  "home_backups_title": "Backups",
+  "home_backups_open": "Open backups and data",
+  "home_backups_off": "Automatic backups are off",
+  "home_backups_set_up": "Turn on backups",
+  "home_backups_last": "Backed up {date}",
+  "home_backups_next": "Next {date}",
+  "home_backups_none": "No backup yet",
+  "home_backups_failed": "Last backup failed",
+  "home_backups_retrying": "It will try again",
+  "home_backups_retry_copy": "Open Backups to retry",
+  "home_backups_running": "Backing up now",
+  "home_imports_checking": "Checking…",
+  "home_cashflow_transfers_unconverted": "transfers not converted to {currency}",
+  "reports_export_title": "Export",
+  "transactions_transfer_title": "Transfer between accounts",
+  "transactions_tier_switch_transfer": "Transfer between accounts",
+  "transactions_transfer_from": "From account",
+  "transactions_transfer_to": "To account",
+  "transactions_transfer_swap": "Swap From and To",
+  "transactions_transfer_from_currency": "Currency sent",
+  "transactions_transfer_to_currency": "Currency received",
+  "transactions_transfer_sent": "Sent ({currency})",
+  "transactions_transfer_received": "Received ({currency})",
+  "transactions_transfer_rate": "Rate: 1 {from} = {rate} {to}",
+  "transactions_transfer_rate_hint": "Enter both amounts as your bank shows them; the rate follows from them.",
+  "transactions_transfer_fee": "Fee (optional)",
+  "transactions_transfer_fee_hint": "Recorded on Bank fees, on top of the transfer, on the day of the account that paid it.",
+  "transactions_transfer_fee_paid_by": "Fee charged by",
+  "transactions_transfer_fee_paid_by_from": "{currency}, by the sending account",
+  "transactions_transfer_fee_paid_by_to": "{currency}, by the receiving account",
+  "transactions_transfer_days_toggle": "Posts on different days",
+  "transactions_transfer_leaves_on": "Leaves on",
+  "transactions_transfer_arrives_on": "Arrives on",
+  "transactions_transfer_days_hint": "Each account shows the transfer on its own day; in between the money is in transit.",
+  "transactions_transfer_problem_missing_account": "Choose both accounts.",
+  "transactions_transfer_problem_same_account": "From and To must be different accounts.",
+  "transactions_transfer_problem_missing_amount": "Enter an amount greater than zero.",
+  "transactions_transfer_problem_missing_received": "Enter the amount that arrived, greater than zero.",
+  "transactions_transfer_problem_arrives_before_leaves": "The arrival day cannot be before the day it leaves.",
+  "transactions_transfer_problem_invalid_fee": "Enter a fee greater than zero, or leave it empty.",
+  "transactions_transfer_problem_fee_exceeds_amount": "The fee is larger than the amount it is taken from.",
+  "transactions_transfer_problem_no_fee_category": "There is no Bank fees category to record the fee on.",
+  "transactions_exchange_title": "Currency exchange",
+  "transactions_exchange_market": "Reference rate on {date}: 1 {from} = {rate} {to}",
+  "transactions_exchange_market_stale": "The latest reference rate before the conversion, from {date}.",
+  "transactions_exchange_cost_below": "About {amount} ({percent} %) less than at the reference rate",
+  "transactions_exchange_cost_above": "About {amount} ({percent} %) more than at the reference rate",
+  "transactions_exchange_cost_equal": "The same as at the reference rate",
+  "transactions_exchange_no_market": "No reference rate covers {date} yet; the estimate appears once one is recorded.",
+  "transactions_exchange_not_booked": "An estimate against a daily reference rate, not the bank's actual spread. Nothing is recorded as a gain or loss.",
+  "home_shortcut_transfer": "Transfer",
+  "transactions_transfer_converted": "Converted {sent} to {received}",
+  "transactions_transfer_statements_hint": "Enter each amount as that account's statement shows it; a fee is taken out before the rate.",
+  "transactions_transfer_conversion_side": "Converted",
+  "transactions_transfer_conversion_sending": "When it leaves (the sending bank converts)",
+  "transactions_transfer_conversion_receiving": "When it arrives (the receiving bank converts)",
+  "transactions_locked_title": "Amounts can't be edited here",
+  "transactions_locked_body": "This transaction has postings the editor would rebuild differently, such as an amount left in transit. You can change the description, payee, kind, tags and note; to change amounts, accounts or dates, void it and enter it again.",
+  "transactions_locked_correct": "This transaction has postings the editor would rebuild differently, such as an amount left in transit, so it can't be corrected here. Void it and enter it again.",
+  "import_match_title": "Already in your ledger",
+  "import_match_intro": "These statement rows match a transaction you already entered: the same account and currency, exactly the same amount, posted within {days} days. Link a row to record it without adding another transaction, or keep it as new.",
+  "import_match_check": "Check for transactions already entered",
+  "import_match_checking": "Checking for matching transactions…",
+  "import_match_empty": "No statement rows match transactions already in your ledger.",
+  "import_match_row_heading": "Row {row}: {date}, {amount}",
+  "import_match_link_option": "Link to {description}, entered for {date}",
+  "import_match_untitled": "a transaction without a description",
+  "import_match_reason_same_day": "Same account and currency, exactly {amount}, posted on the statement date.",
+  "import_match_reason_after": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Same account and currency, exactly {amount}, posted {n} day after the statement date.",
+        "countPlural=*": "Same account and currency, exactly {amount}, posted {n} days after the statement date."
+      }
+    }
+  ],
+  "import_match_reason_before": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Same account and currency, exactly {amount}, posted {n} day before the statement date.",
+        "countPlural=*": "Same account and currency, exactly {amount}, posted {n} days before the statement date."
+      }
+    }
+  ],
+  "import_match_keep_new": "Keep as a new transaction",
+  "import_match_choose": "Several transactions match. Choose one, or keep the row as new.",
+  "import_match_decide": "Decide the matches below, then import again.",
+  "import_preview_dedupe_matched": "Matches existing",
+  "import_result_linked": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} row linked to a transaction already in your ledger",
+        "countPlural=*": "{n} rows linked to transactions already in your ledger"
+      }
+    }
+  ],
+  "import_result_match_review": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} row matches a transaction already in your ledger and waits for your decision.",
+        "countPlural=*": "{n} rows match transactions already in your ledger and wait for your decision."
+      }
+    }
+  ]
 }

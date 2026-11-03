@@ -104,7 +104,7 @@ Implement the owner-approved [Home and navigation design](design/home-and-naviga
 recorded in [commit `457dd74`](https://github.com/sergeyfarin/rekenraam/commit/457dd74a8344caa962bfdf29fe8dd18a69254102),
 with its [v3 mockup](design/home-mockup/README.md). The design is approved;
 its header, registry, tab-route, hide-amounts, shared-search and attention slices
-#455–#458 are delivered; the remaining shell and Home work is not delivered. The owner made it the current
+#455–#459 and section-owned paths #460 are delivered, and Home #437 is delivered and closed; the remaining shell work (#436) and the pages below are not delivered. The owner made it the current
 initiative on 2026-10-29, after the remaining maintenance items (#414, #416)
 were judged not to block it; they, owner-dependent readiness and release
 evidence continue in parallel. Implementation starts with #436.
@@ -118,31 +118,59 @@ Deliver incrementally, tracked in #441, in this order:
    for counts. Header, registry and tab routes #455 are delivered (see the
    capability ledger). Hide amounts #456, search #457 and attention read/Review
    count #458 are delivered. Its posted-currency pricing-discovery follow-up
-   #464 and durable posted-only historical targets #465 are delivered;
-   report-specific conversion coverage remains the consumer's responsibility.
-   Continue with #459 (page actions, widths, `?` help); #460 reviews the
-   remaining route paths afterwards.
+   #464, durable posted-only historical targets #465 and their shared demand
+   read #466 and restart-safe future-demand deferral #471 are delivered;
+   report-specific conversion coverage remains the
+   consumer's responsibility.
+   Section-owned Ledger and Planning paths #460 are delivered with legacy
+   redirects; #448 still replaces the temporary Accounts list with Ledger
+   Overview. Page actions, widths and `?` help #459 are delivered and closed;
+   the shared Home → register → reconciliation journey is #442's acceptance.
 2. **Home (#437):** two-line briefing, central command bar, shortcut tiles led
    by Add transaction, compact default My Home and real-size More to explore
    widgets, backed by a composed Home read and a shared transaction-entry
    dialog. Its status line links to the **Review page (#453)**, which lists
-   everything needing attention and the status of background work.
-3. **Pages in their new places**, in any order after #436: settings in five
+   everything needing attention and the status of background work. Split into
+   #476 (composed read and briefing), #477 (command bar, shortcuts and entry
+   dialog), #478 (My Home widgets) and #479 (More to explore), all delivered;
+   #437 closed 2026-10-31. The Transfer tile and transfer entry (#481: same-
+   and cross-currency, posting days and a fee on Bank fees) were delivered
+   2026-11-01, reopened on review and repaired twice the same day (fee and
+   conversion days, server transfer shape and restatement, stored transfer
+   choices, journals no editor restates locked to what they describe).
+   Linking a statement row to a transfer entered by hand (#485) was delivered
+   2026-11-01 (±5-day window). Pairing two imported rows into one transfer is
+   its own issue with its correction and provenance contract (#487). Currency
+   sub-accounts on demand for multi-currency providers (#486) follow once its
+   parent-posting, migration, historical-reconciliation and report-total
+   questions are decided. Still open: the general reconciliation out-of-date rule with its
+   account-list state and Home widget (#482, configurable window, default 60
+   days). Pinned accounts on the Accounts widget arrive with #442
+   and entered values in the briefing with #454.
+3. **Shell look and task rail (owner, 2026-11-01), next:** olive two-tint
+   header rows with the current section as a joined tab (#489); a *Search
+   Ctrl K* button opening the centred search (#490); the right-hand
+   [task rail](design/home-and-navigation.md#task-rail) with *New transaction*
+   and a transaction-type field on Investments (#491), then report filters in
+   the rail (#492, after #491). #489 and #490 are independent of each other
+   and of the rail.
+4. **Pages in their new places**, in any order after #436: settings in five
    pages with Trash moved to Transactions › Deleted and export to Reports
-   (#446); Import views (#447); Ledger overview with accounts by institution,
-   an Institutions view and brokerages as one account (#448); Planning and
-   Reports overviews (#450); Payees page (#443); Tags view (#444).
-4. **Object navigation (#442):** the switcher as scoped search, pinned
+   (#446) delivered 2026-10-31; Import views (#447); Ledger overview with
+   accounts by institution, an Institutions view and brokerages as one account
+   (#448); Planning and Reports overviews (#450); Payees page (#443); Tags view
+   (#444).
+5. **Object navigation (#442):** the switcher as scoped search, pinned
    accounts and breadcrumbs, after #448 and the owner-run real-book count
    (#449).
-5. **Personalization (#438):** server-persisted layout and revision-checked
+6. **Personalization (#438):** server-persisted layout and revision-checked
    API, headline choices, Customize panel (also in Settings › Preferences),
    item actions with Undo, sizes and settings.
-6. **Search depth (#439):** payee actions with editor prefill and last-used
+7. **Search depth (#439):** payee actions with editor prefill and last-used
    category, payee filtering and full-text transaction search.
-7. **Widget depth (#440):** lazy expanded returns, allocation and forecast
+8. **Widget depth (#440):** lazy expanded returns, allocation and forecast
    charts, then further widgets for existing capabilities.
-8. **Power use**, any time after #436: compact and comfortable density for
+9. **Power use**, any time after #436: compact and comfortable density for
    registers and transactions (#451) and two-key navigation shortcuts (#452).
 
 Navigation decisions (#435) are recorded in the design, and the
@@ -262,6 +290,9 @@ candidate needs fresh evidence for its actual baseline.
 - Record an explicit list of investment limits and resolve the retained
   image-advisory disposition (#337); track the driver prerequisite (#356)
   separately with its admission evidence.
+- Complete or hide the partial locales (`es`, `fr`, `de`): no message may
+  fall back to English in a shipped locale (#493), and native review (#102)
+  covers the batch.
 - Freeze installed-release migrations as append-only at the tag. The
   [baseline and reset contract](implemented.md) records the schema consolidation;
   later schema changes follow the release lifecycle in `docs/conventions.md`.

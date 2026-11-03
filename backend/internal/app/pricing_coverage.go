@@ -15,12 +15,12 @@ import (
 // durable cursor is traversal progress, not proof that a publication exists.
 // Independent retry items preserve failed dates without wedging later history.
 func (s *PricingService) runFXCoverage(ctx context.Context, ownerUserID int64, payload fxCoverageWorkPayload) (PricingRefreshRun, []db.BackgroundWorkSuccessor, error) {
-	ctx, referenceErr := s.settings.referenceContext(ctx, s.now())
+	startedAt := s.now().UTC()
+	ctx, referenceErr := s.settings.referenceContext(ctx, startedAt)
 	if referenceErr != nil {
 		return PricingRefreshRun{}, nil, referenceErr
 	}
 
-	startedAt := s.now().UTC()
 	policy, err := s.pricingPolicyOrDefault(ctx)
 	if err != nil {
 		return PricingRefreshRun{}, nil, err
@@ -40,15 +40,11 @@ func (s *PricingService) runFXCoverage(ctx context.Context, ownerUserID int64, p
 		}
 		return run, nil, err
 	}
-	coverage, err := s.repository.FXCoverageStartDates(ctx, BookID)
+	demand, err := s.fxDemand(ctx)
 	if err != nil {
 		return fail(err)
 	}
-	starts := make(map[int64]string, len(coverage))
-	for _, record := range coverage {
-		starts[record.CommodityID] = record.StartDate
-	}
-	targets, err := s.fxRefreshTargets(ctx, policy)
+	targets, err := s.fxRefreshTargets(ctx, policy, demand)
 	if err != nil {
 		return fail(err)
 	}
@@ -84,7 +80,12 @@ func (s *PricingService) runFXCoverage(ctx context.Context, ownerUserID int64, p
 		remaining = 370
 	}
 	counters := fxRefreshCounters{}
-	var successors []db.BackgroundWorkSuccessor
+	// Collect waits before traversal: exhausting another currency's download
+	// budget must not discard an independent future obligation.
+	successors, err := futureFXCoverageSuccessors(demand, baseCurrencyID, payload, today, location)
+	if err != nil {
+		return fail(err)
+	}
 	var retryErr error
 scan:
 	for _, target := range targets {
@@ -95,12 +96,13 @@ scan:
 			(target.Base.ID == payload.Next.BaseID && target.Quote.ID < payload.Next.QuoteID)) {
 			continue
 		}
-		currencyID := target.Base.ID
-		if currencyID == baseCurrencyID {
-			currencyID = target.Quote.ID
+		start := target.DemandStartDate
+		if payload.Retry == nil && (start > today || (payload.Reason == "deferred" && start == "")) {
+			continue
 		}
-		start := starts[currencyID]
-		if payload.StartDate != "" && (start == "" || payload.StartDate < start) {
+		// A deferred date is a wakeup hint, not historical demand. Re-read the
+		// current posting/account state so cancellation or edits cannot revive it.
+		if payload.Reason != "deferred" && payload.StartDate != "" && (start == "" || payload.StartDate < start) {
 			start = payload.StartDate
 		}
 		if payload.Next != nil && target.Base.ID == payload.Next.BaseID && target.Quote.ID == payload.Next.QuoteID && start < payload.Next.Date {
@@ -143,7 +145,7 @@ scan:
 			}
 			remaining-- // Failures and earlier-date responses also consume the budget.
 			counters.Total++
-			outcome, refreshErr := s.refreshFXTarget(ctx, ownerUserID, target, policy, 0, date, startedAt)
+			outcome, refreshErr := s.refreshFXTargetWithDemand(ctx, ownerUserID, target, policy, 0, date, startedAt, demand)
 			if ctx.Err() != nil {
 				return fail(ctx.Err())
 			}
@@ -201,6 +203,38 @@ scan:
 	// have durable retry successors. A targeted retry retains the same identity
 	// and returns its failure to the existing bounded retry handler.
 	return run, successors, retryErr
+}
+
+func futureFXCoverageSuccessors(demand []db.PricingCurrencyDemandRecord, baseCurrencyID int64, payload fxCoverageWorkPayload, today string, location *time.Location) ([]db.BackgroundWorkSuccessor, error) {
+	var successors []db.BackgroundWorkSuccessor
+	if payload.Retry != nil {
+		return successors, nil
+	}
+	for _, record := range demand {
+		if record.CommodityID == baseCurrencyID || record.StartDate <= today ||
+			(payload.CurrencyID > 0 && payload.CurrencyID != baseCurrencyID && payload.CurrencyID != record.CommodityID) {
+			continue
+		}
+		date, err := time.Parse(time.DateOnly, record.StartDate)
+		if err != nil {
+			return nil, fmt.Errorf("parse future FX demand date: %w", err)
+		}
+		wake := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, location)
+		// Some zones advance across midnight. Go can normalize that missing
+		// midnight into the previous day; wait for the transition instead of
+		// repeatedly claiming an already-due item before its financial date.
+		if wake.In(location).Format(time.DateOnly) < record.StartDate {
+			_, wake = wake.ZoneBounds()
+		}
+		// Include the actual date so the posting outbox will not coalesce an
+		// earlier, newly current obligation into this later pending wakeup.
+		encoded, err := json.Marshal(fxCoverageWorkPayload{Reason: "deferred", StartDate: record.StartDate, CurrencyID: record.CommodityID})
+		if err != nil {
+			return nil, err
+		}
+		successors = append(successors, db.BackgroundWorkSuccessor{PayloadJSON: string(encoded), AvailableAt: wake.UTC().Format(time.RFC3339)})
+	}
+	return successors, nil
 }
 
 func (s *PricingService) bookLocation(ctx context.Context) (*time.Location, error) {

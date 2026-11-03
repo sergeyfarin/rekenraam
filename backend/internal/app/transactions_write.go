@@ -19,6 +19,15 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, input Create
 		if err := s.rejectInvestmentLinkedMutation(ctx, *input.CorrectionOfTransactionID); err != nil {
 			return Transaction{}, err
 		}
+		// A correction restates the original: what it leaves out of the
+		// metadata the original recorded is kept, as an edit keeps it.
+		original, err := s.repository.TransactionByID(ctx, BookID, *input.CorrectionOfTransactionID)
+		if err != nil && !errors.Is(err, db.ErrNotFound) {
+			return Transaction{}, fmt.Errorf("read corrected transaction: %w", err)
+		}
+		if err == nil {
+			input.Spec = preserveOmittedMetadata(input.Spec, toTransaction(original))
+		}
 	}
 	params, err := s.prepareCreateTransactionForWrite(ctx, input)
 	if err != nil {
@@ -214,6 +223,11 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, input Update
 	if err := s.rejectInvestmentLinkedMutation(ctx, input.TransactionID); err != nil {
 		return Transaction{}, err
 	}
+	input.Spec, err = keptJournalSpec(input.Spec, current, input.KeepJournal)
+	if err != nil {
+		return Transaction{}, err
+	}
+	input.Spec = preserveOmittedMetadata(input.Spec, toTransaction(current))
 
 	// The transaction's current lifecycle state decides the final effective
 	// status, not whatever the request body's Status field claims: a draft
@@ -305,6 +319,61 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, input Update
 	return s.enrichOne(ctx, toTransaction(record))
 }
 
+// keptJournalSpec gives an edit that keeps the journal (#481) the version's
+// stored journal, restated as it is, beside the request's descriptive fields.
+func keptJournalSpec(spec TransactionInput, current db.TransactionRecord, keep bool) (TransactionInput, error) {
+	if !keep {
+		return spec, nil
+	}
+	if len(spec.JournalEntries) > 0 {
+		return spec, ValidationError{Message: "an edit that keeps the journal names no journal entries"}
+	}
+	stored := storedTransactionInput(toTransaction(current))
+	spec.JournalEntries, spec.storedJournal = stored.JournalEntries, true
+	return spec, nil
+}
+
+// preserveOmittedMetadata keeps the stored metadata an edit leaves out
+// (#481, the #311 pattern): an omitted transaction metadata keeps the
+// transaction's, an omitted entry metadata keeps the entries' when they all
+// share one, and an omitted posting metadata keeps the stored posting's with
+// the same line key. The stored text is kept as recorded, so no editor that
+// cannot carry a JSON number exactly ever rewrites it; an explicit {} clears.
+func preserveOmittedMetadata(spec TransactionInput, stored Transaction) TransactionInput {
+	if strings.TrimSpace(spec.MetadataJSON) == "" {
+		spec.MetadataJSON = stored.MetadataJSON
+	}
+	entryMetadata, shared := "", true
+	postingMetadata := map[string]string{}
+	for index, entry := range stored.JournalEntries {
+		if index == 0 {
+			entryMetadata = entry.MetadataJSON
+		} else if entry.MetadataJSON != entryMetadata {
+			shared = false
+		}
+		for _, posting := range entry.Postings {
+			postingMetadata[posting.LineKey] = posting.MetadataJSON
+		}
+	}
+	entries := make([]JournalEntryInput, len(spec.JournalEntries))
+	for entryIndex, entry := range spec.JournalEntries {
+		if strings.TrimSpace(entry.MetadataJSON) == "" && shared {
+			entry.MetadataJSON = entryMetadata
+		}
+		postings := make([]PostingInput, len(entry.Postings))
+		for postingIndex, posting := range entry.Postings {
+			if recorded, ok := postingMetadata[strings.TrimSpace(posting.LineKey)]; ok && strings.TrimSpace(posting.MetadataJSON) == "" && posting.LineKey != "" {
+				posting.MetadataJSON = recorded
+			}
+			postings[postingIndex] = posting
+		}
+		entry.Postings = postings
+		entries[entryIndex] = entry
+	}
+	spec.JournalEntries = entries
+	return spec
+}
+
 func (s *TransactionService) PostTransaction(ctx context.Context, input PostTransactionInput) (Transaction, error) {
 	if input.OwnerUserID <= 0 {
 		return Transaction{}, ValidationError{Message: "owner user is required"}
@@ -326,7 +395,7 @@ func (s *TransactionService) PostTransaction(ctx context.Context, input PostTran
 		return Transaction{}, err
 	}
 
-	spec := transactionInputFromTransaction(current)
+	spec := storedTransactionInput(current)
 	spec.Status = "posted"
 	return s.UpdateTransaction(ctx, UpdateTransactionInput{
 		// This spec is this read of the draft, so the promotion is bound to the

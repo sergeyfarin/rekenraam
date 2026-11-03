@@ -29,6 +29,15 @@ function scopeOf(element: Element): Element | null {
   return element.closest('dialog, [data-modal-scope]');
 }
 
+/**
+ * Whether a modal owns the keyboard now: an open dialog, or a side panel that
+ * covers the page below `lg`. Global shortcuts stay out of its way.
+ */
+export function modalOpen(): boolean {
+  return document.querySelector('dialog[open]') !== null
+    || (window.matchMedia('(width < 64rem)').matches && document.querySelector('[data-modal-scope]') !== null);
+}
+
 /** Whether `event` belongs to `scope` itself rather than a dialog nested in it. */
 export function ownsEvent(scope: Element, event: Event): boolean {
   return event.target instanceof Element && scopeOf(event.target) === scope;

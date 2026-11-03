@@ -37,10 +37,10 @@ test('[acceptance] a transaction is entered and its statement reconciled at 390 
 
   // Entry: the register's form starts in this account.
   const description = `Phone groceries ${suffix}`;
-  await page.goto(`/app/accounts/${account.id}/register`);
+  await page.goto(`/app/ledger/accounts/${account.id}/register`);
   await expect(page.getByRole('heading', { name: account.name })).toBeVisible();
   await expectNoHorizontalScroll(page);
-  await page.getByRole('button', { name: 'New transaction' }).click();
+  await page.getByRole('button', { name: 'Add transaction' }).click();
   const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction' }) });
   await expect(form.getByLabel('Account').locator('option:checked')).toHaveText(account.name);
   await form.getByLabel('Date').fill(day);
@@ -61,7 +61,7 @@ test('[acceptance] a transaction is entered and its statement reconciled at 390 
   expect([balance.quantity_value, balance.quantity_scale]).toEqual(['23760', 2]);
 
   // Reconciliation: both postings are uncleared, so both are ticked by hand.
-  await page.goto('/app/reconcile');
+  await page.goto('/app/ledger/reconcile');
   await page.getByLabel('Account').selectOption({ label: account.name });
   await page.getByLabel('Statement closing date').fill(day);
   await page.getByLabel('Statement ending balance').fill('237.60');

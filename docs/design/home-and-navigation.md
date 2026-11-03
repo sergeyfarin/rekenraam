@@ -71,15 +71,24 @@ Background and reasoning:
 The left sidebar and the separate dark top bar are replaced by one light
 header on every page.
 
-- **Surface:** the header uses the page background, separated by space or a
-  hairline, not a coloured band. Colour is reserved for content and the
-  primary shortcut.
+- **Surface (revised 2026-11-01):** the two header rows carry two olive
+  tints from the app's one neutral hue (108), so the shell reads as two
+  levels without a heavy coloured band. The pages row uses the old sidebar
+  tone (`#f2f2e5`, about `oklch(0.953 0.019 108)`), the sections row one step
+  deeper (about `oklch(0.918 0.026 108)`), the page the old page tone
+  (`#f7f7ef`) and cards near white. The first version used the page colour
+  for the header and felt flat next to the old dark bar and tinted sidebar
+  (owner, 2026-11-01). The dark theme uses the same steps. See the
+  [shell look mockup](shell-look-mockup/README.md).
 - **Sections:** Home · Ledger · Investments · Planning · Reports, in
   sentence case. Each section is a plain link to its *Overview* page; the
   tab row under the header lists the section's pages, so there are no
   section menus (owner decision 2026-10-29, revising D2; reasoning in the
   [review](../reviews/navigation-and-pages-options-2026-10-29.md#d2-section-menus)).
-  The current section has a soft tinted pill; the current page an underline.
+  The current section is a tab in the pages-row tint, joined to the row
+  under it (as MS Money did), so a section visibly opens into its pages; the
+  current page has a green underline. Green otherwise marks only count
+  badges and selected chips.
   A page that needs attention shows a number badge on its tab (*Import 1*),
   with the full sentence for screen readers. A section is navigation only: it
   never changes account scope, currency or book.
@@ -105,26 +114,31 @@ header on every page.
   the sections and marked current on Home. The header shows no logo or app
   name; a mark alone was too small a target and too unclear, and beside
   *Home* it was redundant (owner, 2026-10-29).
-- **Look:** header 56px, tab row 40px, sticky, with a translucent blurred
-  background that turns solid under `prefers-reduced-transparency`. Content
-  (cards, widgets, menus, dialogs) is never translucent. The page background
-  is a light neutral off-white with white cards.
+- **Look:** header 56px, tab row about 42px, sticky; each row may stay
+  slightly translucent in its own tint, solid under
+  `prefers-reduced-transparency`. Content (cards, widgets, menus, dialogs) is
+  never translucent. Cards stand clearly whiter than the page.
 - **Right side:** a *Review* button with the count of items needing action
   (the total behind Home's status line, `!` when the check failed), hide
   amounts (eye), Customize (Home only), and a settings
   menu listing the settings pages (General, Preferences, Currencies and FX
   rates, Security, Data and backups), an inline Light / Dark / System theme
   choice and Sign out.
-- **Search:** on every page except Home the header has a compact search
-  field with the same behaviour as Home's command bar (below). On Home the
-  large central bar replaces it, so there is never more than one search
-  field. Keyboard: `/` and Ctrl/⌘ K focus it.
+- **Search (revised 2026-11-01):** on every page except Home the header
+  has a rounded *Search Ctrl K* button (⌘ K on macOS), not a field. It opens
+  the same large, centred, rounded search as Home's command bar (below), as
+  a dialog over the page, with room for grouped results and a scope chip.
+  On Home the central bar is the search. Keyboard: `/` and Ctrl/⌘ K open it.
+  The earlier compact field was square-cornered, truncated its placeholder
+  and dropped a narrow list under itself.
 - **Phone:** sections collapse into a menu button; search becomes an icon.
   No bottom navigation bar. The tab row scrolls horizontally, keeps the
   current tab in view and fades at the edge when more tabs follow.
-- **No sidebar:** the owner rejected an account list beside registers
-  (2026-10-29): other accounts distract from the one in hand, and Ledger
-  overview is one click away. Settings keeps its own side list.
+- **No navigation sidebar:** the owner rejected an account list beside
+  registers (2026-10-29): other accounts distract from the one in hand, and
+  Ledger overview is one click away. Settings keeps its own side list. Pages
+  with many commands or filters get a [task rail](#task-rail) on the right
+  instead; it holds that page's work, never navigation.
 - **Alignment:** the header, tab row and page content share one left edge
   at every width.
 - Every existing route stays reachable. The shell keeps the current
@@ -168,6 +182,47 @@ widget area:
 On phones the command bar opens the same search full screen when tapped, so
 results are not squeezed under a keyboard.
 
+### Briefing contract (#476)
+
+`GET /api/v1/home` is session-only and starts no work. For owner-local today
+it returns two headlines, `net_worth` and `cash`, each read through the Net
+worth report's series for the same accounts in the book's default currency:
+`value` at today, `start_value` at the end of the previous month and `change`
+between them. A headline is complete-only; `unavailable` names why it has no
+value (`valuation_gaps`, `unclassified_short`, `no_reporting_currency`,
+`no_accounts`). `missing` lists each input without a usable observation today
+(a chained conversion's missing currency leg is that currency's `rate`);
+`stale` lists inputs valued from an observation older than the pricing
+policy's staleness days (3 by default) and never repeats a missing one. That
+is the threshold Prices and Review use, so the three agree on what is out of
+date; each leg of a chained conversion is judged on its own observation date
+and reported against its own commodity, so a stale rate is never blamed on a
+current price. Inputs beyond the report's 7-day window are missing, as in the
+report, so an old price does block the headline; the report's window, not
+Home, decides that. Prices never calls usable a price valuation refuses: it
+applies the shorter of the two limits (and returns both), judges a recent
+quote with the report's rate table (a quote across conflicting splits is
+`missing`), and lists a balance in an instrument nothing prices yet, so the
+`?status=unusable` link always shows what Home named.
+Cash is open checking, savings, cash and other money accounts; brokerage cash
+stays with its brokerage. `account_count` counts open asset and liability
+accounts without system or per-instrument holding accounts. Closed accounts
+still count in the net-worth figure, so a book whose accounts are all closed
+still has one (scope "Closed accounts only"); only an empty scope is
+`no_accounts`. `empty_book` means no owner-created asset or liability account
+exists. Both headlines total one ledger read and fold.
+
+The status line's order: a failed or unreadable attention source; then the
+net-worth valuation problem (no default currency, an unclassified short,
+missing inputs, then out-of-date ones), linking to Prices filtered by
+`?status=unusable` (every pair without a usable price, which covers what Home
+calls missing) or `?status=stale`, or to Currencies when only rates are
+involved; then
+the work, naming two kinds at most. What does not lead is one "N more" link to
+Review; price and rate attention units are not counted again behind a
+valuation lead. A failed attention refresh replaces the line even while
+earlier counts are cached, so an old "All clear" never outlives it. Values the owner enters join through #454.
+
 ### What belongs in the briefing
 
 A briefing line is one sentence, chosen by the app, and either a position
@@ -199,7 +254,8 @@ header count and Home's line.
 
 ## Command bar
 
-One component for Home and the compact header field.
+One component for Home's bar and the centred search dialog opened from the
+header's *Search Ctrl K* button.
 
 - Empty: suggested commands and pages.
 - Typing matches, in groups:
@@ -217,17 +273,26 @@ One component for Home and the compact header field.
 Existing support: the `transaction_search` FTS5 index (payee, description,
 external reference, notes), the transactions API `q` and `payee_id`
 parameters with matching Transactions URL filters, and MiniSearch-based
-payee matching in the frontend. New work: the shared editor dialog with
-prefill, a last-used-category read per payee, and payee/Everything result grouping (#439).
-The page/object/command grouping foundation is delivered in #457.
+payee matching in the frontend. New work: a last-used-category read per
+payee and payee/Everything result grouping (#439). The page/object/command
+grouping foundation is delivered in #457; the Home placement and the shared
+entry dialog in #477.
+
+Delivered in #477 (2026-10-31): Home renders the shared search with
+`variant="home"` below the briefing, as wide as its column, and the header
+omits its instance there, so Home owns `/` and Ctrl/⌘ K. On phones it is a
+field-shaped trigger that opens the same full-screen search. The command bar
+and shortcuts show in every briefing state, including the empty book and a
+failed Home read, because neither needs Home data.
 Searching account, category or instrument notes is later work.
 
 ### Shared search foundation (#457)
 
-The compact header field is one reusable combobox. `scope` restricts its result
+The search is one reusable combobox (delivered as a compact header field;
+the header now opens it as a centred dialog, 2026-11-01). `scope` restricts its result
 kind and `onSelect` lets a future switcher keep the current page's context;
 `variant="home"` supports Home placement, with the header instance omitted
-when that placement ships in #437. The mounting owner registers the global
+on Home (#477). The mounting owner registers the global
 shortcuts once. Page-specific filter fields remain on their own pages.
 
 Pages come from the route registry, including localized search aliases, with
@@ -250,6 +315,13 @@ an active descendant, Enter chooses, Escape closes, and Tab reaches scope,
 coverage and expansion controls. `/` ignores editable fields; Ctrl/⌘ K also
 works from ordinary fields, while existing modal workflows retain their focus.
 Phones open the same field in the shared full-screen modal.
+
+Search belongs to the current page's interaction (#472). Leaving for a different
+pathname resets it when navigation starts. Completion of an earlier navigation
+must not close or clear search reopened on the destination. Same-page query or
+fragment updates, including a report normalizing its default date range, keep
+the query, scope and result selection. Choosing a result releases search before
+the destination workflow takes focus, with no deferred close after arrival.
 
 Commands open an unsaved transaction editor or toggle browser presentation
 (amount visibility/theme); they never post or infer an amount/date. The entry
@@ -274,6 +346,46 @@ acceptance; this foundation does not claim their behavior.
 - Each tile has a ⋯ menu (Move left/right, Rename, Remove); a final
   “+ Add shortcut” tile lists the remaining options. Phones show the first
   three tiles plus More.
+
+Delivered in #477 (2026-10-31) as a fixed set: Add transaction, Import file,
+Transactions and Spending by category. **Transfer** joined second with its
+transfer entry (#481, 2026-11-01: different posting days, cross-currency
+transfers with exact sent and received amounts, and a fee recorded on Bank
+fees rather than in the transfer), so phones show Add transaction, Transfer
+and Import file. The account-register tile (“Checking”) waits for pins (#442)
+or the layout document (#438), since nothing yet says which account it
+opens. ⋯ menus, *Add shortcut* and editing are #438. Phones show three tiles
+and a More disclosure listing the rest in order, so a tile moved past the
+third (Add included, once #438 allows moving) stays reachable.
+
+### Shared entry dialog (#477)
+
+*Add transaction* on Home, `N` and search's *Add transaction* command on a
+page without its own editor open one shared dialog: the existing transaction
+editor (locale parsing, financial guards, reconciliation checks, error
+recovery) in `ModalDialog`, a full-screen sheet below 768px. A page that
+offers *Add transaction* in its header keeps its own side-panel editor,
+prefilled for the page (#459); the dialog takes the same account/category
+prefill when a caller supplies it. The shell mounts the dialog once, outside
+every page and outside the shell's own loading and error states, so a
+background refresh of Home, any page or the session never touches the working
+copy (a failed session refresh shows the shell error behind it); the editor
+reads its prefill once (#433). Signing out closes it. Opening it never
+replaces an open working copy. Cancel and Escape discard it without asking;
+backdrop clicks do nothing, and nothing in flight can be dismissed: the whole
+save chain, including a payee the owner confirmed creating first, keeps the
+editor busy, and a dismissed editor never continues to a save. Focus returns
+to the opener, or, when a shell error or its recovery re-rendered the page
+behind the dialog, to the page's main content (the shell error's Retry while
+it shows). Payee and category suggestions are comboboxes (arrows, Enter,
+Escape closes the list, not the dialog) whose options are not Tab stops, so
+entry works by keyboard alone. Saving closes the dialog, refreshes every read
+a transaction can change — transaction lists, registers, balances, reports,
+budgets, forecast, reconciliation, brokerage cash reads and Prices coverage
+(a posting in a new currency needs its exchange rate), so the page
+beneath updates in place, plus Home and the attention count — and announces
+*Transaction added* with a link to the transaction. Nothing posts without the
+editor's own save.
 
 ## Widgets
 
@@ -311,9 +423,79 @@ acceptance; this foundation does not claim their behavior.
   for example “Set up backups”), partial, stale, failed. Estimates (forecast)
   are labelled; market-value changes are never called returns.
 - Unbuilt capabilities (goals, insights, available-to-spend) do not appear.
+- Widgets introduce no rules of their own (owner, 2026-10-31). A threshold,
+  ranking, window or setting a widget needs belongs to the feature it
+  summarises and applies wherever that feature shows the same thing; when one
+  does not exist yet, it is built there first (configurable where the owner
+  would tune it), and the widget reads it. Example: *reconciled within 60
+  days* is a reconciliation setting that the account list and Review use too,
+  not a Home rule.
 
 The capability inventory, which widget uses which existing contract, and the
 composed Home read model are specified in the design review.
+
+### Default widgets contract (#478)
+
+`GET /api/v1/home` also returns `widgets`, one bounded summary per default
+widget, each `{status, summary}`: `failed` (summary null) when that summary
+could not be read, which never fails the briefing or another widget; a
+cancelled request is not a widget failure. The trend and the accounts'
+balances are the exception: they come from the briefing's own fold, so they
+share its snapshot and fail with it. Spending, budgets and recurring are
+separate reads, so Home takes a book change marker (the highest audit event,
+transaction version, price observation and recurring occurrence) before and
+after composing; if a write committed in between, it reads again, and after
+three tries returns `consistent: false`, which the page discloses above the
+widgets while it reads again. Two cards never show different states of the
+book without saying so. Spending bars compare rows only when every row is in
+one currency; otherwise rows are listed without bars, as in the report. `commodities` labels every amount
+any summary names, so Home needs no second read. Each summary is its canonical
+read for the same dates, scope and currency, and Home adds no arithmetic
+beyond choosing and ordering rows (`HomeService`, `home_widgets.go`):
+
+| Widget | Canonical read | Summary |
+|---|---|---|
+| Spending this month | Spending report, by category, 1st of the month to owner-local today, every account, default currency | Converted total (null rather than partial), exact per-currency totals, the report's first three rows in its order, category count |
+| Budgets | Budget month | Expense total in one currency (the default currency when it has an expense target, else the lowest that does) and the count of other currencies; three targeted categories, over budget first (most over first), then by share of target used, compared exactly. No target: *not set up* |
+| Accounts | Account balances at today, posted, taken from the briefing's fold (the same running balances, one pass over the ledger) | Open asset and liability accounts at top level (holdings and nested accounts roll into their parent), largest value in the default currency first; an account without a value ranks after those with one. A balance in one currency shows in that currency. Pins replace the ranking with #442 |
+| Recurring | Recurring templates and the shared review counts | Active (enabled, unarchived) count, drafts and blocked (both shown, and either keeps the widget set up), three schedules by the next due date the Recurring page shows, each with its debit total per commodity |
+| Net worth trend (wide) | Net worth series, monthly, from the end of the month twelve months ago to today, folded in the same ledger read as the headlines | Points (null where incomplete; the last two are the headline's start and value) and the change from first to last, present only when both are. One snapshot with the briefing, so it fails with it |
+
+Each widget shows the designed states: *loading* (placeholders holding the
+grid's places), *ready*, *zero* (nothing spent), *no data* (empty book),
+*not set up* (no budget, no schedule, no default currency), *partial*
+(per-currency totals when spending cannot convert, an account without a
+value, today's net worth unavailable), *stale* (the trend counts the headline's
+out-of-date inputs) and *failed* (in its card, with Retry). Drill-downs are
+plain links that keep the canonical page's URL filters: spending rows open
+Transactions filtered as the Spending report's drill-down, Open links carry
+the period, bucket and reporting currency or the budget month and currency.
+Home keeps the read cached across navigation, so Back restores its scroll
+without late content moving it.
+
+### More to explore contract (#479)
+
+More to explore lists every widget not on My Home, by category, from the same
+`GET /api/v1/home` and the shell's attention read: mounting or expanding it
+starts no request and no returns or forecast calculation. Cards are the My
+Home cards at real size with a dashed outline, muted text and half
+saturation (full colour on hover or focus); the section collapses (the state
+is remembered with #438) and *Add to Home* arrives with #438.
+
+| Category | Widget | Source | Summary |
+|---|---|---|---|
+| Everyday | Cashflow | Cashflow report, 1st of the month to owner-local today, its default liquid-cash scope, one bucket, default currency | Money in, money out, transfers (net) and the operating net, each converted only when every posting it sums converts, else exact per currency; transfers that do not convert keep their exact amounts and the card says so (*partial*), never a silent zero |
+| Wealth & investments | Holdings | Holding accounts from the briefing's fold, valued with the accounts widget's rate table (net worth's valuation) | Open positions with a balance, the largest three by value with instrument and brokerage; an unpriced position has no value and ranks last. The summary's own `missing` and `stale` inputs, the prices and the rates behind foreign holdings, judged as the headline judges its own, make it *partial* or *stale* |
+| | Returns | The latest saved returns run, frozen | Time-weighted return (and annualized when the run has one) for the run's period, labelled *Saved run* with its save date; *Open* links `?run_id=` and Returns opens and focuses that run (its period alone would start a live read over another scope). No run is *not set up* with a link to calculate. Home never calculates a return; live figures are #440 |
+| | Allocation | The same saved run's allocation | By asset type, largest value first, weights as the run froze them; `known_only` is *partial* with the count of balances without a value |
+| | Dividend income | Income coverage summary (`SummaryOnly`) | Instruments with confirmed dividends; unassigned investment cash per currency is cash, never income, and leads as payments to assign |
+| Planning | Forecast | None (the recurring summary Home already has) | Labelled *Estimate*, names the 90-day horizon and the active schedules it projects, calculated when opened; no schedule is *not set up* |
+| Ledger & data | Imports | The shared attention read's `imports` source | Batches to review, the same count Review shows; its own Retry refetches the attention read |
+| | Prices | The net-worth headline's `missing` and `stale` inputs | Named as the status line names them, linking to the same filtered Prices list. The headline judges its inputs even when an unclassified short leaves it unavailable, so empty lists always mean checked and current |
+| | Backups | The Data screen's backup status | Off is *not set up*; a failed latest run says whether it will retry; otherwise the last backup and the next run. Shown in an empty book too |
+
+Reconciliation joins Ledger & data with the reconciliation out-of-date rule
+(#482), which the account list uses as well.
 
 ## Customization
 
@@ -392,6 +574,38 @@ steppers or filters. On phones the tab row scrolls horizontally.
 - Tab counts and Home's status line come from one attention read, replacing
   the shell's recurring-summary query.
 
+### Section-owned paths (#460, 2026-10-30)
+
+Canonical page paths identify the section that owns them. Move the remaining
+Ledger and Planning families together, including their detail pages:
+
+| Previous path | Canonical path | Decision and reason |
+|---|---|---|
+| `/app/accounts` | `/app/ledger/accounts` | Keep the existing list as a temporary Ledger tab. #448 replaces it with Ledger Overview; both list aliases must then lead directly to `/app/ledger`. |
+| `/app/accounts/[id]/register` | `/app/ledger/accounts/[id]/register` | The account's ledger activity belongs to Ledger; this detail path survives #448's list replacement. |
+| `/app/transactions` | `/app/ledger/transactions` | Ledger owns ordinary entries, drafts and their review filters. |
+| `/app/categories` and `/app/categories/[id]` | `/app/ledger/categories` and `/app/ledger/categories/[id]` | Keep the category list and category activity in one family; the Tags view (#444) stays inside it. |
+| `/app/import` and `/app/import/dividends` | `/app/ledger/import` and `/app/ledger/import/dividends` | Keep imports and dividend repair together; #447 still owns their view consolidation. |
+| `/app/reconcile` | `/app/ledger/reconcile` | Reconciliation verifies ledger account activity. |
+| `/app/budgets` | `/app/planning/budgets` | Budgets are Planning, even when linked from spending reports. |
+| `/app/recurring` | `/app/planning/recurring` | Due items and templates are views of the same Planning page. |
+| `/app/forecast` | `/app/planning/forecast` | Projected balances belong to Planning; their ledger drill-downs remain links. |
+
+Keep `/app`, `/app/review`, all Investments and Reports paths, and the current
+Settings paths: these already name their owner or are intentionally standalone.
+Settings consolidation remains #446. Section overview paths also stay unchanged.
+Do not change `/api/v1` paths or financial contracts when moving browser pages.
+
+The extra path segment makes copied links agree with the header and tab row.
+The bounded cost is redirect stubs and mechanical link/test updates; there is
+no duplicate screen implementation. Keep every previous path as a registered
+legacy route, redirect before rendering, and replace that history entry rather
+than adding a Back stop. Keep **every** query parameter (including duplicates,
+empty values and unknown keys) and the fragment. Internal links, search and
+attention destinations use canonical paths directly. Registry tests check all
+aliases; route and subview sweeps exercise the canonical screens, while browser
+coverage checks old links, filter consumption, reload, sharing and Back/forward.
+
 ### Page header
 
 Breadcrumb on detail pages, the title or the object switcher, a scope line
@@ -403,6 +617,57 @@ keyboard shortcut. Widths: narrow (about 720px) for Home's top and forms,
 standard (about 1200px) for reports, budgets and investments, fluid (up to
 about 1600px) for registers, transactions and import review. `?` opens
 keyboard help.
+
+Delivered in #459 (2026-10-30): the page column narrows from the shell's
+left edge instead of re-centring, because header, tab row and page share one
+left edge at every width (#436); Home may still centre its own top block
+inside that column. *N* and search's *Add transaction* open the current
+page's editor in place, prefilled, when the page has one, never replace an
+editor that is already open, and otherwise open the
+[shared entry dialog](#shared-entry-dialog-477) (#477; until then the
+Transactions editor).
+Register and category titles name the object, with the parent tab as the
+breadcrumb; the *Accounts › Brokerage* and category-tree trails and the
+switcher in the title slot remain #442.
+
+### Task rail
+
+Owner decision 2026-11-01, after comparing the old sidebar and MS Money's
+task pane. A page with many commands or report filters shows them in a rail
+on the right, so they are visible, labelled and grouped instead of a wall of
+buttons or a menu. See the [mockup](shell-look-mockup/README.md).
+
+- **Where:** only pages that need it. First: Investments overview and
+  investment account registers (transaction types), and the Spending,
+  Cashflow and Net worth reports (period, currency, filters, then Download
+  CSV and Print). Not Home, Settings, overviews or simple lists; a page
+  with three commands or fewer keeps them in the page header's action slot.
+- **Right, not left:** header, tabs and content keep one left edge, the data
+  is read first, and wide screens have spare width on the right.
+- **Look:** about 260px wide, its own panel in the pages-row tint with a
+  border and rounded corners, clearly distinct from page and cards; stays in
+  view while the page scrolls. Text 14.5–15px, rows about 34px: dense but
+  readable, unlike Money's small type.
+- **Content:** one main button on top, then groups with short headings.
+  Only this page's work: no views (tabs own them), no links elsewhere, no
+  help or promotion.
+- **Investments:** the main button is *New transaction*. It opens the
+  investment editor, where the transaction type is a field (as Money's
+  *Activity*), so one entry point covers every type. The rail also lists the
+  types, grouped (Trades: Buy, Sell, Short sale, Short cover, Write-off;
+  Income: Dividend, Reinvested dividend, Withholding tax, Payment in lieu,
+  Return of capital; Move: Transfer in, Move between holdings, Transfer out;
+  Corporate actions: Split, Share exchange, Cash-and-stock merger,
+  Spin-off), and each opens the editor with that type chosen. The rail
+  shows what is possible without opening anything. Later it may also offer
+  investment summaries and tables that are not reports; that is decided
+  separately.
+- **Narrower than about 1180px:** the rail folds away. The page header shows
+  the main button and one more (*Types…* or *Filters*), which opens the same
+  grouped list as a full-size panel, or a sheet on phones; never a small
+  dropdown.
+- Keyboard: the rail is a labelled `aside` landmark; its items are buttons
+  or links in reading order after the page content's main action.
 
 ### Objects
 
@@ -474,7 +739,7 @@ Sequencing belongs in the roadmap; acceptance in the issues.
 |---|---|
 | Shell: header, section links and settings menu, tab row of real routes, route registry, hide amounts, shared search, attention read; retires the sidebar and the duplicate top bar | #436 (header, registry and tab routes #455; hide amounts #456; search #457; attention read #458; page header, widths and `?` help #459) |
 | Route paths of pages outside their section | #460 |
-| Home: briefing, command bar, shortcuts with the shared Add transaction dialog, default My Home and More to explore, composed Home read | #437 |
+| Home: briefing, command bar, shortcuts with the shared Add transaction dialog, default My Home and More to explore, composed Home read | #437 (read and briefing #476; command bar, shortcuts and entry #477; My Home widgets #478, delivered; More to explore #479, delivered) |
 | Review page: everything needing attention and background status | #453 |
 | Settings in five pages; Trash becomes Transactions › Deleted; ledger export moves to Reports › Export | #446 |
 | Import views: Files, Connections, Rules and profiles, Dividends | #447 |
@@ -488,6 +753,10 @@ Sequencing belongs in the roadmap; acceptance in the issues.
 | Search depth: payee actions with prefilled editor and last-used category, full-text transaction search | #439 |
 | Widget depth: lazy expanded returns, allocation and forecast charts; further widgets | #440 |
 | Density: compact and comfortable rows | #451 |
+| Shell look: olive two-tint rows, joined section tab, green place markers, card contrast | #489 |
+| Search button with centred search dialog | #490 |
+| Task rail component; Investments *New transaction* with type field and type list | #491 |
+| Report filters in the task rail (Spending, Cashflow, Net worth) | #492 |
 | Two-key navigation shortcuts | #452 |
 
 ## Considered and dropped
@@ -496,7 +765,14 @@ Sequencing belongs in the roadmap; acceptance in the issues.
   in My Home.
 - A third briefing line for notable moves or spending pace.
 - *Add transaction* as a header button: it is the first shortcut instead.
-- The dark green top bar and the left sidebar.
+- The dark green top bar and the left navigation sidebar. A dark brand bar
+  was reconsidered on 2026-11-01 and set aside for the olive tints.
+- A header in the page colour (2026-10-29 to 2026-11-01): too flat.
+- A compact search field in the header: replaced by the *Search Ctrl K*
+  button.
+- A wall of record buttons, and folding them into a dropdown; replaced by the
+  task rail. *Record buy* as the Investments main action: *New transaction*
+  with a type field instead.
 - A fixed-order map with a separate shortlist: replaced by My Home plus More
   to explore.
 - Compact previews in More to explore: real-size widgets instead.
@@ -515,10 +791,10 @@ Sequencing belongs in the roadmap; acceptance in the issues.
 
 `GET /api/v1/attention` is the session-only composed read. The shell owns one
 `['api', 'attention']` query and provides its reactive result to the header,
-registry-driven tab badges, Home's temporary Review link and the bounded
+registry-driven tab badges, Home's status line (#476) and the bounded
 `/app/review` landing page. It refreshes every 30 seconds while visible, on
-focus, after successful typed-client writes and on explicit Retry. Home's full
-briefing remains #437; Review's Needs action / Notes / Status design, per-source
+focus, after successful typed-client writes and on explicit Retry. Home's
+briefing follows the [briefing contract](#briefing-contract-476); Review's Needs action / Notes / Status design, per-source
 last-run details and retention remain #453. Entered values join this read when
 #454 supplies the shared coverage; their absence is not a claim about asset
 valuation completeness. FX pair discovery includes nonzero posted currency
@@ -542,7 +818,7 @@ book snapshot. `checked_at` is the UTC start time of that read. Source units are
 | Connections | Each connection whose latest fetch failed, once. |
 | Refresh | Each market-data source with an unresolved refresh-state error or a failed/partial latest ingest run, once across pairs and runs. |
 | Backup / self-check | The latest recorded run of each kind, not historical failures. A failed/errored run contributes one; self-check warning/incomplete contributes one. Pending/running is unknown, never zero. No recorded run has the explicit `never` status. A later successful run clears its predecessor. |
-| Prices / rates | Each distinct non-usable base/quote pair in the current owner-local Pricing workspace, separated by whether the base is a currency. The shared `live_raw_v1` observation owner and pricing staleness policy decide coverage; there is no separate attention valuation calculation. |
+| Prices / rates | Each distinct non-usable base/quote pair in the current owner-local Pricing workspace, separated by whether the base is a currency. The shared `live_raw_v1` observation owner and pricing staleness policy decide coverage, bounded by the reports' window and judged by the reports' rate table, so a quote valuation refuses (conflicting splits) counts. Posted balances are discovered for currencies and for instruments nothing prices yet; there is no separate attention valuation calculation. |
 
 The total counts **action units**, not unique objects across sources: a failed
 refresh and a missing price can both need action. Read failures retain successful

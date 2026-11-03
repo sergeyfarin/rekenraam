@@ -102,7 +102,7 @@
           <pre class="overflow-x-auto whitespace-pre-wrap break-words text-xs text-muted">{JSON.stringify(row.source_evidence,null,2)}</pre>
           <time datetime={row.created_at} class="text-xs text-muted">{dateFormatter.format(parseISO(row.created_at))}</time>
         </details>
-        {#if row.transaction_id}<a class="text-sm text-accent underline" href={`/app/transactions?transaction_id=${row.transaction_id}`}>{m.investments_split_open_journal()}</a>{/if}
+        {#if row.transaction_id}<a class="text-sm text-accent underline" href={`/app/ledger/transactions?transaction_id=${row.transaction_id}`}>{m.investments_split_open_journal()}</a>{/if}
         {#if row.correction_of_operation_id}<p class="text-xs text-muted">{m.investments_split_corrects({id:String(row.correction_of_operation_id)})}</p>{/if}
         {#if row.successor_operation_id}
           {#if row.standing === 'superseded'}

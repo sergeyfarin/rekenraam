@@ -58,6 +58,7 @@ native accounting terms for the line, not inventions.
 | English | Spanish | French | Dutch | German | Russian |
 |---|---|---|---|---|---|
 | Net worth | Patrimonio neto | Patrimoine net | Nettovermogen | Nettovermögen | Чистые активы |
+| Cash (Home headline: money accounts that need no price) | Efectivo | Liquidités | Liquide middelen | Liquide Mittel | Денежные средства |
 | Cashflow | Flujo de caja | Flux de trésorerie | Kasstroom | Cashflow | Денежный поток |
 | Spending | Gastos | Dépenses | Uitgaven | Ausgaben | Расходы |
 | Income | Ingresos | Revenus | Inkomsten | Einnahmen | Доходы |

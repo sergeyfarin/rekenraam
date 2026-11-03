@@ -53,7 +53,7 @@ test.describe('on a phone', () => {
     });
     await expect.poll(() => held(page, holding.id, instrument.commodity_id)).toBe('0');
 
-    await page.goto(`/app/transactions?transaction_id=${written.transaction.id}`);
+    await page.goto(`/app/ledger/transactions?transaction_id=${written.transaction.id}`);
     await page.getByRole('button', { name: 'Correct write-off…' }).click();
     const form = page.getByRole('dialog', { name: 'Correct this write-off' });
     await expect(form.getByLabel('Quantity')).toHaveValue('10');
@@ -72,7 +72,7 @@ test.describe('on a phone', () => {
     const chain = await apiJSON<{ effective_transaction_id: number | null }>(page, 'GET',
       `/api/v1/investments/transactions/${written.transaction.id}/correction-chain`);
     expect(chain.effective_transaction_id).not.toBeNull();
-    await page.goto(`/app/transactions?transaction_id=${chain.effective_transaction_id}`);
+    await page.goto(`/app/ledger/transactions?transaction_id=${chain.effective_transaction_id}`);
     await page.getByRole('button', { name: 'Reverse write-off…' }).click();
     const dialog = page.getByRole('alertdialog');
     await expect(dialog).toContainText('Reverse this write-off');

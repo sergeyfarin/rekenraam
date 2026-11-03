@@ -4,13 +4,13 @@ import { expectNoAccessibilityViolations } from './support/a11y';
 
 test('hide amounts persists across reloads and tabs while editable inputs stay exact', async ({ page, context }) => {
   await readyForLedger(page);
-  await page.goto('/app/transactions');
+  await page.goto('/app/ledger/transactions');
   const toggle = page.getByRole('button', { name: 'Hide amounts', exact: true });
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
   await page.reload();
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: 'New transaction', exact: true }).click();
+  await page.getByRole('button', { name: 'Add transaction', exact: true }).click();
   const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction', exact: true }) });
   await form.getByLabel('Amount', { exact: true }).fill('-1234.56');
   const other = await context.newPage();

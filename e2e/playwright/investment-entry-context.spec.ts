@@ -38,12 +38,12 @@ test('a holding register records a pre-filled buy and opens it in the investment
   const { suffix, name, instrument, holding, cash } = await setup(page);
   const memo = `Context buy ${suffix}`;
 
-  await page.goto(`/app/accounts/${holding.id}/register`);
+  await page.goto(`/app/ledger/accounts/${holding.id}/register`);
   await expect(page.getByRole('heading', { name: `Context holding ${suffix}` })).toBeVisible();
   // The investment entry point replaces the generic one; wait for it so the
   // absence below is checked on a rendered register, not a loading one.
   await expect(page.getByRole('button', { name: 'Record investment activity' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'New transaction' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Add transaction' })).toHaveCount(0);
 
   await openActivity(page, 'Record investment activity', 'Record buy');
   const dialog = page.getByRole('dialog');
@@ -83,7 +83,7 @@ test('an instrument view lists its activity and pre-fills the instrument and its
   await expect(page.getByRole('heading', { name: new RegExp(name) })).toBeVisible();
   await expect(page.getByText(memo)).toBeVisible();
   await expect(page.getByText('+3')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'New transaction' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Add transaction' })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Record investment activity' }).click();
   await expectNoAccessibilityViolations(page, 'instrument view investment entry');
@@ -105,7 +105,7 @@ for (const [locale, menu, back] of contextLocales) {
   test(`investment entry in context is translated in ${locale}`, async ({ page }) => {
     const { holding, instrument } = await setup(page);
     await page.evaluate((value) => localStorage.setItem('PARAGLIDE_LOCALE', value), locale);
-    await page.goto(`/app/accounts/${holding.id}/register`);
+    await page.goto(`/app/ledger/accounts/${holding.id}/register`);
     await expect(page.getByRole('button', { name: menu })).toBeVisible();
     await page.goto(`/app/investments/instruments/${instrument.commodity_id}`);
     await expect(page.getByRole('button', { name: menu })).toBeVisible();
@@ -194,7 +194,7 @@ test('an instrument records, corrects and reverses separately paid withholding t
   const chain = await apiJSON<{ effective_transaction_id: number; effective_dividend: { withholding_only: boolean } }>(
     page, 'GET', `/api/v1/investments/transactions/${original.id}/correction-chain`);
   expect(chain.effective_dividend.withholding_only).toBe(true);
-  await page.goto(`/app/transactions?transaction_id=${chain.effective_transaction_id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${chain.effective_transaction_id}`);
   await page.getByRole('button', { name: 'Reverse withholding tax…' }).click();
   const reversal = page.getByRole('alertdialog', { name: 'Reverse this withholding tax' });
   await reversal.getByLabel('Reason for reversal').fill('duplicate tax');

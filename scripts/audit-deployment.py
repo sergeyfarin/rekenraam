@@ -123,13 +123,13 @@ try:
     start(NEW)
     assert api('/api/v1/setup/status')['install_state'] == 'fresh'
     assert b'<html' in api('/')
-    assert b'<html' in api('/app/transactions')
+    assert b'<html' in api('/app/ledger/transactions')
     print('fresh current Compose install: healthy, setup ready, embedded shell served', flush=True)
     compose('down', '-v')
     start(OLD)
     assert api('/api/v1/setup/status')['install_state'] == 'fresh'
     assert b'<html' in api('/')
-    assert b'<html' in api('/app/transactions')
+    assert b'<html' in api('/app/ledger/transactions')
     api('/api/v1/audit279-missing', expected=404)
     api('/missing-audit279.js', expected=404)
     api('/api/v1/setup/owner', {'username': 'audit279', 'password': PASSWORD}, expected=201)

@@ -35,11 +35,11 @@
 </script>
 <PageHeader title={m.import_dividend_title()} copy={m.import_dividend_help()} />
 <div class="mt-6 max-w-3xl space-y-5">
-  <a href="/app/import" class="inline-flex min-h-11 items-center text-sm font-semibold text-foreground underline underline-offset-2">{m.import_dividend_back()}</a>
+  <a href="/app/ledger/import" class="inline-flex min-h-11 items-center text-sm font-semibold text-foreground underline underline-offset-2">{m.import_dividend_back()}</a>
   {#if saved}
     <Panel>
       <p role="status" class="text-sm text-positive">{saved.repaired ? m.import_dividend_repaired() : m.import_dividend_recorded()}</p>
-      <a href={`/app/transactions?transaction_id=${saved.id}`} class="inline-flex min-h-11 items-center text-sm font-semibold text-foreground underline underline-offset-2">{m.import_dividend_view()}</a>
+      <a href={`/app/ledger/transactions?transaction_id=${saved.id}`} class="inline-flex min-h-11 items-center text-sm font-semibold text-foreground underline underline-offset-2">{m.import_dividend_view()}</a>
     </Panel>
   {/if}
   {#if loading}

@@ -146,7 +146,7 @@ async function realizedGainCents(page: Page, commodityID: number): Promise<strin
 test('a sourced statement resolves an unknown basis and its sale gain on mobile', async ({ page }) => {
   const { instrument, arrived } = await seedUnknownArrivalWithSale(page, 'res');
 
-  await page.goto(`/app/transactions?transaction_id=${arrived.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${arrived.transaction.id}`);
   await page.getByRole('button', { name: 'Resolve cost basis…' }).click();
   const form = page.getByRole('dialog', { name: 'Resolve cost basis' });
   await form.getByLabel(/^Total cost basis/).fill('80.00');
@@ -170,7 +170,7 @@ test('a sourced statement resolves an unknown basis and its sale gain on mobile'
   await expect(form).toBeHidden();
   await expect.poll(() => realizedGainCents(page, instrument.commodity_id)).toBe('1000');
   await expect(page.getByRole('button', { name: 'Resolve cost basis…' })).toHaveCount(0);
-  await page.goto(`/app/transactions?transaction_id=${arrived.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${arrived.transaction.id}`);
   await expect(page.getByRole('group', { name: 'Cost basis resolutions' })).toContainText(reference);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
@@ -187,7 +187,7 @@ test('a sourced basis resolution is corrected and withdrawn on mobile', async ({
   await apiJSON(page, 'POST', resolvePath, csrfToken,
     { ...resolution, gain_impact_acknowledgement: impact.gain_impact.acknowledgement });
 
-  await page.goto(`/app/transactions?transaction_id=${arrived.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${arrived.transaction.id}`);
   await page.getByRole('button', { name: 'Correct cost basis…' }).click();
   const form = page.getByRole('dialog', { name: 'Correct cost basis' });
   await expect(form.getByLabel(/^Total cost basis/)).toHaveValue('80.00');
@@ -206,7 +206,7 @@ test('a sourced basis resolution is corrected and withdrawn on mobile', async ({
   await expect(form).toBeHidden();
   await expect.poll(() => realizedGainCents(page, instrument.commodity_id)).toBe('2000');
   // Saving closes the detail; reopen it to read the resolution history.
-  await page.goto(`/app/transactions?transaction_id=${arrived.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${arrived.transaction.id}`);
   const history = page.getByRole('group', { name: 'Cost basis resolutions' });
   await expect(history.getByRole('listitem')).toHaveCount(2);
   await expect(history.getByRole('listitem').first()).toContainText('Superseded');
@@ -220,7 +220,7 @@ test('a sourced basis resolution is corrected and withdrawn on mobile', async ({
   await withdraw.getByRole('button', { name: 'Review and reverse' }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Accept changed gains' }).click();
   await expect.poll(() => realizedGainCents(page, instrument.commodity_id)).toBe('unknown');
-  await page.goto(`/app/transactions?transaction_id=${arrived.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${arrived.transaction.id}`);
   await expect(page.getByRole('button', { name: 'Resolve cost basis…' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Withdraw cost basis' })).toHaveCount(0);
   await expect(history.getByRole('listitem').last()).toContainText('Reversed');
@@ -232,7 +232,7 @@ test('a sourced basis resolution is corrected and withdrawn on mobile', async ({
 // a change reason alone cannot stand in for provenance.
 test('an explicit owner assertion resolves basis with source history on mobile', async ({ page }) => {
   const { arrived } = await seedUnknownArrivalWithSale(page, 'owner');
-  await page.goto(`/app/transactions?transaction_id=${arrived.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${arrived.transaction.id}`);
   await page.getByRole('button', { name: 'Resolve cost basis…' }).click();
   const form = page.getByRole('dialog', { name: 'Resolve cost basis' });
   await form.getByLabel(/^Total cost basis/).fill('80.00');
@@ -251,7 +251,7 @@ test('an explicit owner assertion resolves basis with source history on mobile',
   await submit.click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Accept changed gains' }).click();
   await expect(form).toBeHidden();
-  await page.goto(`/app/transactions?transaction_id=${arrived.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${arrived.transaction.id}`);
   const history = page.getByRole('group', { name: 'Cost basis resolutions' });
   await expect(history).toContainText('Owner assertion, known on');
   await expect(history).toContainText('Original purchase records establish the total');
@@ -274,7 +274,7 @@ test('basis provenance is corrected without changing gains on mobile', async ({ 
   }, { path: `${base}/resolve-basis`, token: csrfToken, body });
   expect(status).toBe(201);
   const beforeGain = await realizedGainCents(page, instrument.commodity_id);
-  await page.goto(`/app/transactions?transaction_id=${arrived.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${arrived.transaction.id}`);
   await page.getByRole('button', { name: 'Correct cost basis…' }).click();
   const form = page.getByRole('dialog', { name: 'Correct cost basis' });
   await expect(form.getByLabel(/^Total cost basis/)).toHaveValue('80.00');
@@ -288,7 +288,7 @@ test('basis provenance is corrected without changing gains on mobile', async ({ 
   await expect(form).toBeHidden();
   await expect(page.getByRole('alertdialog')).toHaveCount(0);
   expect(await realizedGainCents(page, instrument.commodity_id)).toBe(beforeGain);
-  await page.goto(`/app/transactions?transaction_id=${arrived.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${arrived.transaction.id}`);
   const history = page.getByRole('group', { name: 'Cost basis resolutions' });
   await expect(history).toContainText('Original evidence');
   await expect(history).toContainText('Synthetic original statement');
@@ -309,7 +309,7 @@ test('basis provenance is corrected without changing gains on mobile', async ({ 
   await form.getByLabel('Reason', { exact: true }).fill('better evidence was found');
   await form.getByRole('button', { name: 'Review and correct' }).click();
   await expect(form).toBeHidden();
-  await page.goto(`/app/transactions?transaction_id=${arrived.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${arrived.transaction.id}`);
   await expect(history).toContainText('Evidence correction 2');
   await expect(history).toContainText('Reconstructed from purchase records');
   expect(await realizedGainCents(page, instrument.commodity_id)).toBe(beforeGain);

@@ -854,10 +854,13 @@ func (r *TransactionRepository) insertTransactionVersion(ctx context.Context, tx
 				entry_date,
 				entry_kind,
 				memo,
-				metadata_json
+				metadata_json,
+				conversion_side,
+				fee_paid_by
 			)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
-		`, params.BookID, transactionVersionID, entryIndex+1, entry.EntryDate, entry.EntryKind, entry.Memo, entry.MetadataJSON)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, params.BookID, transactionVersionID, entryIndex+1, entry.EntryDate, entry.EntryKind, entry.Memo, entry.MetadataJSON,
+			sql.NullString{String: entry.ConversionSide, Valid: entry.ConversionSide != ""}, sql.NullString{String: entry.FeePaidBy, Valid: entry.FeePaidBy != ""})
 		if err != nil {
 			return TransactionRecord{}, mapTransactionConstraintError(fmt.Errorf("insert journal entry: %w", err))
 		}

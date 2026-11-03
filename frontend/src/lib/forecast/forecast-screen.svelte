@@ -188,13 +188,13 @@
       spendingModel, historyCompleteFrom: historyCompleteFrom || null, expenseCategoryIDs, expensePatterns
     };
     const params = writeForecastFilters(filters);
-    void goto(`/app/forecast?${params.toString()}`, { reset: false });
+    void goto(`/app/planning/forecast?${params.toString()}`, { reset: false });
   }
 
   function resetFilters() {
     openDetailKey = '';
     queryClient.removeQueries({ queryKey: forecastEventsQueryKey });
-    void goto('/app/forecast', { reset: false });
+    void goto('/app/planning/forecast', { reset: false });
   }
 
   function toggleDetails(date: string) {
@@ -342,7 +342,7 @@
 
     {#if data.scope.resolved_account_ids.length === 0}
       <StatePanel title={m.forecast_no_accounts_title()} copy={m.forecast_no_accounts_copy()}>
-        <div class="flex flex-wrap gap-3"><a href="/app/accounts" class="font-semibold text-accent underline underline-offset-2">{m.forecast_go_accounts()}</a><button type="button" class="font-semibold text-accent underline underline-offset-2" onclick={resetFilters}>{m.forecast_reset()}</button></div>
+        <div class="flex flex-wrap gap-3"><a href="/app/ledger/accounts" class="font-semibold text-accent underline underline-offset-2">{m.forecast_go_accounts()}</a><button type="button" class="font-semibold text-accent underline underline-offset-2" onclick={resetFilters}>{m.forecast_reset()}</button></div>
       </StatePanel>
     {:else}
       {#if data.assumptions.carried_forward_event_count > 0 || data.assumptions.excluded_event_count > 0}
@@ -356,7 +356,7 @@
               {/each}
             </ul>
           {/if}
-          <a href="/app/recurring" class="mt-3 inline-block font-semibold text-accent underline underline-offset-2">{m.forecast_review_recurring()}</a>
+          <a href="/app/planning/recurring" class="mt-3 inline-block font-semibold text-accent underline underline-offset-2">{m.forecast_review_recurring()}</a>
         </Panel>
       {/if}
 

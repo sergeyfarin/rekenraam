@@ -9,7 +9,7 @@ import { daysFromTodayISO, todayISO } from './support/dates';
  * it takes focus, keeps Tab and Shift+Tab inside, closes on Escape unless a
  * write is in flight, and hands focus back to the control that opened it.
  * Covers the reason dialog, the reconciliation override it hands over to, the
- * trash restore override and an investment correction. Phone-sized screen.
+ * Deleted restore override and an investment correction. Phone-sized screen.
  */
 
 test.use({ viewport: { width: 390, height: 844 } });
@@ -56,7 +56,7 @@ async function seedReconciled(page: Page, label: string, deleted = false) {
 
 test('the void dialog and its reconciliation override keep and return focus', async ({ page }) => {
   const s = await seedReconciled(page, 'Focus');
-  await page.goto(`/app/accounts/${s.checking.id}/register`);
+  await page.goto(`/app/ledger/accounts/${s.checking.id}/register`);
   await page.getByRole('row').filter({ hasText: s.description }).click();
 
   const trigger = page.getByRole('button', { name: 'Void…' });
@@ -85,17 +85,17 @@ test('the void dialog and its reconciliation override keep and return focus', as
   await expect(trigger).toBeFocused();
 });
 
-test('the trash restore override keeps focus, ignores Escape while restoring, and returns focus', async ({ page }) => {
+test('the Deleted restore override keeps focus, ignores Escape while restoring, and returns focus', async ({ page }) => {
   const s = await seedReconciled(page, 'Trash focus', true);
 
-  await page.goto('/app/settings/trash');
+  await page.goto('/app/ledger/transactions?view=deleted');
   const trigger = page.getByRole('row').filter({ hasText: s.description }).getByRole('button', { name: /^Restore/ });
   await trigger.focus();
   await page.keyboard.press('Enter');
   const warning = page.getByRole('alertdialog', { name: 'Restore and invalidate reconciliation?' });
   await expect(warning.getByRole('listitem')).not.toHaveCount(0);
   await expect(warning.getByRole('button', { name: 'Restore anyway' })).not.toBeFocused();
-  await expectFocusTrapped(page, warning, 'trash restore');
+  await expectFocusTrapped(page, warning, 'Deleted restore');
   await page.keyboard.press('Escape');
   await expect(warning).toHaveCount(0);
   await expect(trigger).toBeFocused();
@@ -138,7 +138,7 @@ test('an investment correction dialog keeps and returns focus', async ({ page })
     cash_amount_scale: 2, cash_commodity_id: currencyID, cost_basis_method: 'fifo'
   });
 
-  await page.goto(`/app/transactions?transaction_id=${buy.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${buy.transaction.id}`);
   const trigger = page.getByRole('button', { name: 'Correct buy…' });
   await trigger.focus();
   await page.keyboard.press('Enter');

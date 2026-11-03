@@ -113,7 +113,7 @@ async function expectOwnTransferBridge(page: Page, transferID: number, transferD
   }).sort();
   expect(signs).toEqual([-1, 1]);
 
-  await page.goto(`/app/transactions?transaction_id=${bridge.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${bridge.id}`);
   await expect(page.getByRole('heading', { level: 2, name: 'Cost basis transferred out' })).toBeVisible();
 }
 
@@ -140,7 +140,7 @@ test('an outbound transfer is corrected and then reversed on mobile', async ({ p
       position.account_id === s.holdingID && position.commodity_id === s.commodityID)?.quantity_value ?? '0';
   };
 
-  await page.goto(`/app/transactions?transaction_id=${out.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${out.transaction.id}`);
   await page.getByRole('button', { name: 'Correct transfer…' }).click();
   const form = page.getByRole('dialog', { name: 'Correct this transfer out' });
   const lot = form.getByLabel(/^Lot #/);
@@ -157,7 +157,7 @@ test('an outbound transfer is corrected and then reversed on mobile', async ({ p
   expect(chainText).toContain('"reference":"broker letter"');
 
   const chain = JSON.parse(chainText) as { effective_transaction_id: number };
-  await page.goto(`/app/transactions?transaction_id=${chain.effective_transaction_id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${chain.effective_transaction_id}`);
   await page.getByRole('button', { name: 'Reverse transfer…' }).click();
   const dialog = page.getByRole('alertdialog');
   await dialog.getByLabel('Reason for reversal').fill('the transfer was cancelled');

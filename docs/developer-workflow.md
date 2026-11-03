@@ -393,7 +393,9 @@ at a realistic upper bound — 250,000 posted postings over 3,020 accounts in tw
 currencies across five years — and runs the bundle export and the self-check
 against it (#108). It also measures the shell attention read (#458), asserting
 successful aggregate reads and empty transaction-review queues, with ceilings
-of 5 seconds and 64 MiB peak live heap. This does not certify complete FX
+of 5 seconds and 64 MiB peak live heap, and the Home briefing read (#476),
+asserting both headlines name the missing EUR rate, with ceilings of
+10 seconds and 256 MiB. This does not certify complete FX
 discovery from posted currencies (#464). It asserts the right answer at that size (every posting in
 `ledger.csv`, one trial-balance row per leaf and commodity, a passing check)
 and fails when wall time or peak live heap crosses a ceiling set several times
@@ -408,6 +410,12 @@ Measured 2026-10-16 on an 8-core AMD EPYC 3251, without `-race`:
 | --- | --- | --- | --- |
 | Bundle export | 11.2 s | 413 MiB | 24 MiB |
 | Self-check | 11.8 s | 137 MiB | 39 MiB |
+
+Home was measured 2026-10-31 on the same machine: 5.9 s, 513 MiB allocated and
+141 MiB peak heap while each headline ran its own net-worth series; 2.8 s,
+261 MiB and 112 MiB once both headlines total one ledger read and fold
+(`netWorthScopedSeriesTotals`). Its peak heap is the posting history the
+series reads whole.
 
 Both are SQLite-bound (over 90% of CPU in cgo), and the peak heap shows the
 whole-book folds — the trial balance, account paths, the self-check
@@ -682,16 +690,31 @@ stacks and console output. DOM snapshots, trace screenshots and browser network
 capture are off by default: full tracing measured 25–35% slower and the light
 trace 1–6%.
 Use the worker's `app.log` for the server side of a request. Open the trace with
-`pnpm --dir e2e exec playwright show-trace <path>/trace.zip`, or pass `--trace=on`
-to record a full trace while reproducing locally.
+`pnpm --dir e2e exec playwright show-trace <path>/trace.zip`.
+
+For a genuinely full local trace, set `E2E_FULL_TRACE=1`, for example while
+reproducing one shared-search case:
+
+```sh
+E2E_FULL_TRACE=1 pnpm --dir e2e exec playwright test shared-search --grep "#472"
+```
+
+That selection records every case, including passing ones, with DOM snapshots,
+trace screenshots, browser network records and sources. It is a focused
+diagnostic, not a suite setting: full tracing is slower and its retained traces
+are much larger. Do not expect `--trace=on` to do this: Playwright replaces only
+the configured trace mode and keeps the light trace's disabled screenshots,
+snapshots and sources, so the resulting ZIP still has no DOM or network evidence
+(#473). CI and the normal wrappers leave `E2E_FULL_TRACE` unset.
 
 `investments-capital-return-reads.spec.ts` additionally keeps DOM snapshots and
 browser network evidence for its seven cases (#414), with trace screenshots
 and sources still off. Its reversal phases are named timing steps, so a stalled
 click is separate from navigation, reason entry and submit. All other specs
-retain the global light trace. The
-[2026-10-29 follow-up](reviews/capital-return-stall-2026-10-29.md) records the
-failure-artifact control, tracing cost and current reproduction limits.
+retain the global light trace, and `E2E_FULL_TRACE=1` upgrades this scoped spec
+too. The [2026-10-29 follow-up](reviews/capital-return-stall-2026-10-29.md)
+records the failure-artifact control, tracing cost and current reproduction
+limits.
 
 The route and sub-view sweeps run in separate projects before ordinary app
 journeys, with their own worker books. Their complete matrices and assertions
@@ -790,7 +813,7 @@ pnpm test:release-preflight
 - The frontend runs **TypeScript 6.0** as a deliberate, tested exception: `openapi-typescript` 7.13 still declares `peerDependencies.typescript: ^5.x`, but schema generation, `pnpm --dir frontend run check` and the build pass on 6.0 with unchanged generated output. Re-run those three checks on every TypeScript or generator bump, and fall back to the newest 5.x if generation breaks. TypeScript 7 still breaks the schema generator; that upgrade stays tracked as T-48 [#112](https://github.com/sergeyfarin/rekenraam/issues/112), which the 6.0 upgrade does not close.
 - Frontend message catalogs live in `frontend/messages/`, split by domain as `frontend/messages/<domain>/<locale>.json`. Keep message IDs flat and prefixed by domain or screen intent instead of using one growing locale file or deep nested objects. Generated Paraglide output lives in `frontend/src/lib/paraglide/`. Regenerate the typed message layer with `pnpm --dir frontend run paraglide:compile` when changing catalog structure outside the normal `dev`, `check`, or `build` scripts.
 - Shipping locales are `en, es, fr, nl, de, ru`, listed in `frontend/project.inlang/settings.json`. All configured message directories compile into the single `m` namespace, so **a key must be unique across all configured domains** — which file it lives in is grouping, not namespacing.
-- Add each new message to every configured locale in the same change; the parity gate rejects missing keys. Per-message English fallback remains a runtime safeguard. Adding a *term* requires review — put it in `docs/localization-glossary.md` first, because a plausible-but-wrong financial term is worse than English.
+- Add each new message to the maintained locales (`en`, `nl`, `ru`) in the same change. `es`, `fr` and `de` are partial (owner decision 2026-11-01, #493): new or changed messages may be missing there and fall back to English, tracked in `frontend/src/lib/i18n/missing.json` (`pnpm --dir frontend run catalogs:missing` rewrites it; `catalogs:check` fails when it is stale) and caught up in batches, complete before the v0.1.0 tag. The split itself is `frontend/src/lib/i18n/locale-status.json`. Per-message English fallback remains a runtime safeguard. Adding a *term* requires review — put it in `docs/localization-glossary.md` first, because a plausible-but-wrong financial term is worse than English.
 - **Locale resolution is configured in two places that must agree**: `strategy` in `frontend/vite.config.ts` and the `--strategy` flag on the `paraglide:compile` script in `frontend/package.json`. Both list `localStorage`, `preferredLanguage`, `baseLocale` — the CLI flag is variadic, so the names are space-separated there, not comma-separated. If they drift, the plugin's compile usually wins and hides the mistake — until something skips it and the app silently ships English only.
 - Run `pnpm --dir frontend run catalogs:check` to compare every configured domain and locale with the Inlang base locale, including keys, placeholders, nonempty values and shared-namespace collisions. Frontend dev/check/build and the shared frontend/CI gate run it automatically. Catalog parity does not establish native terminology approval; use [the #102 review packet](reviews/localization-native-review-2026-10-13.md). `e2e/playwright/language.spec.ts` covers the switcher end to end and deliberately asserts strings from both the app and settings catalogs, since a missing file would otherwise show up only as English on half a screen.
 - Multi-state Svelte routes should stay thin route entrypoints. Move reusable workflow UI and route-specific helpers into feature folders under `frontend/src/lib/`, as with `frontend/src/lib/install-gate/`.
@@ -806,7 +829,7 @@ pnpm test:release-preflight
 - Browser e2e tests live in `e2e/` and use Playwright. Keep them focused on user journeys that need a browser.
 - `e2e/playwright/release-preflight.spec.ts` is the local release preflight for critical financial workflows. It is intentionally serial against one fresh SQLite database and is not part of push CI; `.github/workflows/release-preflight.yml` runs it weekly and via `workflow_dispatch` so it cannot drift unseen (#306). Because it is `describe.serial`, a failure in the first test skips the rest of the file — check "did not run" counts before concluding a journey passed.
 - **Never hard-code a calendar date for a transaction, statement, or imported row in an e2e spec.** Everything a spec seeds is versioned as effective from *today*, and posting validation resolves account and commodity rules as of the entry date, so a date in the past relative to that seeded data matches no version and the posting is rejected. Use `todayISO()` / `todayQIF()` from `e2e/playwright/support/dates.ts`. A hard-coded `2026-07-08` silently broke every browser transaction-entry journey once the wall clock passed it (fixed 2026-08-06).
-- **Give each locale of a six-locale journey its own test.** Loop `for (const locale of [...]) test(...)` around the body rather than walking every locale inside one test: six passes in one body exceed the default 30 s budget under full-suite load (#250), and a fresh browser context per test means a stored `PARAGLIDE_LOCALE` needs no `finally` reset — which itself fails once a timeout has closed the page. When the locale passes check state an earlier journey built (a saved report, a currency's cumulative totals), put the journey and the per-locale tests in one `test.describe.serial`, seeding in the journey test or a `beforeAll`; keep the `[acceptance]` tag on split-off tests whose journey carried it, since `--grep` selects tests by title (#251).
+- **Per-locale translation journeys run in `en` and `ru`** (`translationLocales` from `e2e/playwright/support/locales.ts`; `nonEnglishTranslationLocales` for non-English-only loops); formatting tests such as `locale-amounts`, and the route sweep's per-locale phone/language pass (one test, and the check that caught #455's Dutch and German label-in-name failures), use `allLocales`; a spec that reads a partial locale's catalog layers it over English, as the app does. **Give each locale of a multi-locale journey its own test.** Loop `for (const locale of [...]) test(...)` around the body rather than walking every locale inside one test: six passes in one body exceed the default 30 s budget under full-suite load (#250), and a fresh browser context per test means a stored `PARAGLIDE_LOCALE` needs no `finally` reset — which itself fails once a timeout has closed the page. When the locale passes check state an earlier journey built (a saved report, a currency's cumulative totals), put the journey and the per-locale tests in one `test.describe.serial`, seeding in the journey test or a `beforeAll`; keep the `[acceptance]` tag on split-off tests whose journey carried it, since `--grep` selects tests by title (#251).
 - **Assert a saved transaction with `expectSavedTransaction()`, not a bare `getByText(description)`.** Saving opens a detail panel, so the description can be on screen three times at once and a loose text locator fails Playwright strict mode — a failure that reads as "not saved" when the opposite is true. Note also that the list row shows the *payee* instead of the description when there is one, so asserting against the row alone is not portable either.
 - Docker assets live in `deploy/docker/` and must preserve the same single-app production shape as the binary.
 - `deploy/docker/proxy-audit/run.sh` stands up a disposable Caddy TLS proxy (local CA) in front of the supplied Compose app. It runs the #268 proxy/shared-browser checks (`e2e/proxy-audit.config.ts`, outside the main suite) and tears everything down. Rerun it when changing cookies, proxy trust, security headers, session exit or MFA key handling. See its README.

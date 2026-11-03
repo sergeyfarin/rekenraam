@@ -106,7 +106,7 @@ async function pricingPair(c: Context) {
 /** The transaction detail panel of the first of `ids` that offers `action`. */
 async function transactionWith(c: Context, ids: number[], action: string): Promise<void> {
   for (const id of ids) {
-    await c.page.goto(`/app/transactions?transaction_id=${id}`);
+    await c.page.goto(`/app/ledger/transactions?transaction_id=${id}`);
     await settle(c.page);
     const button = detailPanel(c).getByRole('button', { name: c.t(action) });
     if (await button.first().waitFor({ state: 'visible', timeout: 5_000 }).then(() => true, () => false)) return;
@@ -120,7 +120,7 @@ function investmentOn(fx: Fixture, ...dates: string[]): number[] {
 
 function correction(name: string, dates: string[], action: string): SubView {
   return {
-    name, group: 'correction', path: () => '/app/transactions',
+    name, group: 'correction', path: () => '/app/ledger/transactions',
     open: async (c) => {
       await transactionWith(c, investmentOn(c.fx, ...dates), action);
       return clickAndDialog(c, action, detailPanel(c));
@@ -160,26 +160,36 @@ const subViews: SubView[] = [
     },
     close: async (c) => { await c.page.keyboard.press('Escape'); }
   },
+  {
+    name: 'keyboard help', group: 'dialog', path: () => '/app',
+    open: async (c) => {
+      await c.page.locator('#main-content').focus();
+      await c.page.keyboard.press('?');
+      const dialog = openDialog(c.page);
+      await expect(dialog).toBeVisible();
+      return dialog;
+    }
+  },
   // ── Transaction lifecycle and reconciliation dialogs ──────────────────
   {
-    name: 'void reason', group: 'dialog', path: () => '/app/transactions',
+    name: 'void reason', group: 'dialog', path: () => '/app/ledger/transactions',
     open: async (c) => { await transactionWith(c, [c.fx.ordinary.get('Groceries')!], 'transactions_panel_void'); return clickAndDialog(c, 'transactions_panel_void', detailPanel(c)); }
   },
   {
-    name: 'unvoid reason', group: 'dialog', path: () => '/app/transactions',
+    name: 'unvoid reason', group: 'dialog', path: () => '/app/ledger/transactions',
     open: async (c) => { await transactionWith(c, [c.fx.ids.get('t13')!], 'transactions_panel_unvoid'); return clickAndDialog(c, 'transactions_panel_unvoid', detailPanel(c)); }
   },
   {
-    name: 'delete reason', group: 'dialog', path: () => '/app/transactions',
+    name: 'delete reason', group: 'dialog', path: () => '/app/ledger/transactions',
     open: async (c) => { await transactionWith(c, [c.fx.ordinary.get('Groceries')!], 'transactions_panel_soft_delete'); return clickAndDialog(c, 'transactions_panel_soft_delete', detailPanel(c)); }
   },
   {
-    name: 'restore reason (detail panel)', group: 'dialog', path: () => '/app/transactions',
+    name: 'restore reason (detail panel)', group: 'dialog', path: () => '/app/ledger/transactions',
     open: async () => { throw new Error('unreachable'); },
     unreachable: 'transaction-detail-panel keeps a `restore` reason branch that nothing opens: a deleted transaction is not served by the ordinary read, and restore lives in Settings → Trash'
   },
   {
-    name: 'void reconciliation override', group: 'dialog', path: () => '/app/transactions',
+    name: 'void reconciliation override', group: 'dialog', path: () => '/app/ledger/transactions',
     // The void itself is refused by the reconciled period; that refusal opens the review.
     writes: /\/transactions\/\d+\/void$/,
     open: async (c) => {
@@ -192,7 +202,7 @@ const subViews: SubView[] = [
     }
   },
   {
-    name: 'edit reconciliation override', group: 'dialog', path: () => '/app/transactions',
+    name: 'edit reconciliation override', group: 'dialog', path: () => '/app/ledger/transactions',
     writes: /\/transactions\/\d+$/,
     open: async (c) => {
       await transactionWith(c, [c.fx.ordinary.get('Groceries')!], 'transactions_panel_edit');
@@ -206,7 +216,7 @@ const subViews: SubView[] = [
     }
   },
   {
-    name: 'checkpoint void', group: 'dialog', path: () => '/app/reconcile',
+    name: 'checkpoint void', group: 'dialog', path: () => '/app/ledger/reconcile',
     open: async (c) => {
       await c.page.locator('#reconcile-account').selectOption(String(c.fx.ids.get('checking')));
       await c.page.getByRole('button', { name: c.t('reconcile_checkpoint_void_aria') }).first().click();
@@ -216,10 +226,10 @@ const subViews: SubView[] = [
     }
   },
   {
-    name: 'trash restore override', group: 'dialog', path: () => '/app/settings/trash',
+    name: 'Deleted restore override', group: 'dialog', path: () => '/app/ledger/transactions?view=deleted',
     open: async (c) => {
       // Phone rows repeat the action for the stacked layout; take the visible one.
-      await c.page.getByRole('row').filter({ hasText: 'Sweep restore subject' }).getByRole('button', { name: c.t('trash_restore_guarded') }).filter({ visible: true }).first().click();
+      await c.page.getByRole('row').filter({ hasText: 'Sweep restore subject' }).getByRole('button', { name: c.t('transactions_deleted_restore_guarded') }).filter({ visible: true }).first().click();
       const dialog = openDialog(c.page);
       await expect(dialog.getByRole('listitem').first()).toBeVisible();
       return dialog;
@@ -230,7 +240,7 @@ const subViews: SubView[] = [
     open: (c) => clickAndDialog(c, 'currencies_add')
   },
   {
-    name: 'account currency picker', group: 'dialog', path: () => '/app/accounts',
+    name: 'account currency picker', group: 'dialog', path: () => '/app/ledger/accounts',
     open: async (c) => {
       await c.page.getByRole('button', { name: c.t('accounts_add_account') }).first().click();
       await c.page.getByRole('combobox', { name: c.t('accounts_field_currency', true) }).selectOption('__other_currency__');
@@ -252,19 +262,19 @@ const subViews: SubView[] = [
     open: async (c) => { await pricingPair(c); return clickAndDialog(c, 'pricing_void'); }
   },
   {
-    name: 'recurring post review', group: 'dialog', path: () => '/app/recurring',
+    name: 'recurring post review', group: 'dialog', path: () => '/app/planning/recurring',
     open: (c) => clickAndDialog(c, 'recurring_post')
   },
   {
-    name: 'recurring draft edit', group: 'dialog', path: () => '/app/recurring',
+    name: 'recurring draft edit', group: 'dialog', path: () => '/app/planning/recurring',
     open: (c) => clickAndDialog(c, 'recurring_edit_draft')
   },
   {
-    name: 'recurring discard', group: 'dialog', path: () => '/app/recurring',
+    name: 'recurring discard', group: 'dialog', path: () => '/app/planning/recurring',
     open: (c) => clickAndDialog(c, 'recurring_discard')
   },
   {
-    name: 'recurring template editor', group: 'editor', path: () => '/app/recurring',
+    name: 'recurring template editor', group: 'editor', path: () => '/app/planning/recurring',
     open: (c) => clickAndDialog(c, 'recurring_new_template')
   },
   {
@@ -304,7 +314,7 @@ const subViews: SubView[] = [
   {
     // Every book buy has a dependant, so its reversal is refused; the review
     // position's first sale is not, and reversing it moves the second sale's lots.
-    name: 'reverse sale: gain review', group: 'correction', path: () => '/app/transactions',
+    name: 'reverse sale: gain review', group: 'correction', path: () => '/app/ledger/transactions',
     open: async (c) => {
       await transactionWith(c, [c.fx.review.firstSale], 'transactions_investment_reverse_action');
       const dialog = await clickAndDialog(c, 'transactions_investment_reverse_action', detailPanel(c));
@@ -315,7 +325,7 @@ const subViews: SubView[] = [
     }
   },
   {
-    name: 'correct buy: reconciliation confirm', group: 'correction', path: () => '/app/transactions',
+    name: 'correct buy: reconciliation confirm', group: 'correction', path: () => '/app/ledger/transactions',
     open: async (c) => {
       await transactionWith(c, [c.fx.review.firstBuy], 'transactions_investment_replace_buy_action');
       const dialog = await clickAndDialog(c, 'transactions_investment_replace_buy_action', detailPanel(c));
@@ -343,12 +353,12 @@ const subViews: SubView[] = [
     ['correct cash in lieu', 'no settled cash in lieu in the reference book; the dialog renders the cash-in-lieu form swept under split activity'],
     ['correct resolved basis', 'the reference book leaves G1 unresolved; resolving it would change every later configuration']
   ] as const).map(([name, why]): SubView => ({
-    name, group: 'correction', path: () => '/app/transactions', open: async () => { throw new Error(why); }, unreachable: why
+    name, group: 'correction', path: () => '/app/ledger/transactions', open: async () => { throw new Error(why); }, unreachable: why
   })),
 
   // ── Side panels ──────────────────────────────────────────────────────
   {
-    name: 'transaction detail panel', group: 'panel', path: () => '/app/transactions',
+    name: 'transaction detail panel', group: 'panel', path: () => '/app/ledger/transactions',
     open: async (c) => {
       await transactionWith(c, [c.fx.ordinary.get('Groceries')!], 'transactions_panel_void');
       return c.page.getByRole('complementary', { name: c.t('transactions_detail_actions') });
@@ -356,7 +366,7 @@ const subViews: SubView[] = [
     close: async (c) => { await c.page.getByRole('button', { name: c.t('transactions_detail_close') }).click(); }
   },
   {
-    name: 'investment detail panel', group: 'panel', path: () => '/app/transactions',
+    name: 'investment detail panel', group: 'panel', path: () => '/app/ledger/transactions',
     open: async (c) => {
       await transactionWith(c, investmentOn(c.fx, '2026-02-23'), 'transactions_investment_replace_sale_action');
       return c.page.getByRole('complementary', { name: c.t('transactions_detail_actions') });
@@ -364,7 +374,7 @@ const subViews: SubView[] = [
     close: async (c) => { await c.page.getByRole('button', { name: c.t('transactions_detail_close') }).click(); }
   },
   {
-    name: 'transaction editor', group: 'panel', path: () => '/app/transactions',
+    name: 'transaction editor', group: 'panel', path: () => '/app/ledger/transactions',
     open: async (c) => {
       await transactionWith(c, [c.fx.ordinary.get('Card split')!], 'transactions_panel_edit');
       await detailPanel(c).getByRole('button', { name: c.t('transactions_panel_edit') }).click();
@@ -389,7 +399,7 @@ const subViews: SubView[] = [
 
   // ── Editors ──────────────────────────────────────────────────────────
   {
-    name: 'account editor (new)', group: 'editor', path: () => '/app/accounts',
+    name: 'account editor (new)', group: 'editor', path: () => '/app/ledger/accounts',
     open: async (c) => {
       await c.page.getByRole('button', { name: c.t('accounts_add_account') }).first().click();
       return c.page.locator('main form').first();
@@ -397,7 +407,7 @@ const subViews: SubView[] = [
     close: async (c, view) => { await view.getByRole('button', { name: c.t('accounts_form_cancel') }).first().click(); }
   },
   {
-    name: 'institution editor (new)', group: 'editor', path: () => '/app/accounts',
+    name: 'institution editor (new)', group: 'editor', path: () => '/app/ledger/accounts',
     open: async (c) => {
       await c.page.getByRole('button', { name: c.t('institutions_add_institution') }).first().click();
       return c.page.locator('main form').first();
@@ -405,7 +415,7 @@ const subViews: SubView[] = [
     close: async (c, view) => { await view.getByRole('button', { name: c.t('accounts_form_cancel') }).first().click(); }
   },
   {
-    name: 'category editor (new)', group: 'editor', path: () => '/app/categories',
+    name: 'category editor (new)', group: 'editor', path: () => '/app/ledger/categories',
     open: async (c) => {
       await c.page.getByRole('button', { name: c.t('categories_add_category') }).first().click();
       return c.page.locator('main form').first();
@@ -413,7 +423,7 @@ const subViews: SubView[] = [
     close: async (c, view) => { await view.getByRole('button', { name: c.t('categories_form_cancel') }).first().click(); }
   },
   {
-    name: 'budget target: invalid amount', group: 'editor', path: () => '/app/budgets',
+    name: 'budget target: invalid amount', group: 'editor', path: () => '/app/planning/budgets',
     writes: /\/budgets\//,
     open: async (c) => {
       const target = c.page.getByRole('textbox', { name: c.t('budgets_target_for') }).first();
@@ -427,7 +437,7 @@ const subViews: SubView[] = [
 
   // ── Import review ────────────────────────────────────────────────────
   {
-    name: 'staged CSV preview with payee resolution', group: 'import review', path: () => '/app/import',
+    name: 'staged CSV preview with payee resolution', group: 'import review', path: () => '/app/ledger/import',
     writes: /\/imports(\/|$)|\/import-profiles/,
     open: async (c) => {
       await uploadCSV(c, `Sweep payee ${Date.now()}`);
@@ -437,7 +447,7 @@ const subViews: SubView[] = [
     close: discardImport
   },
   {
-    name: 'staged CSV preview with a rejected row', group: 'import review', path: () => '/app/import',
+    name: 'staged CSV preview with a rejected row', group: 'import review', path: () => '/app/ledger/import',
     writes: /\/imports(\/|$)|\/import-profiles/,
     open: async (c) => {
       await uploadCSV(c, `Sweep reject ${Date.now()}`, '-12.50');
@@ -447,8 +457,24 @@ const subViews: SubView[] = [
     close: discardImport
   },
   {
+    // #485: a savings row matching the transfer entered by hand.
+    name: 'match review', group: 'import review', path: () => '/app/ledger/import',
+    writes: /\/imports(\/|$)|\/import-profiles/,
+    open: async (c) => {
+      await uploadCSV(c, `Sweep match ${Date.now()}`, undefined, undefined, '-43,21');
+      await c.page.getByRole('combobox', { name: c.t('import_preview_account_label') }).selectOption(String(c.fx.ids.get('savings')));
+      await c.page.getByRole('combobox', { name: c.t('import_preview_currency_label') }).selectOption(String(c.fx.ids.get('EUR')));
+      await c.page.getByRole('combobox', { name: c.t('import_preview_category_label') }).selectOption({ index: 1 });
+      await c.page.getByRole('button', { name: c.t('import_preview_apply_all') }).click();
+      await c.page.getByRole('button', { name: c.t('import_match_check') }).click();
+      await expect(c.page.getByTestId('import-match-row')).toBeVisible();
+      return c.page.locator('main');
+    },
+    close: discardImport
+  },
+  {
     // One row left without an account fails at commit; its review shows only that row.
-    name: 'failed-row review', group: 'import review', path: () => '/app/import',
+    name: 'failed-row review', group: 'import review', path: () => '/app/ledger/import',
     writes: /\/imports(\/|$)|\/import-profiles|\/payees/,
     open: async (c) => {
       const stamp = Date.now();
@@ -471,7 +497,7 @@ const subViews: SubView[] = [
     }
   },
   {
-    name: 'provider preview: short link', group: 'import review', path: () => '/app/import',
+    name: 'provider preview: short link', group: 'import review', path: () => '/app/ledger/import',
     writes: /\/import-connections\/\d+\/refresh|\/imports(\/|$)/,
     open: async (c) => {
       await fetchProvider(c);
@@ -482,7 +508,7 @@ const subViews: SubView[] = [
     close: discardImport
   },
   {
-    name: 'provider preview: split link', group: 'import review', path: () => '/app/import',
+    name: 'provider preview: split link', group: 'import review', path: () => '/app/ledger/import',
     writes: /\/import-connections\/\d+\/refresh|\/imports(\/|$)/,
     open: async (c) => {
       await fetchProvider(c);
@@ -493,7 +519,7 @@ const subViews: SubView[] = [
     close: discardImport
   },
   {
-    name: 'pending dividend review', group: 'import review', path: () => '/app/import/dividends',
+    name: 'pending dividend review', group: 'import review', path: () => '/app/ledger/import/dividends',
     open: async (c) => {
       await expect(c.page.getByRole('heading', { name: c.t('import_dividend_pending') }).first()).toBeVisible();
       return c.page.locator('main');
@@ -507,8 +533,8 @@ function todayDMY(fx: Fixture): string {
   return `${day}/${month}/${year}`;
 }
 
-async function uploadCSV(c: Context, payee: string, rejected?: string, secondPayee?: string) {
-  const rows = [`${todayDMY(c.fx)};${payee};-12,34`, ...(rejected ? [`${todayDMY(c.fx)};${payee};${rejected}`] : []),
+async function uploadCSV(c: Context, payee: string, rejected?: string, secondPayee?: string, amount = '-12,34') {
+  const rows = [`${todayDMY(c.fx)};${payee};${amount}`, ...(rejected ? [`${todayDMY(c.fx)};${payee};${rejected}`] : []),
     ...(secondPayee ? [`${todayDMY(c.fx)};${secondPayee};-5,00`] : [])];
   await c.page.locator('input[type="file"]').setInputFiles({
     name: 'sweep.csv', mimeType: 'text/csv', buffer: Buffer.from(`Datum;Omschrijving;Bedrag\n${rows.join('\n')}\n`)
@@ -568,6 +594,14 @@ async function seedFixture(page: Page): Promise<Fixture> {
   const restoreSubject = await spend('Sweep restore subject', 700);
   await apiJSON(page, 'POST', `/api/v1/transactions/${restoreSubject.id}/soft-delete`, csrf, { change_reason: 'sweep' });
   await spend('Sweep kept', 500);
+  // A transfer entered by hand that a savings statement row matches (#485).
+  await apiJSON(page, 'POST', '/api/v1/transactions', csrf, {
+    transaction_kind: 'transfer', transaction_date: today, status: 'posted', description: 'Sweep match subject',
+    journal_entries: [{ entry_date: today, postings: [
+      { account_id: ids.get('savings'), commodity_id: ids.get('EUR'), quantity_value: '-4321', quantity_scale: 2 },
+      { account_id: ids.get('checking'), commodity_id: ids.get('EUR'), quantity_value: '4321', quantity_scale: 2 }
+    ] }]
+  });
   // The statement balance is the session's own starting balance plus every
   // candidate, so it holds whatever calendar day the server calls today.
   type Quantity = { quantity_value: string; quantity_scale: number };
@@ -719,7 +753,7 @@ async function seedProviderImport(page: Page, csrf: string, ids: Map<string, num
     source: 'trading212', display_name: fillConnection, api_key: fillKey, cash_account_id: cash.id
   });
   // The dividend batch is committed now, so it waits in review for every configuration.
-  await page.goto('/app/import');
+  await page.goto('/app/ledger/import');
   await page.getByRole('row').filter({ hasText: dividendConnection }).getByRole('button', { name: 'Import', exact: true }).click();
   await page.getByRole('button', { name: 'Commit to ledger' }).click();
   await expect(page.getByText('1 dividend payments remain in review.')).toBeVisible({ timeout: 15_000 });

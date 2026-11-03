@@ -5,6 +5,7 @@ import { todayISO } from './support/dates';
 import { expectNoAccessibilityViolations } from './support/a11y';
 import { readFileSync } from 'node:fs';
 import { test as ownedBookTest } from './support/owned-book';
+import { translationLocales } from './support/locales';
 
 /**
  * #255: a short holder's payment in lieu of a dividend is recorded, corrected
@@ -82,7 +83,7 @@ test('a payment in lieu is recorded, corrected and reversed on mobile', async ({
   await expect(page.getByRole('button', { name: new RegExp(s.name) })).toContainText('-10');
 
   const ledger = await apiJSON<{ transactions: Array<{ id: number }> }>(page, 'GET', `/api/v1/transactions?account_id=${s.expenseID}`);
-  await page.goto(`/app/transactions?transaction_id=${ledger.transactions[0].id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${ledger.transactions[0].id}`);
   await page.getByRole('button', { name: 'Correct payment in lieu…' }).click();
   const correction = page.getByRole('dialog', { name: 'Correct payment in lieu' });
   await expect(correction.getByLabel(/Amount owed/)).toHaveValue('5.00');
@@ -94,7 +95,7 @@ test('a payment in lieu is recorded, corrected and reversed on mobile', async ({
 
   const chain = await apiJSON<{ effective_transaction_id: number }>(page, 'GET',
     `/api/v1/investments/transactions/${ledger.transactions[0].id}/correction-chain`);
-  await page.goto(`/app/transactions?transaction_id=${chain.effective_transaction_id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${chain.effective_transaction_id}`);
   await page.getByRole('button', { name: 'Reverse payment in lieu…' }).click();
   await page.getByLabel('Reason for reversal').fill('charged in error');
   await page.getByRole('button', { name: 'Review and reverse' }).click();
@@ -121,7 +122,7 @@ test('a payment in lieu correction changes its date, cash account and currency o
     expense_account_id: anyExpense.id, amount_value: '500', amount_scale: 2
   });
 
-  await page.goto(`/app/transactions?transaction_id=${payment.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${payment.id}`);
   await page.getByRole('button', { name: 'Correct payment in lieu…' }).click();
   const correction = page.getByRole('dialog', { name: 'Correct payment in lieu' });
   await expect(correction.getByLabel('Payment date')).toHaveValue(daysFromTodayISO(-8));
@@ -160,13 +161,13 @@ test('unsupported short attribution leaves recorded cash effective with a warnin
   await expect(form).toBeHidden();
   await expect.poll(() => expenseBalance(page, s.expenseID)).toBe('500');
   const ledger = await apiJSON<{ transactions: Array<{ id: number }> }>(page, 'GET', `/api/v1/transactions?account_id=${s.expenseID}`);
-  await page.goto(`/app/transactions?transaction_id=${ledger.transactions[0].id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${ledger.transactions[0].id}`);
   await expect(page.getByTestId('investment-attribution-diagnostic')).toContainText('No short units');
 });
 
 // #389's mixed-severity rendering uses explicit response fixtures. Real owner
 // entry/repair/clearing is exercised separately below under #388.
-for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of translationLocales) {
   test(`attribution warnings and unavailable coverage stay visible in ${locale}`, async ({ page }) => {
     const s = await setup(page);
     const payment = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/payment-in-lieu', s.csrfToken, {
@@ -204,7 +205,7 @@ for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
     await expect(summary).toContainText(copy.settings_data_selfcheck_failed_unavailable.replace('{count}', '1'));
     await expect(page.getByTestId('selfcheck-warnings')).toHaveText(copy.settings_data_selfcheck_warnings.replace('{count}', '1'));
     await expect(page.getByTestId('selfcheck-unavailable')).toHaveText(copy.settings_data_selfcheck_unavailable.replace('{count}', '1'));
-    const link = page.locator(`a[href="/app/transactions?transaction_id=${payment.id}"]`).first();
+    const link = page.locator(`a[href="/app/ledger/transactions?transaction_id=${payment.id}"]`).first();
     await expect(link).toHaveAccessibleName(copy.investments_attribution_payment_link.replace('{id}', String(payment.id)));
     await expectNoAccessibilityViolations(page);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
@@ -218,7 +219,7 @@ for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
 // The journey ends on the book-wide self-check, so it owns its book (#398):
 // the cleared payment is the run's only unavailable record, and the run's
 // sample, count and link name it whatever other specs have written.
-for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of translationLocales) {
   ownedBookTest(`optional payment attribution is recorded, repaired and cleared in ${locale}`, async ({ page }) => {
     const s = await setup(page);
     const copy = JSON.parse(readFileSync(new URL(`../../frontend/messages/settings/${locale}.json`, import.meta.url), 'utf8')) as Record<string, string>;
@@ -234,7 +235,7 @@ for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
     await entry.getByRole('button', { name: copy.investments_payment_in_lieu_submit, exact: true }).click();
     const created = await (await createdResponse).json() as { id: number };
     await expect(entry).toBeHidden();
-    await page.goto(`/app/transactions?transaction_id=${created.id}`);
+    await page.goto(`/app/ledger/transactions?transaction_id=${created.id}`);
     await expect(page.getByTestId('investment-attribution-diagnostic')).toContainText(copy.investments_attribution_unavailable);
     const replace = async (clear: boolean) => {
       await page.getByRole('button', { name: copy.investments_payment_in_lieu_correct_action, exact: true }).click();
@@ -253,11 +254,11 @@ for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
       return replacement.replacement_transaction.id;
     };
     const supported = await replace(false);
-    await page.goto(`/app/transactions?transaction_id=${supported}`);
+    await page.goto(`/app/ledger/transactions?transaction_id=${supported}`);
     await expect(page.getByRole('button', { name: copy.investments_payment_in_lieu_correct_action, exact: true })).toBeVisible();
     await expect(page.getByTestId('investment-attribution-diagnostic')).toBeHidden();
     const cleared = await replace(true);
-    await page.goto(`/app/transactions?transaction_id=${cleared}`);
+    await page.goto(`/app/ledger/transactions?transaction_id=${cleared}`);
     await expect(page.getByTestId('investment-attribution-diagnostic')).toContainText(copy.investments_attribution_unavailable);
     await expect.poll(() => expenseBalance(page, s.expenseID)).toBe('500');
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
@@ -269,7 +270,7 @@ for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
     expect(attribution?.unavailable_count).toBe(1);
     expect(attribution?.unavailable_sample).toEqual([cleared]);
     await expect(page.getByTestId('selfcheck-unavailable')).toHaveText(copy.settings_data_selfcheck_unavailable.replace('{count}', '1'));
-    await page.locator(`a[href="/app/transactions?transaction_id=${cleared}"]`).click();
+    await page.locator(`a[href="/app/ledger/transactions?transaction_id=${cleared}"]`).click();
     await expect(page.getByTestId('investment-attribution-diagnostic')).toContainText(copy.investments_attribution_unavailable);
   });
 }
@@ -297,8 +298,8 @@ ownedBookTest('a saturated self-check sample leaves the per-transaction diagnost
   expect(attribution?.unavailable_count).toBe(22);
   expect(attribution?.unavailable_sample).toEqual(unrelated.slice(0, 20));
   await expect(page.getByTestId('selfcheck-unavailable')).toHaveText('Not verified: 22 items with unknown information.');
-  await expect(page.locator(`a[href="/app/transactions?transaction_id=${own.id}"]`)).toHaveCount(0);
+  await expect(page.locator(`a[href="/app/ledger/transactions?transaction_id=${own.id}"]`)).toHaveCount(0);
 
-  await page.goto(`/app/transactions?transaction_id=${own.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${own.id}`);
   await expect(page.getByTestId('investment-attribution-diagnostic')).toContainText('Some attribution context is missing');
 });

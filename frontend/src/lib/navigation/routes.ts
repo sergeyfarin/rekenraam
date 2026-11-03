@@ -10,6 +10,8 @@ import { m } from '#lib/paraglide/messages.js';
  * `+page.svelte` route is missing from it.
  */
 
+export type PageWidth = 'narrow' | 'standard' | 'fluid';
+
 export type SectionID = 'home' | 'review' | 'ledger' | 'investments' | 'planning' | 'reports' | 'settings';
 
 // Keep static message references so bundling can discard unrelated catalogs.
@@ -34,13 +36,16 @@ const titles = {
   reports_view_spending: m.reports_view_spending,
   reports_view_cashflow: m.reports_view_cashflow,
   reports_view_net_worth: m.reports_view_net_worth,
-  settings_nav_overview: m.settings_nav_overview,
-  settings_nav_appearance: m.settings_nav_appearance,
-  settings_card_language_title: m.settings_card_language_title,
+  reports_export_title: m.reports_export_title,
+  settings_nav_general: m.settings_nav_general,
+  settings_nav_preferences: m.settings_nav_preferences,
   settings_nav_currencies: m.settings_nav_currencies,
   settings_data_title: m.settings_data_title,
   settings_nav_security: m.settings_nav_security,
-  settings_nav_trash: m.settings_nav_trash,
+  // Aliases for Preferences: the merged page still answers to the old pages'
+  // names in search (#446 review).
+  language_title: m.language_title,
+  appearance_title: m.appearance_title,
 };
 export type TitleKey = keyof typeof titles;
 
@@ -49,9 +54,13 @@ export type RouteEntry = {
   icon: RouteIcon;
   /** Localized search terms; shared search consumes these in #457. */
   keywords: readonly TitleKey[];
-  /** Page width policy; applying it is the separate #459 slice. */
-  width: 'narrow' | 'standard' | 'fluid';
-  /** The SvelteKit route id: `/app/accounts/[id]/register`. */
+  /**
+   * The page column's width (#459): narrow about 720px for forms, standard
+   * about 1200px, fluid up to the shell's 1600px for registers and lists. The
+   * column keeps the shell's left edge, so a narrow page never re-centres.
+   */
+  width: PageWidth;
+  /** The SvelteKit route id: `/app/ledger/accounts/[id]/register`. */
   route: string;
   section: SectionID;
   title: () => string;
@@ -89,19 +98,24 @@ export const sections: readonly Section[] = [
 // Order within a section is tab order. The Ledger, Planning and Reports
 // overviews are placeholders until #448 and #450; Accounts stays a Ledger tab
 // until #448 folds it into the Ledger overview.
-const definitions: readonly Omit<RouteEntry, 'title' | 'keywords'>[] = [
+type RouteDefinition = Omit<RouteEntry, 'title' | 'keywords'> & {
+  /** Extra localized search terms this page still answers to. */
+  keywords?: readonly TitleKey[];
+};
+
+const definitions: readonly RouteDefinition[] = [
   { route: '/app/review', section: 'review', titleKey: 'attention_review', icon: 'scan-line', width: 'standard', standalone: true },
-  { route: '/app', section: 'home', titleKey: 'nav_home', icon: 'house', width: 'fluid' },
+  { route: '/app', section: 'home', titleKey: 'nav_home', icon: 'house', width: 'fluid', ownHeader: true },
 
   { route: '/app/ledger', section: 'ledger', titleKey: 'nav_overview', icon: 'landmark', width: 'standard', tab: true },
-  { route: '/app/accounts', section: 'ledger', titleKey: 'accounts_title', icon: 'landmark', width: 'standard', tab: true },
-  { route: '/app/accounts/[id]/register', section: 'ledger', titleKey: 'accounts_title', icon: 'list', width: 'fluid', parent: '/app/accounts' },
-  { route: '/app/transactions', attention: ['transaction_review'], section: 'ledger', titleKey: 'transactions_page_title', icon: 'list', width: 'fluid', tab: true },
-  { route: '/app/categories', section: 'ledger', titleKey: 'categories_title', icon: 'tags', width: 'standard', tab: true },
-  { route: '/app/categories/[id]', section: 'ledger', titleKey: 'categories_title', icon: 'tags', width: 'standard', parent: '/app/categories' },
-  { route: '/app/import', attention: ['imports', 'connections'], section: 'ledger', titleKey: 'import_title', icon: 'download', width: 'fluid', tab: true },
-  { route: '/app/import/dividends', section: 'ledger', titleKey: 'import_dividend_title', icon: 'download', width: 'fluid', parent: '/app/import', ownHeader: true },
-  { route: '/app/reconcile', section: 'ledger', titleKey: 'reconcile_title', icon: 'scan-line', width: 'fluid', tab: true },
+  { route: '/app/ledger/accounts', section: 'ledger', titleKey: 'accounts_title', icon: 'landmark', width: 'standard', tab: true },
+  { route: '/app/ledger/accounts/[id]/register', section: 'ledger', titleKey: 'accounts_title', icon: 'list', width: 'fluid', parent: '/app/ledger/accounts', ownHeader: true },
+  { route: '/app/ledger/transactions', attention: ['transaction_review'], section: 'ledger', titleKey: 'transactions_page_title', icon: 'list', width: 'fluid', tab: true, ownHeader: true },
+  { route: '/app/ledger/categories', section: 'ledger', titleKey: 'categories_title', icon: 'tags', width: 'standard', tab: true },
+  { route: '/app/ledger/categories/[id]', section: 'ledger', titleKey: 'categories_title', icon: 'tags', width: 'fluid', parent: '/app/ledger/categories', ownHeader: true },
+  { route: '/app/ledger/import', attention: ['imports', 'connections'], section: 'ledger', titleKey: 'import_title', icon: 'download', width: 'fluid', tab: true },
+  { route: '/app/ledger/import/dividends', section: 'ledger', titleKey: 'import_dividend_title', icon: 'download', width: 'fluid', parent: '/app/ledger/import', ownHeader: true },
+  { route: '/app/ledger/reconcile', section: 'ledger', titleKey: 'reconcile_title', icon: 'scan-line', width: 'fluid', tab: true },
 
   { route: '/app/investments', attention: ['suggestions'], section: 'investments', titleKey: 'nav_overview', icon: 'chart-no-axes-combined', width: 'standard', tab: true },
   { route: '/app/investments/instruments', section: 'investments', titleKey: 'quotes_instruments', icon: 'shapes', width: 'standard', tab: true },
@@ -113,28 +127,61 @@ const definitions: readonly Omit<RouteEntry, 'title' | 'keywords'>[] = [
   { route: '/app/pricing', section: 'investments', titleKey: 'nav_prices', icon: 'coins', width: 'standard', legacy: true },
 
   { route: '/app/planning', section: 'planning', titleKey: 'nav_overview', icon: 'calendar-days', width: 'standard', tab: true },
-  { route: '/app/budgets', section: 'planning', titleKey: 'budgets_title', icon: 'wallet', width: 'standard', tab: true, ownHeader: true },
-  { route: '/app/recurring', attention: ['drafts', 'recurring_blocked'], section: 'planning', titleKey: 'recurring_title', icon: 'repeat', width: 'standard', tab: true },
-  { route: '/app/forecast', section: 'planning', titleKey: 'forecast_nav', icon: 'calendar-range', width: 'fluid', tab: true },
+  { route: '/app/planning/budgets', section: 'planning', titleKey: 'budgets_title', icon: 'wallet', width: 'standard', tab: true, ownHeader: true },
+  { route: '/app/planning/recurring', attention: ['drafts', 'recurring_blocked'], section: 'planning', titleKey: 'recurring_title', icon: 'repeat', width: 'standard', tab: true },
+  { route: '/app/planning/forecast', section: 'planning', titleKey: 'forecast_nav', icon: 'calendar-range', width: 'fluid', tab: true },
 
   { route: '/app/reports', section: 'reports', titleKey: 'nav_overview', icon: 'chart-pie', width: 'standard', tab: true },
   { route: '/app/reports/spending', section: 'reports', titleKey: 'reports_view_spending', icon: 'chart-pie', width: 'standard', tab: true, queryGroup: 'reports' },
   { route: '/app/reports/cashflow', section: 'reports', titleKey: 'reports_view_cashflow', icon: 'arrow-left-right', width: 'standard', tab: true, queryGroup: 'reports' },
   { route: '/app/reports/net-worth', section: 'reports', titleKey: 'reports_view_net_worth', icon: 'chart-line', width: 'standard', tab: true, queryGroup: 'reports' },
+  { route: '/app/reports/export', section: 'reports', titleKey: 'reports_export_title', icon: 'download', width: 'standard', tab: true },
 
-  { route: '/app/settings', section: 'settings', titleKey: 'settings_nav_overview', icon: 'settings-2', width: 'standard', tab: true },
-  { route: '/app/settings/appearance', section: 'settings', titleKey: 'settings_nav_appearance', icon: 'palette', width: 'standard', tab: true },
-  { route: '/app/settings/language', section: 'settings', titleKey: 'settings_card_language_title', icon: 'languages', width: 'standard', tab: true },
+  { route: '/app/settings', section: 'settings', titleKey: 'settings_nav_general', icon: 'settings-2', width: 'standard', tab: true },
+  { route: '/app/settings/preferences', section: 'settings', titleKey: 'settings_nav_preferences', icon: 'palette', width: 'standard', tab: true, keywords: ['language_title', 'appearance_title'] },
   { route: '/app/settings/currencies', section: 'settings', titleKey: 'settings_nav_currencies', icon: 'coins', width: 'standard', tab: true },
-  { route: '/app/settings/data', section: 'settings', titleKey: 'settings_data_title', icon: 'database', width: 'standard', tab: true },
   { route: '/app/settings/security', section: 'settings', titleKey: 'settings_nav_security', icon: 'shield-check', width: 'standard', tab: true },
-  { route: '/app/settings/trash', section: 'settings', titleKey: 'settings_nav_trash', icon: 'trash-2', width: 'standard', tab: true }
+  { route: '/app/settings/data', section: 'settings', titleKey: 'settings_data_title', icon: 'database', width: 'standard', tab: true },
+
+  // Settings moved pages (#446). They redirect before rendering; the stub
+  // pages keep old bookmarks inside the app shell.
+  { route: '/app/settings/appearance', section: 'settings', titleKey: 'settings_nav_preferences', icon: 'palette', width: 'standard', legacy: true },
+  { route: '/app/settings/language', section: 'settings', titleKey: 'settings_nav_preferences', icon: 'palette', width: 'standard', legacy: true },
+  { route: '/app/settings/trash', section: 'settings', titleKey: 'settings_data_title', icon: 'database', width: 'standard', legacy: true }
 ];
 
-export const routes: readonly RouteEntry[] = definitions.map((entry) => ({
+// Keep the old page families until old bookmarks no longer need them (#460).
+// Accounts remains a tab until #448 folds its list into the Ledger overview;
+// registers already have their lasting section-owned path.
+const sectionRouteMoves = [
+  ['/app/accounts', '/app/ledger/accounts'],
+  ['/app/transactions', '/app/ledger/transactions'],
+  ['/app/categories', '/app/ledger/categories'],
+  ['/app/import', '/app/ledger/import'],
+  ['/app/reconcile', '/app/ledger/reconcile'],
+  ['/app/budgets', '/app/planning/budgets'],
+  ['/app/recurring', '/app/planning/recurring'],
+  ['/app/forecast', '/app/planning/forecast']
+] as const;
+
+const legacyDefinitions: readonly RouteDefinition[] = definitions.flatMap((entry) => {
+  const move = sectionRouteMoves.find(([, target]) => entry.route === target || entry.route.startsWith(`${target}/`));
+  if (!move) return [];
+  // Legacy paths only redirect, never appear as tabs or search results.
+  return [{
+    route: move[0] + entry.route.slice(move[1].length),
+    section: entry.section,
+    titleKey: entry.titleKey,
+    icon: entry.icon,
+    width: entry.width,
+    legacy: true as const
+  }];
+});
+
+export const routes: readonly RouteEntry[] = [...definitions, ...legacyDefinitions].map((entry) => ({
   ...entry,
   title: () => titles[entry.titleKey](),
-  keywords: [entry.titleKey]
+  keywords: [entry.titleKey, ...(entry.keywords ?? [])]
 }));
 
 const patterns = routes.map((entry) => ({
@@ -158,6 +205,17 @@ export function sectionTabs(section: SectionID): RouteEntry[] {
 
 export function sectionFor(id: SectionID): Section | undefined {
   return sections.find((section) => section.id === id);
+}
+
+export type Crumb = { label: string; href: string };
+
+/**
+ * A detail page's breadcrumb: the tab it belongs to (*Accounts › Checking*).
+ * The object hierarchy (*Categories › Housing › Energy*) extends it in #442.
+ */
+export function breadcrumbs(entry: RouteEntry | undefined): Crumb[] {
+  const parent = entry?.parent ? routes.find((route) => route.route === entry.parent) : undefined;
+  return parent ? [{ label: parent.title(), href: parent.route }] : [];
 }
 
 /** The tab a page marks current: itself, or the tab it is a detail of. */
@@ -194,7 +252,31 @@ export function canonicalURL(url: Pick<URL, 'href' | 'pathname' | 'search'>): UR
   };
   const path = url.pathname.replace(/\/$/, '') || '/';
 
+  if (routeFor(path)?.legacy) {
+    const moved = sectionRouteMoves.find(([from]) => path === from || path.startsWith(`${from}/`));
+    if (moved) return move(moved[1] + path.slice(moved[0].length));
+  }
+
   if (path === '/app/pricing') return move('/app/investments/prices');
+
+  // Settings consolidation (#446): appearance and language are one page, and
+  // Trash is a view of Transactions. Keep every other parameter.
+  if (path === '/app/settings/appearance' || path === '/app/settings/language') {
+    return move('/app/settings/preferences');
+  }
+  if (path === '/app/settings/trash') {
+    params.set('view', 'deleted');
+    return move('/app/ledger/transactions');
+  }
+  // An old link that opened Export inside Settings → Data now belongs on its
+  // own Reports page.
+  if (path === '/app/settings/data') {
+    if (params.get('view') === 'export' || params.get('export') === 'true') {
+      params.delete('view');
+      params.delete('export');
+      return move('/app/reports/export');
+    }
+  }
 
   // `/app/reports` was the net-worth report; it is now the Reports overview.
   // A link carrying any report state is a report link, so it keeps going to

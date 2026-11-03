@@ -634,8 +634,8 @@ PricingCoverageResponse:
   properties:
     reason:
       type: string
-      enum: [usable, future_only, incompatible_quote_basis, not_known_at_cutoff]
-      description: Why no compatible observation was selected; absent for a pair without any live evidence.
+      enum: [usable, future_only, incompatible_quote_basis, not_known_at_cutoff, no_observation_in_window, conflicting_splits]
+      description: Why no compatible observation was selected, or why a recent one cannot value the pair (conflicting_splits); absent for a pair without any live evidence.
 
     base_commodity_id:
       type: integer
@@ -651,6 +651,7 @@ PricingCoverageResponse:
       - usable
       - stale
       - missing
+      description: stale when the observation is older than staleness_max_days or valuation_window_days; missing when there is none, or when valuation cannot use a recent one (reason says why, and observation stays present).
     age_days:
       type: integer
       minimum: 0
@@ -662,6 +663,7 @@ PricingWorkspaceResponse:
   required:
   - as_of
   - staleness_max_days
+  - valuation_window_days
   - commodities
   - sources
   - coverage
@@ -671,6 +673,10 @@ PricingWorkspaceResponse:
       format: date
     staleness_max_days:
       type: integer
+      description: The pricing policy's out-of-date limit, as configured.
+    valuation_window_days:
+      type: integer
+      description: The longest age at which reports, and so Home, value with a price. Coverage applies the smaller of the two limits.
     commodities:
       type: array
       items:

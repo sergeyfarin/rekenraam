@@ -31,13 +31,13 @@ func TestFXRefreshTargetsIncludePostedOnlyCurrency(t *testing.T) {
 	f := newPostedCurrencyFixture(t)
 	f.post(t, "2026-06-12", "posted", "10000", 2)
 
-	coverage, err := f.pricing.repository.FXCoverageStartDates(ctx, BookID)
+	demand, err := f.pricing.repository.FXDemand(ctx, BookID)
 	require.NoError(t, err)
-	require.Contains(t, coverage, db.PricingCurrencyCoverageRecord{CommodityID: f.foreign, StartDate: "2026-06-12"})
+	require.Contains(t, demand, db.PricingCurrencyDemandRecord{CommodityID: f.foreign, Code: "USD", StartDate: "2026-06-12"})
 
 	policy, err := f.pricing.pricingPolicyOrDefault(ctx)
 	require.NoError(t, err)
-	targets, err := f.pricing.fxRefreshTargets(ctx, policy)
+	targets, err := f.pricing.fxRefreshTargets(ctx, policy, demand)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"EUR/USD", "USD/EUR"}, fxTargetCodes(targets),
 		"the dated demand owner and the target planner must agree on posted currencies")
@@ -65,6 +65,86 @@ func postedCurrencyObservations(t *testing.T, f postedCurrencyFixture, date stri
 		AND ((base_commodity_id=? AND quote_commodity_id=?) OR (base_commodity_id=? AND quote_commodity_id=?))`,
 		date, f.foreign, f.eurCommodityID, f.eurCommodityID, f.foreign).Scan(&observations))
 	return observations
+}
+
+func insertAccountVersion(t *testing.T, f postedCurrencyFixture, accountClass, accountKind string, allowsPostings int) {
+	t.Helper()
+	_, err := f.database.Exec(`INSERT INTO account_versions(account_id,version_seq,effective_from,recorded_at,changed_by_user_id,change_reason,status,opened_on,name,account_class,account_kind,default_commodity_id,allows_postings)
+		VALUES(?,2,'2026-06-12','2026-06-12T12:00:00Z',1,'demand scope fixture','active','2026-01-01','Demand receivable',?,?,?,?)`,
+		f.cashAccountID, accountClass, accountKind, f.foreign, allowsPostings)
+	require.NoError(t, err)
+}
+
+// #466: coverage start dates and refresh targets come from one demand read, so
+// an account default either contributes both or neither. A default that cannot
+// accept postings or whose commodity version is archived has no future FX
+// obligation; a posted currency keeps its obligation regardless.
+func TestFXDemandCoverageAndTargetsShareAccountDefaultScope(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name      string
+		wantStart string
+		prepare   func(t *testing.T, f postedCurrencyFixture)
+	}{
+		{name: "active_postable_default", wantStart: "2026-01-01", prepare: func(t *testing.T, f postedCurrencyFixture) {
+			insertAccountVersion(t, f, "asset", "receivable", 1)
+		}},
+		{name: "non_postable_default", prepare: func(t *testing.T, f postedCurrencyFixture) {
+			insertAccountVersion(t, f, "asset", "receivable", 0)
+		}},
+		{name: "archived_currency_default", prepare: func(t *testing.T, f postedCurrencyFixture) {
+			insertAccountVersion(t, f, "asset", "receivable", 1)
+			_, err := f.database.Exec(`INSERT INTO commodity_versions(commodity_id,version_seq,effective_from,recorded_at,changed_by_user_id,change_reason,status,symbol,display_symbol,name,standard_scale,max_quantity_scale)
+				VALUES(?,2,'2026-06-12','2026-06-12T12:00:00Z',1,'archived fixture','archived','USD','USD','US dollar',2,6)`, f.foreign)
+			require.NoError(t, err)
+		}},
+		{name: "posted_on_non_postable_account", wantStart: "2026-06-12", prepare: func(t *testing.T, f postedCurrencyFixture) {
+			f.post(t, "2026-06-12", "posted", "10000", 2)
+			_, err := f.database.Exec(`INSERT INTO account_versions(account_id,version_seq,effective_from,recorded_at,changed_by_user_id,change_reason,status,opened_on,name,account_class,account_kind,allows_postings)
+				VALUES(?,2,'2026-06-12','2026-06-12T12:00:00Z',1,'non-postable fixture','active','2026-01-01','Read-only receivable','asset','receivable',0)`, f.cashAccountID)
+			require.NoError(t, err)
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			ctx := context.Background()
+			f := newPostedCurrencyFixture(t)
+			test.prepare(t, f)
+
+			demand, err := f.pricing.fxDemand(ctx)
+			require.NoError(t, err)
+			policy, err := f.pricing.pricingPolicyOrDefault(ctx)
+			require.NoError(t, err)
+			targets, err := f.pricing.fxRefreshTargets(ctx, policy, demand)
+			require.NoError(t, err)
+
+			demandIDs := make([]int64, 0, len(demand))
+			for _, record := range demand {
+				demandIDs = append(demandIDs, record.CommodityID)
+			}
+			targetIDs := make([]int64, 0, len(targets)*2)
+			seenTargetIDs := map[int64]bool{}
+			for _, target := range targets {
+				for _, id := range []int64{target.Base.ID, target.Quote.ID} {
+					if !seenTargetIDs[id] {
+						seenTargetIDs[id] = true
+						targetIDs = append(targetIDs, id)
+					}
+				}
+			}
+			wantDemandIDs := []int64{}
+			wantTargetIDs := []int64{}
+			if test.wantStart != "" {
+				wantDemandIDs = []int64{f.foreign}
+				wantTargetIDs = []int64{f.eurCommodityID, f.foreign}
+				assert.Contains(t, demand, db.PricingCurrencyDemandRecord{CommodityID: f.foreign, Code: "USD", StartDate: test.wantStart})
+			}
+			assert.ElementsMatch(t, wantDemandIDs, demandIDs,
+				"the demand read owns every coverage start date")
+			assert.ElementsMatch(t, wantTargetIDs, targetIDs,
+				"every demanded start date must own a refresh target and every planned currency must own a start date")
+		})
+	}
 }
 
 // #465: the durable worker must actually fetch the posted-only pair/date, not
@@ -177,9 +257,12 @@ func TestFXRefreshPostedCurrencyDemandScope(t *testing.T) {
 			t.Parallel()
 			f := newPostedCurrencyFixture(t)
 			test.prepare(t, f)
-			policy, err := f.pricing.pricingPolicyOrDefault(context.Background())
+			ctx := context.Background()
+			demand, err := f.pricing.fxDemand(ctx)
 			require.NoError(t, err)
-			targets, err := f.pricing.fxRefreshTargets(context.Background(), policy)
+			policy, err := f.pricing.pricingPolicyOrDefault(ctx)
+			require.NoError(t, err)
+			targets, err := f.pricing.fxRefreshTargets(ctx, policy, demand)
 			require.NoError(t, err)
 			want := []string{}
 			if test.want {
@@ -198,9 +281,11 @@ func TestFXRefreshFuturePostedCurrencyDoesNotFetchBeforeItsDate(t *testing.T) {
 	f := newPostedCurrencyFixture(t)
 	f.post(t, "2026-06-13", "posted", "10000", 2)
 
+	demand, err := f.pricing.fxDemand(ctx)
+	require.NoError(t, err)
 	policy, err := f.pricing.pricingPolicyOrDefault(ctx)
 	require.NoError(t, err)
-	targets, err := f.pricing.fxRefreshTargets(ctx, policy)
+	targets, err := f.pricing.fxRefreshTargets(ctx, policy, demand)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"EUR/USD", "USD/EUR"}, fxTargetCodes(targets))
 
@@ -208,7 +293,9 @@ func TestFXRefreshFuturePostedCurrencyDoesNotFetchBeforeItsDate(t *testing.T) {
 		Reason: "transaction_entered", CurrencyID: f.foreign, StartDate: "2026-06-13"})
 	require.NoError(t, err)
 	assert.Zero(t, run.ItemsTotal)
-	assert.Empty(t, successors)
+	require.Len(t, successors, 1, "future demand retains a durable owner-date wakeup (#471)")
+	assert.Equal(t, "2026-06-13T00:00:00Z", successors[0].AvailableAt)
+	assert.Zero(t, successors[0].Attempts)
 	assert.Zero(t, postedCurrencyObservations(t, f, "2026-06-13"))
 }
 

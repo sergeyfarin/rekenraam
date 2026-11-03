@@ -75,7 +75,7 @@ test('a return of capital beyond the basis previews its excess, then is reversed
   await expect(card).toContainText('3.00');
   await expect(card).toContainText('Basis reduction');
   await expect(card).toContainText('7.00');
-  await page.goto(`/app/transactions?transaction_id=${receipt!.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${receipt!.id}`);
   const history = page.getByRole('region', { name: 'Return-of-capital allocation history' });
   await expect(history).toContainText('3.00');
   await expect(history).toContainText('Effective allocation set');
@@ -84,7 +84,7 @@ test('a return of capital beyond the basis previews its excess, then is reversed
   await reversal.getByLabel('Reason for reversal').fill('notice withdrawn');
   await reversal.getByRole('button', { name: 'Review and reverse' }).click();
   await expect(reversal).toBeHidden();
-  await page.goto(`/app/transactions?transaction_id=${receipt!.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${receipt!.id}`);
   await expect(history).toContainText('Historical allocation set');
   await expect(history).not.toContainText('Effective allocation set');
   await expect(history).toContainText('3.00');
@@ -133,7 +133,7 @@ test('a closed position allows partial-lot return correction before its same-day
   await apiJSON(page, 'POST', '/api/v1/investments/sell', csrfToken, {
     ...trade, transaction_date: daysFromTodayISO(-10), cash_amount_value: '3000'
   });
-  await page.goto(`/app/transactions?transaction_id=${receipt.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${receipt.transaction.id}`);
   await page.getByRole('button', { name: 'Correct return of capital', exact: true }).click();
   const form = page.getByRole('dialog', { name: 'Correct return of capital', exact: true });
   await expect(form.getByLabel(/Amount received/)).toHaveValue('4.00');
@@ -152,7 +152,7 @@ test('a closed position allows partial-lot return correction before its same-day
   await expect(confirmation).toContainText('basis 16.00 → 10.00');
   await confirmation.getByRole('button', { name: 'Accept changed gains' }).click();
   await expect(form).toBeHidden();
-  await page.goto(`/app/transactions?transaction_id=${receipt.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${receipt.transaction.id}`);
   const history = page.getByRole('region', { name: 'Return-of-capital allocation history' });
   await expect(history.getByRole('article')).toHaveCount(2);
   const current = history.getByRole('article').filter({ hasText: 'Effective allocation set' });
@@ -196,7 +196,7 @@ test('a return-of-capital correction preserves exact unedited source evidence on
     source_evidence: { reference: 'issuer notice', revision: 'EXACT:9007199254740993', nested: { rate: 'EXACT:0.1000000000000000055511151231257827' } }
   }));
   const transactionID = (JSON.parse(created) as { transaction: { id: number } }).transaction.id;
-  await page.goto(`/app/transactions?transaction_id=${transactionID}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${transactionID}`);
   await page.getByRole('button', { name: 'Correct return of capital', exact: true }).click();
   const form = page.getByRole('dialog', { name: 'Correct return of capital', exact: true });
   await expect(form.getByLabel('Broker or statement reference')).toHaveValue('issuer notice');

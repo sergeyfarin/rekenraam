@@ -62,7 +62,7 @@ test('a refused void and unvoid show every affected checkpoint before override',
   // A second statement the same day, after the subject, is invalidated too.
   const later = await s.reconcile(await s.spend(`Later spend ${s.suffix}`, 500), -1500);
 
-  await page.goto(`/app/accounts/${s.checking.id}/register`);
+  await page.goto(`/app/ledger/accounts/${s.checking.id}/register`);
   await page.getByRole('row').filter({ hasText: `Statement fix ${s.suffix}` }).click();
   await page.getByRole('button', { name: 'Void…' }).click();
   await page.getByLabel('Reason').fill('duplicate charge');
@@ -92,7 +92,7 @@ test('a refused void and unvoid show every affected checkpoint before override',
   // on this statement (#240): -5.00 later plus -2.00 next.
   const again = await s.reconcile(await s.spend(`Next spend ${s.suffix}`, 200), -700);
   // The register hides voided entries; a transaction link opens its panel.
-  await page.goto(`/app/transactions?transaction_id=${subject.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${subject.id}`);
   await page.getByRole('button', { name: 'Unvoid…' }).click();
   await page.getByLabel('Reason').fill('charge was real');
   await page.getByRole('dialog', { name: 'Unvoid transaction' }).getByRole('button', { name: 'Unvoid', exact: true }).click();

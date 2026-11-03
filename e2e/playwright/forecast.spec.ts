@@ -24,7 +24,7 @@ test('[acceptance] forecasts recorded and recurring movements without posting', 
   await postForecastTransaction(page, todayISO(), account.id, income.id, currencyID, '10000', '-10000');
   await postForecastTransaction(page, daysFromTodayISO(1), account.id, expense.id, currencyID, '-2500', '2500');
 
-  await page.goto(`/app/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false`);
+  await page.goto(`/app/planning/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false`);
   await expect(page.getByRole('heading', { name: 'Forecast', exact: true })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Planning pages' }).getByRole('link', { name: 'Forecast' })).toHaveAttribute('aria-current', 'page');
 
@@ -37,7 +37,7 @@ test('[acceptance] forecasts recorded and recurring movements without posting', 
   await table.getByRole('row').filter({ hasText: 'USD -25.00' }).getByRole('button').click();
   await expect(page.getByText('forecast screen fixture', { exact: true })).toBeVisible();
   await expect(page.getByText('Posted', { exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Review transactions' })).toHaveAttribute('href', '/app/transactions');
+  await expect(page.getByRole('link', { name: 'Review transactions' })).toHaveAttribute('href', '/app/ledger/transactions');
   await expect(page.locator('tr[id^="forecast-detail-"] > td')).toHaveAttribute('colspan', '6');
   await page.getByRole('button', { name: 'Close details' }).click();
 
@@ -83,7 +83,7 @@ test('[acceptance] edited recurring draft replaces the template assumption', asy
       { account_id: expense.id, commodity_id: currencyID, quantity_value: '1234', quantity_scale: 2 }
     ]
   }, [201]);
-  const forecastURL = `/app/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false`;
+  const forecastURL = `/app/planning/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false`;
 
   try {
     await page.goto(forecastURL);
@@ -150,7 +150,7 @@ test('forecast refreshes after stale event basis without mixing pages', async ({
     });
   });
 
-  await page.goto(`/app/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false`);
+  await page.goto(`/app/planning/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false`);
   await page.getByRole('table').getByRole('row').filter({ hasText: 'USD -10.00' }).first().getByRole('button').click();
   await expect(page.getByText('old event that must be cleared', { exact: true })).toBeVisible();
   const loadMore = page.getByRole('button', { name: 'Load more movements' });
@@ -186,7 +186,7 @@ test('[acceptance] forecast is usable on mobile and by keyboard in both themes',
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ basis_token: url.searchParams.get('basis_token'), date: url.searchParams.get('date'), total_count: 0, next_cursor: null, items: [] }) });
   });
 
-  await page.goto(`/app/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false`);
+  await page.goto(`/app/planning/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false`);
   const dayButtons = page.getByRole('table').getByRole('button');
   const firstDay = dayButtons.nth(0);
   await firstDay.focus();
@@ -212,10 +212,10 @@ test('[acceptance] forecast filters survive reload and back navigation', async (
   const { csrfToken, currencyID } = await readyForLedger(page);
   const account = await createCashAccount(page, csrfToken, `Forecast filters ${Date.now()}`, currencyID);
 
-  await page.goto('/app/forecast?horizon_days=invalid');
+  await page.goto('/app/planning/forecast?horizon_days=invalid');
   await expect(page.getByText('These forecast filters are invalid', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Reset', exact: true }).click();
-  await expect(page).toHaveURL(/\/app\/forecast$/);
+  await expect(page).toHaveURL(/\/app\/planning\/forecast$/);
 
   await page.getByRole('button', { name: '30 days' }).click();
   await page.getByLabel(account.name, { exact: true }).check();
@@ -232,7 +232,7 @@ test('[acceptance] forecast filters survive reload and back navigation', async (
   await page.reload();
   await expect(page.getByLabel(account.name, { exact: true })).toBeChecked();
   await expect(page.getByLabel('Include eligible sub-accounts')).not.toBeChecked();
-  await page.goto('/app/transactions');
+  await page.goto('/app/ledger/transactions');
   await page.goBack();
   await expect(page).toHaveURL(filteredURL);
   await expect(page.getByLabel('Combined currency')).toHaveValue(String(currencyID));
@@ -264,7 +264,7 @@ test('forecast exposes loading empty error and excluded-assumption states', asyn
     await route.fulfill({ response, json: body });
   });
 
-  await page.goto(`/app/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false`);
+  await page.goto(`/app/planning/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false`);
   await expect(page.getByText('Loading projected balances', { exact: true })).toBeVisible();
   releaseFirst();
   await expect(page.getByText('Projected balances could not load', { exact: true })).toBeVisible();
@@ -287,7 +287,7 @@ test('forecast keeps exact currencies when constant FX is unavailable', async ({
   if (!expense) throw new Error('expected seeded expense category');
   await postForecastTransaction(page, todayISO(), account.id, expense.id, eur.id, '1234', '-1234');
 
-  await page.goto(`/app/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false&reporting_currency_id=${currencyID}&fx_method=constant_as_of`);
+  await page.goto(`/app/planning/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false&reporting_currency_id=${currencyID}&fx_method=constant_as_of`);
   await expect(page.getByText('A complete combined balance cannot be shown. Exact currency balances remain available.')).toBeVisible();
   await expect(page.getByText('USD 12.34', { exact: true })).toHaveCount(0);
   await expect(page.getByText(`${code} 12.34`, { exact: true }).first()).toBeVisible();
@@ -296,12 +296,12 @@ test('forecast keeps exact currencies when constant FX is unavailable', async ({
 test('forecast renders all new messages in a non-English locale', async ({ page }) => {
   const { csrfToken, currencyID } = await readyForLedger(page);
   const account = await createCashAccount(page, csrfToken, `Forecast locale ${Date.now()}`, currencyID);
-  await page.goto('/app/settings/language');
+  await page.goto('/app/settings/preferences');
   await page.getByRole('button', { name: 'Русский' }).click();
-  await page.goto(`/app/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false`);
+  await page.goto(`/app/planning/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false`);
   await expect(page.getByRole('heading', { name: 'Прогноз', exact: true })).toBeVisible();
   await expect(page.getByText('В этом периоде нет запланированных изменений', { exact: true })).toBeVisible();
-  await page.goto('/app/settings/language');
+  await page.goto('/app/settings/preferences');
   await page.getByRole('button', { name: 'English' }).click();
 });
 

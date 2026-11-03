@@ -4,6 +4,7 @@ import { readyForLedger } from './support/ledger';
 import { daysFromTodayISO, todayISO } from './support/dates';
 import { expectNoAccessibilityViolations } from './support/a11y';
 import { readFileSync } from 'node:fs';
+import { translationLocales } from './support/locales';
 
 test.use({ viewport: { width: 390, height: 844 } });
 test.describe.configure({ mode: 'parallel' });
@@ -59,7 +60,7 @@ for (const theme of ['light', 'dark']) {
   });
 }
 
-for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of translationLocales) {
   for (const shape of ['dividend', 'embedded_tax', 'separate_tax']) {
   test(`${shape} payer entry, assignment and clearing work in ${locale}`, async ({ page }) => {
     const { csrfToken, currencyID } = await readyForLedger(page);
@@ -106,7 +107,7 @@ for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
       originalIDs.push(created.id);
       let current = created.id;
       for (const clear of [false, true]) {
-        await page.goto(`/app/transactions?transaction_id=${current}`);
+        await page.goto(`/app/ledger/transactions?transaction_id=${current}`);
         await page.getByRole('button', { name: separate ? copy.investments_withholding_correct_action : copy.transactions_investment_replace_dividend_action, exact: true }).click();
         const form = page.getByRole('dialog', { name: separate ? copy.investments_withholding_correct_title : copy.transactions_investment_replace_dividend_title, exact: true });
         await form.locator('#dividend-correction-payer').selectOption(clear ? '' : String(instrument.commodity_id));

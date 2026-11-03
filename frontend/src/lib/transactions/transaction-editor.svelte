@@ -2,7 +2,7 @@
   import { useOwnerToday } from '#lib/dates/owner-date-context.ts';
   import { transactionTitle } from '#lib/transactions/transaction-title.ts';
   import { systemLabelText } from '#lib/transactions/system-label.ts';
-  import { untrack, type Snippet } from 'svelte';
+  import { onDestroy, tick, untrack, type Snippet } from 'svelte';
   import { tagsQueryOptions } from '#lib/api/tags.ts';
   import Plus from '@lucide/svelte/icons/plus';
   import Save from '@lucide/svelte/icons/save';
@@ -14,7 +14,23 @@
   import APIFormError from '#lib/components/api-form-error.svelte';
   import { isSubledgerManagedAccountKind } from '#lib/accounts/subledger-accounts.ts';
   import { isOrdinaryEntryAccount } from './entry-account';
+  import { suggestionKey } from './suggestion-keys.ts';
   import { editablePostings, hasPostingDay, postedOnForRequest } from './posted-on';
+  import { simpleFormFits, simpleFormKeeps, splitEntryCarry, splitEntryRequest, type SplitEntryCarry, type SplitPosting } from './editable-entry';
+  import {
+    convertedAmounts,
+    sameCurrencyAmount,
+    sameCurrencyStatements,
+    transferEntry,
+    transferFeeCategoryKey,
+    transferFields,
+    transferProblem,
+    type TransferFields,
+    type TransferProblem,
+    type TransferSideName
+  } from './transfer';
+  import { getLocale } from '#lib/paraglide/runtime.js';
+  import { formatQuantity, formatRatio, joinCommodityAmount } from '#lib/money/format.ts';
   import { m } from '#lib/paraglide/messages.js';
   import { accountsQueryOptions } from '#lib/api/accounts.ts';
   import { categoriesQueryOptions } from '#lib/api/categories.ts';
@@ -64,7 +80,9 @@
   const ownerToday = useOwnerToday();
 
   // ── Tier types ────────────────────────────────────────────────────
-  type Tier = 'simple' | 'split';
+  // `locked`: a journal no editor restates exactly; only what it describes
+  // is edited, and the save keeps the stored journal (#481).
+  type Tier = 'simple' | 'split' | 'transfer' | 'locked';
 
   // A single editable posting leg in the split editor.
   type SplitLeg = {
@@ -76,6 +94,10 @@
     /** The day this account posting posts on, '' when it follows the
      *  transaction date (#187). */
     postedOn: string;
+    /** Carried, never shown (#481): the day a category was restated on and
+     *  its tags. */
+    followsDay?: string;
+    tagIDs?: number[];
   };
 
   // ── Props ─────────────────────────────────────────────────────────
@@ -100,8 +122,9 @@
     onSaved?: (saved: TransactionResponse) => Promise<void> | void;
     initialValues?: TransactionRequest;
     /** Pre-selects the account or category a new transaction starts from,
-     *  when it is entered from that account's or category's screen (#185). */
-    createDefaults?: { accountID?: number; categoryID?: number };
+     *  when it is entered from that account's or category's screen (#185);
+     *  `transfer` opens Transfer mode, the account as From (#481). */
+    createDefaults?: { accountID?: number; categoryID?: number; transfer?: boolean };
     templateFields?: Snippet;
     saveTemplate?: (payload: TransactionRequest) => Promise<void>;
     preservePostings?: boolean;
@@ -147,12 +170,57 @@
   const queryClient = useQueryClient();
   let categoryDropdownOpen = $state(false);
   let categorySearch = $state('');
+  // Suggestion lists are comboboxes: the active option, -1 for none.
+  const uid = $props.id();
+  let payeeActive = $state(-1);
+  let categoryActive = $state(-1);
 
   function onPayeeInput(e: Event) {
     const val = (e.target as HTMLInputElement).value;
     payeeSearch = val;
     payeeID = undefined; // clear resolved ID when user edits
     payeeDropdownOpen = val.length > 0;
+    payeeActive = -1;
+  }
+
+  function choosePayee(payee: PayeeResponse) {
+    payeeID = payee.id;
+    payeeSearch = payee.name;
+    payeeDropdownOpen = false;
+    payeeActive = -1;
+  }
+
+  function payeeKeydown(event: KeyboardEvent) {
+    if (event.isComposing) return;
+    const result = suggestionKey(event.key, payeeDropdownOpen, payeeMatches.length, payeeActive);
+    if (result.kind === 'none') return;
+    event.preventDefault();
+    if (result.kind === 'move') {
+      payeeDropdownOpen = true;
+      payeeActive = result.active;
+      void tick().then(() => document.getElementById(`${uid}-payee-${payeeActive}`)?.scrollIntoView({ block: 'nearest' }));
+    }
+    else if (result.kind === 'choose') choosePayee(payeeMatches[result.index]);
+    else { payeeDropdownOpen = false; payeeActive = -1; }
+  }
+
+  async function categoryKeydown(event: KeyboardEvent) {
+    if (event.isComposing) return;
+    const result = suggestionKey(event.key, categoryDropdownOpen, filteredCategories.length, categoryActive);
+    if (result.kind === 'none') return;
+    event.preventDefault();
+    if (result.kind === 'move') {
+      categoryDropdownOpen = true;
+      categoryActive = result.active;
+      await tick();
+      document.getElementById(`${uid}-category-${categoryActive}`)?.scrollIntoView({ block: 'nearest' });
+    }
+    else if (result.kind === 'choose') {
+      // The field becomes the chosen label and its clear button; keep focus there.
+      selectCategory(filteredCategories[result.index]);
+      await tick();
+      document.getElementById(`${uid}-category-clear`)?.focus();
+    } else { categoryDropdownOpen = false; categoryActive = -1; }
   }
 
   const payeesQuery = createQuery(() => payeesQueryOptions({}));
@@ -186,15 +254,52 @@
   let noteMarkdown = $state('');
   let externalRefHint = $state('');
 
+  // What the split editor carries for the entry and never shows (#481).
+  let splitCarry = $state<SplitEntryCarry>({});
+  // The simple form's two lines, kept so an edit keeps their identity.
+  let simpleLineKeys = $state<{ account?: string; category?: string }>({});
+
   // Tier 3: split legs
   let splitLegs = $state<SplitLeg[]>([
     { accountID: '', commodityID: '', amountStr: '', memo: '', postedOn: '' },
     { accountID: '', commodityID: '', amountStr: '', memo: '', postedOn: '' }
   ]);
 
+  // Transfer between two of the owner's accounts (#481). In one currency the
+  // amount transferred; in two, what left From and what reached To as their
+  // statements show them. A fee on top, on Bank fees, posts with its payer.
+  let transferFromID = $state<number | undefined>(undefined);
+  let transferToID = $state<number | undefined>(undefined);
+  // Chosen currency for a side whose account has no default commodity.
+  let transferFromCommodityID = $state<number | undefined>(undefined);
+  let transferToCommodityID = $state<number | undefined>(undefined);
+  let sentStr = $state('');
+  let receivedStr = $state('');
+  let feeStr = $state('');
+  let feePaidBy = $state<TransferSideName>('sending');
+  let conversionSide = $state<TransferSideName>('sending');
+  // Memos the form does not show, kept so a save leaves them as they were.
+  let transferMemos = $state<{ from?: string; to?: string; fee?: string; entry?: string }>({});
+  let feeAccountID = $state<number | undefined>(undefined);
+  let leavesOn = $state('');
+  let arrivesOn = $state('');
+  let showTransferDays = $state(false);
+  let transferLineKeys = $state<{ from?: string; to?: string; fee?: string }>({});
+  // The saved entries' kind, sent back so an edit keeps it.
+  let transferEntryKind = $state<TransferFields['entryKind']>(undefined);
+  // Why the transfer cannot be saved yet, translated; '' when it can.
+  let transferMessage = $state('');
+
   // ── Form state ────────────────────────────────────────────────────
   let pending = $state(false);
-  $effect(() => { onPendingChange?.(pending); });
+  // The whole save chain is busy, the payee it creates first included: a
+  // dialog or panel never dismisses (and so discards) the entry while a write
+  // that leads to posting it is in flight.
+  const busy = $derived(pending || payeeCreatePending);
+  $effect(() => { onPendingChange?.(busy); });
+  // A dismissed editor never continues to a save of its own.
+  let dismissed = false;
+  onDestroy(() => { dismissed = true; });
   let formError = $state<unknown>(undefined);
 
   // Reconciliation override modal
@@ -254,6 +359,35 @@
     )
   );
 
+  const transferFromAccount = $derived(assetLiabilityAccounts.find((a: AccountResponse) => a.id === transferFromID));
+  const transferToAccount = $derived(assetLiabilityAccounts.find((a: AccountResponse) => a.id === transferToID));
+  const transferFromCommodity = $derived(transferFromAccount?.default_commodity_id ?? transferFromCommodityID);
+  const transferToCommodity = $derived(transferToAccount?.default_commodity_id ?? transferToCommodityID);
+  const transferIsExchange = $derived(
+    transferFromCommodity !== undefined && transferToCommodity !== undefined && transferFromCommodity !== transferToCommodity
+  );
+  const bankFeesCategoryID = $derived(
+    (categoriesQuery.data?.categories ?? []).find((c: CategoryResponse) => c.builtin_key === transferFeeCategoryKey && c.status === 'active')?.id
+  );
+  // Display only: what converted (the statement amounts with the fee taken
+  // back out of its payer) and the rate those imply, never used to fill one in.
+  const transferConversion = $derived.by(() => {
+    if (!transferIsExchange) return null;
+    const sent = parseDecimalAmount(sentStr);
+    const received = parseDecimalAmount(receivedStr);
+    if (!sent || !received) return null;
+    const fee = parsedFee();
+    const converted = convertedAmounts({ sent, received, fee: fee ? { amount: fee, paidBy: feePaidBy } : undefined });
+    if (!converted) return null;
+    const locale = getLocale();
+    return {
+      sent: joinCommodityAmount(commodityCode(transferFromCommodity), formatQuantity(converted.sent.value, converted.sent.scale, locale)),
+      received: joinCommodityAmount(commodityCode(transferToCommodity), formatQuantity(converted.received.value, converted.received.scale, locale)),
+      rate: formatRatio(converted.received, converted.sent, 6, locale)
+    };
+  });
+  const commodityCode = (id: number | undefined) => (id === undefined ? '' : currenciesByID.get(id)?.code ?? '');
+
   // For Tier 3 imbalance check — summed per commodity, scale-aware, in #lib/money.
   const splitImbalance = $derived.by(() => commodityImbalance(splitLegs));
 
@@ -262,7 +396,9 @@
       ? m.transactions_form_correction_title()
       : mode === 'edit'
         ? m.transactions_form_edit_title()
-        : m.transactions_form_create_title()
+        : tier === 'transfer'
+          ? m.transactions_transfer_title()
+          : m.transactions_form_create_title()
   );
 
   const submitLabel = $derived(
@@ -277,10 +413,26 @@
 
   const isVoided = $derived(transaction?.status === 'voided');
 
+  // A locked journal is shown as it is stored, system postings included.
+  const lockedPostings = $derived(
+    tier === 'locked'
+      ? (transaction?.journal_entries ?? []).flatMap((entry) =>
+          entry.postings.map((posting) => ({
+            key: `${entry.entry_seq}-${posting.line_key}`,
+            date: entry.entry_date,
+            label: posting.account_system_role ? systemRoleLabel(posting.account_system_role) : (posting.account_name ?? String(posting.account_id)),
+            amount: joinCommodityAmount(posting.commodity_code ?? '', formatQuantity(posting.quantity_value, posting.quantity_scale, getLocale()))
+          }))
+        )
+      : []
+  );
+
   // ── Initialise from existing transaction (edit mode) ──────────────
   $effect(() => {
     tagIDs = [...(transaction?.tag_ids ?? initialValues?.tag_ids ?? [])];
     splitPostedOnOpen = {};
+    splitCarry = {};
+    simpleLineKeys = {};
     if (mode === 'template' && initialValues) {
       transactionDate = initialValues.transaction_date ?? untrack(ownerToday);
       payeeID = initialValues.payee_id ?? undefined;
@@ -316,7 +468,15 @@
       transactionKind = 'ordinary';
       noteMarkdown = '';
       externalRefHint = '';
-      tier = 'simple';
+      resetTransfer();
+      // Local, not read back from `tier`: the effect must not track the tier,
+      // or switching it would reset the form.
+      const startsAsTransfer = untrack(() => createDefaults?.transfer) === true;
+      tier = startsAsTransfer ? 'transfer' : 'simple';
+      if (startsAsTransfer) {
+        transferFromID = untrack(() => createDefaults?.accountID);
+        accountID = undefined;
+      }
       splitLegs = [
         { accountID: '', commodityID: '', amountStr: '', memo: '', postedOn: '' },
         { accountID: '', commodityID: '', amountStr: '', memo: '', postedOn: '' }
@@ -346,12 +506,52 @@
       ({ posting }) => posting.account_class === 'income' || posting.account_class === 'expense'
     );
 
-    // The simple form is one account and one category; anything else (a
-    // transfer between two accounts included) opens as splits.
-    if (!preservePostings && shown.length <= 2 && assetLegs.length <= 1 && categoryLegs.length <= 1 && assetLegs.length + categoryLegs.length === shown.length) {
+    // A transfer between two accounts, in one currency or two, with or
+    // without a fee, opens in Transfer mode (#481).
+    const transfer = preservePostings ? null : transferFields(transaction);
+    resetTransfer();
+    if (transfer) {
+      tier = 'transfer';
+      transferFromID = transfer.from.accountID;
+      transferToID = transfer.to.accountID;
+      transferFromCommodityID = transfer.from.commodityID;
+      transferToCommodityID = transfer.to.commodityID;
+      const twoCurrencies = transfer.from.commodityID !== transfer.to.commodityID;
+      const amount = twoCurrencies ? transfer.sent : sameCurrencyAmount(transfer);
+      sentStr = formatEditableAmount(amount.value, amount.scale);
+      receivedStr = twoCurrencies ? formatEditableAmount(transfer.received.value, transfer.received.scale) : '';
+      leavesOn = transfer.from.postedOn;
+      arrivesOn = transfer.to.postedOn;
+      showTransferDays = transfer.from.postedOn !== '' || transfer.to.postedOn !== '' || transfer.conversionSide === 'receiving';
+      conversionSide = transfer.conversionSide ?? 'sending';
+      transferLineKeys = { from: transfer.from.lineKey, to: transfer.to.lineKey, fee: transfer.fee?.lineKey };
+      transferMemos = { from: transfer.from.memo, to: transfer.to.memo, fee: transfer.fee?.memo, entry: transfer.entryMemo };
+      transferEntryKind = transfer.entryKind;
+      if (transfer.fee) {
+        feeStr = formatEditableAmount(transfer.fee.amount.value, transfer.fee.amount.scale);
+        feePaidBy = transfer.fee.paidBy;
+        feeAccountID = transfer.fee.accountID;
+      }
+      return;
+    }
+
+    // Everything else is edited as the server restates it; a journal it
+    // cannot restate exactly is locked to what it describes (#481).
+    const editable = preservePostings ? undefined : transaction.editable_entry;
+    if (!preservePostings && !editable) {
+      tier = 'locked';
+      return;
+    }
+    if (editable) splitCarry = splitEntryCarry(editable);
+    const accountIDs = new Set(loaded.filter(({ posting }) => hasPostingDay(posting)).map(({ posting }) => posting.account_id));
+
+    // The simple form is one account and one category, with nothing it would
+    // drop; anything else opens as splits.
+    if (editable && simpleFormKeeps(editable, (id) => accountIDs.has(id)) && shown.length <= 2 && assetLegs.length <= 1 && categoryLegs.length <= 1 && assetLegs.length + categoryLegs.length === shown.length) {
       tier = 'simple';
       const assetLeg = assetLegs[0];
       const catLeg = categoryLegs[0]?.posting;
+      simpleLineKeys = { account: assetLeg?.posting.line_key, category: catLeg?.line_key };
       if (assetLeg) {
         accountID = assetLeg.posting.account_id;
         simpleCommodityID = assetLeg.posting.commodity_id;
@@ -369,6 +569,21 @@
         const cat = allCats?.find((c: CategoryResponse) => c.id === catLeg.account_id);
         categoryLabel = cat ? categoryDisplayName(cat) : allCats ? String(catLeg.account_id) : '';
       }
+    } else if (editable) {
+      tier = 'split';
+      splitLegs = editable.postings.map((p) => {
+        const isAccount = accountIDs.has(p.account_id);
+        return {
+          accountID: String(p.account_id),
+          commodityID: String(p.commodity_id),
+          amountStr: formatEditableAmount(p.quantity_value, p.quantity_scale),
+          memo: p.memo,
+          lineKey: p.line_key,
+          postedOn: isAccount ? (p.posted_on ?? '') : '',
+          followsDay: isAccount ? undefined : p.posted_on,
+          tagIDs: p.tag_ids
+        };
+      });
     } else {
       tier = 'split';
       splitLegs = shown.map(({ posting: p, postedOn }) => ({
@@ -400,6 +615,15 @@
 
     if (isVoided) {
       return; // blocked by UI; should not happen
+    }
+
+    transferMessage = '';
+    if (tier === 'transfer') {
+      const problem = currentTransferProblem();
+      if (problem) {
+        transferMessage = problem === 'no_fee_category' ? m.transactions_transfer_problem_no_fee_category() : transferProblemMessage(problem);
+        return;
+      }
     }
 
     // A newly typed name that names no payee stops here rather than being saved
@@ -474,6 +698,7 @@
     } finally {
       payeeCreatePending = false;
     }
+    if (dismissed) return;
     await savePayee();
   }
 
@@ -580,7 +805,14 @@
       payload.payee_name = payeeSearch.trim();
     }
 
-    if (tier === 'simple') {
+    if (tier === 'transfer') {
+      // A new transfer is one by kind; an edit or correction keeps the kind
+      // it was saved with.
+      if (mode === 'create') payload.transaction_kind = 'transfer';
+      payload.journal_entries = buildTransferJournalEntries();
+    } else if (tier === 'locked') {
+      payload.keep_journal = true;
+    } else if (tier === 'simple') {
       payload.journal_entries = buildSimpleJournalEntries();
     } else {
       payload.journal_entries = buildSplitJournalEntries();
@@ -614,6 +846,7 @@
         entry_date: transactionDate,
         postings: [
           {
+            line_key: simpleLineKeys.account,
             account_id: accountID,
             posted_on: mode === 'template' ? undefined : postedOnForRequest(accountPostedOn, transactionDate, account),
             commodity_id: effectiveCommodityID,
@@ -622,6 +855,7 @@
             memo: ''
           },
           {
+            line_key: simpleLineKeys.category,
             account_id: categoryID,
             commodity_id: effectiveCommodityID,
             quantity_value: catLedgerValue,
@@ -633,31 +867,172 @@
     ];
   }
 
-  function buildSplitJournalEntries(): TransactionRequest['journal_entries'] {
+  /** The filled split legs as postings, or null when one cannot be parsed. */
+  function splitPostings(): SplitPosting[] | null {
     const legs = splitLegs.filter(
       (leg) => leg.accountID !== '' && leg.commodityID !== '' && leg.amountStr.trim() !== ''
     );
 
-    const postings: JournalEntryPostingRequest[] = [];
+    const postings: SplitPosting[] = [];
     for (const leg of legs) {
       const parsed = parseDecimalAmount(leg.amountStr);
       // A leg the user filled in but we cannot parse must not silently become a
       // zero posting — refuse to build the payload, as the simple tier does.
-      if (parsed === null) return [];
+      if (parsed === null) return null;
+      const account = accountForLeg(leg.accountID);
+      const isAccount = hasPostingDay(account);
       postings.push({
-        line_key: leg.lineKey,
-        account_id: Number(leg.accountID),
-        posted_on: mode === 'template' ? undefined : postedOnForRequest(leg.postedOn, transactionDate, accountForLeg(leg.accountID)),
-        commodity_id: Number(leg.commodityID),
-        quantity_value: parsed.value,
-        quantity_scale: parsed.scale,
-        memo: leg.memo.trim()
+        lineKey: leg.lineKey,
+        accountID: Number(leg.accountID),
+        commodityID: Number(leg.commodityID),
+        value: parsed.value,
+        scale: parsed.scale,
+        memo: leg.memo.trim(),
+        isAccount,
+        postedOn: mode === 'template' || !isAccount ? '' : leg.postedOn.trim(),
+        followsDay: mode === 'template' ? undefined : leg.followsDay,
+        tagIDs: leg.tagIDs
       });
     }
+    return postings;
+  }
 
-    if (postings.length === 0) return [];
+  function buildSplitJournalEntries(): TransactionRequest['journal_entries'] {
+    const postings = splitPostings();
+    if (!postings || postings.length === 0) return [];
 
-    return [{ entry_date: transactionDate, postings }];
+    // Account postings in two currencies are an exchange: the server adds
+    // the commodity_trading legs the editor never shows (#481). What the
+    // editor carries goes back while it still fits.
+    const hasSystemAccount = postings.some((posting) => !!accountForLeg(String(posting.accountID))?.system_role);
+    return [splitEntryRequest(postings, splitCarry, transactionDate, hasSystemAccount)];
+  }
+
+  function resetTransfer() {
+    transferFromID = undefined;
+    transferToID = undefined;
+    transferFromCommodityID = undefined;
+    transferToCommodityID = undefined;
+    sentStr = '';
+    receivedStr = '';
+    feeStr = '';
+    feePaidBy = 'sending';
+    conversionSide = 'sending';
+    transferMemos = {};
+    feeAccountID = undefined;
+    leavesOn = '';
+    arrivesOn = '';
+    showTransferDays = false;
+    transferLineKeys = {};
+    transferEntryKind = undefined;
+    transferMessage = '';
+  }
+
+  function parsedFee() {
+    return feeStr.trim() ? parseDecimalAmount(feeStr) : null;
+  }
+
+  function currentTransferProblem(): TransferProblem | 'no_fee_category' | null {
+    if (feeStr.trim() && parsedFee() === null) return 'invalid_fee';
+    const fee = parsedFee();
+    if (fee && fee.value !== '0' && feeAccountID === undefined && bankFeesCategoryID === undefined) return 'no_fee_category';
+    if (sentStr.trim() && parseDecimalAmount(sentStr) === null) return 'missing_amount';
+    return transferProblem({
+      fromAccountID: transferFromID && transferFromCommodity !== undefined ? transferFromID : undefined,
+      toAccountID: transferToID && transferToCommodity !== undefined ? transferToID : undefined,
+      sent: parseDecimalAmount(sentStr),
+      received: parseDecimalAmount(receivedStr),
+      exchange: transferIsExchange,
+      leavesOn: leavesOn || transactionDate,
+      arrivesOn: arrivesOn || transactionDate,
+      fee: parsedFee(),
+      feePaidBy
+    });
+  }
+
+  function transferProblemMessage(problem: TransferProblem): string {
+    switch (problem) {
+      case 'missing_account': return m.transactions_transfer_problem_missing_account();
+      case 'same_account': return m.transactions_transfer_problem_same_account();
+      case 'missing_amount': return m.transactions_transfer_problem_missing_amount();
+      case 'missing_received': return m.transactions_transfer_problem_missing_received();
+      case 'arrives_before_leaves': return m.transactions_transfer_problem_arrives_before_leaves();
+      case 'invalid_fee': return m.transactions_transfer_problem_invalid_fee();
+      case 'fee_exceeds_amount': return m.transactions_transfer_problem_fee_exceeds_amount();
+    }
+  }
+
+  function buildTransferJournalEntries(): TransactionRequest['journal_entries'] {
+    const amount = parseDecimalAmount(sentStr);
+    if (!transferFromID || !transferToID || transferFromCommodity === undefined || transferToCommodity === undefined || !amount) return [];
+    const parsed = parsedFee();
+    const feeCategory = feeAccountID ?? bankFeesCategoryID;
+    const fee = parsed && parsed.value !== '0' && feeCategory ? { amount: parsed, paidBy: feePaidBy } : undefined;
+    let statements = sameCurrencyStatements(amount, fee);
+    if (transferIsExchange) {
+      const received = parseDecimalAmount(receivedStr);
+      if (!received) return [];
+      statements = { sent: amount, received };
+    }
+    const entry = transferEntry({
+      from: { accountID: transferFromID, commodityID: transferFromCommodity, postedOn: mode === 'template' ? '' : leavesOn, lineKey: transferLineKeys.from, memo: transferMemos.from },
+      to: { accountID: transferToID, commodityID: transferToCommodity, postedOn: mode === 'template' ? '' : arrivesOn, lineKey: transferLineKeys.to, memo: transferMemos.to },
+      sent: statements.sent,
+      received: statements.received,
+      fee: fee && feeCategory ? { accountID: feeCategory, amount: fee.amount, paidBy: fee.paidBy, lineKey: transferLineKeys.fee, memo: transferMemos.fee } : undefined,
+      conversionSide: transferIsExchange ? conversionSide : undefined,
+      entryMemo: transferMemos.entry,
+      entryKind: transferEntryKind
+    }, transactionDate);
+    return [{ entry_date: transactionDate, ...entry }];
+  }
+
+  function switchTransferToSplit() {
+    const built = buildTransferJournalEntries() ?? [];
+    const entry = built[0];
+    const postings = entry?.postings ?? [];
+    if (postings.length >= 2) {
+      // The transfer's days, memos and choices travel into the split: a fee's
+      // day is carried, as the split shows no day for a category (#481).
+      splitLegs = postings.map((p: JournalEntryPostingRequest) => {
+        const isAccount = hasPostingDay(accountForLeg(String(p.account_id)));
+        return {
+          accountID: String(p.account_id),
+          commodityID: String(p.commodity_id),
+          amountStr: formatEditableAmount(p.quantity_value ?? '0', p.quantity_scale ?? 0),
+          memo: p.memo ?? '',
+          lineKey: p.line_key,
+          postedOn: isAccount ? (p.posted_on ?? '') : '',
+          followsDay: isAccount ? undefined : p.posted_on
+        };
+      });
+      splitCarry = {
+        entryKind: entry.entry_kind ?? splitCarry.entryKind,
+        memo: entry.memo,
+        conversionSide: entry.conversion_side,
+        feePaidBy: entry.fee_paid_by
+      };
+    }
+    tier = 'split';
+  }
+
+  function switchToTransfer() {
+    resetTransfer();
+    transferFromID = accountID;
+    tier = 'transfer';
+  }
+
+  function swapTransferSides() {
+    [transferFromID, transferToID] = [transferToID, transferFromID];
+    [transferFromCommodityID, transferToCommodityID] = [transferToCommodityID, transferFromCommodityID];
+    [leavesOn, arrivesOn] = [arrivesOn, leavesOn];
+    if (transferIsExchange) [sentStr, receivedStr] = [receivedStr, sentStr];
+    [transferLineKeys, transferMemos] = [
+      { from: transferLineKeys.to, to: transferLineKeys.from, fee: transferLineKeys.fee },
+      { ...transferMemos, from: transferMemos.to, to: transferMemos.from }
+    ];
+    feePaidBy = feePaidBy === 'sending' ? 'receiving' : 'sending';
+    conversionSide = conversionSide === 'sending' ? 'receiving' : 'sending';
   }
 
   // ── Helpers ───────────────────────────────────────────────────────
@@ -667,6 +1042,7 @@
     categoryLabel = categoryDisplayName(cat);
     categorySearch = '';
     categoryDropdownOpen = false;
+    categoryActive = -1;
   }
 
   function clearCategory() {
@@ -696,6 +1072,8 @@
           commodityID: inferredCommodityID ? String(inferredCommodityID) : '',
           amountStr: formatEditableAmount(assetLedger, scale),
           memo: '',
+          // The same lines, so their reconciliation state stays theirs.
+          lineKey: simpleLineKeys.account,
           postedOn: accountPostedOn
         },
         {
@@ -703,6 +1081,7 @@
           commodityID: inferredCommodityID ? String(inferredCommodityID) : '',
           amountStr: formatEditableAmount(negateCoefficient(assetLedger), scale),
           memo: '',
+          lineKey: simpleLineKeys.category,
           postedOn: ''
         }
       ];
@@ -710,7 +1089,33 @@
     tier = 'split';
   }
 
+  // The split as the simple form would show it, or null when it would drop
+  // something; an untouched new split switches freely.
+  const splitIsEmpty = $derived(splitLegs.every((leg) => leg.accountID === '' && leg.amountStr.trim() === ''));
+  const simpleFit = $derived.by(() => {
+    if (tier !== 'split' || preservePostings) return null;
+    const postings = splitPostings();
+    if (!postings) return null;
+    const categoryIDs = new Set((categoriesQuery.data?.categories ?? []).map((category: CategoryResponse) => category.id));
+    return simpleFormFits(postings, splitCarry, (id) => categoryIDs.has(id));
+  });
+
   function switchToSimple() {
+    const fit = simpleFit;
+    if (fit) {
+      const account = assetLiabilityAccounts.find((a: AccountResponse) => a.id === fit.account.accountID);
+      accountID = fit.account.accountID;
+      simpleCommodityID = fit.account.commodityID;
+      amountStr = inflowPositiveAmount({ quantity_value: fit.account.value, quantity_scale: fit.account.scale, account_class: account?.account_class ?? 'asset' });
+      accountPostedOn = fit.account.postedOn;
+      showAccountPostedOn = fit.account.postedOn !== '';
+      categoryID = fit.category.accountID;
+      const category = categoriesQuery.data?.categories.find((c: CategoryResponse) => c.id === fit.category.accountID);
+      categoryLabel = category ? categoryDisplayName(category) : String(fit.category.accountID);
+      simpleLineKeys = { account: fit.account.lineKey, category: fit.category.lineKey };
+    } else if (!splitIsEmpty) {
+      return;
+    }
     tier = 'simple';
   }
 
@@ -803,7 +1208,7 @@
   </ModalDialog>
 {/if}
 
-<form class="space-y-4" onsubmit={handleSubmit} aria-busy={pending}>
+<form class="space-y-4" onsubmit={handleSubmit} aria-busy={busy}>
   <!-- Header -->
   <div class="flex items-start justify-between gap-3">
     <div class="min-w-0">
@@ -818,7 +1223,7 @@
       type="button"
       class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover"
       onclick={onCancel}
-      disabled={pending}
+      disabled={busy}
       aria-label={m.transactions_form_cancel()}
       title={m.transactions_form_cancel()}
     >
@@ -826,7 +1231,7 @@
     </button>
   </div>
 
-  <fieldset disabled={pending} class="space-y-4">
+  <fieldset disabled={busy} class="space-y-4">
   {#if templateFields}{@render templateFields()}{/if}
 
   <!-- Correction banner -->
@@ -864,7 +1269,7 @@
           bind:value={transactionDate}
           class={inputClass}
           required
-          disabled={isVoided && mode === 'edit'}
+          disabled={(isVoided && mode === 'edit') || tier === 'locked'}
         />
       </label>
       {#if tier === 'simple'}
@@ -896,14 +1301,21 @@
     {/if}
     <!-- Payee autocomplete -->
     <label class="relative">
-      <span class={labelClass}>{m.transactions_field_payee()}</span>
+      <span id={`${uid}-payee-label`} class={labelClass}>{m.transactions_field_payee()}</span>
       <input
         id={payeeInputID}
         type="text"
+        aria-labelledby={`${uid}-payee-label`}
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={payeeDropdownOpen && payeeMatches.length > 0}
+        aria-controls={payeeDropdownOpen && payeeMatches.length > 0 ? `${uid}-payees` : undefined}
+        aria-activedescendant={payeeDropdownOpen && payeeActive >= 0 ? `${uid}-payee-${payeeActive}` : undefined}
         value={payeeSearch}
         oninput={onPayeeInput}
+        onkeydown={payeeKeydown}
         onfocus={() => { if (payeeSearch) payeeDropdownOpen = true; }}
-        onblur={() => setTimeout(() => { payeeDropdownOpen = false; }, 150)}
+        onblur={() => setTimeout(() => { payeeDropdownOpen = false; payeeActive = -1; }, 150)}
         class={inputClass}
         placeholder={m.transactions_field_payee_placeholder()}
         autocomplete="off"
@@ -911,21 +1323,21 @@
       />
       {#if payeeDropdownOpen && payeeMatches.length > 0}
         <ul
+          id={`${uid}-payees`}
           class="absolute z-20 mt-1 w-full rounded-[var(--radius-control)] border border-border bg-surface text-sm shadow-[var(--shadow-panel)]"
           role="listbox"
+          aria-label={m.transactions_field_payee()}
         >
-          {#each payeeMatches as payee (payee.id)}
-            <li>
+          {#each payeeMatches as payee, index (payee.id)}
+            <li role="none">
               <button
                 type="button"
-                class="w-full px-3 py-2 text-left hover:bg-row-hover"
-                onmousedown={() => {
-                  payeeID = payee.id;
-                  payeeSearch = payee.name;
-                  payeeDropdownOpen = false;
-                }}
+                id={`${uid}-payee-${index}`}
+                tabindex="-1"
+                class="w-full px-3 py-2 text-left hover:bg-row-hover aria-selected:bg-row-hover"
+                onmousedown={() => choosePayee(payee)}
                 role="option"
-                aria-selected={payeeID === payee.id}
+                aria-selected={index === payeeActive}
               >
                 {payee.name}
               </button>
@@ -1005,7 +1417,176 @@
     </label>
   </div>
 
-  {#if tier === 'simple'}
+  {#if tier === 'transfer'}
+    <!-- ── Transfer between two accounts (#481) ───────────────────── -->
+    <div class="space-y-3" role="group" aria-label={m.transactions_transfer_title()}>
+      {#if transferMessage}
+        <p role="alert" class="flex items-start gap-2 rounded-[var(--radius-control)] border border-danger/40 bg-danger-soft px-3 py-2.5 text-sm text-foreground">
+          <AlertTriangle size={15} class="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
+          <span>{transferMessage}</span>
+        </p>
+      {/if}
+      <div class="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
+        <label>
+          <span class={labelClass}>{m.transactions_transfer_from()}</span>
+          <select
+            value={transferFromID ?? ''}
+            onchange={(e) => { transferFromID = Number(e.currentTarget.value) || undefined; transferFromCommodityID = undefined; }}
+            class={inputClass}
+            required
+            disabled={isVoided && mode === 'edit'}
+          >
+            <option value="">—</option>
+            {#each assetLiabilityAccounts as a (a.id)}
+              <option value={a.id}>{postingAccountLabel(a)}</option>
+            {/each}
+          </select>
+        </label>
+        <button
+          type="button"
+          class="inline-flex h-10 min-w-11 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control px-3 text-sm text-foreground transition hover:bg-control-hover"
+          onclick={swapTransferSides}
+          aria-label={m.transactions_transfer_swap()}
+          title={m.transactions_transfer_swap()}
+          disabled={isVoided && mode === 'edit'}
+        >
+          <span aria-hidden="true">⇄</span>
+        </button>
+        <label>
+          <span class={labelClass}>{m.transactions_transfer_to()}</span>
+          <select
+            value={transferToID ?? ''}
+            onchange={(e) => { transferToID = Number(e.currentTarget.value) || undefined; transferToCommodityID = undefined; }}
+            class={inputClass}
+            required
+            disabled={isVoided && mode === 'edit'}
+          >
+            <option value="">—</option>
+            {#each assetLiabilityAccounts as a (a.id)}
+              <option value={a.id}>{postingAccountLabel(a)}</option>
+            {/each}
+          </select>
+        </label>
+      </div>
+
+      {#if (transferFromID !== undefined && transferFromAccount?.default_commodity_id == null) || (transferToID !== undefined && transferToAccount?.default_commodity_id == null)}
+        <div class="grid gap-3 sm:grid-cols-2">
+          {#if transferFromID !== undefined && transferFromAccount?.default_commodity_id == null}
+            <label>
+              <span class={labelClass}>{m.transactions_transfer_from_currency()}</span>
+              <select value={transferFromCommodityID ?? ''} onchange={(e) => { transferFromCommodityID = Number(e.currentTarget.value) || undefined; }} class={inputClass} required>
+                <option value="">—</option>
+                {#each allActiveCommodities as c (c.id)}<option value={c.id}>{c.code}</option>{/each}
+              </select>
+            </label>
+          {/if}
+          {#if transferToID !== undefined && transferToAccount?.default_commodity_id == null}
+            <label>
+              <span class={labelClass}>{m.transactions_transfer_to_currency()}</span>
+              <select value={transferToCommodityID ?? ''} onchange={(e) => { transferToCommodityID = Number(e.currentTarget.value) || undefined; }} class={inputClass} required>
+                <option value="">—</option>
+                {#each allActiveCommodities as c (c.id)}<option value={c.id}>{c.code}</option>{/each}
+              </select>
+            </label>
+          {/if}
+        </div>
+      {/if}
+
+      <div class="grid gap-3 sm:grid-cols-2">
+        <label>
+          <span class={labelClass}>
+            {transferIsExchange ? m.transactions_transfer_sent({ currency: commodityCode(transferFromCommodity) }) : m.transactions_field_amount()}
+          </span>
+          <input type="text" bind:value={sentStr} class={inputClass} inputmode="decimal" placeholder={formatEditableAmount('0', 2)} required aria-describedby={transferIsExchange ? 'transfer-statements-hint' : undefined} disabled={isVoided && mode === 'edit'} />
+        </label>
+        {#if transferIsExchange}
+          <label>
+            <span class={labelClass}>{m.transactions_transfer_received({ currency: commodityCode(transferToCommodity) })}</span>
+            <input type="text" bind:value={receivedStr} class={inputClass} inputmode="decimal" placeholder={formatEditableAmount('0', 2)} required aria-describedby="transfer-statements-hint transfer-rate" disabled={isVoided && mode === 'edit'} />
+          </label>
+          <p id="transfer-statements-hint" class="text-xs text-muted sm:col-span-2">{m.transactions_transfer_statements_hint()}</p>
+          <p id="transfer-rate" class="text-xs text-muted sm:col-span-2" aria-live="polite">
+            {#if transferConversion}
+              {m.transactions_transfer_converted({ sent: transferConversion.sent, received: transferConversion.received })}
+              · {m.transactions_transfer_rate({ rate: transferConversion.rate, from: commodityCode(transferFromCommodity), to: commodityCode(transferToCommodity) })}
+            {:else}
+              {m.transactions_transfer_rate_hint()}
+            {/if}
+          </p>
+        {/if}
+      </div>
+
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label>
+            <span class={labelClass}>{m.transactions_transfer_fee()}</span>
+            <input type="text" bind:value={feeStr} class={inputClass} inputmode="decimal" placeholder={formatEditableAmount('0', 2)} aria-describedby="transfer-fee-hint" disabled={isVoided && mode === 'edit'} />
+          </label>
+          <span id="transfer-fee-hint" class="mt-1 block text-xs text-muted">{m.transactions_transfer_fee_hint()}</span>
+        </div>
+        {#if feeStr.trim()}
+          <label>
+            <span class={labelClass}>{m.transactions_transfer_fee_paid_by()}</span>
+            <select bind:value={feePaidBy} class={inputClass} disabled={isVoided && mode === 'edit'}>
+              <option value="sending">{m.transactions_transfer_fee_paid_by_from({ currency: commodityCode(transferFromCommodity) })}</option>
+              <option value="receiving">{m.transactions_transfer_fee_paid_by_to({ currency: commodityCode(transferToCommodity) })}</option>
+            </select>
+          </label>
+        {/if}
+      </div>
+
+      {#if mode !== 'template'}
+        {#if showTransferDays}
+          <div class="grid gap-3 sm:grid-cols-2">
+            <label>
+              <span class={labelClass}>{m.transactions_transfer_leaves_on()}</span>
+              <input type="date" value={leavesOn || transactionDate} oninput={(e) => { leavesOn = e.currentTarget.value; }} class={inputClass} disabled={isVoided && mode === 'edit'} />
+            </label>
+            <label>
+              <span class={labelClass}>{m.transactions_transfer_arrives_on()}</span>
+              <input type="date" value={arrivesOn || transactionDate} oninput={(e) => { arrivesOn = e.currentTarget.value; }} class={inputClass} aria-describedby="transfer-days-hint" disabled={isVoided && mode === 'edit'} />
+            </label>
+            <p id="transfer-days-hint" class="text-xs text-muted sm:col-span-2">{m.transactions_transfer_days_hint()}</p>
+            {#if transferIsExchange}
+              <label class="sm:col-span-2">
+                <span class={labelClass}>{m.transactions_transfer_conversion_side()}</span>
+                <select bind:value={conversionSide} class={inputClass} disabled={isVoided && mode === 'edit'}>
+                  <option value="sending">{m.transactions_transfer_conversion_sending()}</option>
+                  <option value="receiving">{m.transactions_transfer_conversion_receiving()}</option>
+                </select>
+              </label>
+            {/if}
+          </div>
+        {:else}
+          <button type="button" class="min-h-10 text-xs font-medium text-accent underline-offset-2 hover:underline" onclick={() => { showTransferDays = true; }} disabled={isVoided && mode === 'edit'}>
+            {m.transactions_transfer_days_toggle()}
+          </button>
+        {/if}
+      {/if}
+
+      <div class="flex justify-end">
+        <button type="button" class="min-h-10 text-xs font-medium text-accent underline-offset-2 hover:underline" onclick={switchTransferToSplit}>
+          {m.transactions_tier_switch_split()}
+        </button>
+      </div>
+    </div>
+  {:else if tier === 'locked'}
+    <div class="space-y-2 rounded-[var(--radius-control)] border border-border bg-surface px-3 py-3" role="note" aria-labelledby="locked-journal-title">
+      <p id="locked-journal-title" class="text-sm font-semibold text-foreground">{m.transactions_locked_title()}</p>
+      <p class="text-sm text-muted">{mode === 'correct' ? m.transactions_locked_correct() : m.transactions_locked_body()}</p>
+      <ul class="space-y-1">
+        {#each lockedPostings as row (row.key)}
+          <li class="flex items-center justify-between gap-3 text-sm">
+            <span class="min-w-0">
+              <span class="block truncate text-foreground">{row.label}</span>
+              <span class="block text-xs tabular-nums text-muted">{row.date}</span>
+            </span>
+            <span class="shrink-0 font-medium tabular-nums text-foreground">{row.amount}</span>
+          </li>
+        {/each}
+      </ul>
+    </div>
+  {:else if tier === 'simple'}
     <!-- ── Tier 1: simple two-posting form ─────────────────────────── -->
     <div class="grid gap-3 sm:grid-cols-2">
       <!-- Account (asset/liability leg) -->
@@ -1062,7 +1643,7 @@
 
       <!-- Category (income/expense) with searchable dropdown -->
       <label class="relative sm:col-span-2">
-        <span class={labelClass}>{m.transactions_field_category()}</span>
+        <span id={`${uid}-category-label`} class={labelClass}>{m.transactions_field_category()}</span>
         {#if categoryID !== undefined}
           <div class="mt-1.5 flex items-center gap-2">
             <span class="flex-1 truncate rounded-[var(--radius-control)] border border-border bg-control px-3 py-2.5 text-sm text-foreground">
@@ -1071,7 +1652,12 @@
             <button
               type="button"
               class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-muted transition hover:bg-control-hover hover:text-foreground"
-              onclick={clearCategory}
+              id={`${uid}-category-clear`}
+              onclick={async () => {
+                clearCategory();
+                await tick();
+                document.getElementById(`${uid}-category`)?.focus();
+              }}
               aria-label={m.reports_filter_clear_dimension()}
               disabled={isVoided && mode === 'edit'}
             >
@@ -1081,10 +1667,19 @@
         {:else}
           <div class="relative mt-1.5">
             <input
+              id={`${uid}-category`}
               type="text"
+              aria-labelledby={`${uid}-category-label`}
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={categoryDropdownOpen && filteredCategories.length > 0}
+              aria-controls={categoryDropdownOpen && filteredCategories.length > 0 ? `${uid}-categories` : undefined}
+              aria-activedescendant={categoryDropdownOpen && categoryActive >= 0 ? `${uid}-category-${categoryActive}` : undefined}
               bind:value={categorySearch}
+              oninput={() => { categoryDropdownOpen = true; categoryActive = -1; }}
+              onkeydown={categoryKeydown}
               onfocus={() => { categoryDropdownOpen = true; }}
-              onblur={() => setTimeout(() => { categoryDropdownOpen = false; }, 150)}
+              onblur={() => setTimeout(() => { categoryDropdownOpen = false; categoryActive = -1; }, 150)}
               class={inputClass + ' mt-0'}
               placeholder={m.transactions_field_category_placeholder()}
               autocomplete="off"
@@ -1092,17 +1687,21 @@
             />
             {#if categoryDropdownOpen && filteredCategories.length > 0}
               <ul
+                id={`${uid}-categories`}
                 class="absolute z-20 mt-1 max-h-52 w-full overflow-auto rounded-[var(--radius-control)] border border-border bg-surface text-sm shadow-[var(--shadow-panel)]"
                 role="listbox"
+                aria-label={m.transactions_field_category()}
               >
-                {#each filteredCategories as cat (cat.id)}
-                  <li>
+                {#each filteredCategories as cat, index (cat.id)}
+                  <li role="none">
                     <button
                       type="button"
-                      class="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-row-hover"
+                      id={`${uid}-category-${index}`}
+                      tabindex="-1"
+                      class="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-row-hover aria-selected:bg-row-hover"
                       onmousedown={() => selectCategory(cat)}
                       role="option"
-                      aria-selected={false}
+                      aria-selected={index === categoryActive}
                     >
                       <span class="min-w-0 truncate text-foreground">{categoryDisplayName(cat)}</span>
                       <span class="ml-auto shrink-0 text-xs text-muted">{cat.category_type === 'income' ? '↑' : '↓'}</span>
@@ -1116,11 +1715,20 @@
       </label>
     </div>
 
-    <!-- Switch to split -->
-    <div class="flex justify-end">
+    <!-- Switch to transfer or split -->
+    <div class="flex flex-wrap justify-end gap-x-4">
+      {#if mode !== 'template'}
+        <button
+          type="button"
+          class="min-h-10 text-xs font-medium text-accent underline-offset-2 hover:underline"
+          onclick={switchToTransfer}
+        >
+          {m.transactions_tier_switch_transfer()}
+        </button>
+      {/if}
       <button
         type="button"
-        class="text-xs font-medium text-accent underline-offset-2 hover:underline"
+        class="min-h-10 text-xs font-medium text-accent underline-offset-2 hover:underline"
         onclick={switchToSplit}
       >
         {m.transactions_tier_switch_split()}
@@ -1131,13 +1739,15 @@
     <div class="space-y-3">
       <div class="flex items-center justify-between">
         <span class={labelClass}>{m.transactions_split_title()}</span>
-        <button
-          type="button"
-          class="text-xs font-medium text-accent underline-offset-2 hover:underline"
-          onclick={switchToSimple}
-        >
-          {m.transactions_tier_switch_simple()}
-        </button>
+        {#if splitIsEmpty || simpleFit}
+          <button
+            type="button"
+            class="text-xs font-medium text-accent underline-offset-2 hover:underline"
+            onclick={switchToSimple}
+          >
+            {m.transactions_tier_switch_simple()}
+          </button>
+        {/if}
       </div>
 
       {#each splitLegs as leg, i (i)}
@@ -1262,7 +1872,7 @@
     {:else if !tagsQuery.data?.tags.length}<p class="text-sm text-muted">{m.recurring_no_tags()}</p>
     {:else}<div class="flex flex-wrap gap-3">
       {#each tagsQuery.data.tags as tag (tag.id)}
-        <label class="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" value={tag.id} bind:group={tagIDs} disabled={pending} />{tag.name}</label>
+        <label class="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" value={tag.id} bind:group={tagIDs} disabled={busy} />{tag.name}</label>
       {/each}
     </div>{/if}
   </fieldset>
@@ -1271,8 +1881,8 @@
   <details class="rounded-[var(--radius-control)] border border-border bg-surface">
     <summary class="cursor-pointer px-3 py-2 text-sm font-semibold text-foreground">{m.form_advanced()}</summary>
     <div class="grid gap-3 border-t border-border px-3 py-3 sm:grid-cols-2">
-      <!-- Transaction kind -->
-      <label>
+      <!-- Transaction kind; a transfer is always one -->
+      <label class:hidden={tier === 'transfer'}>
         <span class={labelClass}>{m.transactions_field_kind()}</span>
         <select bind:value={transactionKind} class={inputClass} disabled={isVoided && mode === 'edit'}>
           <option value="ordinary">{m.transaction_kind_ordinary()}</option>
@@ -1317,17 +1927,17 @@
       type="button"
       class="inline-flex items-center gap-2 rounded-[var(--radius-control)] border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-control-hover"
       onclick={onCancel}
-      disabled={pending}
+      disabled={busy}
     >
       <X size={16} aria-hidden="true" />
       {m.transactions_form_cancel()}
     </button>
 
-    {#if !(isVoided && mode === 'edit')}
+    {#if !(isVoided && mode === 'edit') && !(tier === 'locked' && mode === 'correct')}
       <button
         type="submit"
         class="inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-        disabled={pending}
+        disabled={busy}
       >
         <Save size={16} aria-hidden="true" />
         {submitLabel}

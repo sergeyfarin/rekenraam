@@ -49,5 +49,5 @@
     <p class="text-xs text-muted">{new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(parseISO(entry.created_at))}</p>
     <pre class="mt-2 whitespace-pre-wrap break-all text-xs text-muted">{entry.source_evidence_json}</pre>
   </details>
-  <a class="font-medium text-accent" href={`/app/transactions?transaction_id=${entry.transaction_id}`}>{m.investments_roc_open_receipt()}</a>
+  <a class="font-medium text-accent" href={`/app/ledger/transactions?transaction_id=${entry.transaction_id}`}>{m.investments_roc_open_receipt()}</a>
 </article>

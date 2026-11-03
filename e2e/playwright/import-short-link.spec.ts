@@ -58,7 +58,7 @@ test('[acceptance] an unsupported provider row links to a recorded short sale on
     source: 'trading212', display_name: connection, api_key: apiKey, cash_account_id: cash.id
   });
   const fetchRows = async (action: 'Import' | 'Re-fetch full history') => {
-    await page.goto('/app/import');
+    await page.goto('/app/ledger/import');
     await page.getByRole('row').filter({ hasText: connection }).getByRole('button', { name: action, exact: true }).click();
     await expect(page.getByRole('button', { name: 'Commit to ledger' })).toBeVisible({ timeout: 15_000 });
   };

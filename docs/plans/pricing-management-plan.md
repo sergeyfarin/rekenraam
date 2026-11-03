@@ -71,28 +71,66 @@ own dated conversion coverage and complete-only totals. Historical provider
 refresh planning remains a separate demand owner under ADR 0010 below; a valid
 manual rate can repair current coverage before automated history arrives.
 
-### Posted-only historical demand (#465)
+### Posted-only historical demand (#465, #466)
 
 Durable FX planning derives its currency set from active account defaults plus
-every currency in the current posted ledger, and keeps required dates in the
-existing `FXCoverageStartDates` owner. The posting outbox, manual refresh, daily
-schedule and durable worker therefore share one base-relative pair set. Posting
-a multi-currency receivable or payable without a default commodity now attempts
-the required pairs instead of completing an empty sweep.
+every currency in the current posted ledger. One `FXDemand` repository read
+returns each demanded currency, its code and earliest required date; coverage
+traversal, target planning and triangulation candidates all consume that single
+read, so a sweep does not scan the posted ledger twice. The posting outbox,
+manual refresh, daily schedule and durable worker therefore share one
+base-relative pair set. Posting a multi-currency receivable or payable without
+a default commodity now attempts the required pairs instead of completing an
+empty sweep.
+
+An empty demand result is a loaded set, so failed triangulation attempts do
+not query it again. Immediate latest refreshes, like durable sweeps, pin
+reference-data selection to the owner-local day captured at run start, even
+if midnight passes during the run.
+
+An account default contributes only while its current version is active and
+postable and its commodity version is active; it then supplies both a start
+date and a target. A non-postable or archived default supplies neither, so a
+traversal never sees a required date with no owning pair.
 
 Historical demand is deliberately wider than current exposure. A balance that
 later returns to zero, a closed account, an income/expense/equity posting, and
 a currency archived after posting all retain their posted rate obligation.
 Drafts, voided and deleted transactions, superseded versions, unsaved working
 copies and import previews create none; only a durable `posted` current
-transaction version does. A future-dated posted entry keeps its target identity,
-but ADR 0010 bounds fetching through owner-local today, so it requests no rate
-before that date.
+transaction version does. A future-dated posted entry remains in the demand
+set, and durable scans bound requests through owner-local today. Future-only
+currencies (#471) create no immediate latest requests, including manual and
+scheduled refreshes. The worker atomically completes the sweep and publishes
+one canonical currency/date wakeup at owner-local midnight, converting the
+IANA-zone boundary to UTC with its date's DST offset. This works with the daily
+schedule disabled and survives database reopen or process restart. If a DST
+transition skips midnight, the wakeup uses the first valid instant after the
+gap, preventing an early wakeup from repeatedly rescheduling itself.
+
+Waiting has zero provider attempts and no failure state. Repeated sweeps share
+the same active wakeup; another currency exhausting the chunk budget cannot
+discard it. Its nonempty start date prevents the posting outbox from absorbing
+new earlier/current demand into a later wait. At wake, current demand replaces
+the saved date hint: cancellation/void/delete or currency replacement removes
+the obligation, while a later posting date publishes a new wait. Independent
+current demand for the same currency remains immediately eligible. Due work
+retains the existing weekend/publication policy and eight-attempt pair/date
+retry identity; waiting does not consume that budget. Named regressions:
+`TestFXFutureDemand*`, `TestFXFutureWakeDoesNotCoalesceAwayNewCurrentDemand`,
+and `TestFXFuturePostingDoesNotDeferIndependentCurrentDemand`.
 
 Provider selection, exact observation storage, the persisted pair/date cursor,
 continuation and bounded retry are unchanged. An unsupported pair remains
 explicit failed work with the pair/date in its error instead of a successful
-empty sweep that implies coverage.
+empty sweep that implies coverage. A refresh run is not reported successful
+when its per-pair item or source-health write fails: the first persistence
+failure stops the sweep, marks the run failed and is returned to the caller.
+Observations already stored remain, while the missing item or health row is
+never fabricated (#469). A quote refresh applies the same rule to its
+single-target run: the run finishes failed with the persistence error
+instead of staying running, and the provider fetch error is kept alongside
+it so terminal failures and Retry-After still drive the work's retry (#474).
 
 Every observation exposes source, quote type and adjustment basis, valuation,
 observation, publication and recording times, manual/derived/approximate flags,

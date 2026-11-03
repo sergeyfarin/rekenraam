@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { expect, test } from './support/fixtures';
 import { ensureBrowserSession } from './support/session';
 
@@ -10,7 +11,7 @@ import { ensureBrowserSession } from './support/session';
 test('switches the interface language and keeps it across navigation', async ({ page }) => {
   await ensureBrowserSession(page);
 
-  await page.goto('/app/settings/language');
+  await page.goto('/app/settings/preferences');
   await expect(page.getByRole('heading', { name: 'Language' })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 
@@ -22,7 +23,7 @@ test('switches the interface language and keeps it across navigation', async ({ 
   // The two catalogs compile into one namespace but are separate files, so a
   // string from each has to be checked: 'Язык' comes from messages/app and the
   // settings-section nav from messages/settings.
-  await expect(page.getByRole('link', { name: 'Оформление' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Предпочтения' })).toBeVisible();
 
   await page.goto('/app/reports');
   await expect(page.getByRole('heading', { name: 'Отчёты', level: 1 })).toBeVisible();
@@ -33,8 +34,29 @@ test('switches the interface language and keeps it across navigation', async ({ 
   await expect(page.getByRole('heading', { name: 'Чистые активы', level: 1 })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Группировка' })).toBeVisible();
 
-  await page.goto('/app/settings/language');
+  await page.goto('/app/settings/preferences');
   await page.getByRole('button', { name: 'English' }).click();
   await expect(page.getByRole('heading', { name: 'Language' })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+});
+
+// #493: es, fr and de are partial; their buttons say so with the count of texts
+// still shown in English, while the button's name stays the language alone.
+test('marks partial languages with their untranslated count', async ({ page }) => {
+  const status = JSON.parse(readFileSync(new URL('../../frontend/src/lib/i18n/locale-status.json', import.meta.url), 'utf8')) as { maintained: string[]; partial: string[] };
+  const missing = JSON.parse(readFileSync(new URL('../../frontend/src/lib/i18n/missing.json', import.meta.url), 'utf8')) as { counts: Record<string, number> };
+  const names: Record<string, string> = { en: 'English', es: 'Español', fr: 'Français', nl: 'Nederlands', de: 'Deutsch', ru: 'Русский' };
+  await ensureBrowserSession(page);
+  await page.goto('/app/settings/preferences');
+
+  for (const locale of status.partial) {
+    const button = page.getByRole('button', { name: names[locale], exact: true });
+    const note = page.locator(`#language-partial-${locale}`);
+    await expect(note).toContainText('Partial');
+    if (missing.counts[locale] > 0) await expect(note).toContainText(String(missing.counts[locale]));
+    await expect(button).toHaveAccessibleDescription(/Partial/);
+  }
+  for (const locale of status.maintained) {
+    await expect(page.locator(`#language-partial-${locale}`)).toHaveCount(0);
+  }
 });

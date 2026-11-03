@@ -364,7 +364,7 @@
                   <span class="text-xs text-muted">{sourceLabel(s.source_code)}</span>
                 </div>
                 {#if paymentID}
-                  <a class="mt-1 inline-block text-sm underline" href={`/app/transactions?transaction_id=${paymentID}`}>
+                  <a class="mt-1 inline-block text-sm underline" href={`/app/ledger/transactions?transaction_id=${paymentID}`}>
                     {m.investments_attribution_payment_link({ id: String(paymentID) })}
                   </a>
                 {/if}

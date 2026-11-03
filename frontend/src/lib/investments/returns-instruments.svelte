@@ -165,7 +165,7 @@
       <ul class="mt-2 space-y-2 text-sm">
         {#each instruments.not_attributed as item (`${item.transaction_id}-${item.date}`)}
           <li class="text-foreground">
-            <a href={`/app/transactions?transaction_id=${item.transaction_id}`} class="inline-flex min-h-11 items-center font-semibold underline underline-offset-2">{formatDate(item.date)}</a>
+            <a href={`/app/ledger/transactions?transaction_id=${item.transaction_id}`} class="inline-flex min-h-11 items-center font-semibold underline underline-offset-2">{formatDate(item.date)}</a>
             {#if item.instrument_id !== null}· {commodityLabel(item.instrument_id)}{/if}
             · {fallbackReasonText(item.reason)}
             {#if fallbackCountedText(fallbacks, item.transaction_id) !== null}· {fallbackCountedText(fallbacks, item.transaction_id)}{/if}

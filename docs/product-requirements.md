@@ -164,7 +164,21 @@ These apply across all feature phases.
 - Transactions with postings are the canonical ledger primitive. "Split" may be
   used as user-facing copy for split transaction entry, but "posting" is the
   canonical schema and service term.
-- Transfers are ordinary balanced transactions.
+- Transfers are ordinary balanced transactions. A transfer between two of the
+  owner's accounts in different currencies records both amounts exactly as
+  each statement shows them; stored amounts are the facts, a rate is never
+  stored as one or used to derive an amount, and no FX gain or loss is posted
+  (owner decisions 2026-11-01, #481). It converts on the day money leaves,
+  unless the owner says the receiving bank converted. A transfer fee is not
+  part of the transfer: it is its own expense posting (Bank fees by default),
+  charged on top by the account that paid it, on that account's day. Unlike
+  an investment trade's charges, it never enters any basis. A multi-currency
+  provider keeps one account per currency (#486).
+- Editing a transaction never changes a financial fact the owner did not
+  change: amounts, days, accounts, currencies, memos and recorded choices
+  survive any editor's read and save, and switching between editing modes.
+  A journal an editor cannot represent exactly is edited only in what it
+  describes (#481).
 - Same-day ordering is explicit and independently editable for the global
   transaction list and each account's posting register. A transfer may occupy a
   different same-day position in each account. Account-posting order, together
@@ -471,7 +485,12 @@ Goal: add power-user workflows after the core ledger is stable.
   working copies with no database row) and import previews do not trigger
   downloads; import rows trigger only after commit posts them. Manual, daily,
   and domain-triggered refreshes use durable background work that resumes
-  after network loss or an app restart.
+  after network loss or an app restart. A currency demanded only by future
+  posted entries waits durably until its earliest needed date at owner-local
+  midnight, even with scheduled refresh disabled. Manual and scheduled refresh
+  do not override this wait. The worker rechecks current demand on waking, so
+  cancellation or date/currency replacement cannot force obsolete downloads;
+  independent current demand for the same currency remains eligible immediately.
 - Investment accounts for stocks and ETFs using the existing commodity,
   account, and ledger model.
 - Security identity and provider matching for listed instruments, including

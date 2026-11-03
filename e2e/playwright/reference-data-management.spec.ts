@@ -21,7 +21,7 @@ test('[acceptance] accounts can be created, renamed and closed at 390 px', async
   // Seed the collision here so this journey never depends on worker history.
   await createCashAccount(page, csrfToken, `Name collision ${suffix}`, currencyID);
 
-  await page.goto('/app/accounts');
+  await page.goto('/app/ledger/accounts');
   await page.getByRole('button', { name: 'Add account' }).first().click();
   let form = page.locator('form').filter({ has: page.getByRole('button', { name: 'Create account' }) });
   await form.getByLabel('Name', { exact: true }).fill(name);
@@ -71,7 +71,7 @@ test('[acceptance] categories can be created under a parent and archived at 390 
   await readyForLedger(page);
   const name = `Mobile hobby ${Date.now()}`;
 
-  await page.goto('/app/categories');
+  await page.goto('/app/ledger/categories');
   await page.getByRole('button', { name: 'Add category' }).first().click();
   const form = page.locator('form').filter({ has: page.getByRole('button', { name: 'Create category' }) });
   await form.getByLabel('Name', { exact: true }).fill(name);

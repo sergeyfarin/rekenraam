@@ -17,9 +17,13 @@ import (
 //
 //   - An account posting (an asset or liability that is not a system account)
 //     posts on its PostedOn, or on the entry date when PostedOn is empty.
-//   - Every other posting (categories, system legs) follows the account
-//     postings when they all share one date — a card purchase posted later is
-//     one entry on the posting day — and otherwise stays on the entry date.
+//   - Any other posting may name PostedOn only as the day of an account
+//     posting — a category, of an account posting in its own commodity — and
+//     then posts that day: a transfer fee follows the account that paid it,
+//     and an exchange's trading legs follow the side that converted (#481).
+//   - Every other posting follows the account postings when they all share
+//     one date — a card purchase posted later is one entry on the posting
+//     day — and otherwise stays on the entry date.
 //   - Each dated entry is balanced per commodity through transfer_clearing,
 //     the money in transit between the dates. The whole transaction must
 //     balance first, so the bridge never hides an imbalance.
@@ -28,6 +32,9 @@ import (
 func (s *TransactionService) groupPostingsByPostedOn(ctx context.Context, input TransactionInput, transactionDate string) ([]JournalEntryInput, error) {
 	usesPostedOn := false
 	for _, entry := range input.JournalEntries {
+		if strings.TrimSpace(entry.FeePaidBy) != "" {
+			usesPostedOn = true
+		}
 		for _, posting := range entry.Postings {
 			if strings.TrimSpace(posting.PostedOn) != "" {
 				usesPostedOn = true
@@ -38,7 +45,7 @@ func (s *TransactionService) groupPostingsByPostedOn(ctx context.Context, input 
 		return input.JournalEntries, nil
 	}
 	if len(input.JournalEntries) != 1 {
-		return nil, ValidationError{Message: "posted dates require exactly one journal entry"}
+		return nil, ValidationError{Message: "posted dates and a fee payer require exactly one journal entry"}
 	}
 	entry := input.JournalEntries[0]
 	entryDate := strings.TrimSpace(entry.EntryDate)
@@ -50,13 +57,7 @@ func (s *TransactionService) groupPostingsByPostedOn(ctx context.Context, input 
 		return nil, err
 	}
 
-	if err := validatePostingsBalanced(entry.Postings); err != nil {
-		return nil, err
-	}
-
-	dates := make([]string, len(entry.Postings))
-	accountLeg := make([]bool, len(entry.Postings))
-	accountDates := map[string]bool{}
+	roles := make([]postingDayRole, len(entry.Postings))
 	for index, posting := range entry.Postings {
 		postedOn := strings.TrimSpace(posting.PostedOn)
 		date := entryDate
@@ -69,21 +70,67 @@ func (s *TransactionService) groupPostingsByPostedOn(ctx context.Context, input 
 		rule, err := s.repository.PostingAccountRule(ctx, BookID, posting.AccountID, date)
 		switch {
 		case err == nil:
-			accountLeg[index] = isPostedOnAccount(rule)
+			roles[index] = postingDayRole{account: isPostedOnAccount(rule), system: rule.IsSystem}
 		case errors.Is(err, db.ErrNotFound):
 			// cleanPosting reports a missing or not-yet-opened account with
 			// the specific message; an explicit posted date still marks the
 			// leg as the account's.
-			accountLeg[index] = postedOn != ""
+			roles[index] = postingDayRole{account: postedOn != ""}
 		default:
 			return nil, fmt.Errorf("read posting account rule: %w", err)
 		}
-		if postedOn != "" && !accountLeg[index] {
-			return nil, ValidationError{Message: "a posted date applies only to an account posting"}
+	}
+	return groupPostingsByDay(entry, entryDate, roles, func() (int64, error) {
+		id, err := s.repository.SystemAccountID(ctx, BookID, "transfer_clearing")
+		if err != nil {
+			return 0, fmt.Errorf("read transfer clearing account: %w", err)
+		}
+		return id, nil
+	})
+}
+
+// postingDayRole is what the posted-date rule needs to know about a
+// posting's account: whether it has a posting day of its own (a user's asset
+// or liability), and whether it is a system account.
+type postingDayRole struct {
+	account bool
+	system  bool
+}
+
+// groupPostingsByDay is the posted-date rule without its account lookups, so
+// the writer and the reader that checks a stored journal against it
+// (TransferShape, #481) apply one rule. clearing is asked for the
+// transfer_clearing account only when a bridge is needed.
+func groupPostingsByDay(entry JournalEntryInput, entryDate string, roles []postingDayRole, clearing func() (int64, error)) ([]JournalEntryInput, error) {
+	if err := validatePostingsBalanced(entry.Postings); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(entry.FeePaidBy) != "" {
+		var err error
+		if entry, err = feeOnItsPayersDay(entry, entryDate, roles); err != nil {
+			return nil, err
+		}
+	}
+
+	dates := make([]string, len(entry.Postings))
+	accountDates := map[string]bool{}
+	accountDayCommodity := map[string]map[int64]bool{}
+	for index, posting := range entry.Postings {
+		date := entryDate
+		if postedOn := strings.TrimSpace(posting.PostedOn); postedOn != "" {
+			cleaned, err := cleanRequiredDate(postedOn, "posted date")
+			if err != nil {
+				return nil, err
+			}
+			date = cleaned
 		}
 		dates[index] = date
-		if accountLeg[index] {
+		if roles[index].account {
 			accountDates[date] = true
+			if accountDayCommodity[date] == nil {
+				accountDayCommodity[date] = map[int64]bool{}
+			}
+			accountDayCommodity[date][posting.CommodityID] = true
 		}
 	}
 
@@ -96,7 +143,15 @@ func (s *TransactionService) groupPostingsByPostedOn(ctx context.Context, input 
 	grouped := map[string][]PostingInput{}
 	for index, posting := range entry.Postings {
 		date := followDate
-		if accountLeg[index] {
+		switch {
+		case roles[index].account:
+			date = dates[index]
+		case strings.TrimSpace(posting.PostedOn) != "":
+			// A posting without its own day may follow an account's: a
+			// category only one in its own commodity, which it settles with.
+			if !accountDates[dates[index]] || (!roles[index].system && !accountDayCommodity[dates[index]][posting.CommodityID]) {
+				return nil, ValidationError{Message: "a posted date applies only to an account posting, or to the day of an account posting in its currency"}
+			}
 			date = dates[index]
 		}
 		posting.PostedOn = ""
@@ -110,9 +165,9 @@ func (s *TransactionService) groupPostingsByPostedOn(ctx context.Context, input 
 		return []JournalEntryInput{entry}, nil
 	}
 
-	clearingAccountID, err := s.repository.SystemAccountID(ctx, BookID, "transfer_clearing")
+	clearingAccountID, err := clearing()
 	if err != nil {
-		return nil, fmt.Errorf("read transfer clearing account: %w", err)
+		return nil, err
 	}
 	orderedDates := make([]string, 0, len(grouped))
 	for date := range grouped {
@@ -128,14 +183,74 @@ func (s *TransactionService) groupPostingsByPostedOn(ctx context.Context, input 
 			return nil, err
 		}
 		entries = append(entries, JournalEntryInput{
-			EntryDate:    date,
-			EntryKind:    entry.EntryKind,
-			Memo:         entry.Memo,
-			MetadataJSON: entry.MetadataJSON,
-			Postings:     append(postings, bridges...),
+			EntryDate:      date,
+			EntryKind:      entry.EntryKind,
+			Memo:           entry.Memo,
+			MetadataJSON:   entry.MetadataJSON,
+			ConversionSide: entry.ConversionSide,
+			FeePaidBy:      entry.FeePaidBy,
+			Postings:       append(postings, bridges...),
 		})
 	}
 	return entries, nil
+}
+
+// feeOnItsPayersDay applies a named fee payer (#481): the entry is a
+// transfer between two accounts, one amount out and one in, and its one
+// other non-system posting is a positive fee in the payer's currency that
+// posts on the payer's day. A refund or a second category is not a fee
+// charged on top, so the choice is refused rather than reinterpreted.
+func feeOnItsPayersDay(entry JournalEntryInput, entryDate string, roles []postingDayRole) (JournalEntryInput, error) {
+	var accounts []int
+	fee := -1
+	for index := range entry.Postings {
+		switch {
+		case roles[index].account:
+			accounts = append(accounts, index)
+		case roles[index].system:
+		case fee >= 0:
+			return entry, ValidationError{Message: "a fee payer applies to a transfer with one fee"}
+		default:
+			fee = index
+		}
+	}
+	if len(accounts) != 2 || fee < 0 {
+		return entry, ValidationError{Message: "a fee payer applies to a transfer between two accounts with one fee"}
+	}
+	sending, receiving := accounts[0], accounts[1]
+	if entry.Postings[sending].QuantityValue.Sign() > 0 {
+		sending, receiving = receiving, sending
+	}
+	if entry.Postings[sending].QuantityValue.Sign() >= 0 || entry.Postings[receiving].QuantityValue.Sign() <= 0 ||
+		entry.Postings[sending].AccountID == entry.Postings[receiving].AccountID {
+		return entry, ValidationError{Message: "a fee payer applies to a transfer out of one account and into another"}
+	}
+	payer := sending
+	switch strings.TrimSpace(entry.FeePaidBy) {
+	case conversionSending:
+	case conversionReceiving:
+		payer = receiving
+	default:
+		return entry, ValidationError{Message: "fee payer must be 'sending' or 'receiving'"}
+	}
+	feePosting := entry.Postings[fee]
+	if feePosting.QuantityValue.Sign() <= 0 {
+		return entry, ValidationError{Message: "a fee charged on top must be positive"}
+	}
+	if feePosting.CommodityID != entry.Postings[payer].CommodityID {
+		return entry, ValidationError{Message: "a fee is in the currency of the account that paid it"}
+	}
+	payerDay := strings.TrimSpace(entry.Postings[payer].PostedOn)
+	if payerDay == "" {
+		payerDay = entryDate
+	}
+	if postedOn := strings.TrimSpace(feePosting.PostedOn); postedOn != "" && postedOn != payerDay {
+		return entry, ValidationError{Message: "a fee posts on the day of the account that paid it"}
+	}
+	postings := append([]PostingInput{}, entry.Postings...)
+	postings[fee].PostedOn = payerDay
+	entry.Postings = postings
+	return entry, nil
 }
 
 // isPostedOnAccount reports whether a posting's account has its own posting
@@ -248,16 +363,55 @@ func (s *TransactionService) MovePostingToDay(ctx context.Context, input MovePos
 	if !ok {
 		return Transaction{}, ValidationError{Message: "this transaction's journal cannot move by day; edit it instead"}
 	}
-	rebuilt, err := s.groupPostingsByPostedOn(ctx, spec, spec.TransactionDate)
-	if err != nil {
-		return Transaction{}, err
+	step := 1
+	if input.Direction == "earlier" {
+		step = -1
 	}
-	if !sameJournalDays(current.JournalEntries, rebuilt) {
-		return Transaction{}, ValidationError{Message: "this transaction's journal cannot move by day; edit it instead"}
+	// A transfer moves through its shape (#481): its fee keeps following the
+	// account that paid it and its conversion the side that converted.
+	shape := TransferShapeOf(current)
+	if shape != nil {
+		var side *TransferShapeSide
+		for _, candidate := range []*TransferShapeSide{&shape.Sending, &shape.Receiving} {
+			if original := postingByLineKey(current, candidate.LineKey); original != nil && original.PostingLineID == input.PostingLineID {
+				if original.AccountID != input.AccountID {
+					return Transaction{}, ErrTransactionNotFound
+				}
+				side = candidate
+			}
+		}
+		if side == nil {
+			return Transaction{}, ValidationError{Message: "only an account posting moves to another day"}
+		}
+		day, err := time.Parse(time.DateOnly, side.PostedOn)
+		if err != nil {
+			return Transaction{}, fmt.Errorf("parse posting day: %w", err)
+		}
+		side.PostedOn = day.AddDate(0, 0, step).Format(time.DateOnly)
+		spec = shape.input(spec)
+	}
+	// Any other journal moves only if the rule rebuilds it exactly as stored;
+	// an exchange that is not a transfer shape is never restated (#481).
+	if shape == nil {
+		for _, entry := range current.JournalEntries {
+			if entry.EntryKind == exchangeEntryKind {
+				return Transaction{}, ValidationError{Message: "this transaction's journal cannot move by day; edit it instead"}
+			}
+		}
+		rebuilt, err := s.groupPostingsByPostedOn(ctx, spec, spec.TransactionDate)
+		if err != nil {
+			return Transaction{}, err
+		}
+		if !sameJournalDays(current.JournalEntries, rebuilt) {
+			return Transaction{}, ValidationError{Message: "this transaction's journal cannot move by day; edit it instead"}
+		}
 	}
 
-	moved := false
+	moved := shape != nil
 	for index, posting := range spec.JournalEntries[0].Postings {
+		if shape != nil {
+			break
+		}
 		original := postingByLineKey(current, posting.LineKey)
 		if original == nil || original.PostingLineID != input.PostingLineID {
 			continue
@@ -272,10 +426,6 @@ func (s *TransactionService) MovePostingToDay(ctx context.Context, input MovePos
 		day, err := time.Parse(time.DateOnly, posting.PostedOn)
 		if err != nil {
 			return Transaction{}, fmt.Errorf("parse posting day: %w", err)
-		}
-		step := 1
-		if input.Direction == "earlier" {
-			step = -1
 		}
 		spec.JournalEntries[0].Postings[index].PostedOn = day.AddDate(0, 0, step).Format(time.DateOnly)
 		moved = true
@@ -301,7 +451,8 @@ func (s *TransactionService) MovePostingToDay(ctx context.Context, input MovePos
 
 // postedOnSpec restates a stored transaction as one journal entry whose
 // account postings carry their posting days, leaving out the transfer_clearing
-// bridge the posted-date rule rebuilds. It reports false when the entries
+// bridge the posted-date rule rebuilds and an exchange's commodity_trading
+// legs, which the exchange rule rebuilds (#481). It reports false when the entries
 // differ in anything but their date, which one entry cannot carry.
 func postedOnSpec(transaction Transaction) (TransactionInput, bool) {
 	spec := transactionInputFromTransaction(transaction)
@@ -311,14 +462,19 @@ func postedOnSpec(transaction Transaction) (TransactionInput, bool) {
 	}
 	first := spec.JournalEntries[0]
 	bridged := len(transaction.JournalEntries) > 1
-	merged := JournalEntryInput{EntryDate: transaction.TransactionDate, EntryKind: first.EntryKind, Memo: first.Memo, MetadataJSON: first.MetadataJSON}
+	merged := JournalEntryInput{EntryDate: transaction.TransactionDate, EntryKind: first.EntryKind, Memo: first.Memo, MetadataJSON: first.MetadataJSON,
+		ConversionSide: first.ConversionSide, FeePaidBy: first.FeePaidBy}
 	for entryIndex, entry := range transaction.JournalEntries {
 		input := spec.JournalEntries[entryIndex]
-		if input.EntryKind != first.EntryKind || input.Memo != first.Memo || input.MetadataJSON != first.MetadataJSON {
+		if input.EntryKind != first.EntryKind || input.Memo != first.Memo || input.MetadataJSON != first.MetadataJSON ||
+			input.ConversionSide != first.ConversionSide || input.FeePaidBy != first.FeePaidBy {
 			return spec, false
 		}
 		for postingIndex, posting := range entry.Postings {
 			if bridged && posting.AccountSystemRole != nil && *posting.AccountSystemRole == "transfer_clearing" {
+				continue
+			}
+			if isExchangeTradingLeg(entry, posting) {
 				continue
 			}
 			postingInput := input.Postings[postingIndex]

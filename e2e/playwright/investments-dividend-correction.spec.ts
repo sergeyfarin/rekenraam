@@ -58,7 +58,7 @@ test('a cash dividend is corrected, then the correction is reversed', async ({ p
     income_account_id: s.incomeID, amount_value: '5000', amount_scale: 2, memo: `ACME ${s.suffix}`
   });
 
-  await page.goto(`/app/transactions?transaction_id=${dividend.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${dividend.id}`);
   await page.getByRole('button', { name: 'Correct dividend…' }).click();
   const form = page.getByRole('dialog', { name: 'Correct this dividend' });
   await expect(form.getByLabel('Dividend amount')).toHaveValue('50.00');
@@ -72,7 +72,7 @@ test('a cash dividend is corrected, then the correction is reversed', async ({ p
   const replacement = await chainEffective(page, dividend.id);
   expect(replacement).not.toBeNull();
   expect(replacement).not.toBe(dividend.id);
-  await page.goto(`/app/transactions?transaction_id=${replacement}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${replacement}`);
   await page.getByRole('button', { name: 'Reverse dividend…' }).click();
   const dialog = page.getByRole('alertdialog');
   await expect(dialog).toContainText('Reverse this dividend');
@@ -96,7 +96,7 @@ test.describe('on a phone', () => {
       income_account_id: s.incomeID, amount_value: '5000', amount_scale: 2, memo: `ACME ${s.suffix}`
     });
 
-    await page.goto(`/app/transactions?transaction_id=${dividend.id}`);
+    await page.goto(`/app/ledger/transactions?transaction_id=${dividend.id}`);
     await page.getByRole('button', { name: 'Correct dividend…' }).click();
     const form = page.getByRole('dialog', { name: 'Correct this dividend' });
     const exDateField = form.getByLabel('Ex-dividend date');
@@ -133,7 +133,7 @@ test.describe('on a phone', () => {
       income_account_id: income.id, amount_value: '5000', amount_scale: 2, memo: `ACME ${s.suffix}`
     });
 
-    await page.goto(`/app/transactions?transaction_id=${dividend.id}`);
+    await page.goto(`/app/ledger/transactions?transaction_id=${dividend.id}`);
     await page.getByRole('button', { name: 'Correct dividend…' }).click();
     const form = page.getByRole('dialog', { name: 'Correct this dividend' });
     await expect(form.getByLabel('Payment date', { exact: true })).toHaveValue(daysFromTodayISO(-10));
@@ -172,7 +172,7 @@ test.describe('on a phone', () => {
     await apiJSON(page, 'POST', `/api/v1/accounts/${s.cashID}/close`, s.csrfToken, { closed_on: todayISO() });
     await apiJSON(page, 'POST', `/api/v1/accounts/${s.cashID}/archive`, s.csrfToken, { effective_from: todayISO() });
 
-    await page.goto(`/app/transactions?transaction_id=${dividend.id}`);
+    await page.goto(`/app/ledger/transactions?transaction_id=${dividend.id}`);
     await page.getByRole('button', { name: 'Correct dividend…' }).click();
     const form = page.getByRole('dialog', { name: 'Correct this dividend' });
     const cashAccount = form.getByLabel(/^Cash account/);
@@ -227,7 +227,7 @@ test.describe('on a phone', () => {
     await page.goto('/app/investments');
     await page.getByRole('link', { name: 'Gains', exact: true }).click();
     await expect(saleRow).toContainText('140.00');
-    await clientNavigate(page, `/app/transactions?transaction_id=${reinvestment.transaction.id}`);
+    await clientNavigate(page, `/app/ledger/transactions?transaction_id=${reinvestment.transaction.id}`);
     await page.getByRole('button', { name: 'Correct reinvested dividend…' }).click();
     const form = page.getByRole('dialog', { name: 'Correct this reinvested dividend' });
     await expect(form.getByLabel('Quantity')).toHaveValue('10');
@@ -285,7 +285,7 @@ test.describe('on a phone', () => {
     await trade('buy', 20, '10', '20000');
     await trade('sell', 10, '5', '15000');
 
-    await page.goto(`/app/transactions?transaction_id=${reinvestment.transaction.id}`);
+    await page.goto(`/app/ledger/transactions?transaction_id=${reinvestment.transaction.id}`);
     await page.getByRole('button', { name: 'Correct reinvested dividend…' }).click();
     const form = page.getByRole('dialog', { name: 'Correct this reinvested dividend' });
     await expect(form.getByLabel('Date', { exact: true })).toHaveValue(daysFromTodayISO(-30));

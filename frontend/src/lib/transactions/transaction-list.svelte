@@ -39,7 +39,10 @@
     actions,
     initialFilters,
     onFiltersChange,
-    onRowClick
+    onRowClick,
+    lockStatus,
+    emptyTitle,
+    emptyCopy
   }: {
     csrfToken?: string;
     actions: TransactionWorkspaceActions;
@@ -48,6 +51,10 @@
     /** Reports each change back so the route can keep the URL in step. */
     onFiltersChange?: (filters: TransactionQueryFilters) => void;
     onRowClick?: (tx: TransactionResponse) => void;
+    /** A view that owns lifecycle, such as Drafts, hides the status filter. */
+    lockStatus?: TransactionFilters['status'];
+    emptyTitle?: string;
+    emptyCopy?: string;
   } = $props();
 
   // Filters the bar cannot set — a drill-down's category and date basis — are
@@ -62,7 +69,7 @@
   });
   const fromReport = $derived(linkFilters.categoryID !== undefined || linkFilters.categoryType !== undefined);
   let filters = $state<TransactionFilters>({
-    status: seed?.status,
+    status: untrack(() => lockStatus ?? seed?.status),
     kind: seed?.kind,
     accountID: seed?.accountID,
     payeeID: seed?.payeeID,
@@ -71,7 +78,11 @@
     afterDate: seed?.afterDate,
     beforeDate: seed?.beforeDate
   });
-  const activeFilters = $derived<TransactionQueryFilters>({ ...linkFilters, ...filters });
+  const activeFilters = $derived<TransactionQueryFilters>({
+    ...linkFilters,
+    ...filters,
+    ...(lockStatus ? { status: lockStatus } : {})
+  });
 
   $effect(() => {
     onFiltersChange?.(activeFilters);
@@ -146,7 +157,7 @@
   <Panel variant="toolbar">
     <TransactionFilterBar
       bind:filters
-      show={{ status: true, kind: true, account: true, payee: true, search: true, dateRange: true, needsReview: true }}
+      show={{ status: !lockStatus, kind: true, account: true, payee: true, search: true, dateRange: true, needsReview: true }}
     />
   </Panel>
 
@@ -230,5 +241,7 @@
     error={query.error instanceof Error ? query.error : query.error ? new Error(String(query.error)) : null}
     onRetry={() => query.refetch()}
     onRowClick={onRowClick}
+    emptyTitle={emptyTitle}
+    emptyCopy={emptyCopy}
   />
 </div>

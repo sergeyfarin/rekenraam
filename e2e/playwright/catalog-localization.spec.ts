@@ -4,16 +4,17 @@ import { readyForLedger } from './support/ledger';
 import { apiJSON, csrfTokenFor } from './support/api';
 import { secretFromOTPAuthURI } from './support/totp';
 import { activateBrowserMFA } from './support/mfa-enrollment';
+import { nonEnglishTranslationLocales } from './support/locales';
 
 test.use({ viewport: { width: 390, height: 844 } });
 const messages = (domain: string, locale: string) => JSON.parse(readFileSync(new URL(`../../frontend/messages/${domain}/${locale}.json`, import.meta.url), 'utf8'));
 
-for (const locale of ['es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of nonEnglishTranslationLocales) {
   test(`[acceptance] CSV mapping creation, reuse, editing and deletion render in ${locale} at 390px`, async ({ page }) => {
     await readyForLedger(page);
     const m = messages('app', locale);
     await page.evaluate(value => localStorage.setItem('PARAGLIDE_LOCALE', value), locale);
-    await page.goto('/app/import');
+    await page.goto('/app/ledger/import');
     const suffix = Date.now();
     const column = (name: string) => `${name}_${locale}_${suffix}`;
     const fixture = {
@@ -40,7 +41,7 @@ for (const locale of ['es', 'fr', 'nl', 'de', 'ru']) {
     await expect(page.getByRole('button', { name: m.import_commit_button, exact: true })).toBeVisible();
 
     // Reopen the file through the real saved profile; no ledger commit is needed.
-    await page.goto('/app/import');
+    await page.goto('/app/ledger/import');
     await page.locator('input[type="file"]').setInputFiles(fixture);
     const saved = page.getByRole('combobox', { name: m.import_csv_saved_profile, exact: true });
     await expect.poll(() => saved.evaluate((select: HTMLSelectElement) => select.selectedOptions[0]?.textContent?.trim())).toBe(m.import_csv_profile_suggested.replace('{name}', profileName));
@@ -104,7 +105,7 @@ for (const locale of ['es', 'fr', 'nl', 'de', 'ru']) {
       await page.getByLabel(m.security_mfa_password_label, { exact: true }).fill('test-password');
       await page.getByRole('button', { name: m.security_mfa_disable, exact: true }).click();
       await expect(page.getByText(m.security_mfa_badge_inactive, { exact: true })).toBeVisible();
-      await page.goto('/app/settings/language');
+      await page.goto('/app/settings/preferences');
       await expect(page.getByText(messages('app', locale).language_translation_progress_copy, { exact: true })).toBeVisible();
     } finally {
       const status = await apiJSON<{ status: string }>(page, 'GET', '/api/v1/auth/mfa');

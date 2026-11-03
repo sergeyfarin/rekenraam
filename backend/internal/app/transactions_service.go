@@ -477,13 +477,15 @@ func toTransaction(record db.TransactionRecord) Transaction {
 			})
 		}
 		entries = append(entries, JournalEntry{
-			ID:           entry.ID,
-			EntrySeq:     entry.EntrySeq,
-			EntryDate:    entry.EntryDate,
-			EntryKind:    entry.EntryKind,
-			Memo:         entry.Memo,
-			MetadataJSON: entry.MetadataJSON,
-			Postings:     postings,
+			ID:             entry.ID,
+			EntrySeq:       entry.EntrySeq,
+			EntryDate:      entry.EntryDate,
+			EntryKind:      entry.EntryKind,
+			Memo:           entry.Memo,
+			MetadataJSON:   entry.MetadataJSON,
+			ConversionSide: entry.ConversionSide.String,
+			FeePaidBy:      entry.FeePaidBy.String,
+			Postings:       postings,
 		})
 	}
 

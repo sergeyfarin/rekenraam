@@ -67,6 +67,9 @@ func createReconciliationImpact(logger *slog.Logger, authService *app.AuthServic
 			writeDecodeError(w, err)
 			return
 		}
+		if !refuseKeptJournal(w, request) {
+			return
+		}
 		impact, err := transactionService.ReconciliationImpactForCreate(r.Context(), app.CreateReconciliationImpactInput{
 			OwnerUserID: owner.ID,
 			Spec:        toTransactionInput(request),
@@ -100,6 +103,7 @@ func updateReconciliationImpact(logger *slog.Logger, authService *app.AuthServic
 			Spec:          toTransactionInput(request),
 			// The version binds the preview to the form as the write is (#296).
 			ExpectedVersionID: request.ExpectedVersionID,
+			KeepJournal:       request.KeepJournal,
 		})
 		if err != nil {
 			writeTransactionServiceError(w, r, logger, "reconciliation impact", err)

@@ -12,7 +12,7 @@ test('a new-account draft survives a currency refetch while the editor is open',
   const draft = `Refetch draft ${Date.now()}`;
 
   await page.clock.install();
-  await page.goto('/app/accounts');
+  await page.goto('/app/ledger/accounts');
   await page.getByRole('button', { name: 'Add account' }).first().click();
   const form = page.locator('form').filter({ has: page.getByRole('button', { name: 'Create account' }) });
   const nameField = form.getByLabel('Name', { exact: true });
@@ -54,7 +54,7 @@ test('a transaction edit survives a category refetch while the editor is open', 
   });
 
   await page.clock.install();
-  await page.goto('/app/transactions');
+  await page.goto('/app/ledger/transactions');
   await page.getByRole('row').filter({ hasText: description }).getByRole('button', { name: 'Edit', exact: true }).click();
   const edit = page.getByRole('complementary', { name: 'Actions' });
   await expect(edit.getByRole('heading', { name: 'Edit transaction' })).toBeVisible();

@@ -362,13 +362,29 @@
   "import_fetching_cancel": "Annuleren",
   "import_fetching_failed_title": "Het ophalen is mislukt",
   "import_fetching_failed_copy": "Controleer de API-sleutel van de koppeling en probeer het opnieuw.",
-  "settings_card_language_title": "Taal",
-  "settings_card_language_copy": "Kies de taal waarin de interface wordt getoond.",
   "language_title": "Taal",
   "language_copy": "De taal van de interface wordt in deze browser bewaard. Bedragen, datums en getallen volgen de gekozen taal.",
   "language_select_legend": "Taal van de interface",
   "language_translation_progress_title": "Voorlopige vertaling",
   "language_translation_progress_copy": "Deze vertalingen zijn opgesteld aan de hand van een terminologielijst en zijn nog niet nagekeken door een moedertaalspreker. Wat nog niet vertaald is, wordt in het Engels getoond in plaats van leeg te blijven.",
+  "language_partial": "Gedeeltelijk",
+  "language_partial_missing": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} onvertaalde tekst",
+        "countPlural=*": "{n} onvertaalde teksten"
+      }
+    }
+  ],
+  "language_partial_option": "{language} · gedeeltelijk",
   "import_rules_title": "Importregels",
   "import_rules_copy": "Pas de eerste overeenkomende regel toe wanneer een nieuw bestand wordt klaargezet. Je kunt elk resultaat controleren vóór het boeken.",
   "import_rules_add": "Regel toevoegen",
@@ -1006,7 +1022,6 @@
   "search_switch_theme": "Wissel licht/donker thema",
   "search_navigation_error": "Dit resultaat kon niet worden geopend. Probeer opnieuw.",
   "attention_review": "Controleren",
-  "attention_review_label": "Controleren · {status}",
   "attention_count": "Te controleren items: {count}",
   "attention_failed": "{count} bekende items · een controle is mislukt",
   "attention_checking": "{count} bekende items · de controle is onvolledig",
@@ -1026,5 +1041,1005 @@
   "attention_backups": "Laatste back-up",
   "attention_self_check": "Laatste grootboekcontrole",
   "attention_prices": "Ontbrekende of verouderde prijzen",
-  "attention_rates": "Ontbrekende of verouderde wisselkoersen"
+  "attention_rates": "Ontbrekende of verouderde wisselkoersen",
+  "nav_breadcrumb": "Kruimelpad",
+  "keyboard_help_title": "Sneltoetsen",
+  "keyboard_help_search": "Pagina’s, rekeningen en opdrachten zoeken",
+  "keyboard_help_help": "Deze lijst tonen",
+  "keyboard_help_escape": "Een venster, menu of paneel sluiten",
+  "keyboard_help_note": "Sneltoetsen werken niet tijdens het typen in een veld.",
+  "keyboard_help_close": "Sluiten",
+  "keyboard_help_or": "of",
+  "keyboard_key_ctrl": "Ctrl",
+  "keyboard_key_escape": "Esc",
+  "briefing_headline_net_worth": "Nettovermogen",
+  "briefing_headline_cash": "Liquide middelen",
+  "briefing_scope_all": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} rekening",
+        "countPlural=*": "Alle {n} rekeningen"
+      }
+    }
+  ],
+  "briefing_scope_cash": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} geldrekening",
+        "countPlural=*": "{n} geldrekeningen"
+      }
+    }
+  ],
+  "briefing_scope_closed": "Alleen gesloten rekeningen",
+  "briefing_change": "{amount} in {month}",
+  "briefing_change_label": "{amount} van eind {start} tot {end}",
+  "briefing_needs_price_named": "Nettovermogen mist een prijs voor {code}",
+  "briefing_needs_rate_named": "Nettovermogen mist een wisselkoers voor {code}",
+  "briefing_missing_price_named": "Prijs ontbreekt voor {code}",
+  "briefing_missing_rate_named": "Wisselkoers ontbreekt voor {code}",
+  "briefing_stale_price_named": "Prijs voor {code} verouderd",
+  "briefing_stale_rate_named": "Wisselkoers voor {code} verouderd",
+  "briefing_needs_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Nettovermogen mist {n} prijs",
+        "countPlural=*": "Nettovermogen mist {n} prijzen"
+      }
+    }
+  ],
+  "briefing_needs_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Nettovermogen mist {n} wisselkoers",
+        "countPlural=*": "Nettovermogen mist {n} wisselkoersen"
+      }
+    }
+  ],
+  "briefing_needs_values": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Nettovermogen mist {n} waarde",
+        "countPlural=*": "Nettovermogen mist {n} waarden"
+      }
+    }
+  ],
+  "briefing_missing_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} prijs ontbreekt",
+        "countPlural=*": "{n} prijzen ontbreken"
+      }
+    }
+  ],
+  "briefing_missing_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} wisselkoers ontbreekt",
+        "countPlural=*": "{n} wisselkoersen ontbreken"
+      }
+    }
+  ],
+  "briefing_missing_values": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} waarde ontbreekt",
+        "countPlural=*": "{n} waarden ontbreken"
+      }
+    }
+  ],
+  "briefing_stale_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} prijs verouderd",
+        "countPlural=*": "{n} prijzen verouderd"
+      }
+    }
+  ],
+  "briefing_stale_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} wisselkoers verouderd",
+        "countPlural=*": "{n} wisselkoersen verouderd"
+      }
+    }
+  ],
+  "briefing_stale_values": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} waarde verouderd",
+        "countPlural=*": "{n} waarden verouderd"
+      }
+    }
+  ],
+  "briefing_work_drafts": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} concept",
+        "countPlural=*": "{n} concepten"
+      }
+    }
+  ],
+  "briefing_work_transactions": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} transactie",
+        "countPlural=*": "{n} transacties"
+      }
+    }
+  ],
+  "briefing_work_recurring": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} geblokkeerde terugkerende boeking",
+        "countPlural=*": "{n} geblokkeerde terugkerende boekingen"
+      }
+    }
+  ],
+  "briefing_work_imports": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} import",
+        "countPlural=*": "{n} imports"
+      }
+    }
+  ],
+  "briefing_work_suggestions": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} beleggingssuggestie",
+        "countPlural=*": "{n} beleggingssuggesties"
+      }
+    }
+  ],
+  "briefing_work_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} prijs",
+        "countPlural=*": "{n} prijzen"
+      }
+    }
+  ],
+  "briefing_work_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} wisselkoers",
+        "countPlural=*": "{n} wisselkoersen"
+      }
+    }
+  ],
+  "briefing_work_one": "{item} te controleren",
+  "briefing_work_two": "{first} en {second} te controleren",
+  "briefing_failed_unchecked": "Sommige controles konden niet worden uitgevoerd",
+  "briefing_failed_backup": "Laatste back-up mislukt",
+  "briefing_failed_self_check": "Zelfcontrole van het grootboek vraagt aandacht",
+  "briefing_failed_connections": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} verbindingsdownload mislukt",
+        "countPlural=*": "{n} verbindingsdownloads mislukt"
+      }
+    }
+  ],
+  "briefing_failed_refresh": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} prijs- of koersverversing mislukt",
+        "countPlural=*": "{n} prijs- of koersverversingen mislukt"
+      }
+    }
+  ],
+  "briefing_failed_imports": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} import mislukt",
+        "countPlural=*": "{n} imports mislukt"
+      }
+    }
+  ],
+  "briefing_failed_other": "Een controle is mislukt",
+  "briefing_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "nog {n}",
+        "countPlural=*": "nog {n}"
+      }
+    }
+  ],
+  "briefing_more_label": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "nog {n} te controleren",
+        "countPlural=*": "nog {n} te controleren"
+      }
+    }
+  ],
+  "briefing_needs_currency": "Kies een standaardvaluta om het nettovermogen te zien",
+  "briefing_needs_short_review": "Nettovermogen vraagt om controle van een shortpositie",
+  "briefing_check_failed": "Kon niet controleren wat aandacht nodig heeft",
+  "briefing_checking": "Controleren wat aandacht nodig heeft…",
+  "briefing_review_count": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} item te controleren",
+        "countPlural=*": "{n} items te controleren"
+      }
+    }
+  ],
+  "briefing_all_clear": "Alles in orde, niets te controleren",
+  "briefing_headline_menu": "Kop kiezen",
+  "briefing_headline_unavailable": "{label} niet beschikbaar",
+  "briefing_loading": "Overzicht laden…",
+  "briefing_load_error": "Het overzicht kon niet worden geladen.",
+  "briefing_start_title": "Begin met een rekening",
+  "briefing_start_copy": "Voeg de rekeningen toe die je gebruikt om hier je nettovermogen en openstaande punten te zien.",
+  "briefing_start_action": "Rekening toevoegen",
+  "home_shortcuts_label": "Snelkoppelingen",
+  "home_shortcut_import": "Bestand importeren",
+  "home_shortcut_spending": "Uitgaven per categorie",
+  "home_shortcut_more": "Meer",
+  "transactions_entry_saved": "Transactie toegevoegd.",
+  "transactions_entry_view": "Transactie bekijken",
+  "home_widgets_label": "Mijn start",
+  "home_widget_failed": "Dit overzicht kon niet worden geladen.",
+  "home_widget_no_data": "Nog geen gegevens",
+  "home_widget_no_data_copy": "Verschijnt zodra u een rekening en transacties toevoegt.",
+  "home_widget_no_currency": "Stel een standaardvaluta in om dit in één valuta te zien.",
+  "home_widget_set_currency": "Standaardvaluta instellen",
+  "home_spending_title": "Uitgaven deze maand",
+  "home_spending_scope": "{period} · alle rekeningen · {currency}",
+  "home_spending_zero": "Deze maand nog niets uitgegeven",
+  "home_spending_partial": "Niet alle uitgaven zijn om te rekenen naar {currency}; totalen per valuta",
+  "home_spending_open": "Uitgavenrapport openen",
+  "home_budgets_title": "Budgetten · {month}",
+  "home_budgets_left": "{amount} over",
+  "home_budgets_over": "{amount} boven budget",
+  "home_budgets_spent": "{actual} van {target} uitgegeven",
+  "home_budgets_row": "{actual} van {target}",
+  "home_budgets_row_over": "{amount} erover",
+  "home_budgets_not_set_up": "Geen budget deze maand",
+  "home_budgets_set_up": "Budget instellen",
+  "home_budgets_open": "Budgetten openen",
+  "home_accounts_title": "Rekeningen",
+  "home_accounts_scope": "Grootste saldi · {date}",
+  "home_accounts_no_value": "Geen waarde",
+  "home_accounts_open": "Alle rekeningen",
+  "home_recurring_title": "Terugkerend",
+  "home_recurring_next": "Volgende: {name} op {date}",
+  "home_recurring_none_due": "Niets gepland",
+  "home_recurring_not_set_up": "Geen terugkerende schema’s",
+  "home_recurring_set_up": "Schema instellen",
+  "home_recurring_open": "Terugkerende openen",
+  "home_trend_title": "Nettovermogen · 12 maanden",
+  "home_trend_scope": "{period} · waarden aan maandeinde · {currency}",
+  "home_trend_unavailable": "Niet beschikbaar",
+  "home_trend_unavailable_copy": "De waarde van vandaag mist een koers; die wordt nooit gedeeltelijk getoond.",
+  "home_trend_chart_label": "Nettovermogen van {start} tot {end}",
+  "home_trend_change_label": "{amount} sinds {date}",
+  "home_trend_open": "Vermogensrapport openen",
+  "home_spending_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} andere categorie",
+        "countPlural=*": "+{n} andere categorieën"
+      }
+    }
+  ],
+  "home_budgets_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} ander budget",
+        "countPlural=*": "+{n} andere budgetten"
+      }
+    }
+  ],
+  "home_budgets_other_currencies": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "plus {n} andere valuta",
+        "countPlural=*": "plus {n} andere valuta’s"
+      }
+    }
+  ],
+  "home_accounts_count": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} open rekening",
+        "countPlural=*": "{n} open rekeningen"
+      }
+    }
+  ],
+  "home_accounts_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} andere rekening",
+        "countPlural=*": "+{n} andere rekeningen"
+      }
+    }
+  ],
+  "home_recurring_active": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} actief schema",
+        "countPlural=*": "{n} actieve schema’s"
+      }
+    }
+  ],
+  "home_recurring_drafts": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} concept te controleren",
+        "countPlural=*": "{n} concepten te controleren"
+      }
+    }
+  ],
+  "home_trend_stale": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} waarde verouderd",
+        "countPlural=*": "{n} waarden verouderd"
+      }
+    }
+  ],
+  "home_widgets_changing": "Het boek veranderde terwijl Start het las, dus kaarten kunnen even verschillen. Opnieuw lezen…",
+  "home_recurring_blocked": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} geblokkeerd",
+        "countPlural=*": "{n} geblokkeerd"
+      }
+    }
+  ],
+  "home_explore_title": "Meer ontdekken",
+  "home_explore_subtitle": "Voeg elk van de widgets hieronder toe aan de startpagina",
+  "home_explore_collapse": "Inklappen",
+  "home_explore_expand": "Alles tonen",
+  "home_explore_everyday": "Dagelijks",
+  "home_explore_wealth": "Vermogen en beleggingen",
+  "home_explore_planning": "Planning",
+  "home_explore_data": "Grootboek en gegevens",
+  "home_cashflow_label": "Kasstroom",
+  "home_cashflow_title": "Kasstroom · {month}",
+  "home_cashflow_open": "Kasstroomrapport openen",
+  "home_cashflow_no_accounts": "Geen geldrekeningen",
+  "home_cashflow_add_account": "Rekening toevoegen",
+  "home_cashflow_accounts": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} geldrekening",
+        "countPlural=*": "{n} geldrekeningen"
+      }
+    }
+  ],
+  "home_cashflow_zero": "Deze maand nog niets in of uit",
+  "home_cashflow_in": "Inkomend",
+  "home_cashflow_out": "Uitgaand",
+  "home_cashflow_transfers": "Overboekingen, netto",
+  "home_cashflow_net_label": "{amount} inkomend min uitgaand",
+  "home_cashflow_partial": "Niet elk bedrag is om te rekenen naar {currency}; totalen per valuta",
+  "home_holdings_title": "Posities",
+  "home_holdings_open": "Beleggingen openen",
+  "home_holdings_none": "Nog geen beleggingen",
+  "home_holdings_set_up": "Aankoop vastleggen",
+  "home_holdings_no_price": "Geen koers",
+  "home_holdings_scope": "Grootste naar waarde · {date}",
+  "home_holdings_count": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} positie",
+        "countPlural=*": "{n} posities"
+      }
+    }
+  ],
+  "home_holdings_unpriced": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} zonder koers",
+        "countPlural=*": "{n} zonder koers"
+      }
+    }
+  ],
+  "home_holdings_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} andere positie",
+        "countPlural=*": "+{n} andere posities"
+      }
+    }
+  ],
+  "home_returns_title": "Rendement",
+  "home_returns_open": "Rendement openen",
+  "home_returns_scope": "Tijdgewogen · {period}",
+  "home_returns_saved": "opgeslagen op {date}",
+  "home_returns_saved_badge": "Opgeslagen berekening",
+  "home_returns_annualized": "Op jaarbasis",
+  "home_returns_not_saved": "Nog geen opgeslagen berekening",
+  "home_returns_not_saved_copy": "Home toont de laatste berekening die je bij Rendement opslaat; zelf rekent het nooit.",
+  "home_returns_calculate": "Rendement berekenen",
+  "home_allocation_title": "Verdeling",
+  "home_allocation_scope": "Naar soort bezitting · {date}",
+  "home_allocation_short": "{type}, short",
+  "home_allocation_fact": "{type} {weight}",
+  "home_allocation_unknown": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} saldo zonder waarde",
+        "countPlural=*": "{n} saldi zonder waarde"
+      }
+    }
+  ],
+  "home_allocation_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} andere soort",
+        "countPlural=*": "+{n} andere soorten"
+      }
+    }
+  ],
+  "home_income_title": "Dividendinkomsten",
+  "home_income_open": "Inkomsten openen",
+  "home_income_zero": "Geen dividenden vastgelegd",
+  "home_income_instruments": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Inkomsten uit {n} instrument",
+        "countPlural=*": "Inkomsten uit {n} instrumenten"
+      }
+    }
+  ],
+  "home_income_scope": "Bevestigde dividenden, alle tijd",
+  "home_income_to_assign": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} betaling toe te wijzen",
+        "countPlural=*": "{n} betalingen toe te wijzen"
+      }
+    }
+  ],
+  "home_income_unassigned_copy": "niet toegewezen geld is pas inkomen als je het toewijst",
+  "home_income_unassigned_cash": "Niet toegewezen geld",
+  "home_income_payments": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} betaling",
+        "countPlural=*": "{n} betalingen"
+      }
+    }
+  ],
+  "home_forecast_title": "Prognose",
+  "home_forecast_open": "Prognose openen",
+  "home_forecast_badge": "Schatting",
+  "home_forecast_fact": "Komende 90 dagen",
+  "home_forecast_scope": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Verwachte saldi uit {n} actief schema, berekend bij openen",
+        "countPlural=*": "Verwachte saldi uit {n} actieve schema’s, berekend bij openen"
+      }
+    }
+  ],
+  "home_forecast_scope_unknown": "Verwachte saldi, berekend bij openen",
+  "home_forecast_not_set_up": "Niets gepland om te voorspellen",
+  "home_forecast_not_set_up_copy": "De prognose rekent je terugkerende schema’s door.",
+  "home_imports_title": "Importen",
+  "home_imports_open": "Import openen",
+  "home_imports_zero": "Niets wacht op controle",
+  "home_imports_review": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} batch te controleren",
+        "countPlural=*": "{n} batches te controleren"
+      }
+    }
+  ],
+  "home_imports_scope": "Klaargezette bestandsimporten wachten op je controle",
+  "home_prices_title": "Koersen",
+  "home_prices_open": "Koersen openen",
+  "home_prices_scope": "Koersen en wisselkoersen voor je vermogen",
+  "home_prices_current": "Actueel",
+  "home_prices_price": "koers",
+  "home_prices_rate": "wisselkoers",
+  "home_prices_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} meer",
+        "countPlural=*": "+{n} meer"
+      }
+    }
+  ],
+  "home_backups_title": "Back-ups",
+  "home_backups_open": "Back-ups en gegevens openen",
+  "home_backups_off": "Automatische back-ups staan uit",
+  "home_backups_set_up": "Back-ups inschakelen",
+  "home_backups_last": "Back-up van {date}",
+  "home_backups_next": "Volgende {date}",
+  "home_backups_none": "Nog geen back-up",
+  "home_backups_failed": "Laatste back-up mislukt",
+  "home_backups_retrying": "Er volgt een nieuwe poging",
+  "home_backups_retry_copy": "Open Back-ups om opnieuw te proberen",
+  "home_backups_running": "Back-up loopt",
+  "home_imports_checking": "Controleren…",
+  "home_cashflow_transfers_unconverted": "overboekingen niet omgerekend naar {currency}",
+  "reports_export_title": "Exporteren",
+  "transactions_transfer_title": "Overboeking tussen rekeningen",
+  "transactions_tier_switch_transfer": "Overboeking tussen rekeningen",
+  "transactions_transfer_from": "Van rekening",
+  "transactions_transfer_to": "Naar rekening",
+  "transactions_transfer_swap": "Van en Naar omwisselen",
+  "transactions_transfer_from_currency": "Verzonden valuta",
+  "transactions_transfer_to_currency": "Ontvangen valuta",
+  "transactions_transfer_sent": "Verzonden ({currency})",
+  "transactions_transfer_received": "Ontvangen ({currency})",
+  "transactions_transfer_rate": "Koers: 1 {from} = {rate} {to}",
+  "transactions_transfer_rate_hint": "Voer beide bedragen in zoals uw bank ze toont; de koers volgt daaruit.",
+  "transactions_transfer_fee": "Kosten (optioneel)",
+  "transactions_transfer_fee_hint": "Geboekt op Bankkosten, bovenop de overboeking, op de dag van de rekening die ze betaalde.",
+  "transactions_transfer_fee_paid_by": "Kosten in rekening gebracht door",
+  "transactions_transfer_fee_paid_by_from": "{currency}, door de verzendende rekening",
+  "transactions_transfer_fee_paid_by_to": "{currency}, door de ontvangende rekening",
+  "transactions_transfer_days_toggle": "Wordt op verschillende dagen geboekt",
+  "transactions_transfer_leaves_on": "Afgeschreven op",
+  "transactions_transfer_arrives_on": "Bijgeschreven op",
+  "transactions_transfer_days_hint": "Elke rekening toont de overboeking op haar eigen dag; daartussen is het geld onderweg.",
+  "transactions_transfer_problem_missing_account": "Kies beide rekeningen.",
+  "transactions_transfer_problem_same_account": "Van en Naar moeten verschillende rekeningen zijn.",
+  "transactions_transfer_problem_missing_amount": "Voer een bedrag groter dan nul in.",
+  "transactions_transfer_problem_missing_received": "Voer het ontvangen bedrag in, groter dan nul.",
+  "transactions_transfer_problem_arrives_before_leaves": "De dag van bijschrijving kan niet vóór de dag van afschrijving liggen.",
+  "transactions_transfer_problem_invalid_fee": "Voer kosten groter dan nul in, of laat het veld leeg.",
+  "transactions_transfer_problem_fee_exceeds_amount": "De kosten zijn hoger dan het bedrag waarvan ze worden afgetrokken.",
+  "transactions_transfer_problem_no_fee_category": "Er is geen categorie Bankkosten om de kosten op te boeken.",
+  "transactions_exchange_title": "Valutawissel",
+  "transactions_exchange_market": "Referentiekoers op {date}: 1 {from} = {rate} {to}",
+  "transactions_exchange_market_stale": "De laatste referentiekoers vóór de wissel, van {date}.",
+  "transactions_exchange_cost_below": "Ongeveer {amount} ({percent} %) minder dan tegen de referentiekoers",
+  "transactions_exchange_cost_above": "Ongeveer {amount} ({percent} %) meer dan tegen de referentiekoers",
+  "transactions_exchange_cost_equal": "Gelijk aan de referentiekoers",
+  "transactions_exchange_no_market": "Er is nog geen referentiekoers voor {date}; de schatting verschijnt zodra er een is vastgelegd.",
+  "transactions_exchange_not_booked": "Een schatting tegenover een dagelijkse referentiekoers, niet de werkelijke marge van de bank. Er wordt geen winst of verlies geboekt.",
+  "home_shortcut_transfer": "Overboeking",
+  "transactions_transfer_converted": "Omgewisseld: {sent} naar {received}",
+  "transactions_transfer_statements_hint": "Voer elk bedrag in zoals het afschrift van die rekening het toont; kosten worden vóór de koers eruit gehaald.",
+  "transactions_transfer_conversion_side": "Omgewisseld",
+  "transactions_transfer_conversion_sending": "Bij afschrijving (de verzendende bank wisselt)",
+  "transactions_transfer_conversion_receiving": "Bij bijschrijving (de ontvangende bank wisselt)",
+  "transactions_locked_title": "Bedragen zijn hier niet te bewerken",
+  "transactions_locked_body": "Deze boeking heeft regels die de editor anders zou opbouwen, zoals een bedrag dat nog onderweg is. Je kunt de omschrijving, begunstigde, soort, tags en notitie wijzigen; om bedragen, rekeningen of datums te wijzigen, maak je haar ongedaan en voer je haar opnieuw in.",
+  "transactions_locked_correct": "Deze boeking heeft regels die de editor anders zou opbouwen, zoals een bedrag dat nog onderweg is, dus ze kan hier niet worden gecorrigeerd. Maak haar ongedaan en voer haar opnieuw in.",
+  "import_match_title": "Al in je grootboek",
+  "import_match_intro": "Deze afschriftregels komen overeen met een transactie die je al hebt ingevoerd: dezelfde rekening en valuta, precies hetzelfde bedrag, geboekt binnen {days} dagen. Koppel een regel om hem vast te leggen zonder nog een transactie toe te voegen, of houd hem als nieuw.",
+  "import_match_check": "Zoeken naar al ingevoerde transacties",
+  "import_match_checking": "Overeenkomende transacties zoeken…",
+  "import_match_empty": "Geen afschriftregel komt overeen met een transactie in je grootboek.",
+  "import_match_row_heading": "Regel {row}: {date}, {amount}",
+  "import_match_link_option": "Koppelen aan {description}, ingevoerd voor {date}",
+  "import_match_untitled": "een transactie zonder omschrijving",
+  "import_match_reason_same_day": "Dezelfde rekening en valuta, precies {amount}, geboekt op de afschriftdatum.",
+  "import_match_reason_after": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Dezelfde rekening en valuta, precies {amount}, geboekt {n} dag na de afschriftdatum.",
+        "countPlural=*": "Dezelfde rekening en valuta, precies {amount}, geboekt {n} dagen na de afschriftdatum."
+      }
+    }
+  ],
+  "import_match_reason_before": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Dezelfde rekening en valuta, precies {amount}, geboekt {n} dag vóór de afschriftdatum.",
+        "countPlural=*": "Dezelfde rekening en valuta, precies {amount}, geboekt {n} dagen vóór de afschriftdatum."
+      }
+    }
+  ],
+  "import_match_keep_new": "Als nieuwe transactie houden",
+  "import_match_choose": "Meerdere transacties komen overeen. Kies er een of houd de regel als nieuw.",
+  "import_match_decide": "Beslis hieronder over de overeenkomsten en importeer daarna opnieuw.",
+  "import_preview_dedupe_matched": "Al aanwezig",
+  "import_result_linked": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} regel gekoppeld aan een transactie in je grootboek",
+        "countPlural=*": "{n} regels gekoppeld aan transacties in je grootboek"
+      }
+    }
+  ],
+  "import_result_match_review": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} regel komt overeen met een transactie in je grootboek en wacht op je beslissing.",
+        "countPlural=*": "{n} regels komen overeen met transacties in je grootboek en wachten op je beslissing."
+      }
+    }
+  ]
 }

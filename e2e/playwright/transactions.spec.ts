@@ -11,8 +11,8 @@ test('creates a simple transaction through the browser form', async ({ page }) =
 
   await createCashAccount(page, csrfToken, accountName, currencyID);
 
-  await page.goto('/app/transactions');
-  await page.getByRole('button', { name: 'New transaction' }).click();
+  await page.goto('/app/ledger/transactions');
+  await page.getByRole('button', { name: 'Add transaction' }).click();
 
   await expect(page.getByRole('heading', { name: 'Add transaction' })).toBeVisible();
   const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction' }) });
@@ -25,7 +25,7 @@ test('creates a simple transaction through the browser form', async ({ page }) =
   // The payee goes last: its suggestion list is also a `listbox`, so filling it
   // earlier would leave two open at once and the category pick could land in
   // the wrong one.
-  await form.getByRole('textbox', { name: 'Payee' }).fill(payeeName);
+  await form.getByRole('combobox', { name: 'Payee' }).fill(payeeName);
   await form.getByRole('button', { name: 'Add transaction' }).click();
 
   // A payee nobody has recorded is not saved as free text: creating the record
@@ -64,8 +64,8 @@ test('offers an existing payee before creating a near-duplicate', async ({ page 
     [201]
   );
 
-  await page.goto('/app/transactions');
-  await page.getByRole('button', { name: 'New transaction' }).click();
+  await page.goto('/app/ledger/transactions');
+  await page.getByRole('button', { name: 'Add transaction' }).click();
   const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction' }) });
 
   await form.getByLabel('Date').fill(todayISO());
@@ -76,7 +76,7 @@ test('offers an existing payee before creating a near-duplicate', async ({ page 
   await form.locator('ul[role="listbox"] button[role="option"]').first().click();
   // A typo, which is the case this exists for: a substring search would find
   // nothing here and the user would create a second, near-duplicate payee.
-  await form.getByRole('textbox', { name: 'Payee' }).fill(`Markt Hall ${suffix}`);
+  await form.getByRole('combobox', { name: 'Payee' }).fill(`Markt Hall ${suffix}`);
   await form.getByRole('button', { name: 'Add transaction' }).click();
 
   await expect(form.getByText('Did you mean one of these?')).toBeVisible();

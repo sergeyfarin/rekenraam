@@ -32,7 +32,7 @@ async function dividendSource(page: Page) {
     source: 'trading212', display_name: connectionName, api_key: apiKey, cash_account_id: cash.id
   });
   const fetchRows = async (action: 'Import' | 'Re-fetch full history') => {
-    await page.goto('/app/import');
+    await page.goto('/app/ledger/import');
     await page.getByRole('row').filter({ hasText: connectionName }).getByRole('button', { name: action, exact: true }).click();
     await expect(page.getByRole('button', { name: 'Commit to ledger' })).toBeVisible({ timeout: 15_000 });
   };
@@ -80,7 +80,7 @@ test('[acceptance] historical cash dividend repair keeps the original payment an
     ] }]
   });
   linkLegacyCashDividend(row.row_id, legacy.id, f.cash.id);
-  await page.goto(`/app/import/dividends?batch_id=${row.batch_id}`);
+  await page.goto(`/app/ledger/import/dividends?batch_id=${row.batch_id}`);
   await expect(page.getByRole('heading', { name: 'Repair previously imported cash payment', exact: true })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Cash account', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Declare source cash as gross with no withholding', exact: true }).click();
@@ -115,7 +115,7 @@ test('a dividend repair keeps its reviewed version when the list refreshes behin
   const legacy = await apiJSON<{ id: number; version_id: number }>(page, 'POST', '/api/v1/transactions', f.csrfToken, original);
   linkLegacyCashDividend(row.row_id, legacy.id, f.cash.id);
   await page.clock.install();
-  await page.goto(`/app/import/dividends?batch_id=${row.batch_id}`);
+  await page.goto(`/app/ledger/import/dividends?batch_id=${row.batch_id}`);
   const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Repair previously imported cash payment', exact: true }) });
   await form.getByRole('button', { name: 'Declare source cash as gross with no withholding', exact: true }).click();
   await form.getByRole('combobox', { name: 'Income account', exact: true }).selectOption(String(f.income.id));

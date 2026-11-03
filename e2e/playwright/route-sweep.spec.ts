@@ -5,6 +5,7 @@ import { seedReferenceBook } from './support/reference-book';
 import { accessibilityViolations, type AxeViolation } from './support/a11y';
 import { ensureBrowserSession } from './support/session';
 import { observePageRequests, waitForPageReady } from './support/page-readiness';
+import { allLocales } from './support/locales';
 
 // Worker scope preserves one seed per book while letting Playwright schedule
 // each parallel sweep test independently instead of bundling beforeAll groups.
@@ -47,14 +48,14 @@ const routes: Route[] = [
   { name: 'review', route: '/app/review', path: () => '/app/review', data: true },
   { name: 'home', route: '/app', path: () => '/app', data: false },
   { name: 'ledger overview', route: '/app/ledger', path: () => '/app/ledger', data: false },
-  { name: 'accounts', route: '/app/accounts', path: () => '/app/accounts', data: true },
-  { name: 'account register', route: '/app/accounts/[id]/register', path: (ids) => `/app/accounts/${ids.get('checking')}/register`, data: true },
-  { name: 'categories', route: '/app/categories', path: () => '/app/categories', data: true },
-  { name: 'category detail', route: '/app/categories/[id]', path: (ids) => `/app/categories/${ids.get('groceries')}`, data: true },
-  { name: 'transactions', route: '/app/transactions', path: () => '/app/transactions', data: true },
-  { name: 'reconcile', route: '/app/reconcile', path: () => '/app/reconcile', data: true },
-  { name: 'import', route: '/app/import', path: () => '/app/import', data: true },
-  { name: 'dividend repair', route: '/app/import/dividends', path: () => '/app/import/dividends', data: true },
+  { name: 'accounts', route: '/app/ledger/accounts', path: () => '/app/ledger/accounts', data: true },
+  { name: 'account register', route: '/app/ledger/accounts/[id]/register', path: (ids) => `/app/ledger/accounts/${ids.get('checking')}/register`, data: true },
+  { name: 'categories', route: '/app/ledger/categories', path: () => '/app/ledger/categories', data: true },
+  { name: 'category detail', route: '/app/ledger/categories/[id]', path: (ids) => `/app/ledger/categories/${ids.get('groceries')}`, data: true },
+  { name: 'transactions', route: '/app/ledger/transactions', path: () => '/app/ledger/transactions', data: true },
+  { name: 'reconcile', route: '/app/ledger/reconcile', path: () => '/app/ledger/reconcile', data: true },
+  { name: 'import', route: '/app/ledger/import', path: () => '/app/ledger/import', data: true },
+  { name: 'dividend repair', route: '/app/ledger/import/dividends', path: () => '/app/ledger/import/dividends', data: true },
   { name: 'investments', route: '/app/investments', path: () => '/app/investments', data: true },
   { name: 'instruments', route: '/app/investments/instruments', path: () => '/app/investments/instruments', data: true },
   { name: 'instrument', route: '/app/investments/instruments/[id]', path: (ids) => `/app/investments/instruments/${ids.get('REF')}`, data: true },
@@ -63,24 +64,30 @@ const routes: Route[] = [
   { name: 'gains', route: '/app/investments/gains', path: () => '/app/investments/gains', data: true },
   { name: 'prices', route: '/app/investments/prices', path: () => '/app/investments/prices', data: true },
   { name: 'planning overview', route: '/app/planning', path: () => '/app/planning', data: false },
-  { name: 'budgets', route: '/app/budgets', path: () => '/app/budgets', data: true },
-  { name: 'recurring', route: '/app/recurring', path: () => '/app/recurring', data: true },
-  { name: 'forecast', route: '/app/forecast', path: () => '/app/forecast', data: true },
+  { name: 'budgets', route: '/app/planning/budgets', path: () => '/app/planning/budgets', data: true },
+  { name: 'recurring', route: '/app/planning/recurring', path: () => '/app/planning/recurring', data: true },
+  { name: 'forecast', route: '/app/planning/forecast', path: () => '/app/planning/forecast', data: true },
   { name: 'reports overview', route: '/app/reports', path: () => '/app/reports', data: false },
   { name: 'spending', route: '/app/reports/spending', path: () => `/app/reports/spending?${reportRange}`, data: true },
   { name: 'cashflow', route: '/app/reports/cashflow', path: () => `/app/reports/cashflow?${reportRange}`, data: true },
   { name: 'net worth', route: '/app/reports/net-worth', path: () => `/app/reports/net-worth?${reportRange}`, data: true },
-  { name: 'settings', route: '/app/settings', path: () => '/app/settings', data: true, inlineErrors: true },
-  { name: 'appearance', route: '/app/settings/appearance', path: () => '/app/settings/appearance', data: false },
+  { name: 'reports export', route: '/app/reports/export', path: () => '/app/reports/export', data: true },
+  { name: 'settings general', route: '/app/settings', path: () => '/app/settings', data: true, inlineErrors: true },
+  { name: 'preferences', route: '/app/settings/preferences', path: () => '/app/settings/preferences', data: false },
   { name: 'currencies', route: '/app/settings/currencies', path: () => '/app/settings/currencies', data: true },
-  { name: 'language', route: '/app/settings/language', path: () => '/app/settings/language', data: false },
   { name: 'security', route: '/app/settings/security', path: () => '/app/settings/security', data: true },
-  { name: 'data', route: '/app/settings/data', path: () => '/app/settings/data', data: true },
-  { name: 'trash', route: '/app/settings/trash', path: () => '/app/settings/trash', data: true }
+  { name: 'data and backups', route: '/app/settings/data', path: () => '/app/settings/data', data: true }
 ];
 
-// Old paths that only redirect (#436); the redirect itself is unit-tested.
-const legacyRoutes = new Set(['/app/pricing']);
+// Old paths only redirect (#436/#460); shell-navigation tests the browser
+// transition and routes.test.ts checks every parameter and fragment.
+const legacyRoutes = new Set([
+  '/app/pricing', '/app/accounts', '/app/accounts/[id]/register',
+  '/app/transactions', '/app/categories', '/app/categories/[id]',
+  '/app/import', '/app/import/dividends', '/app/reconcile',
+  '/app/budgets', '/app/recurring', '/app/forecast',
+  '/app/settings/appearance', '/app/settings/language', '/app/settings/trash'
+]);
 
 const reportRange = 'start_date=2026-01-01&end_date=2026-03-31&bucket=month';
 
@@ -215,7 +222,7 @@ test.describe('route sweep (#278)', () => {
     await page.setViewportSize(viewports.phone);
     const failures: string[] = [];
 
-    for (const locale of ['es', 'fr', 'nl', 'de', 'ru']) {
+    for (const locale of allLocales.filter(locale => locale !== 'en')) {
       await page.evaluate((name) => window.localStorage.setItem('PARAGLIDE_LOCALE', name), locale);
       for (const route of routes) {
         await test.step(`route: ${route.name} / ${locale}`, async () => {

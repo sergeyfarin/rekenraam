@@ -4941,6 +4941,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/home": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Home briefing and widgets
+         * @description Home's composed read for owner-local today. Each headline is the Net worth report's figure for the same accounts in the book's default currency, at today and at the end of the previous month. A headline is complete-only: a missing price or rate leaves value null and lists what is missing, never a partial figure. Out-of-date inputs (valued from an earlier observation inside the staleness window) are listed separately and do not block the value. The default My Home widgets (spending this month, budgets, accounts, recurring, net worth trend) are bounded summaries of their canonical reads; each fails on its own (status failed) without failing the briefing. Never starts work or contacts providers. Session-only; no personal-access-token grant.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Briefing headlines */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["HomeResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/search/catalog": {
         parameters: {
             query?: never;
@@ -29038,7 +29086,10 @@ export interface components {
         TransactionNeedsReview: boolean;
         /** @enum {string} */
         TransactionKind: "ordinary" | "transfer" | "investment" | "opening_balance" | "adjustment";
-        /** @enum {string} */
+        /**
+         * @description `exchange` (#481) marks a transfer between two of the owner's accounts in different currencies. A request entry of this kind names the two account postings — the exact amount that left (negative) and the exact amount that arrived (positive) — and at most one expense posting for a fee charged on top, in one side's currency, and must be the request's only journal entry. It names no system account: the server adds one commodity_trading posting per currency so each balances, on the day of the side that converted (conversion_side), before the posted_on rule bridges different posting days; the fee posts on the day of the account that paid it. The two accounts must differ. Readers that edit an exchange restate it from the response's transfer shape.
+         * @enum {string}
+         */
         JournalEntryKind: "ordinary" | "transfer_leg" | "exchange" | "investment" | "opening_balance" | "adjustment";
         /** @enum {string} */
         ReconciliationStatus: "uncleared" | "cleared" | "reconciled";
@@ -29058,6 +29109,330 @@ export interface components {
             quantity_scale: number;
             /** @description Lossless class-normalized integer coefficient. Liability, equity, and income balances are sign-flipped for display/reporting. */
             normal_quantity_value: string;
+        };
+        HomeResponse: {
+            /**
+             * Format: date
+             * @description Owner-local today.
+             */
+            as_of: string;
+            /**
+             * Format: date
+             * @description Last day of the previous month; the change is measured from the end of this day.
+             */
+            start_boundary: string;
+            /** @description The book's default currency; null when none is set. */
+            reporting_currency: components["schemas"]["HomeReportingCurrency"] | null;
+            /** @description True when the book has no owner-created asset or liability account, open or closed. */
+            empty_book: boolean;
+            headlines: components["schemas"]["HomeHeadline"][];
+            widgets: components["schemas"]["HomeWidgets"];
+            /** @description True when no write committed while Home was reading, so every summary describes one state of the book. The briefing, trend and account balances share one snapshot; spending, budgets and recurring are separate reads, read again while the book changes. False after three tries; the page then says so and reads again. */
+            consistent: boolean;
+            /** @description Every commodity any widget names, so no second read labels an amount. */
+            commodities: components["schemas"]["HomeReportingCurrency"][];
+        };
+        HomeHeadline: {
+            /**
+             * @description cash is open checking, savings, cash and other money accounts, which need no price.
+             * @enum {string}
+             */
+            id: "net_worth" | "cash";
+            /** @description Open asset and liability accounts in scope, without system or per-instrument holding accounts. Zero with a value when net worth is held only in closed accounts. */
+            account_count: number;
+            /** @description Converted total at as_of; null when unavailable. */
+            value: components["schemas"]["BalanceQuantity"] | null;
+            /** @description Converted total at start_boundary; null when it cannot be converted. */
+            start_value: components["schemas"]["BalanceQuantity"] | null;
+            /** @description value minus start_value, present only when both are. */
+            change: components["schemas"]["BalanceQuantity"] | null;
+            /**
+             * @description no_accounts means the scope holds no account at all; for net worth, closed accounts still count.
+             * @enum {string|null}
+             */
+            unavailable: "valuation_gaps" | "unclassified_short" | "no_reporting_currency" | "no_accounts" | null;
+            /** @description Inputs with no usable observation at as_of, one per commodity. */
+            missing: components["schemas"]["HomeValuationInput"][];
+            /** @description Inputs valued from an observation older than the pricing policy's staleness days at as_of, the threshold Prices uses. Each leg of a chained conversion is reported against its own commodity. Never also missing. */
+            stale: components["schemas"]["HomeValuationInput"][];
+        };
+        HomeValuationInput: {
+            /** Format: int64 */
+            commodity_id: number;
+            code: string;
+            /**
+             * @description rate for a currency's exchange rate; price for anything else. A chained conversion's missing currency leg is that currency's rate.
+             * @enum {string}
+             */
+            kind: "price" | "rate";
+        };
+        HomeReportingCurrency: {
+            /** Format: int64 */
+            commodity_id: number;
+            code: string;
+            /** @description The commodity kind, such as currency or security. */
+            kind: string;
+            /** @description The currency's display symbol, such as €. */
+            symbol: string;
+            scale: number;
+        };
+        /**
+         * @description failed means this summary could not be read; summary is then null and the other widgets are unaffected.
+         * @enum {string}
+         */
+        HomeWidgetStatus: "ok" | "failed";
+        /** @description The default My Home widgets (#478) and the More to explore widgets (#479). Each fails on its own. */
+        HomeWidgets: {
+            spending: {
+                status: components["schemas"]["HomeWidgetStatus"];
+                summary: components["schemas"]["HomeSpendingSummary"] | null;
+            };
+            budgets: {
+                status: components["schemas"]["HomeWidgetStatus"];
+                summary: components["schemas"]["HomeBudgetSummary"] | null;
+            };
+            accounts: {
+                status: components["schemas"]["HomeWidgetStatus"];
+                summary: components["schemas"]["HomeAccountsSummary"] | null;
+            };
+            recurring: {
+                status: components["schemas"]["HomeWidgetStatus"];
+                summary: components["schemas"]["HomeRecurringSummary"] | null;
+            };
+            net_worth_trend: {
+                status: components["schemas"]["HomeWidgetStatus"];
+                summary: components["schemas"]["HomeNetWorthTrendSummary"] | null;
+            };
+            cashflow: {
+                status: components["schemas"]["HomeWidgetStatus"];
+                summary: components["schemas"]["HomeCashflowSummary"] | null;
+            };
+            holdings: {
+                status: components["schemas"]["HomeWidgetStatus"];
+                summary: components["schemas"]["HomeHoldingsSummary"] | null;
+            };
+            returns: {
+                status: components["schemas"]["HomeWidgetStatus"];
+                summary: components["schemas"]["HomeReturnsSummary"] | null;
+            };
+            allocation: {
+                status: components["schemas"]["HomeWidgetStatus"];
+                summary: components["schemas"]["HomeAllocationSummary"] | null;
+            };
+            income: {
+                status: components["schemas"]["HomeWidgetStatus"];
+                summary: components["schemas"]["HomeIncomeSummary"] | null;
+            };
+            backups: {
+                status: components["schemas"]["HomeWidgetStatus"];
+                summary: components["schemas"]["HomeBackupsSummary"] | null;
+            };
+        };
+        /** @description The Spending report for this month to date, by category, over every account, in the default currency. */
+        HomeSpendingSummary: {
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            /** @description The report's converted total; null without a default currency or when any posting cannot be converted, never partial. */
+            total: components["schemas"]["BalanceQuantity"] | null;
+            commodity_totals: components["schemas"]["BalanceQuantity"][];
+            /** @description The report's first rows, in its order (at most three). */
+            categories: components["schemas"]["HomeSpendingCategory"][];
+            category_count: number;
+        };
+        HomeSpendingCategory: {
+            /** Format: int64 */
+            category_id: number;
+            code: string;
+            name: string;
+            /** @description Built-in or starter category key; label by it when name is empty. */
+            builtin_key: string | null;
+            converted: components["schemas"]["BalanceQuantity"] | null;
+            totals: components["schemas"]["BalanceQuantity"][];
+        };
+        /** @description This month's expense budget in one currency, the default currency when it has an expense target. Currencies are never totalled together. */
+        HomeBudgetSummary: {
+            /** Format: date */
+            period_start: string;
+            /** Format: date */
+            period_end: string;
+            /**
+             * Format: int64
+             * @description null when no expense category has a target this month (not set up).
+             */
+            commodity_id: number | null;
+            other_commodity_count: number;
+            /** @description The budget month's expense total in commodity_id. */
+            total: components["schemas"]["BudgetCategoryAmount"] | null;
+            /** @description Targeted expense categories, over budget first (most over first), then by share of target used (at most three). */
+            categories: components["schemas"]["HomeBudgetCategory"][];
+            category_count: number;
+        };
+        HomeBudgetCategory: {
+            /** Format: int64 */
+            category_id: number;
+            code: string;
+            name: string;
+            /** @description Built-in or starter category key; label by it when name is empty. */
+            builtin_key: string | null;
+            amount: components["schemas"]["BudgetCategoryAmount"];
+        };
+        /** @description The largest open accounts by value in the default currency, until pinned accounts exist (#442). A balance includes the accounts under it. Balances are the posted account balances at as_of from the same ledger read as the headlines. */
+        HomeAccountsSummary: {
+            /** Format: date */
+            as_of: string;
+            /** @description Open accounts listed at top level; holdings and nested accounts roll into their parent. */
+            open_count: number;
+            accounts: components["schemas"]["HomeAccountRow"][];
+        };
+        HomeAccountRow: {
+            /** Format: int64 */
+            account_id: number;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            account_class: "asset" | "liability";
+            account_kind: string;
+            balances: components["schemas"]["BalanceQuantity"][];
+            /** @description balances in the default currency at as_of; null when any part cannot be converted. */
+            value: components["schemas"]["BalanceQuantity"] | null;
+        };
+        HomeRecurringSummary: {
+            /** Format: date */
+            today: string;
+            /** @description Enabled, unarchived schedules. */
+            active_count: number;
+            draft_count: number;
+            blocked_count: number;
+            /** @description Active schedules by next due date (at most three). */
+            upcoming: components["schemas"]["HomeRecurringItem"][];
+        };
+        HomeRecurringItem: {
+            /** Format: int64 */
+            template_id: number;
+            name: string;
+            /** Format: date */
+            next_due_on: string;
+            /** @description The transaction's size per commodity, the sum of its debit postings, as the Recurring page shows it. */
+            amounts: components["schemas"]["BalanceQuantity"][];
+        };
+        /** @description The Net worth series by month from the end of the month twelve months ago to today, in the default currency, folded in the same ledger read as the headlines, so its last two points are the net worth headline's start_value and value. Empty points without a default currency or accounts. */
+        HomeNetWorthTrendSummary: {
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            points: components["schemas"]["HomeTrendPoint"][];
+            /** @description The last point minus the first, present only when both are. */
+            change: components["schemas"]["BalanceQuantity"] | null;
+        };
+        HomeTrendPoint: {
+            /** Format: date */
+            date: string;
+            /** @description Complete-only converted net worth at date; null when any price or rate is missing. */
+            value: components["schemas"]["BalanceQuantity"] | null;
+        };
+        /** @description The Cashflow report for this month to date over its default liquid-cash scope, as one bucket. Measures are exact per commodity; converted_* are the report's reporting-currency figures, null when a posting cannot be converted, never partial. */
+        HomeCashflowSummary: {
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            /** @enum {string} */
+            cash_scope: "default_liquid_cash" | "selected_accounts";
+            account_count: number;
+            inflow: components["schemas"]["BalanceQuantity"][];
+            outflow: components["schemas"]["BalanceQuantity"][];
+            transfer_net: components["schemas"]["BalanceQuantity"][];
+            operating_net: components["schemas"]["BalanceQuantity"][];
+            converted_inflow: components["schemas"]["BalanceQuantity"] | null;
+            converted_outflow: components["schemas"]["BalanceQuantity"] | null;
+            converted_transfer_net: components["schemas"]["BalanceQuantity"] | null;
+            converted_operating_net: components["schemas"]["BalanceQuantity"] | null;
+        };
+        /** @description Open holding accounts with a balance, largest value in the default currency first, from the briefing's fold and valued through the same rates as the accounts widget. A position without a usable price has no value and ranks last. */
+        HomeHoldingsSummary: {
+            /** Format: date */
+            as_of: string;
+            position_count: number;
+            unpriced_count: number;
+            /** @description At most three. */
+            holdings: components["schemas"]["HomeHoldingRow"][];
+            /** @description Prices and rates valuing every open position needs and lacks today, as the headline's missing are judged (a chained conversion's missing currency leg is that currency's rate). */
+            missing: components["schemas"]["HomeValuationInput"][];
+            /** @description Inputs valuing the positions from an observation older than the pricing policy's staleness days, each leg judged on its own; never repeats a missing one. */
+            stale: components["schemas"]["HomeValuationInput"][];
+        };
+        HomeHoldingRow: {
+            /** Format: int64 */
+            account_id: number;
+            /** Format: int64 */
+            brokerage_id: number | null;
+            brokerage_name: string;
+            balances: components["schemas"]["BalanceQuantity"][];
+            /** @description The position in the default currency today; null when its price or rate is missing. */
+            value: components["schemas"]["BalanceQuantity"] | null;
+        };
+        /** @description The latest saved returns run's time-weighted return, as frozen when saved; Home never calculates returns. Every run field is null when no run has been saved. */
+        HomeReturnsSummary: {
+            /** Format: int64 */
+            run_id: number | null;
+            /** Format: date-time */
+            captured_at: string | null;
+            /** Format: date */
+            from: string | null;
+            /** Format: date */
+            to: string | null;
+            account_scope: string | null;
+            account_count: number;
+            time_weighted: components["schemas"]["ReturnFigure"] | null;
+            time_weighted_annualized: components["schemas"]["ReturnFigure"] | null;
+        };
+        /** @description The same saved run's allocation by asset type, largest value first (at most three rows). reason makes it unavailable; basis known_only means unknown_count balances had no value and are in no weight. */
+        HomeAllocationSummary: {
+            /** Format: int64 */
+            run_id: number | null;
+            /** Format: date-time */
+            captured_at: string | null;
+            /** Format: date */
+            date: string | null;
+            /** @enum {string|null} */
+            reason: "unclassified_short" | null;
+            /** @enum {string|null} */
+            basis: "closing_value" | "known_only" | null;
+            unknown_count: number;
+            rows: components["schemas"]["HomeAllocationRow"][];
+            row_count: number;
+        };
+        HomeAllocationRow: {
+            /** @enum {string} */
+            asset_type: "cash" | "stock" | "etf" | "fund" | "bond" | "option" | "future" | "crypto" | "other" | "unclassified";
+            /** @enum {string} */
+            side: "long" | "short";
+            value: components["schemas"]["BalanceQuantity"] | null;
+            weight: string | null;
+        };
+        /** @description The income coverage summary. instrument_count counts instruments with owner-confirmed dividends; unassigned is identifiable investment cash per currency (at most three, most payments first), which is cash, never gross income. */
+        HomeIncomeSummary: {
+            instrument_count: number;
+            unassigned_count: number;
+            unassigned: components["schemas"]["HomeIncomeUnassigned"][];
+        };
+        HomeIncomeUnassigned: {
+            cash: components["schemas"]["BalanceQuantity"];
+            item_count: number;
+        };
+        /** @description The backup status the Data screen reads. latest_will_retry tells a failed run with a retry queued from one that spent its attempts. */
+        HomeBackupsSummary: {
+            enabled: boolean;
+            /** Format: date-time */
+            next_run_at: string | null;
+            /** Format: date-time */
+            last_success_at: string | null;
+            /** @enum {string|null} */
+            latest_status: "pending" | "running" | "completed" | "failed" | null;
+            latest_will_retry: boolean;
         };
         AccountBalance: {
             /** Format: int64 */
@@ -29632,15 +30007,18 @@ export interface components {
         };
         PricingCoverageResponse: {
             /**
-             * @description Why no compatible observation was selected; absent for a pair without any live evidence.
+             * @description Why no compatible observation was selected, or why a recent one cannot value the pair (conflicting_splits); absent for a pair without any live evidence.
              * @enum {string}
              */
-            reason?: "usable" | "future_only" | "incompatible_quote_basis" | "not_known_at_cutoff";
+            reason?: "usable" | "future_only" | "incompatible_quote_basis" | "not_known_at_cutoff" | "no_observation_in_window" | "conflicting_splits";
             /** Format: int64 */
             base_commodity_id: number;
             /** Format: int64 */
             quote_commodity_id: number;
-            /** @enum {string} */
+            /**
+             * @description stale when the observation is older than staleness_max_days or valuation_window_days; missing when there is none, or when valuation cannot use a recent one (reason says why, and observation stays present).
+             * @enum {string}
+             */
             status: "usable" | "stale" | "missing";
             age_days?: number;
             observation?: components["schemas"]["PriceObservationResponse"];
@@ -29648,7 +30026,10 @@ export interface components {
         PricingWorkspaceResponse: {
             /** Format: date */
             as_of: string;
+            /** @description The pricing policy's out-of-date limit, as configured. */
             staleness_max_days: number;
+            /** @description The longest age at which reports, and so Home, value with a price. Coverage applies the smaller of the two limits. */
+            valuation_window_days: number;
             commodities: components["schemas"]["PricingCommodityResponse"][];
             sources: components["schemas"]["MarketDataSourceResponse"][];
             coverage: components["schemas"]["PricingCoverageResponse"][];
@@ -30078,6 +30459,16 @@ export interface components {
             metadata: {
                 [key: string]: unknown;
             };
+            /**
+             * @description A currency exchange's recorded converting side (#481).
+             * @enum {string}
+             */
+            conversion_side?: "sending" | "receiving";
+            /**
+             * @description A transfer's recorded fee payer (#481).
+             * @enum {string}
+             */
+            fee_paid_by?: "sending" | "receiving";
             postings: components["schemas"]["PostingResponse"][];
         };
         TransactionResponse: {
@@ -30133,6 +30524,102 @@ export interface components {
              */
             system_label?: "split_adjustment" | "transfer_bridge" | "share_exchange" | "cash_and_stock_merger" | "spin_off";
             invalidated_checkpoint_ids: number[];
+            /** @description The journal as the split editor restates it (#481): absent when no edit can restate it exactly (a residual in clearing, a system posting the server would not build). Such a transaction is edited only in what it describes, with keep_journal. */
+            editable_entry?: components["schemas"]["EditableEntry"];
+            /** @description Present when the transaction is a transfer Transfer entry edits (#481): restating it as a transfer request and rebuilding it with the writer's rules reproduces the stored journal exactly. Absent for any other journal, which stays in split entry. */
+            transfer?: components["schemas"]["TransferShape"];
+            /** @description Only on GET /transactions/{transaction_id}, and only for a currency exchange (#481): the deal against the market rate, computed on read. */
+            exchange_conversion?: components["schemas"]["ExchangeConversion"];
+        };
+        TransferSide: {
+            /** Format: int64 */
+            account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            /** @description Signed */
+            quantity_value: string;
+            quantity_scale: number;
+            /** Format: date */
+            posted_on: string;
+            line_key: string;
+            memo: string;
+        };
+        TransferShape: {
+            sending: components["schemas"]["TransferSide"];
+            receiving: components["schemas"]["TransferSide"];
+            fee?: {
+                /** Format: int64 */
+                account_id: number;
+                /** Format: int64 */
+                commodity_id: number;
+                quantity_value: string;
+                quantity_scale: number;
+                /** @enum {string} */
+                paid_by: "sending" | "receiving";
+                line_key: string;
+                memo: string;
+            };
+            /**
+             * @description Which side converted, for an exchange; absent in one currency.
+             * @enum {string}
+             */
+            conversion_side?: "sending" | "receiving";
+            entry_memo: string;
+            entry_kind: components["schemas"]["JournalEntryKind"];
+        };
+        EditablePosting: {
+            line_key: string;
+            /** Format: int64 */
+            account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            quantity_value: string;
+            quantity_scale: number;
+            /**
+             * Format: date
+             * @description The posting's day where the posted-date rule would not choose it by itself; a category's day included, which the editor keeps unshown.
+             */
+            posted_on?: string;
+            memo: string;
+            tag_ids: number[];
+        };
+        /** @description One journal entry request that rebuilds the stored journal exactly (#481): every posting but the system ones the server builds. Metadata is left out: an edit that omits it keeps the stored metadata exactly. */
+        EditableEntry: {
+            entry_kind: components["schemas"]["JournalEntryKind"];
+            memo: string;
+            /** @enum {string} */
+            conversion_side?: "sending" | "receiving";
+            /** @enum {string} */
+            fee_paid_by?: "sending" | "receiving";
+            postings: components["schemas"]["EditablePosting"][];
+        };
+        ExchangeQuantity: {
+            /** Format: int64 */
+            commodity_id: number;
+            quantity_value: string;
+            quantity_scale: number;
+        };
+        /** @description A currency exchange measured against the market (#481). Display only: nothing here is stored, and no FX gain or loss is posted. sent and received are the converted amounts (a fee charged on top is outside them); implied_rate is received per one unit sent, at six places. market is the reporting rate on the conversion day, selected as reports select it (the nearest earlier observation within the staleness window); when there is none, market is absent and market_gap names why. A rate that arrives or is corrected later shows on the next read. */
+        ExchangeConversion: {
+            /** Format: date */
+            conversion_date: string;
+            sent: components["schemas"]["ExchangeQuantity"];
+            received: components["schemas"]["ExchangeQuantity"];
+            implied_rate: components["schemas"]["ExchangeQuantity"];
+            market?: {
+                rate: components["schemas"]["ExchangeQuantity"];
+                /** Format: date */
+                observation_date: string;
+                /** @description The observation is from an earlier day than the conversion. */
+                stale: boolean;
+                /** @description The received amount valued in the sent currency at the market rate. */
+                market_value: components["schemas"]["ExchangeQuantity"];
+                /** @description Sent minus market_value, in the sent currency; positive when the deal delivered less than the market rate. */
+                cost: components["schemas"]["ExchangeQuantity"];
+                /** @description Cost as a percentage of sent, as a coefficient at scale 2. */
+                cost_percent: string;
+            };
+            market_gap?: string;
         };
         TransactionsResponse: {
             transactions: components["schemas"]["TransactionResponse"][];
@@ -30235,7 +30722,7 @@ export interface components {
             line_key?: string;
             /**
              * Format: date
-             * @description The day this account posting appears on its statement, when it differs from the entry date (#187). Allowed only on asset and liability postings, and only in a request with exactly one journal entry. The server builds one journal entry per date: with one account, every other posting follows its date; with several, they stay on the entry date, and each dated entry is balanced per commodity through transfer_clearing. Not stored on the posting; responses carry the resulting journal entries.
+             * @description The day this account posting appears on its statement, when it differs from the entry date (#187), in a request with exactly one journal entry. On an asset or liability posting it is that posting's day. Any other posting may name only the day of an account posting (a category, of one in its own currency): a transfer fee then posts with the account that paid it (#481). The server builds one journal entry per date: with one account, every other posting follows its date; with several, the rest stay on the entry date, and each dated entry is balanced per commodity through transfer_clearing. Not stored on the posting; responses carry the resulting journal entries.
              */
             posted_on?: string;
             /** Format: int64 */
@@ -30245,6 +30732,7 @@ export interface components {
             /** Format: int64 */
             commodity_id: number;
             memo?: string;
+            /** @description On PATCH or a correction, omitted keeps the stored posting's metadata with the same line_key exactly; {} clears it (#481). */
             metadata?: {
                 [key: string]: unknown;
             };
@@ -30257,7 +30745,18 @@ export interface components {
              */
             entry_date?: string;
             entry_kind?: components["schemas"]["JournalEntryKind"];
+            /**
+             * @description For an exchange entry only (#481): which side converted. The exchange legs post on that side's day; sending (the default) means the money in transit is in the receiving currency. Stored with the entry.
+             * @enum {string}
+             */
+            conversion_side?: "sending" | "receiving";
+            /**
+             * @description Which side of a transfer between two accounts paid its one fee charged on top (#481). The fee must be positive and in that side's currency, and posts on its day. Stored with the entry, so the choice survives when both sides post on one day.
+             * @enum {string}
+             */
+            fee_paid_by?: "sending" | "receiving";
             memo?: string;
+            /** @description On PATCH or a correction, omitted keeps the stored entries' metadata exactly when they share one; {} clears it (#481). */
             metadata?: {
                 [key: string]: unknown;
             };
@@ -30277,6 +30776,7 @@ export interface components {
             description?: string;
             external_ref_hint?: string;
             note_markdown?: string;
+            /** @description On PATCH or a correction, omitted keeps the stored metadata exactly; {} clears it (#481). */
             metadata?: {
                 [key: string]: unknown;
             };
@@ -30293,6 +30793,8 @@ export interface components {
              * @description The transaction version this form was composed against (#296). Required by PATCH, which replaces the whole spec: a different current version is refused with 409 TRANSACTION_VERSION_STALE and nothing is written. The update reconciliation-impact preview checks it the same way when given. Create and correct ignore it.
              */
             expected_version_id?: number;
+            /** @description PATCH and its reconciliation-impact preview only (#481): keep the stored journal exactly and change only what the transaction describes. journal_entries must then be omitted. Create and correct refuse it. */
+            keep_journal?: boolean;
         };
         TransactionLifecycleRequest: {
             change_reason?: string;
@@ -30502,6 +31004,7 @@ export interface components {
             applied_rule_id?: number;
             applied_rule_name?: string;
             exclude?: boolean;
+            match?: components["schemas"]["ImportMatchChoice"];
         };
         ImportStagedRowResponse: {
             /** Format: int64 */
@@ -30740,6 +31243,10 @@ export interface components {
         };
         CorrectTrading212SaleRequest: components["schemas"]["CorrectTrading212BuyRequest"];
         CommitImportBatchResponse: {
+            /** @description Rows committed as links to existing postings; they wrote no journal (#485). Included in committed_count. */
+            linked_count: number;
+            /** @description Rows held pending because they match postings already in the ledger with no standing decision, or the linked posting changed since review (#485). Preview and decide again. */
+            match_review_row_ids: number[];
             /** Format: int64 */
             batch_id: number;
             status: components["schemas"]["ImportBatchStatus"];
@@ -30761,6 +31268,10 @@ export interface components {
             checkpoint_ids: number[];
         };
         PreviewCommitResponse: {
+            /** @description Pending CSV and QIF rows that match postings already in the ledger (#485). A row needing a decision is held at commit until the owner links it or keeps it as new. */
+            match_reviews: components["schemas"]["ImportRowMatchReview"][];
+            /** @description Includable rows that would commit as links, writing no journal. */
+            link_count: number;
             /** @description Pending imported acquisitions whose rolled-back writer replay changes committed disposal gains against the current ledger (T-126). Rows commit chronologically, so an earlier row can change a later row's set; that row is then held for another review rather than committed. */
             gain_impacts: components["schemas"]["ImportRowGainImpact"][];
             includable_count: number;
@@ -30768,6 +31279,46 @@ export interface components {
             reconciliation_issues: components["schemas"]["ImportReconciliationIssue"][];
             /** @description The union of the active checkpoints the pending rows would invalidate, once per checkpoint in id order (#305). A commit's reconciliation_override_checkpoint_ids names these ids. entry_date is one triggering row's date. */
             reconciliation_checkpoints: components["schemas"]["ReconciliationCheckpointImpact"][];
+        };
+        /** @description The owner's decision on a CSV or QIF row that matches a posting already in the ledger (#485). A link names the posting by its transaction and stable line key, with the posted_on day it was reviewed with; commit links only while that posting is still posted, unlinked and unchanged. new keeps the row as a new transaction. */
+        ImportMatchChoice: {
+            /** @enum {string} */
+            decision: "link" | "new";
+            /** Format: int64 */
+            transaction_id?: number;
+            line_key?: string;
+            /** Format: date */
+            posted_on?: string;
+        };
+        /** @description An unlinked posting of a current posted transaction on the row's account, in its commodity, for exactly its amount, whose posted_on day is within window_days of the row's date. day_offset is posted_on minus the row date. */
+        ImportMatchCandidate: {
+            /** Format: int64 */
+            transaction_id: number;
+            line_key: string;
+            /** Format: date */
+            transaction_date: string;
+            transaction_kind: string;
+            /** Format: date */
+            posted_on: string;
+            day_offset: number;
+            /** Format: int64 */
+            account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            quantity_value: string;
+            quantity_scale: number;
+            payee_name: string;
+            description: string;
+        };
+        /** @description A pending row that matches postings already in the ledger, or whose link choice no longer stands. needs_decision is true while commit would hold the row (no decision yet, or the chosen posting is no longer a candidate). */
+        ImportRowMatchReview: {
+            /** Format: int64 */
+            row_id: number;
+            row_index: number;
+            candidates: components["schemas"]["ImportMatchCandidate"][];
+            choice: components["schemas"]["ImportMatchChoice"] | null;
+            needs_decision: boolean;
+            window_days: number;
         };
         ImportProfileResponse: {
             /** Format: int64 */

@@ -214,7 +214,7 @@ test.describe.serial('deploy phase', () => {
 
   test('sign-out in one tab ends the other tab without showing it new data', async () => {
     const other = await context.newPage();
-    await other.goto('/app/accounts');
+    await other.goto('/app/ledger/accounts');
     await expect(other.getByText(SENTINEL_ACCOUNT).first()).toBeVisible();
 
     await page.bringToFront();
@@ -241,7 +241,7 @@ test.describe.serial('deploy phase', () => {
     await signInWithPassword(page);
     await verifyCode(page, await nextCode(state));
     await expect(page).toHaveURL(/\/app$/);
-    await page.goto('/app/accounts');
+    await page.goto('/app/ledger/accounts');
     await expect(page.getByText(SENTINEL_ACCOUNT).first()).toBeVisible();
 
     await page.getByRole('button', { name: 'Sign out' }).click();
@@ -258,7 +258,7 @@ test.describe.serial('deploy phase', () => {
     await signInWithPassword(page);
     await verifyCode(page, await nextCode(state));
     await expect(page).toHaveURL(/\/app$/);
-    await page.goto('/app/accounts');
+    await page.goto('/app/ledger/accounts');
     await expect(page.getByText(SENTINEL_ACCOUNT).first()).toBeVisible();
 
     // Leave the financial document by a cross-document navigation, so the
@@ -343,7 +343,7 @@ test.describe.serial('restart phases', () => {
     writeState(state);
     await verifyCode(page, recoveryCode);
     await expect(page).toHaveURL(/\/app$/);
-    await page.goto('/app/accounts');
+    await page.goto('/app/ledger/accounts');
     await expect(page.getByText(SENTINEL_ACCOUNT).first()).toBeVisible();
   });
 });

@@ -31,32 +31,42 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { replaceState } from '$app/navigation';
-  import { onMount, type Snippet } from 'svelte';
+  import type { Snippet } from 'svelte';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import Plus from '@lucide/svelte/icons/plus';
+  import ArrowLeftRight from '@lucide/svelte/icons/arrow-left-right';
   import { m } from '#lib/paraglide/messages.js';
   import Panel from '#lib/components/panel.svelte';
+  import PageHeader from '#lib/components/page-header.svelte';
+  import type { Crumb } from '#lib/navigation/routes.ts';
   import APIFormError from '#lib/components/api-form-error.svelte';
   import { phoneModal } from '#lib/components/modal-focus.ts';
   import { authSessionQueryOptions } from '#lib/api/auth.ts';
-  import { accountRegisterQueryKey, approveTransaction, getTransaction, restoreTransaction, transactionsQueryKey } from '#lib/api/transactions.ts';
-  import { forecastQueryKey } from '#lib/api/forecast.ts';
+  import { approveTransaction, getTransaction, restoreTransaction } from '#lib/api/transactions.ts';
+  import { invalidateTransactionReads } from './invalidate.ts';
   import type { TransactionRowAction } from './row-action.ts';
   import TransactionDetailPanel from './transaction-detail-panel.svelte';
   import TransactionEditor from './transaction-editor.svelte';
   import InvestmentEntry from '#lib/investments/investment-entry.svelte';
+  import { addTransfer, providePageAdd } from './add-transaction.svelte.ts';
 
   // The transaction workspace (#185): one list screen plus the shared side
   // panel for detail, edit, correction, creation and undo of a deletion. The
   // main transactions screen, an account register and a category's
   // transactions all use it, so every screen offers the same actions. The
-  // screen supplies its list and how it offers a new transaction.
+  // screen supplies its list and how it offers a new transaction. A screen
+  // that names a `title` gets the page header with that offer in its action
+  // slot (#459); otherwise the offer ends the toolbar row after `header`.
   let {
+    title,
+    breadcrumbs = [],
     header,
     list,
     create = { kind: 'editor' },
     linkedTransactionID = 0
   }: {
+    title?: string;
+    breadcrumbs?: Crumb[];
     /** Leading content of the toolbar row, such as a back link and title. */
     header?: Snippet;
     list: Snippet<[TransactionWorkspaceActions, string | undefined]>;
@@ -82,17 +92,25 @@
   const csrfToken = $derived(sessionQuery.data?.csrf_token);
   const queryClient = useQueryClient();
 
-  onMount(() => {
-    if (Number.isSafeInteger(linkedTransactionID) && linkedTransactionID > 0) void showTransaction(linkedTransactionID);
+  // A `transaction_id` link can arrive without remounting this screen: after a
+  // save, View transaction points at the same route. Consume each new ID, not
+  // just the first one seen on mount.
+  let openedLinkedTransactionID = 0;
+  $effect(() => {
+    const transactionID = linkedTransactionID;
+    if (!Number.isSafeInteger(transactionID) || transactionID <= 0) {
+      openedLinkedTransactionID = 0;
+      return;
+    }
+    if (transactionID === openedLinkedTransactionID) return;
+    openedLinkedTransactionID = transactionID;
+    void showTransaction(transactionID);
   });
 
-  // A write may change any list and every account's running balance.
+  // A write may change any list, every account's running balance and the
+  // reports and budgets read from them.
   async function invalidate() {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: transactionsQueryKey }),
-      queryClient.invalidateQueries({ queryKey: accountRegisterQueryKey }),
-      queryClient.invalidateQueries({ queryKey: forecastQueryKey })
-    ]);
+    await invalidateTransactionReads(queryClient);
   }
 
   async function showTransaction(transactionID: number) {
@@ -118,6 +136,15 @@
       url.searchParams.delete('create');
       void replaceState(url, page.state);
     }
+  });
+
+  // N and search's Add command open this editor in place. They never replace
+  // an editor that is already open, which may hold unsaved input.
+  $effect(() => {
+    if (create.kind !== 'editor') return;
+    return providePageAdd(() => {
+      if (panel.type !== 'create' && panel.type !== 'edit' && panel.type !== 'correct') panel = { type: 'create' };
+    });
   });
 
   const actions: TransactionWorkspaceActions = {
@@ -191,7 +218,7 @@
       await restoreTransaction(transaction.id, csrfToken, { expected_version_id: transaction.version_id });
       await invalidate();
     } catch {
-      // It stays deleted; Settings → Trash can still restore it.
+      // It stays deleted; Transactions → Deleted can still restore it.
     }
     panel = { type: 'none' };
   }
@@ -202,6 +229,40 @@
   }
 </script>
 
+{#snippet createAction()}
+  {#if create.kind === 'editor'}
+    <div class="flex max-w-full flex-wrap items-center justify-end gap-2">
+    <button
+      type="button"
+      class="inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90"
+      onclick={() => (panel = { type: 'create' })}
+    >
+      <Plus size={16} aria-hidden="true" />
+      {m.transactions_form_create_title()}
+    </button>
+    {#if create.defaults?.accountID !== undefined}
+      <!-- From this account's register, the account is the transfer's From (#481). -->
+      <button
+        type="button"
+        class="inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-control-hover"
+        onclick={() => addTransfer(create.defaults?.accountID)}
+      >
+        <ArrowLeftRight size={16} aria-hidden="true" />
+        {m.home_shortcut_transfer()}
+      </button>
+    {/if}
+    </div>
+  {:else if create.kind === 'investment'}
+    <div class="flex max-w-full flex-wrap items-center justify-end gap-2">
+      <InvestmentEntry layout="menu" prefill={create.prefill} />
+    </div>
+  {/if}
+{/snippet}
+
+{#if title}
+  <PageHeader {title} {breadcrumbs} actions={create.kind === 'none' ? undefined : createAction} />
+{/if}
+
 <div class="lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-6 xl:grid-cols-[minmax(0,1fr)_26rem]">
   <div class="min-w-0">
     {#if (loadingTransactionID !== undefined || actionPending) && panel.type === 'none'}
@@ -209,25 +270,14 @@
     {:else if loadError}
       <div class="mb-4"><APIFormError error={loadError} /></div>
     {/if}
-    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <div class="flex min-w-0 flex-wrap items-center gap-3">
-        {@render header?.()}
-      </div>
-      {#if create.kind === 'editor'}
-        <button
-          type="button"
-          class="inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90"
-          onclick={() => (panel = { type: 'create' })}
-        >
-          <Plus size={16} aria-hidden="true" />
-          {m.transactions_new()}
-        </button>
-      {:else if create.kind === 'investment'}
-        <div class="flex max-w-full flex-wrap items-center justify-end gap-2">
-          <InvestmentEntry layout="menu" prefill={create.prefill} />
+    {#if header || (!title && create.kind !== 'none')}
+      <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex min-w-0 flex-wrap items-center gap-3">
+          {@render header?.()}
         </div>
-      {/if}
-    </div>
+        {#if !title}{@render createAction()}{/if}
+      </div>
+    {/if}
 
     {@render list(actions, csrfToken)}
   </div>

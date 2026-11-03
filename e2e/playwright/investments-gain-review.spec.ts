@@ -64,7 +64,7 @@ test('reversing a sale shows the removed gain and the later sale it revises', as
   const first = await trade(page, p, 'sell', 20, '8', '16000');
   await trade(page, p, 'sell', 15, '4', '8000');
 
-  await page.goto(`/app/transactions?transaction_id=${first.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${first.transaction.id}`);
   await page.getByRole('button', { name: 'Reverse sale…' }).click();
   await page.getByLabel('Reason for reversal').fill('entered twice');
   await page.getByRole('button', { name: 'Review and reverse' }).click();
@@ -83,7 +83,7 @@ test('correcting a buy shows the later sale gain it changes before replacing', a
   const bought = await trade(page, p, 'buy', 20, '10', '20000');
   await trade(page, p, 'sell', 10, '5', '15000');
 
-  await page.goto(`/app/transactions?transaction_id=${bought.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${bought.transaction.id}`);
   await page.getByRole('button', { name: 'Correct buy…' }).click();
   await page.getByLabel('Reason for correction').fill('broker corrected the price');
   await page.getByLabel('Total cost').fill('20.00');
@@ -126,7 +126,7 @@ test('reversing a buy shows the later sale gain it changes', async ({ page }) =>
   await trade(page, p, 'buy', 25, '10', '30000'); // 30.00 per share
   await trade(page, p, 'sell', 20, '5', '25000');
 
-  await page.goto(`/app/transactions?transaction_id=${cheap.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${cheap.transaction.id}`);
   await page.getByRole('button', { name: 'Reverse buy…' }).click();
   await page.getByLabel('Reason for reversal').fill('duplicate import');
   await page.getByRole('button', { name: 'Review and reverse' }).click();
@@ -143,7 +143,7 @@ test('correcting a sale shows its replaced gain before replacing', async ({ page
   await trade(page, p, 'buy', 20, '10', '20000');
   const sold = await trade(page, p, 'sell', 10, '5', '15000');
 
-  await page.goto(`/app/transactions?transaction_id=${sold.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${sold.transaction.id}`);
   await page.getByRole('button', { name: 'Correct sale…' }).click();
   await page.getByLabel('Reason for correction').fill('broker corrected the fill');
   await page.getByLabel(/^Proceeds/).fill('250.00');

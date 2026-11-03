@@ -134,15 +134,23 @@ func (s *PricingService) refreshQuoteTarget(ctx context.Context, target db.Quote
 		counters.LastError = lastError
 	}
 	pair := fxRefreshTarget{Base: db.PricingCurrencyRecord{ID: target.BaseCommodityID, Code: target.BaseCode}, Quote: db.PricingCurrencyRecord{ID: target.QuoteCommodityID, Code: target.QuoteCode}}
-	if err := s.recordFXRefreshItem(ctx, run.ID, pair, itemStatus, observation.ID, observation.ProviderObservationID, lastError, now); err != nil {
-		return err
-	}
 	state := db.PricingRefreshStateSpec{BookID: BookID, BaseCommodityID: target.BaseCommodityID, QuoteCommodityID: target.QuoteCommodityID, SourceID: target.SourceID, LastAttemptAt: now.Format(time.RFC3339), LastError: lastError, UpdatedAt: now.Format(time.RFC3339)}
 	if fetchErr == nil {
 		state.LastSuccessDate = sql.NullString{String: observation.ValuationDate, Valid: true}
 	}
-	if err := s.repository.UpsertRefreshState(ctx, state); err != nil {
-		return err
+	var persistErr error
+	if err := s.recordFXRefreshItem(ctx, run.ID, pair, itemStatus, observation.ID, observation.ProviderObservationID, lastError, now); err != nil {
+		persistErr = fmt.Errorf("record quote refresh item for %s/%s: %w", target.BaseCode, target.QuoteCode, err)
+	} else if err := s.repository.UpsertRefreshState(ctx, state); err != nil {
+		persistErr = fmt.Errorf("record quote refresh state for %s/%s: %w", target.BaseCode, target.QuoteCode, err)
+	}
+	if persistErr != nil {
+		// A stored observation is durable evidence even when its item or
+		// health row cannot be written. Finish the run as failed so it never
+		// stays running, and keep the fetch error in the result so terminal
+		// and Retry-After handling are unchanged (#474).
+		_, finishErr := s.repository.FinishRefreshRun(ctx, BookID, run.ID, "failed", s.now().UTC().Format(time.RFC3339), 1, counters.Succeeded, counters.Failed, persistErr.Error())
+		return errors.Join(persistErr, finishErr, fetchErr)
 	}
 	_, err = s.repository.FinishRefreshRun(ctx, BookID, run.ID, status, s.now().UTC().Format(time.RFC3339), 1, counters.Succeeded, counters.Failed, lastError)
 	if err != nil {

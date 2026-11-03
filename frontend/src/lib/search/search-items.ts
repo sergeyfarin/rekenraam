@@ -15,11 +15,12 @@ export function searchItems(catalog: SearchCatalogItem[], hidden: boolean): Sear
     title: item.name.trim() || (item.builtin_key ? builtinCategoryLabel(item.builtin_key) : item.code.trim()) || `#${item.id}`,
     keywords: `${item.code} ${item.account_kind}`,
     detail: item.kind === 'category' && item.builtin_key ? undefined : item.code.trim(), inactive: item.status !== 'active',
-    href: item.kind === 'account' ? `/app/accounts/${item.id}/register`
-      : item.kind === 'category' ? `/app/categories/${item.id}` : `/app/investments/instruments/${item.id}`
+    href: item.kind === 'account' ? `/app/ledger/accounts/${item.id}/register`
+      : item.kind === 'category' ? `/app/ledger/categories/${item.id}` : `/app/investments/instruments/${item.id}`
   }));
   const commands: SearchResult[] = [
     { id: 'command:add', group: 'command', title: m.transactions_form_create_title(), command: 'add-transaction' },
+    { id: 'command:transfer', group: 'command', title: m.home_shortcut_transfer(), command: 'add-transfer' },
     { id: 'command:amounts', group: 'command', title: hidden ? m.search_show_amounts() : m.nav_hide_amounts(), command: 'hide-amounts' },
     { id: 'command:theme', group: 'command', title: m.search_switch_theme(), command: 'theme' }
   ];

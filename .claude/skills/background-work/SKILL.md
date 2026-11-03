@@ -43,6 +43,13 @@ hardened — copy this shape for new workers).
   completion transaction, carrying the first failed attempt into their cap.
   Fresh outbox demand must not coalesce against a suffix continuation or
   targeted retry. Revisit gaps in new scans; never manufacture holiday rates.
+- Future-only FX demand retains a canonical currency/date successor at
+  owner-local midnight, atomically with parent completion (#471). Waiting has
+  zero provider attempts. Re-read demand on wake; ignore the saved start hint
+  after cancellation or replacement. Include the actual future start date so
+  outbox coalescing cannot strand earlier demand behind the wait. Collect waits
+  before budgeted traversal, and test restart/DST, deduplication, edits, rollback
+  and preservation of the provider retry cap.
 
 ## Scheduler shape
 

@@ -1,5 +1,2 @@
-<script lang="ts">
-  import CategoryListScreen from '#lib/categories/category-list-screen.svelte';
-</script>
-
-<CategoryListScreen />
+<!-- Moved to /app/ledger/categories (#460). The app layout redirects before
+     rendering, preserving the query string and fragment. Keep this route for old links. -->

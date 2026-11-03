@@ -13,6 +13,6 @@ export function coverageMoney(amount: CoverageAmount, currencyID: number, code: 
 /** Where an owner repairs an item: the import review keeps source evidence and
  * repairs the same payment; a named dividend is corrected from its detail. */
 export function coverageRepairHref(item: Pick<IncomeCoverageItem, 'kind' | 'transaction_id' | 'source'>): string {
-  if (item.kind === 'imported_cash' && item.source) return `/app/import/dividends?batch_id=${item.source.batch_id}`;
-  return `/app/transactions?transaction_id=${item.transaction_id}`;
+  if (item.kind === 'imported_cash' && item.source) return `/app/ledger/import/dividends?batch_id=${item.source.batch_id}`;
+  return `/app/ledger/transactions?transaction_id=${item.transaction_id}`;
 }

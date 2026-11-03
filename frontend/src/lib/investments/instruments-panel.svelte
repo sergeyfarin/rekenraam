@@ -141,5 +141,5 @@
     {#if success}<p role="status" class="mt-4 text-sm">{m.quotes_saved()}</p>{/if}
   </Panel>
   {/if}
-  <a href="/app/import" class="inline-block min-h-11 text-sm font-semibold underline">{m.quotes_csv()}</a>
+  <a href="/app/ledger/import" class="inline-block min-h-11 text-sm font-semibold underline">{m.quotes_csv()}</a>
 </div>

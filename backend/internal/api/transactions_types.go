@@ -33,16 +33,161 @@ type transactionResponse struct {
 	ChangeReason              string                 `json:"change_reason"`
 	SystemLabel               string                 `json:"system_label,omitempty"`
 	InvalidatedCheckpointIDs  []int64                `json:"invalidated_checkpoint_ids"`
+	// ExchangeConversion is set only by the single-transaction read (#481).
+	ExchangeConversion *exchangeConversionResponse `json:"exchange_conversion,omitempty"`
+	// Transfer is the transaction as Transfer entry edits it, when it is one.
+	Transfer *transferShapeResponse `json:"transfer,omitempty"`
+	// EditableEntry is the journal as the split editor restates it; absent
+	// when no edit restates it exactly, which keep_journal then edits.
+	EditableEntry *editableEntryResponse `json:"editable_entry,omitempty"`
+}
+
+type editablePostingResponse struct {
+	LineKey       string            `json:"line_key"`
+	AccountID     int64             `json:"account_id"`
+	CommodityID   int64             `json:"commodity_id"`
+	QuantityValue exact.Coefficient `json:"quantity_value"`
+	QuantityScale int               `json:"quantity_scale"`
+	PostedOn      string            `json:"posted_on,omitempty"`
+	Memo          string            `json:"memo"`
+	TagIDs        []int64           `json:"tag_ids"`
+}
+
+// editableEntryResponse leaves metadata out: an edit that omits it keeps the
+// stored text exactly (#481), which a browser round trip could not.
+type editableEntryResponse struct {
+	EntryKind      string                    `json:"entry_kind"`
+	Memo           string                    `json:"memo"`
+	ConversionSide string                    `json:"conversion_side,omitempty"`
+	FeePaidBy      string                    `json:"fee_paid_by,omitempty"`
+	Postings       []editablePostingResponse `json:"postings"`
+}
+
+func toEditableEntryResponse(entry *app.JournalEntryInput) *editableEntryResponse {
+	if entry == nil {
+		return nil
+	}
+	response := &editableEntryResponse{
+		EntryKind: entry.EntryKind, Memo: entry.Memo,
+		ConversionSide: entry.ConversionSide, FeePaidBy: entry.FeePaidBy,
+		Postings: make([]editablePostingResponse, 0, len(entry.Postings)),
+	}
+	for _, posting := range entry.Postings {
+		tagIDs := posting.TagIDs
+		if tagIDs == nil {
+			tagIDs = []int64{}
+		}
+		response.Postings = append(response.Postings, editablePostingResponse{
+			LineKey: posting.LineKey, AccountID: posting.AccountID, CommodityID: posting.CommodityID,
+			QuantityValue: posting.QuantityValue, QuantityScale: posting.QuantityScale, PostedOn: posting.PostedOn,
+			Memo: posting.Memo, TagIDs: tagIDs,
+		})
+	}
+	return response
+}
+
+type transferSideResponse struct {
+	AccountID     int64             `json:"account_id"`
+	CommodityID   int64             `json:"commodity_id"`
+	QuantityValue exact.Coefficient `json:"quantity_value"`
+	QuantityScale int               `json:"quantity_scale"`
+	PostedOn      string            `json:"posted_on"`
+	LineKey       string            `json:"line_key"`
+	Memo          string            `json:"memo"`
+}
+
+type transferFeeResponse struct {
+	AccountID     int64             `json:"account_id"`
+	CommodityID   int64             `json:"commodity_id"`
+	QuantityValue exact.Coefficient `json:"quantity_value"`
+	QuantityScale int               `json:"quantity_scale"`
+	PaidBy        string            `json:"paid_by"`
+	LineKey       string            `json:"line_key"`
+	Memo          string            `json:"memo"`
+}
+
+type transferShapeResponse struct {
+	Sending        transferSideResponse `json:"sending"`
+	Receiving      transferSideResponse `json:"receiving"`
+	Fee            *transferFeeResponse `json:"fee,omitempty"`
+	ConversionSide string               `json:"conversion_side,omitempty"`
+	EntryMemo      string               `json:"entry_memo"`
+	EntryKind      string               `json:"entry_kind"`
+}
+
+func toTransferShapeResponse(shape *app.TransferShape) *transferShapeResponse {
+	if shape == nil {
+		return nil
+	}
+	side := func(s app.TransferShapeSide) transferSideResponse {
+		return transferSideResponse{AccountID: s.AccountID, CommodityID: s.CommodityID, QuantityValue: s.QuantityValue, QuantityScale: s.QuantityScale, PostedOn: s.PostedOn, LineKey: s.LineKey, Memo: s.Memo}
+	}
+	response := &transferShapeResponse{Sending: side(shape.Sending), Receiving: side(shape.Receiving), ConversionSide: shape.ConversionSide, EntryMemo: shape.EntryMemo, EntryKind: shape.EntryKind}
+	if fee := shape.Fee; fee != nil {
+		response.Fee = &transferFeeResponse{AccountID: fee.AccountID, CommodityID: fee.CommodityID, QuantityValue: fee.QuantityValue, QuantityScale: fee.QuantityScale, PaidBy: fee.PaidBy, LineKey: fee.LineKey, Memo: fee.Memo}
+	}
+	return response
+}
+
+type exchangeQuantityResponse struct {
+	CommodityID   int64             `json:"commodity_id"`
+	QuantityValue exact.Coefficient `json:"quantity_value"`
+	QuantityScale int               `json:"quantity_scale"`
+}
+
+type exchangeMarketResponse struct {
+	Rate            exchangeQuantityResponse `json:"rate"`
+	ObservationDate string                   `json:"observation_date"`
+	Stale           bool                     `json:"stale"`
+	MarketValue     exchangeQuantityResponse `json:"market_value"`
+	Cost            exchangeQuantityResponse `json:"cost"`
+	CostPercent     exact.Coefficient        `json:"cost_percent"`
+}
+
+type exchangeConversionResponse struct {
+	ConversionDate string                   `json:"conversion_date"`
+	Sent           exchangeQuantityResponse `json:"sent"`
+	Received       exchangeQuantityResponse `json:"received"`
+	ImpliedRate    exchangeQuantityResponse `json:"implied_rate"`
+	Market         *exchangeMarketResponse  `json:"market,omitempty"`
+	MarketGap      string                   `json:"market_gap,omitempty"`
+}
+
+func toExchangeQuantityResponse(quantity app.ExchangeQuantity) exchangeQuantityResponse {
+	return exchangeQuantityResponse{CommodityID: quantity.CommodityID, QuantityValue: quantity.QuantityValue, QuantityScale: quantity.QuantityScale}
+}
+
+func toExchangeConversionResponse(conversion *app.ExchangeConversion) *exchangeConversionResponse {
+	if conversion == nil {
+		return nil
+	}
+	response := &exchangeConversionResponse{
+		ConversionDate: conversion.ConversionDate,
+		Sent:           toExchangeQuantityResponse(conversion.Sent),
+		Received:       toExchangeQuantityResponse(conversion.Received),
+		ImpliedRate:    toExchangeQuantityResponse(conversion.ImpliedRate),
+		MarketGap:      conversion.MarketGap,
+	}
+	if market := conversion.Market; market != nil {
+		response.Market = &exchangeMarketResponse{
+			Rate: toExchangeQuantityResponse(market.Rate), ObservationDate: market.ObservationDate, Stale: market.Stale,
+			MarketValue: toExchangeQuantityResponse(market.MarketValue), Cost: toExchangeQuantityResponse(market.Cost),
+			CostPercent: market.CostPercent,
+		}
+	}
+	return response
 }
 
 type journalEntryResponse struct {
-	ID        int64             `json:"id"`
-	EntrySeq  int64             `json:"entry_seq"`
-	EntryDate string            `json:"entry_date"`
-	EntryKind string            `json:"entry_kind"`
-	Memo      string            `json:"memo"`
-	Metadata  json.RawMessage   `json:"metadata"`
-	Postings  []postingResponse `json:"postings"`
+	ID             int64             `json:"id"`
+	EntrySeq       int64             `json:"entry_seq"`
+	EntryDate      string            `json:"entry_date"`
+	EntryKind      string            `json:"entry_kind"`
+	Memo           string            `json:"memo"`
+	Metadata       json.RawMessage   `json:"metadata"`
+	ConversionSide string            `json:"conversion_side,omitempty"`
+	FeePaidBy      string            `json:"fee_paid_by,omitempty"`
+	Postings       []postingResponse `json:"postings"`
 }
 
 type postingResponse struct {
@@ -191,14 +336,19 @@ type transactionRequest struct {
 	// ExpectedVersionID is the version an edit was composed against; PATCH
 	// requires it (#296). Create and correct ignore it.
 	ExpectedVersionID int64 `json:"expected_version_id"`
+	// KeepJournal, on PATCH, keeps the stored journal and edits only what
+	// the transaction describes (#481); journal_entries is then omitted.
+	KeepJournal bool `json:"keep_journal"`
 }
 
 type journalEntryRequest struct {
-	EntryDate string           `json:"entry_date"`
-	EntryKind string           `json:"entry_kind"`
-	Memo      string           `json:"memo"`
-	Metadata  json.RawMessage  `json:"metadata"`
-	Postings  []postingRequest `json:"postings"`
+	EntryDate      string           `json:"entry_date"`
+	EntryKind      string           `json:"entry_kind"`
+	ConversionSide string           `json:"conversion_side"`
+	FeePaidBy      string           `json:"fee_paid_by"`
+	Memo           string           `json:"memo"`
+	Metadata       json.RawMessage  `json:"metadata"`
+	Postings       []postingRequest `json:"postings"`
 }
 
 type postingRequest struct {
@@ -257,11 +407,13 @@ func toTransactionInput(request transactionRequest) app.TransactionInput {
 			})
 		}
 		entries = append(entries, app.JournalEntryInput{
-			EntryDate:    entry.EntryDate,
-			EntryKind:    entry.EntryKind,
-			Memo:         entry.Memo,
-			MetadataJSON: rawJSONText(entry.Metadata),
-			Postings:     postings,
+			EntryDate:      entry.EntryDate,
+			EntryKind:      entry.EntryKind,
+			ConversionSide: entry.ConversionSide,
+			FeePaidBy:      entry.FeePaidBy,
+			Memo:           entry.Memo,
+			MetadataJSON:   rawJSONText(entry.Metadata),
+			Postings:       postings,
 		})
 	}
 
@@ -315,13 +467,15 @@ func toTransactionResponse(transaction app.Transaction) transactionResponse {
 			})
 		}
 		entries = append(entries, journalEntryResponse{
-			ID:        entry.ID,
-			EntrySeq:  entry.EntrySeq,
-			EntryDate: entry.EntryDate,
-			EntryKind: entry.EntryKind,
-			Memo:      entry.Memo,
-			Metadata:  json.RawMessage(entry.MetadataJSON),
-			Postings:  postings,
+			ID:             entry.ID,
+			EntrySeq:       entry.EntrySeq,
+			EntryDate:      entry.EntryDate,
+			EntryKind:      entry.EntryKind,
+			Memo:           entry.Memo,
+			Metadata:       json.RawMessage(entry.MetadataJSON),
+			ConversionSide: entry.ConversionSide,
+			FeePaidBy:      entry.FeePaidBy,
+			Postings:       postings,
 		})
 	}
 
@@ -360,6 +514,8 @@ func toTransactionResponse(transaction app.Transaction) transactionResponse {
 		ChangeReason:              transaction.ChangeReason,
 		SystemLabel:               transaction.SystemLabel,
 		InvalidatedCheckpointIDs:  invalidatedCheckpointIDs,
+		Transfer:                  toTransferShapeResponse(app.TransferShapeOf(transaction)),
+		EditableEntry:             toEditableEntryResponse(app.JournalRestatementOf(transaction)),
 	}
 }
 

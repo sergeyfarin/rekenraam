@@ -92,7 +92,11 @@ func (s *TransactionService) ReconciliationImpactForUpdate(ctx context.Context, 
 	// current status is always the final status — pin it the same way
 	// UpdateTransaction does, so the balance-validation check here matches
 	// what the real update will enforce.
-	spec, err := s.cleanTransactionSpec(ctx, input.Spec, cleanTransactionOptions{
+	requested, err := keptJournalSpec(input.Spec, current, input.KeepJournal)
+	if err != nil {
+		return ReconciliationImpact{}, err
+	}
+	spec, err := s.cleanTransactionSpec(ctx, requested, cleanTransactionOptions{
 		OwnerUserID:      input.OwnerUserID,
 		ForcedStatus:     current.Status,
 		ExistingLineKeys: lineKeySet(current),
@@ -134,7 +138,7 @@ func (s *TransactionService) ReconciliationImpactForPost(ctx context.Context, ow
 	if err := s.rejectInvestmentLinkedMutation(ctx, transactionID); err != nil {
 		return ReconciliationImpact{}, err
 	}
-	_, err = s.cleanTransactionSpec(ctx, transactionInputFromTransaction(toTransaction(current)), cleanTransactionOptions{
+	_, err = s.cleanTransactionSpec(ctx, storedTransactionInput(toTransaction(current)), cleanTransactionOptions{
 		OwnerUserID:  ownerID,
 		ForcedStatus: "posted", ExistingLineKeys: lineKeySet(current), ExistingPostings: existingPostingStateSet(current),
 	})

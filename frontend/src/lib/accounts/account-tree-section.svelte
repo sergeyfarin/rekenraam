@@ -322,7 +322,7 @@
                   custom CSS file is required.
                 -->
                 <a
-                  href="/app/accounts/{account.id}/register"
+                  href="/app/ledger/accounts/{account.id}/register"
                   class="min-w-0 truncate text-sm font-semibold text-foreground after:absolute after:inset-0 after:z-0"
                   aria-label={m.accounts_action_view_register({ name: accountDisplayName(account) })}
                 >

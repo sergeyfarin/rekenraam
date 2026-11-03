@@ -362,13 +362,31 @@
   "import_fetching_cancel": "Отмена",
   "import_fetching_failed_title": "Загрузка не удалась",
   "import_fetching_failed_copy": "Проверьте ключ API этого подключения и попробуйте снова.",
-  "settings_card_language_title": "Язык",
-  "settings_card_language_copy": "Выберите язык интерфейса.",
   "language_title": "Язык",
   "language_copy": "Язык интерфейса сохраняется в этом браузере. Суммы, даты и числа отображаются по правилам выбранного языка.",
   "language_select_legend": "Язык интерфейса",
   "language_translation_progress_title": "Черновой перевод",
   "language_translation_progress_copy": "Эти переводы составлены по терминологическому глоссарию и ещё не проверены носителями языка. То, что пока не переведено, показывается на английском, а не остаётся пустым.",
+  "language_partial": "Неполный перевод",
+  "language_partial_missing": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} непереведённая строка",
+        "countPlural=few": "{n} непереведённые строки",
+        "countPlural=many": "{n} непереведённых строк",
+        "countPlural=*": "{n} непереведённой строки"
+      }
+    }
+  ],
+  "language_partial_option": "{language} · неполный перевод",
   "import_rules_title": "Правила импорта",
   "import_rules_copy": "При подготовке нового файла применяется первое совпавшее правило. Каждый результат можно проверить до проведения.",
   "import_rules_add": "Добавить правило",
@@ -1006,7 +1024,6 @@
   "search_switch_theme": "Переключить светлую/тёмную тему",
   "search_navigation_error": "Не удалось открыть этот результат. Попробуйте ещё раз.",
   "attention_review": "Проверить",
-  "attention_review_label": "Проверить · {status}",
   "attention_count": "Элементов для проверки: {count}",
   "attention_failed": "Известных элементов: {count} · ошибка проверки",
   "attention_checking": "Известных элементов: {count} · проверка не завершена",
@@ -1026,5 +1043,1067 @@
   "attention_backups": "Последняя резервная копия",
   "attention_self_check": "Последняя проверка книги",
   "attention_prices": "Отсутствующие или устаревшие цены",
-  "attention_rates": "Отсутствующие или устаревшие валютные курсы"
+  "attention_rates": "Отсутствующие или устаревшие валютные курсы",
+  "nav_breadcrumb": "Навигационная цепочка",
+  "keyboard_help_title": "Сочетания клавиш",
+  "keyboard_help_search": "Поиск страниц, счетов и команд",
+  "keyboard_help_help": "Показать этот список",
+  "keyboard_help_escape": "Закрыть диалог, меню или панель",
+  "keyboard_help_note": "Сочетания клавиш не действуют во время ввода в поле.",
+  "keyboard_help_close": "Закрыть",
+  "keyboard_help_or": "или",
+  "keyboard_key_ctrl": "Ctrl",
+  "keyboard_key_escape": "Esc",
+  "briefing_headline_net_worth": "Чистые активы",
+  "briefing_headline_cash": "Денежные средства",
+  "briefing_scope_all": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Все счета: {n}",
+        "countPlural=*": "Все счета: {n}"
+      }
+    }
+  ],
+  "briefing_scope_cash": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Денежные счета: {n}",
+        "countPlural=*": "Денежные счета: {n}"
+      }
+    }
+  ],
+  "briefing_scope_closed": "Только закрытые счета",
+  "briefing_change": "{amount} в {month}",
+  "briefing_change_label": "{amount} с конца {start} по {end}",
+  "briefing_needs_price_named": "Для чистых активов нужна цена {code}",
+  "briefing_needs_rate_named": "Для чистых активов нужен курс {code}",
+  "briefing_missing_price_named": "Нет цены {code}",
+  "briefing_missing_rate_named": "Нет курса {code}",
+  "briefing_stale_price_named": "Цена {code} устарела",
+  "briefing_stale_rate_named": "Курс {code} устарел",
+  "briefing_needs_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Для чистых активов нужна {n} цена",
+        "countPlural=few": "Для чистых активов нужны {n} цены",
+        "countPlural=many": "Для чистых активов нужно {n} цен",
+        "countPlural=*": "Для чистых активов нужно {n} цены"
+      }
+    }
+  ],
+  "briefing_needs_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Для чистых активов нужен {n} курс",
+        "countPlural=few": "Для чистых активов нужны {n} курса",
+        "countPlural=many": "Для чистых активов нужно {n} курсов",
+        "countPlural=*": "Для чистых активов нужно {n} курса"
+      }
+    }
+  ],
+  "briefing_needs_values": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Для чистых активов нужно {n} значение",
+        "countPlural=few": "Для чистых активов нужны {n} значения",
+        "countPlural=many": "Для чистых активов нужно {n} значений",
+        "countPlural=*": "Для чистых активов нужно {n} значения"
+      }
+    }
+  ],
+  "briefing_missing_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Не хватает цен: {n}",
+        "countPlural=*": "Не хватает цен: {n}"
+      }
+    }
+  ],
+  "briefing_missing_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Не хватает курсов: {n}",
+        "countPlural=*": "Не хватает курсов: {n}"
+      }
+    }
+  ],
+  "briefing_missing_values": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Не хватает значений: {n}",
+        "countPlural=*": "Не хватает значений: {n}"
+      }
+    }
+  ],
+  "briefing_stale_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Устаревших цен: {n}",
+        "countPlural=*": "Устаревших цен: {n}"
+      }
+    }
+  ],
+  "briefing_stale_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Устаревших курсов: {n}",
+        "countPlural=*": "Устаревших курсов: {n}"
+      }
+    }
+  ],
+  "briefing_stale_values": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Устаревших значений: {n}",
+        "countPlural=*": "Устаревших значений: {n}"
+      }
+    }
+  ],
+  "briefing_work_drafts": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} черновик",
+        "countPlural=few": "{n} черновика",
+        "countPlural=many": "{n} черновиков",
+        "countPlural=*": "{n} черновика"
+      }
+    }
+  ],
+  "briefing_work_transactions": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} операция",
+        "countPlural=few": "{n} операции",
+        "countPlural=many": "{n} операций",
+        "countPlural=*": "{n} операции"
+      }
+    }
+  ],
+  "briefing_work_recurring": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} заблокированный повтор",
+        "countPlural=few": "{n} заблокированных повтора",
+        "countPlural=many": "{n} заблокированных повторов",
+        "countPlural=*": "{n} заблокированного повтора"
+      }
+    }
+  ],
+  "briefing_work_imports": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} импорт",
+        "countPlural=few": "{n} импорта",
+        "countPlural=many": "{n} импортов",
+        "countPlural=*": "{n} импорта"
+      }
+    }
+  ],
+  "briefing_work_suggestions": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} инвестиционное предложение",
+        "countPlural=few": "{n} инвестиционных предложения",
+        "countPlural=many": "{n} инвестиционных предложений",
+        "countPlural=*": "{n} инвестиционного предложения"
+      }
+    }
+  ],
+  "briefing_work_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} цена",
+        "countPlural=few": "{n} цены",
+        "countPlural=many": "{n} цен",
+        "countPlural=*": "{n} цены"
+      }
+    }
+  ],
+  "briefing_work_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} курс",
+        "countPlural=few": "{n} курса",
+        "countPlural=many": "{n} курсов",
+        "countPlural=*": "{n} курса"
+      }
+    }
+  ],
+  "briefing_work_one": "На проверку: {item}",
+  "briefing_work_two": "На проверку: {first} и {second}",
+  "briefing_failed_unchecked": "Некоторые проверки не удалось выполнить",
+  "briefing_failed_backup": "Последнее резервное копирование не удалось",
+  "briefing_failed_self_check": "Самопроверка книги требует внимания",
+  "briefing_failed_connections": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Ошибок загрузки подключений: {n}",
+        "countPlural=*": "Ошибок загрузки подключений: {n}"
+      }
+    }
+  ],
+  "briefing_failed_refresh": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Ошибок обновления цен и курсов: {n}",
+        "countPlural=*": "Ошибок обновления цен и курсов: {n}"
+      }
+    }
+  ],
+  "briefing_failed_imports": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Ошибок импорта: {n}",
+        "countPlural=*": "Ошибок импорта: {n}"
+      }
+    }
+  ],
+  "briefing_failed_other": "Одна из проверок не удалась",
+  "briefing_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "ещё {n}",
+        "countPlural=*": "ещё {n}"
+      }
+    }
+  ],
+  "briefing_more_label": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "ещё {n} на проверку",
+        "countPlural=*": "ещё {n} на проверку"
+      }
+    }
+  ],
+  "briefing_needs_currency": "Выберите валюту по умолчанию, чтобы видеть чистые активы",
+  "briefing_needs_short_review": "Для чистых активов нужно проверить короткую позицию",
+  "briefing_check_failed": "Не удалось проверить, что требует внимания",
+  "briefing_checking": "Проверяем, что требует внимания…",
+  "briefing_review_count": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "На проверку: {n}",
+        "countPlural=*": "На проверку: {n}"
+      }
+    }
+  ],
+  "briefing_all_clear": "Всё в порядке, проверять нечего",
+  "briefing_headline_menu": "Выбрать заголовок",
+  "briefing_headline_unavailable": "{label}: нет данных",
+  "briefing_loading": "Загрузка сводки…",
+  "briefing_load_error": "Не удалось загрузить сводку.",
+  "briefing_start_title": "Начните со счёта",
+  "briefing_start_copy": "Добавьте свои счета, чтобы видеть здесь чистые активы и то, что требует внимания.",
+  "briefing_start_action": "Добавить счёт",
+  "home_shortcuts_label": "Ярлыки",
+  "home_shortcut_import": "Импорт файла",
+  "home_shortcut_spending": "Расходы по категориям",
+  "home_shortcut_more": "Ещё",
+  "transactions_entry_saved": "Транзакция добавлена.",
+  "transactions_entry_view": "Открыть транзакцию",
+  "home_widgets_label": "Моя главная",
+  "home_widget_failed": "Не удалось загрузить эту сводку.",
+  "home_widget_no_data": "Данных пока нет",
+  "home_widget_no_data_copy": "Появится, когда вы добавите счёт и операции.",
+  "home_widget_no_currency": "Укажите основную валюту, чтобы видеть это в одной валюте.",
+  "home_widget_set_currency": "Указать основную валюту",
+  "home_spending_title": "Расходы за месяц",
+  "home_spending_scope": "{period} · все счета · {currency}",
+  "home_spending_zero": "В этом месяце расходов пока нет",
+  "home_spending_partial": "Не все расходы пересчитываются в {currency}; итоги по валютам",
+  "home_spending_open": "Открыть отчёт о расходах",
+  "home_budgets_title": "Бюджеты · {month}",
+  "home_budgets_left": "Осталось {amount}",
+  "home_budgets_over": "Перерасход {amount}",
+  "home_budgets_spent": "Потрачено {actual} из {target}",
+  "home_budgets_row": "{actual} из {target}",
+  "home_budgets_row_over": "перерасход {amount}",
+  "home_budgets_not_set_up": "На этот месяц бюджета нет",
+  "home_budgets_set_up": "Задать бюджет",
+  "home_budgets_open": "Открыть бюджеты",
+  "home_accounts_title": "Счета",
+  "home_accounts_scope": "Крупнейшие остатки · {date}",
+  "home_accounts_no_value": "Нет оценки",
+  "home_accounts_open": "Все счета",
+  "home_recurring_title": "Регулярные",
+  "home_recurring_next": "Далее: {name}, {date}",
+  "home_recurring_none_due": "Ничего не запланировано",
+  "home_recurring_not_set_up": "Регулярных операций нет",
+  "home_recurring_set_up": "Настроить расписание",
+  "home_recurring_open": "Открыть регулярные",
+  "home_trend_title": "Чистые активы · 12 месяцев",
+  "home_trend_scope": "{period} · на конец месяца · {currency}",
+  "home_trend_unavailable": "Недоступно",
+  "home_trend_unavailable_copy": "Для сегодняшней оценки нужна цена или курс; частичная сумма не показывается.",
+  "home_trend_chart_label": "Чистые активы: с {start} до {end}",
+  "home_trend_change_label": "{amount} с {date}",
+  "home_trend_open": "Открыть отчёт о чистых активах",
+  "home_spending_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "ещё {n} категория",
+        "countPlural=few": "ещё {n} категории",
+        "countPlural=many": "ещё {n} категорий",
+        "countPlural=*": "ещё {n} категории"
+      }
+    }
+  ],
+  "home_budgets_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "ещё {n} бюджет",
+        "countPlural=few": "ещё {n} бюджета",
+        "countPlural=many": "ещё {n} бюджетов",
+        "countPlural=*": "ещё {n} бюджета"
+      }
+    }
+  ],
+  "home_budgets_other_currencies": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "ещё {n} валюта",
+        "countPlural=few": "ещё {n} валюты",
+        "countPlural=many": "ещё {n} валют",
+        "countPlural=*": "ещё {n} валюты"
+      }
+    }
+  ],
+  "home_accounts_count": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} открытый счёт",
+        "countPlural=few": "{n} открытых счёта",
+        "countPlural=many": "{n} открытых счетов",
+        "countPlural=*": "{n} открытого счёта"
+      }
+    }
+  ],
+  "home_accounts_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "ещё {n} счёт",
+        "countPlural=few": "ещё {n} счёта",
+        "countPlural=many": "ещё {n} счетов",
+        "countPlural=*": "ещё {n} счёта"
+      }
+    }
+  ],
+  "home_recurring_active": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} активное расписание",
+        "countPlural=few": "{n} активных расписания",
+        "countPlural=many": "{n} активных расписаний",
+        "countPlural=*": "{n} активного расписания"
+      }
+    }
+  ],
+  "home_recurring_drafts": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} черновик на проверку",
+        "countPlural=few": "{n} черновика на проверку",
+        "countPlural=many": "{n} черновиков на проверку",
+        "countPlural=*": "{n} черновика на проверку"
+      }
+    }
+  ],
+  "home_trend_stale": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} устаревшее значение",
+        "countPlural=few": "{n} устаревших значения",
+        "countPlural=many": "{n} устаревших значений",
+        "countPlural=*": "{n} устаревшего значения"
+      }
+    }
+  ],
+  "home_widgets_changing": "Книга изменилась во время чтения, поэтому карточки могут ненадолго расходиться. Читаем заново…",
+  "home_recurring_blocked": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} заблокирована",
+        "countPlural=few": "{n} заблокированы",
+        "countPlural=many": "{n} заблокировано",
+        "countPlural=*": "{n} заблокировано"
+      }
+    }
+  ],
+  "home_explore_title": "Ещё виджеты",
+  "home_explore_subtitle": "Любой из виджетов ниже можно добавить на главную",
+  "home_explore_collapse": "Свернуть",
+  "home_explore_expand": "Показать все",
+  "home_explore_everyday": "Повседневное",
+  "home_explore_wealth": "Капитал и инвестиции",
+  "home_explore_planning": "Планирование",
+  "home_explore_data": "Учёт и данные",
+  "home_cashflow_label": "Денежный поток",
+  "home_cashflow_title": "Денежный поток · {month}",
+  "home_cashflow_open": "Открыть отчёт о денежном потоке",
+  "home_cashflow_no_accounts": "Нет денежных счетов",
+  "home_cashflow_add_account": "Добавить счёт",
+  "home_cashflow_accounts": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} денежный счёт",
+        "countPlural=few": "{n} денежных счёта",
+        "countPlural=many": "{n} денежных счетов",
+        "countPlural=*": "{n} денежного счёта"
+      }
+    }
+  ],
+  "home_cashflow_zero": "В этом месяце пока нет поступлений и списаний",
+  "home_cashflow_in": "Поступления",
+  "home_cashflow_out": "Списания",
+  "home_cashflow_transfers": "Переводы, нетто",
+  "home_cashflow_net_label": "{amount}: поступления минус списания",
+  "home_cashflow_partial": "Не все суммы пересчитываются в {currency}; итоги по валютам",
+  "home_holdings_title": "Позиции",
+  "home_holdings_open": "Открыть инвестиции",
+  "home_holdings_none": "Инвестиций пока нет",
+  "home_holdings_set_up": "Записать покупку",
+  "home_holdings_no_price": "Нет цены",
+  "home_holdings_scope": "Крупнейшие по стоимости · {date}",
+  "home_holdings_count": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} позиция",
+        "countPlural=few": "{n} позиции",
+        "countPlural=many": "{n} позиций",
+        "countPlural=*": "{n} позиции"
+      }
+    }
+  ],
+  "home_holdings_unpriced": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} без цены",
+        "countPlural=few": "{n} без цены",
+        "countPlural=many": "{n} без цены",
+        "countPlural=*": "{n} без цены"
+      }
+    }
+  ],
+  "home_holdings_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "ещё {n} позиция",
+        "countPlural=few": "ещё {n} позиции",
+        "countPlural=many": "ещё {n} позиций",
+        "countPlural=*": "ещё {n} позиции"
+      }
+    }
+  ],
+  "home_returns_title": "Доходность",
+  "home_returns_open": "Открыть доходность",
+  "home_returns_scope": "Взвешенная по времени · {period}",
+  "home_returns_saved": "сохранено {date}",
+  "home_returns_saved_badge": "Сохранённый расчёт",
+  "home_returns_annualized": "Годовая",
+  "home_returns_not_saved": "Сохранённых расчётов пока нет",
+  "home_returns_not_saved_copy": "Главная показывает последний расчёт, сохранённый на странице «Доходность», и никогда не считает сама.",
+  "home_returns_calculate": "Рассчитать доходность",
+  "home_allocation_title": "Распределение",
+  "home_allocation_scope": "По типу активов · {date}",
+  "home_allocation_short": "{type}, короткая",
+  "home_allocation_fact": "{type} {weight}",
+  "home_allocation_unknown": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} остаток без оценки",
+        "countPlural=few": "{n} остатка без оценки",
+        "countPlural=many": "{n} остатков без оценки",
+        "countPlural=*": "{n} остатка без оценки"
+      }
+    }
+  ],
+  "home_allocation_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "ещё {n} тип",
+        "countPlural=few": "ещё {n} типа",
+        "countPlural=many": "ещё {n} типов",
+        "countPlural=*": "ещё {n} типа"
+      }
+    }
+  ],
+  "home_income_title": "Дивиденды",
+  "home_income_open": "Открыть доходы",
+  "home_income_zero": "Дивидендов не записано",
+  "home_income_instruments": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Доход от {n} инструмента",
+        "countPlural=few": "Доход от {n} инструментов",
+        "countPlural=many": "Доход от {n} инструментов",
+        "countPlural=*": "Доход от {n} инструмента"
+      }
+    }
+  ],
+  "home_income_scope": "Подтверждённые дивиденды за всё время",
+  "home_income_to_assign": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} платёж нужно отнести",
+        "countPlural=few": "{n} платежа нужно отнести",
+        "countPlural=many": "{n} платежей нужно отнести",
+        "countPlural=*": "{n} платежа нужно отнести"
+      }
+    }
+  ],
+  "home_income_unassigned_copy": "неотнесённые деньги не считаются доходом, пока вы их не отнесёте",
+  "home_income_unassigned_cash": "Неотнесённые деньги",
+  "home_income_payments": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} платёж",
+        "countPlural=few": "{n} платежа",
+        "countPlural=many": "{n} платежей",
+        "countPlural=*": "{n} платежа"
+      }
+    }
+  ],
+  "home_forecast_title": "Прогноз",
+  "home_forecast_open": "Открыть прогноз",
+  "home_forecast_badge": "Оценка",
+  "home_forecast_fact": "Ближайшие 90 дней",
+  "home_forecast_scope": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Ожидаемые остатки по {n} активному расписанию, рассчитываются при открытии",
+        "countPlural=few": "Ожидаемые остатки по {n} активным расписаниям, рассчитываются при открытии",
+        "countPlural=many": "Ожидаемые остатки по {n} активным расписаниям, рассчитываются при открытии",
+        "countPlural=*": "Ожидаемые остатки по {n} активного расписания, рассчитываются при открытии"
+      }
+    }
+  ],
+  "home_forecast_scope_unknown": "Ожидаемые остатки, рассчитываются при открытии",
+  "home_forecast_not_set_up": "Нечего прогнозировать",
+  "home_forecast_not_set_up_copy": "Прогноз строится по вашим регулярным расписаниям.",
+  "home_imports_title": "Импорт",
+  "home_imports_open": "Открыть импорт",
+  "home_imports_zero": "Нет ничего на проверку",
+  "home_imports_review": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} пакет на проверку",
+        "countPlural=few": "{n} пакета на проверку",
+        "countPlural=many": "{n} пакетов на проверку",
+        "countPlural=*": "{n} пакета на проверку"
+      }
+    }
+  ],
+  "home_imports_scope": "Подготовленные файлы ждут вашей проверки",
+  "home_prices_title": "Цены",
+  "home_prices_open": "Открыть цены",
+  "home_prices_scope": "Цены и курсы для расчёта капитала",
+  "home_prices_current": "Актуальны",
+  "home_prices_price": "цена",
+  "home_prices_rate": "курс валюты",
+  "home_prices_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "ещё {n}",
+        "countPlural=few": "ещё {n}",
+        "countPlural=many": "ещё {n}",
+        "countPlural=*": "ещё {n}"
+      }
+    }
+  ],
+  "home_backups_title": "Резервные копии",
+  "home_backups_open": "Открыть копии и данные",
+  "home_backups_off": "Автоматическое копирование выключено",
+  "home_backups_set_up": "Включить копирование",
+  "home_backups_last": "Копия от {date}",
+  "home_backups_next": "Следующая {date}",
+  "home_backups_none": "Копий пока нет",
+  "home_backups_failed": "Последнее копирование не удалось",
+  "home_backups_retrying": "Будет повторная попытка",
+  "home_backups_retry_copy": "Откройте копии, чтобы повторить",
+  "home_backups_running": "Идёт копирование",
+  "home_imports_checking": "Проверяем…",
+  "home_cashflow_transfers_unconverted": "переводы не пересчитаны в {currency}",
+  "reports_export_title": "Экспорт",
+  "transactions_transfer_title": "Перевод между счетами",
+  "transactions_tier_switch_transfer": "Перевод между счетами",
+  "transactions_transfer_from": "Со счёта",
+  "transactions_transfer_to": "На счёт",
+  "transactions_transfer_swap": "Поменять счета местами",
+  "transactions_transfer_from_currency": "Валюта списания",
+  "transactions_transfer_to_currency": "Валюта зачисления",
+  "transactions_transfer_sent": "Списано ({currency})",
+  "transactions_transfer_received": "Зачислено ({currency})",
+  "transactions_transfer_rate": "Курс: 1 {from} = {rate} {to}",
+  "transactions_transfer_rate_hint": "Введите обе суммы так, как их показывает банк; курс получится из них.",
+  "transactions_transfer_fee": "Комиссия (необязательно)",
+  "transactions_transfer_fee_hint": "Учитывается в «Банковских комиссиях» сверх перевода, в день счёта, с которого списана.",
+  "transactions_transfer_fee_paid_by": "Комиссию списал",
+  "transactions_transfer_fee_paid_by_from": "{currency}, со счёта списания",
+  "transactions_transfer_fee_paid_by_to": "{currency}, со счёта зачисления",
+  "transactions_transfer_days_toggle": "Проводится в разные дни",
+  "transactions_transfer_leaves_on": "Списано",
+  "transactions_transfer_arrives_on": "Зачислено",
+  "transactions_transfer_days_hint": "Каждый счёт показывает перевод в свой день; в промежутке деньги в пути.",
+  "transactions_transfer_problem_missing_account": "Выберите оба счёта.",
+  "transactions_transfer_problem_same_account": "Счета списания и зачисления должны различаться.",
+  "transactions_transfer_problem_missing_amount": "Введите сумму больше нуля.",
+  "transactions_transfer_problem_missing_received": "Введите зачисленную сумму больше нуля.",
+  "transactions_transfer_problem_arrives_before_leaves": "День зачисления не может быть раньше дня списания.",
+  "transactions_transfer_problem_invalid_fee": "Введите комиссию больше нуля или оставьте поле пустым.",
+  "transactions_transfer_problem_fee_exceeds_amount": "Комиссия больше суммы, из которой она удерживается.",
+  "transactions_transfer_problem_no_fee_category": "Нет категории «Банковские комиссии» для учёта комиссии.",
+  "transactions_exchange_title": "Обмен валюты",
+  "transactions_exchange_market": "Справочный курс на {date}: 1 {from} = {rate} {to}",
+  "transactions_exchange_market_stale": "Последний справочный курс до обмена, от {date}.",
+  "transactions_exchange_cost_below": "Примерно на {amount} ({percent} %) меньше, чем по справочному курсу",
+  "transactions_exchange_cost_above": "Примерно на {amount} ({percent} %) больше, чем по справочному курсу",
+  "transactions_exchange_cost_equal": "Так же, как по справочному курсу",
+  "transactions_exchange_no_market": "Справочного курса на {date} пока нет; оценка появится, когда курс будет записан.",
+  "transactions_exchange_not_booked": "Оценка относительно ежедневного справочного курса, а не фактическая маржа банка. Прибыль или убыток не записываются.",
+  "home_shortcut_transfer": "Перевод",
+  "transactions_transfer_converted": "Обменяно: {sent} на {received}",
+  "transactions_transfer_statements_hint": "Введите каждую сумму так, как её показывает выписка счёта; комиссия вычитается до расчёта курса.",
+  "transactions_transfer_conversion_side": "Обмен",
+  "transactions_transfer_conversion_sending": "При списании (обменивает банк-отправитель)",
+  "transactions_transfer_conversion_receiving": "При зачислении (обменивает банк-получатель)",
+  "transactions_locked_title": "Суммы здесь изменить нельзя",
+  "transactions_locked_body": "В этой проводке есть строки, которые редактор собрал бы иначе, например сумма, оставшаяся в пути. Можно изменить описание, получателя, вид, теги и заметку; чтобы изменить суммы, счета или даты, аннулируйте её и введите заново.",
+  "transactions_locked_correct": "В этой проводке есть строки, которые редактор собрал бы иначе, например сумма, оставшаяся в пути, поэтому исправить её здесь нельзя. Аннулируйте её и введите заново.",
+  "import_match_title": "Уже в вашей книге",
+  "import_match_intro": "Эти строки выписки совпадают с уже введённой операцией: тот же счёт и валюта, точно та же сумма, проведена в пределах {days} дн. Свяжите строку, чтобы учесть её без новой операции, или оставьте её новой.",
+  "import_match_check": "Найти уже введённые операции",
+  "import_match_checking": "Поиск совпадающих операций…",
+  "import_match_empty": "Ни одна строка выписки не совпадает с операциями в вашей книге.",
+  "import_match_row_heading": "Строка {row}: {date}, {amount}",
+  "import_match_link_option": "Связать с операцией «{description}» от {date}",
+  "import_match_untitled": "без описания",
+  "import_match_reason_same_day": "Тот же счёт и валюта, точно {amount}, проведена в дату выписки.",
+  "import_match_reason_after": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Тот же счёт и валюта, точно {amount}; проведена позже даты выписки, дней: {n}.",
+        "countPlural=*": "Тот же счёт и валюта, точно {amount}; проведена позже даты выписки, дней: {n}."
+      }
+    }
+  ],
+  "import_match_reason_before": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Тот же счёт и валюта, точно {amount}; проведена раньше даты выписки, дней: {n}.",
+        "countPlural=*": "Тот же счёт и валюта, точно {amount}; проведена раньше даты выписки, дней: {n}."
+      }
+    }
+  ],
+  "import_match_keep_new": "Оставить новой операцией",
+  "import_match_choose": "Совпадает несколько операций. Выберите одну или оставьте строку новой.",
+  "import_match_decide": "Примите решения по совпадениям ниже и импортируйте снова.",
+  "import_preview_dedupe_matched": "Уже есть",
+  "import_result_linked": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Строк, связанных с операциями в книге: {n}",
+        "countPlural=*": "Строк, связанных с операциями в книге: {n}"
+      }
+    }
+  ],
+  "import_result_match_review": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Строк, совпадающих с операциями в книге и ждущих вашего решения: {n}.",
+        "countPlural=*": "Строк, совпадающих с операциями в книге и ждущих вашего решения: {n}."
+      }
+    }
+  ]
 }

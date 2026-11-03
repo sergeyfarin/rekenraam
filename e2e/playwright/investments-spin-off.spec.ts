@@ -99,7 +99,7 @@ test('a spin-off previews the exact basis split and the new lots name the parent
 
   const listed = await apiJSON<{ lots: Array<{ source_transaction_id: number }> }>(
     page, 'GET', `/api/v1/investments/lots?account_id=${s.spun.holdingID}&commodity_id=${s.spun.commodity_id}`);
-  await page.goto(`/app/transactions?transaction_id=${listed.lots[0].source_transaction_id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${listed.lots[0].source_transaction_id}`);
   const detail = page.getByRole('group', { name: 'Spin-off' });
   await expect(detail).toContainText(`${s.spun.name} spun off from ${s.parent.name}`);
   await expect(detail).toContainText('Total basis moved');
@@ -148,7 +148,7 @@ test('correcting a spin-off percentage revises the later parent sale on mobile',
   const spun = await s.spinOff();
   await s.sell(s.parent, 5, '5', '10000'); // basis 45.00 after 10 % moved
 
-  await page.goto(`/app/transactions?transaction_id=${spun.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${spun.transaction.id}`);
   const detail = page.getByRole('group', { name: 'Spin-off' });
   await expect(detail.getByRole('button', { name: 'Reverse spin-off…' })).toBeVisible();
   await detail.getByRole('button', { name: 'Correct spin-off…' }).click();
@@ -183,7 +183,7 @@ test('reversing a spin-off whose new units were sold is refused with a translate
   const spun = await s.spinOff();
   await s.sell(s.spun, 5, '5', '1000');
 
-  await page.goto(`/app/transactions?transaction_id=${spun.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${spun.transaction.id}`);
   await page.getByRole('button', { name: 'Reverse spin-off…' }).click();
   await page.getByLabel('Reason for reversal').fill('no spin-off happened');
   await page.getByRole('button', { name: 'Review and reverse' }).click();
@@ -195,7 +195,7 @@ test('reversing an unsold spin-off gives the parent its basis back', async ({ pa
   await s.buy(40, '10', '10000');
   const spun = await s.spinOff();
 
-  await page.goto(`/app/transactions?transaction_id=${spun.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${spun.transaction.id}`);
   await page.getByRole('button', { name: 'Reverse spin-off…' }).click();
   await page.getByLabel('Reason for reversal').fill('no spin-off happened');
   await page.getByRole('button', { name: 'Review and reverse' }).click();
@@ -225,7 +225,7 @@ test('a spin-off correction preserves exact unedited source evidence', async ({ 
     source_evidence: { reference: 'issuer notice', revision: 'EXACT:9007199254740993', nested: { rate: 'EXACT:0.1000000000000000055511151231257827' } }
   }));
   const transactionID = (JSON.parse(created) as { transaction: { id: number } }).transaction.id;
-  await page.goto(`/app/transactions?transaction_id=${transactionID}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${transactionID}`);
   await page.getByRole('group', { name: 'Spin-off' }).getByRole('button', { name: 'Correct spin-off…' }).click();
   const form = page.getByRole('dialog', { name: 'Correct this spin-off' });
   await expect(form.getByLabel('Broker or statement reference')).toHaveValue('issuer notice');

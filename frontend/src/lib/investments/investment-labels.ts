@@ -1,36 +1,24 @@
-import type { components } from '#lib/api/schema.js';
+import type { CostBasisMethod } from '#lib/api/investments.ts';
 import { formatQuantity } from '#lib/money/format.ts';
-
-export type InvestmentPositionResponse = components['schemas']['InvestmentPositionResponse'];
-export type InvestmentLotResponse = components['schemas']['InvestmentLotResponse'];
-export type InvestmentInstrumentResponse = components['schemas']['InvestmentInstrumentResponse'];
+import { m } from '#lib/paraglide/messages.js';
 
 export function formatScaledValue(value: string, scale: number, locale: string): string {
   return formatQuantity(value, scale, locale);
 }
 
-export function lotStatusLabel(status: string): string {
-  switch (status) {
-    case 'open':
-      return 'Open';
-    case 'closed':
-      return 'Closed';
-    default:
-      return status;
-  }
-}
+export const COST_BASIS_METHODS: readonly CostBasisMethod[] = ['fifo', 'lifo', 'average_cost', 'specific_lot'];
 
-export function costBasisMethodLabel(method: string): string {
+// One localized label per durable cost-basis method code, shared by every
+// investment workflow so selects and previews agree in each locale.
+export function costBasisMethodLabel(method: CostBasisMethod): string {
   switch (method) {
     case 'fifo':
-      return 'FIFO';
+      return m.transactions_investment_replace_method_fifo();
     case 'lifo':
-      return 'LIFO';
+      return m.transactions_investment_replace_method_lifo();
     case 'average_cost':
-      return 'Average cost';
+      return m.transactions_investment_replace_method_average();
     case 'specific_lot':
-      return 'Specific lot';
-    default:
-      return method;
+      return m.transactions_investment_replace_method_specific();
   }
 }

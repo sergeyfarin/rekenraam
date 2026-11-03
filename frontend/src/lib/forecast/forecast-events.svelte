@@ -111,7 +111,7 @@
                 {#if event.payee_name}<p class="mt-1 text-sm text-muted">{m.forecast_event_payee({ payee: event.payee_name })}</p>{/if}
               </div>
               {#if source.review}
-                <a href={source.review === 'transactions' ? '/app/transactions' : '/app/recurring'} class="font-semibold text-accent underline underline-offset-2">
+                <a href={source.review === 'transactions' ? '/app/ledger/transactions' : '/app/planning/recurring'} class="font-semibold text-accent underline underline-offset-2">
                   {source.review === 'transactions' ? m.forecast_event_review_transactions() : m.forecast_event_review_recurring()}
                 </a>
               {/if}

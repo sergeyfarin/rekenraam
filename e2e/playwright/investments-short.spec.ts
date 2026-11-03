@@ -114,7 +114,7 @@ test('a cover is corrected and then reversed from its transaction on mobile (#17
   await s.short('short-sale', 20, '10', '10000');
   const cover = await s.short('short-cover', 10, '10', '7000');
 
-  await page.goto(`/app/transactions?transaction_id=${cover.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${cover.transaction.id}`);
   await page.getByRole('button', { name: 'Correct short cover…' }).click();
   const form = page.getByRole('dialog', { name: 'Correct this short cover' });
   await expect(form.getByLabel(/Cost to cover/)).toHaveValue('70.00');
@@ -129,7 +129,7 @@ test('a cover is corrected and then reversed from its transaction on mobile (#17
 
   const replacement = await apiJSON<{ effective_transaction_id: number }>(page, 'GET',
     `/api/v1/investments/transactions/${cover.transaction.id}/correction-chain`);
-  await page.goto(`/app/transactions?transaction_id=${replacement.effective_transaction_id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${replacement.effective_transaction_id}`);
   await page.getByRole('button', { name: 'Reverse short cover…' }).click();
   await page.getByLabel('Reason for reversal').fill('cover was not executed');
   await page.getByRole('button', { name: 'Review and reverse' }).click();

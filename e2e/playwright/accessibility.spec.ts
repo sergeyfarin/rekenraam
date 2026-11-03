@@ -41,13 +41,13 @@ test('[acceptance] transaction entry is accessible and operable by keyboard', as
   const { csrfToken, currencyID } = await readyForLedger(page);
   await createCashAccount(page, csrfToken, `A11y checking ${Date.now()}`, currencyID);
 
-  await page.goto('/app/transactions');
+  await page.goto('/app/ledger/transactions');
   await expect(page.getByRole('heading').first()).toBeVisible();
 
   // Entry is a panel on the transactions screen rather than its own route, so
   // the check is of the screen with the form open — which is where a keyboard
   // user actually meets it.
-  const newTransaction = page.getByRole('button', { name: /new transaction/i }).first();
+  const newTransaction = page.getByRole('button', { name: /add transaction/i }).first();
   if (await newTransaction.isVisible().catch(() => false)) {
     await newTransaction.click();
   }
@@ -91,7 +91,7 @@ test('[acceptance] the transactions list is accessible', async ({ page }) => {
     ]
   });
 
-  await page.goto('/app/transactions');
+  await page.goto('/app/ledger/transactions');
   await expect(page.getByRole('table').first()).toBeVisible();
 
   await expectNoAccessibilityViolations(page, 'transactions list');
@@ -101,7 +101,7 @@ test('[acceptance] the reconcile screen is accessible', async ({ page }) => {
   const { csrfToken, currencyID } = await readyForLedger(page);
   await createCashAccount(page, csrfToken, `A11y reconcile ${Date.now()}`, currencyID);
 
-  await page.goto('/app/reconcile');
+  await page.goto('/app/ledger/reconcile');
   await expect(page.getByRole('heading').first()).toBeVisible();
 
   await expectNoAccessibilityViolations(page, 'reconcile');
@@ -110,7 +110,7 @@ test('[acceptance] the reconcile screen is accessible', async ({ page }) => {
 test('[acceptance] the budget screen is accessible and usable on mobile', async ({ page }) => {
   await readyForLedger(page);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/app/budgets');
+  await page.goto('/app/planning/budgets');
   await expect(page.getByRole('heading', { name: 'Budgets' }).first()).toBeVisible();
   await expectNoAccessibilityViolations(page, 'budgets');
   await expectKeyboardReachable(page, 'budgets', ['input:', 'select:', 'button:']);
@@ -138,7 +138,7 @@ test('an archived budget category keeps its actual and a read-only target', asyn
   await apiJSON(page, 'POST', `/api/v1/categories/${category.id}/disable`, csrfToken, {});
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/app/budgets');
+  await page.goto('/app/planning/budgets');
   const row = page.locator('form').filter({ hasText: name });
   await expect(row).toContainText('Archived');
   await expect(row).toContainText('12.34');
@@ -222,7 +222,7 @@ test('the reporting-currency select is never operable before its fade finishes',
 test('[acceptance] the import screen is accessible', async ({ page }) => {
   await ensureBrowserSession(page);
 
-  await page.goto('/app/import');
+  await page.goto('/app/ledger/import');
   await expect(page.getByRole('heading').first()).toBeVisible();
 
   await expectNoAccessibilityViolations(page, 'import');

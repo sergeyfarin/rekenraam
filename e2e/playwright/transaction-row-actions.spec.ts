@@ -4,6 +4,7 @@ import { expect, test, type Page } from './support/fixtures';
 import { apiJSON, csrfTokenFor } from './support/api';
 import { todayISO } from './support/dates';
 import { createCashAccount, readyForLedger } from './support/ledger';
+import { translationLocales } from './support/locales';
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -23,9 +24,9 @@ async function seed(page: Page) {
     ] }]
   });
   const paths = {
-    journal: `/app/transactions?account_id=${account.id}`,
-    account: `/app/accounts/${account.id}/register`,
-    category: `/app/categories/${category.id}`
+    journal: `/app/ledger/transactions?account_id=${account.id}`,
+    account: `/app/ledger/accounts/${account.id}/register`,
+    category: `/app/ledger/categories/${category.id}`
   };
   return { account, category, transaction, description, paths, currencyID };
 }
@@ -113,7 +114,7 @@ test('a stale edit is refused, the editor reloads the newer version and its save
   expect(final.journal_entries[0].postings.find((p) => p.account_id === s.account.id)?.quantity_value).toBe('-900');
 });
 
-for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of translationLocales) {
   test(`row actions use ${locale} labels and keyboard controls on all three screens at 390px`, async ({ page }) => {
     const s = await seed(page);
     const m = JSON.parse(readFileSync(new URL(`../../frontend/messages/settings/${locale}.json`, import.meta.url), 'utf8'));
@@ -252,7 +253,7 @@ test('investment rows offer their detail instead of the generic editor', async (
     cash_account_id: cash.id, quantity_value: '1', quantity_scale: 0, cash_amount_value: '1000',
     cash_amount_scale: 2, cash_commodity_id: currencyID
   });
-  for (const path of [`/app/accounts/${holding.id}/register`, `/app/transactions?account_id=${holding.id}`]) {
+  for (const path of [`/app/ledger/accounts/${holding.id}/register`, `/app/ledger/transactions?account_id=${holding.id}`]) {
     await page.goto(path);
     const entry = page.locator('[data-table-row]').first();
     await expect(entry).toBeVisible();
@@ -337,7 +338,7 @@ test('a category screen shows only its own leg of a split transaction (#222)', a
     ] }]
   });
   for (const [category, expected, other] of [[groceries, '10.00', '20.00'], [dining, '20.00', '10.00']] as const) {
-    await page.goto(`/app/categories/${category.id}`);
+    await page.goto(`/app/ledger/categories/${category.id}`);
     const entry = row(page, description);
     await expect(entry).toContainText(expected);
     await expect(entry).not.toContainText(other);

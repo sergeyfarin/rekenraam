@@ -107,6 +107,8 @@ paths:
     $ref: "./paths/setup-currencies.yaml"
   /api/v1/attention:
     $ref: "./paths/attention.yaml"
+  /api/v1/home:
+    $ref: "./paths/home.yaml"
   /api/v1/search/catalog:
     $ref: "./paths/search-catalog.yaml"
   /api/v1/accounts:
@@ -982,6 +984,56 @@ components:
       $ref: "./components/schemas/ledger.yaml#/LedgerStatus"
     BalanceQuantity:
       $ref: "./components/schemas/ledger.yaml#/BalanceQuantity"
+    HomeResponse:
+      $ref: "./components/schemas/home.yaml#/HomeResponse"
+    HomeHeadline:
+      $ref: "./components/schemas/home.yaml#/HomeHeadline"
+    HomeValuationInput:
+      $ref: "./components/schemas/home.yaml#/HomeValuationInput"
+    HomeReportingCurrency:
+      $ref: "./components/schemas/home.yaml#/HomeReportingCurrency"
+    HomeWidgetStatus:
+      $ref: "./components/schemas/home.yaml#/HomeWidgetStatus"
+    HomeWidgets:
+      $ref: "./components/schemas/home.yaml#/HomeWidgets"
+    HomeSpendingSummary:
+      $ref: "./components/schemas/home.yaml#/HomeSpendingSummary"
+    HomeSpendingCategory:
+      $ref: "./components/schemas/home.yaml#/HomeSpendingCategory"
+    HomeBudgetSummary:
+      $ref: "./components/schemas/home.yaml#/HomeBudgetSummary"
+    HomeBudgetCategory:
+      $ref: "./components/schemas/home.yaml#/HomeBudgetCategory"
+    HomeAccountsSummary:
+      $ref: "./components/schemas/home.yaml#/HomeAccountsSummary"
+    HomeAccountRow:
+      $ref: "./components/schemas/home.yaml#/HomeAccountRow"
+    HomeRecurringSummary:
+      $ref: "./components/schemas/home.yaml#/HomeRecurringSummary"
+    HomeRecurringItem:
+      $ref: "./components/schemas/home.yaml#/HomeRecurringItem"
+    HomeNetWorthTrendSummary:
+      $ref: "./components/schemas/home.yaml#/HomeNetWorthTrendSummary"
+    HomeTrendPoint:
+      $ref: "./components/schemas/home.yaml#/HomeTrendPoint"
+    HomeCashflowSummary:
+      $ref: "./components/schemas/home.yaml#/HomeCashflowSummary"
+    HomeHoldingsSummary:
+      $ref: "./components/schemas/home.yaml#/HomeHoldingsSummary"
+    HomeHoldingRow:
+      $ref: "./components/schemas/home.yaml#/HomeHoldingRow"
+    HomeReturnsSummary:
+      $ref: "./components/schemas/home.yaml#/HomeReturnsSummary"
+    HomeAllocationSummary:
+      $ref: "./components/schemas/home.yaml#/HomeAllocationSummary"
+    HomeAllocationRow:
+      $ref: "./components/schemas/home.yaml#/HomeAllocationRow"
+    HomeIncomeSummary:
+      $ref: "./components/schemas/home.yaml#/HomeIncomeSummary"
+    HomeIncomeUnassigned:
+      $ref: "./components/schemas/home.yaml#/HomeIncomeUnassigned"
+    HomeBackupsSummary:
+      $ref: "./components/schemas/home.yaml#/HomeBackupsSummary"
     AccountBalance:
       $ref: "./components/schemas/ledger.yaml#/AccountBalance"
     AccountBalancesResponse:
@@ -1114,6 +1166,18 @@ components:
       $ref: "./components/schemas/transactions.yaml#/JournalEntryResponse"
     TransactionResponse:
       $ref: "./components/schemas/transactions.yaml#/TransactionResponse"
+    TransferSide:
+      $ref: "./components/schemas/transactions.yaml#/TransferSide"
+    TransferShape:
+      $ref: "./components/schemas/transactions.yaml#/TransferShape"
+    EditablePosting:
+      $ref: "./components/schemas/transactions.yaml#/EditablePosting"
+    EditableEntry:
+      $ref: "./components/schemas/transactions.yaml#/EditableEntry"
+    ExchangeQuantity:
+      $ref: "./components/schemas/transactions.yaml#/ExchangeQuantity"
+    ExchangeConversion:
+      $ref: "./components/schemas/transactions.yaml#/ExchangeConversion"
     TransactionsResponse:
       $ref: "./components/schemas/transactions.yaml#/TransactionsResponse"
     AccountRegisterEntryResponse:
@@ -1224,6 +1288,12 @@ components:
       $ref: "./components/schemas/imports.yaml#/ImportReconciliationIssue"
     PreviewCommitResponse:
       $ref: "./components/schemas/imports.yaml#/PreviewCommitResponse"
+    ImportMatchChoice:
+      $ref: "./components/schemas/imports.yaml#/ImportMatchChoice"
+    ImportMatchCandidate:
+      $ref: "./components/schemas/imports.yaml#/ImportMatchCandidate"
+    ImportRowMatchReview:
+      $ref: "./components/schemas/imports.yaml#/ImportRowMatchReview"
     ImportProfileResponse:
       $ref: "./components/schemas/imports.yaml#/ImportProfileResponse"
     ListImportProfilesResponse:

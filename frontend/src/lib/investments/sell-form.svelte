@@ -396,15 +396,6 @@
     if (positionMoved && costBasisMethod === 'specific_lot') costBasisMethod = 'fifo';
   });
 
-  function replacementMethodLabel(method: CostBasisMethod): string {
-    switch (method) {
-      case 'fifo': return m.transactions_investment_replace_method_fifo();
-      case 'lifo': return m.transactions_investment_replace_method_lifo();
-      case 'average_cost': return m.transactions_investment_replace_method_average();
-      case 'specific_lot': return m.transactions_investment_replace_method_specific();
-    }
-  }
-
   function formatGain(gain: string, scale: number): string {
     return formatScaledValue(gain, scale, locale);
   }
@@ -592,7 +583,7 @@
       class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"
     >
       {#each availableMethods as method (method)}
-        <option value={method}>{correction ? replacementMethodLabel(method) : costBasisMethodLabel(method)}</option>
+        <option value={method}>{costBasisMethodLabel(method)}</option>
       {/each}
     </select>
     {#if positionMoved}

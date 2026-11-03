@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import { apiJSON } from './support/api';
 import { readyForLedger } from './support/ledger';
 import { todayISO } from './support/dates';
+import { scopedDomTrace } from '../trace-options';
+import { translationLocales } from './support/locales';
 
 test.use({
   viewport: { width: 390, height: 844 },
@@ -11,11 +13,12 @@ test.use({
   // and browser network evidence for this small spec so the next occurrence
   // can distinguish a missing control, actionability wait and lost dialog.
   // Other journeys retain the lighter global trace; trace screenshots stay off.
-  trace: { mode: 'retain-on-failure', snapshots: true, screenshots: false, sources: false }
+  // E2E_FULL_TRACE=1 upgrades every spec, including this one, to a full trace.
+  trace: scopedDomTrace
 });
 function ago(days: number) { const date = new Date(); date.setDate(date.getDate() - days); return todayISO(date); }
 
-for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of translationLocales) {
   const settings = JSON.parse(readFileSync(new URL(`../../frontend/messages/settings/${locale}.json`, import.meta.url), 'utf8'));
   test(`recorded capital-return excess, revisions and unknown results in ${locale} on mobile`, async ({ page }) => {
     const { csrfToken, currencyID } = await readyForLedger(page);
@@ -38,7 +41,7 @@ for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
       effective_on: ago(30), payment_on: ago(20), amount_value: '1000', amount_scale: 2, source_evidence: { reference: suffix, precise: '9007199254740993' } };
     const receipt = await apiJSON<{ transaction: { id: number } }>(page, 'POST', '/api/v1/investments/return-of-capital', csrfToken, receiptTerms);
     await page.evaluate((value) => localStorage.setItem('PARAGLIDE_LOCALE', value), locale);
-    await page.goto(`/app/transactions?transaction_id=${receipt.transaction.id}`);
+    await page.goto(`/app/ledger/transactions?transaction_id=${receipt.transaction.id}`);
     const history = page.getByRole('region', { name: settings.investments_roc_history });
     let card = history.getByRole('article').filter({ hasText: settings.investments_roc_current });
     await expect(card).toContainText(settings.investments_roc_excess);
@@ -70,7 +73,7 @@ for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
     await expect(summary.getByRole('article').filter({ hasText: suffix })).toHaveCount(1);
     await expect(summary.getByRole('article').filter({ hasText: suffix })).toContainText(settings.investments_roc_no_excess);
     await test.step('load the capital-return transaction for reversal', async () => {
-      await page.goto(`/app/transactions?transaction_id=${receipt.transaction.id}`);
+      await page.goto(`/app/ledger/transactions?transaction_id=${receipt.transaction.id}`);
     });
     await test.step('click the capital-return reversal action', async () => {
       await page.getByRole('button', { name: settings.transactions_investment_reverse_capital_return_action, exact: true }).click();
@@ -86,7 +89,7 @@ for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
     await test.step('wait for the capital-return reversal dialog to close', async () => {
       await expect(reversal).toBeHidden();
     });
-    await page.goto(`/app/transactions?transaction_id=${receipt.transaction.id}`);
+    await page.goto(`/app/ledger/transactions?transaction_id=${receipt.transaction.id}`);
     await expect(history.getByRole('article')).toHaveCount(3);
     await expect(history).not.toContainText(settings.investments_roc_current);
 

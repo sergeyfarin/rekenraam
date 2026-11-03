@@ -7,7 +7,7 @@ import { goHomeInApp } from './support/session';
 // #326: run against the production binary, including a fresh document for
 // reload/shared links and real browser history for Back. Filter tweaks must
 // replace the current history entry rather than making extra Back stops.
-async function revisit(page: Page, assertSelection: (page: Page) => Promise<void>, destination = '/app/transactions') {
+async function revisit(page: Page, assertSelection: (page: Page) => Promise<void>, destination = '/app/ledger/transactions') {
   const selectedURL = page.url();
   // Exercise SvelteKit's in-app navigation and popstate restoration too.
   await goHomeInApp(page);
@@ -39,7 +39,7 @@ for (const width of [1280, 390]) {
       const { csrfToken } = await readyForLedger(page);
       const eur = await ensureCurrency(page, csrfToken, 'EUR', 'Euro');
       const usd = await ensureCurrency(page, await csrfTokenFor(page), 'USD', 'US Dollar');
-      await page.goto('/app/budgets?highlight=kept');
+      await page.goto('/app/planning/budgets?highlight=kept');
       await expect(page.getByRole('combobox', { name: 'Currency', exact: true }).getByRole('option', { name: 'USD', exact: true })).toHaveCount(1);
       const historyLength = await page.evaluate(() => history.length);
       await page.getByLabel('Month', { exact: true }).fill('2026-01');
@@ -58,7 +58,7 @@ for (const width of [1280, 390]) {
 
     test('recurring tab survives reload, Back and sharing and Due clears it', async ({ page }) => {
       await readyForLedger(page);
-      await page.goto('/app/recurring?highlight=kept');
+      await page.goto('/app/planning/recurring?highlight=kept');
       await expect(page.getByRole('button', { name: 'Due for review', exact: true })).toHaveAttribute('aria-pressed', 'true');
       const historyLength = await page.evaluate(() => history.length);
       await page.getByRole('button', { name: 'Templates', exact: true }).click();
@@ -87,8 +87,8 @@ for (const width of [1280, 390]) {
             amount_value: '100', amount_scale: 2, memo: description
           });
         }
-        const path = screen === 'register' ? `/app/accounts/${ids.get('checking')}/register`
-          : screen === 'category' ? `/app/categories/${ids.get('groceries')}`
+        const path = screen === 'register' ? `/app/ledger/accounts/${ids.get('checking')}/register`
+          : screen === 'category' ? `/app/ledger/categories/${ids.get('groceries')}`
           : `/app/investments/instruments/${ids.get('REF')}`;
         const requests: URL[] = [];
         const endpoint = screen === 'register' ? `/api/v1/accounts/${ids.get('checking')}/register` : '/api/v1/transactions';
@@ -131,7 +131,7 @@ for (const width of [1280, 390]) {
         const transactions = await apiJSON<{ transactions: Array<{ id: number }> }>(page, 'GET', `/api/v1/transactions?${query}`);
         const linkedID = screen === 'register' ? ids.get('t13') : transactions.transactions[0]?.id;
         expect(linkedID).toBeTruthy();
-        await revisit(page, assertSelection, `/app/transactions?transaction_id=${linkedID}`);
+        await revisit(page, assertSelection, `/app/ledger/transactions?transaction_id=${linkedID}`);
 
         await page.getByLabel('From', { exact: true }).fill('');
         await page.getByLabel('To', { exact: true }).fill('');
@@ -153,7 +153,7 @@ test('budget saves refresh the displayed target for both default and URL-selecte
   const { csrfToken } = await readyForLedger(page);
   const name = `URL budget target ${Date.now()}`;
   await apiJSON(page, 'POST', '/api/v1/categories', csrfToken, { name, category_type: 'expense' });
-  await page.goto('/app/budgets');
+  await page.goto('/app/planning/budgets');
   const form = page.locator('form').filter({ has: page.getByLabel(`Target for ${name}`, { exact: true }) });
   await form.getByLabel(`Target for ${name}`, { exact: true }).fill('12');
   await form.getByRole('button', { name: 'Save', exact: true }).click();
@@ -175,18 +175,18 @@ test('malformed shared selections fall back without sending impossible dates to 
     if (response.url().includes('/api/v1/') && response.status() >= 400) failures.push(response.url());
   });
   for (const path of [
-    '/app/transactions', `/app/accounts/${ids.get('checking')}/register`,
-    `/app/categories/${ids.get('groceries')}`, `/app/investments/instruments/${ids.get('REF')}`
+    '/app/ledger/transactions', `/app/ledger/accounts/${ids.get('checking')}/register`,
+    `/app/ledger/categories/${ids.get('groceries')}`, `/app/investments/instruments/${ids.get('REF')}`
   ]) {
     await page.goto(`${path}?after_date=2026-02-31&before_date=2026-13-01&status=invalid`);
     await expect(page.getByLabel('From', { exact: true })).toHaveValue('');
     await expect(page.getByLabel('To', { exact: true })).toHaveValue('');
     await expect(page.getByRole('row').nth(1)).toBeVisible();
   }
-  await page.goto('/app/budgets?month=2026-13&currency_id=-1');
+  await page.goto('/app/planning/budgets?month=2026-13&currency_id=-1');
   await expect(page.getByLabel('Month', { exact: true })).toHaveValue(/^\d{4}-(0[1-9]|1[0-2])$/);
   await expect(page.getByRole('combobox', { name: 'Currency', exact: true })).not.toHaveValue('0');
-  await page.goto('/app/recurring?tab=unknown');
+  await page.goto('/app/planning/recurring?tab=unknown');
   await expect(page.getByRole('button', { name: 'Due for review', exact: true })).toHaveAttribute('aria-pressed', 'true');
   expect(failures).toEqual([]);
 });

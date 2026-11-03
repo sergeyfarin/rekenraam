@@ -57,7 +57,7 @@ test('an invalidated statement can be reconciled again to the corrected balance'
   });
   expect((await checkpoints()).map((c) => c.status)).toEqual(['invalidated']);
 
-  await page.goto('/app/reconcile');
+  await page.goto('/app/ledger/reconcile');
   await page.getByLabel('Account').selectOption({ label: cash.name });
   await page.getByLabel('Statement closing date').fill(day);
   await page.getByLabel('Statement ending balance').fill('85.00');

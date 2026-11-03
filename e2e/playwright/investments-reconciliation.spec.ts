@@ -72,7 +72,7 @@ test('a backdated buy names the reconciliation it would invalidate, then proceed
 
   // Reconcile the cash account through the statement date. The buy's cash leg
   // is the only posting on it, so the closing balance is the money that left.
-  await page.goto('/app/reconcile');
+  await page.goto('/app/ledger/reconcile');
   await page.getByLabel('Account').selectOption({ label: cash.name });
   await page.getByLabel('Statement closing date').fill(statementDate);
   await page.getByLabel('Statement ending balance').fill('-20.00');

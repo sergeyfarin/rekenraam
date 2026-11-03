@@ -5,6 +5,7 @@ import { todayISO } from './support/dates';
 import { expectNoAccessibilityViolations } from './support/a11y';
 import { readFileSync } from 'node:fs';
 import { test as ownedBookTest } from './support/owned-book';
+import { translationLocales } from './support/locales';
 
 test.use({ viewport: { width: 390, height: 844 } });
 function ago(days:number) { const date=new Date();date.setDate(date.getDate()-days);return todayISO(date); }
@@ -23,7 +24,7 @@ async function setup(page:Page, multipleLots=false) {
 }
 
 async function entry(page:Page,p:Awaited<ReturnType<typeof setup>>,days=30) {
-  await page.goto(`/app/transactions?transaction_id=${p.splitID}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${p.splitID}`);
   await page.getByRole('button',{name:'Record cash in lieu…',exact:true}).click();
   const form=page.getByRole('dialog',{name:'Record cash in lieu',exact:true});
   await expect(form.getByLabel('Disposal date')).toHaveValue(ago(30));
@@ -49,7 +50,7 @@ test('mobile cash in lieu is entered with specific lots, corrected, reversed, an
   await form.getByRole('button',{name:'Record cash in lieu',exact:true}).click();
   const original=await(await posted).json();
   await expect(form).toBeHidden();
-  await page.goto(`/app/transactions?transaction_id=${original.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${original.transaction.id}`);
   await page.getByRole('button',{name:'Correct cash in lieu',exact:true}).click();
   const correction=page.getByRole('dialog',{name:'Correct cash in lieu',exact:true});
   await expect(correction.getByLabel('Fraction disposed')).toHaveValue('0.5');
@@ -62,19 +63,19 @@ test('mobile cash in lieu is entered with specific lots, corrected, reversed, an
   await page.getByRole('alertdialog').getByRole('button',{name:'Accept changed gains'}).click();
   const replacement=await(await replaced).json();
   await expect(correction).toBeHidden();
-  await page.goto(`/app/transactions?transaction_id=${p.splitID}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${p.splitID}`);
   await page.getByRole('button',{name:'Reverse split…',exact:true}).click();
   await page.getByLabel('Reason for reversal').fill('withdraw split');
   await page.getByRole('button',{name:'Review and reverse'}).click();
   await expect(page.getByRole('alertdialog').getByRole('button',{name:'Accept changed gains'})).toBeVisible();
   await page.keyboard.press('Escape');
-  await page.goto(`/app/transactions?transaction_id=${replacement.replacement.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${replacement.replacement.transaction.id}`);
   await page.getByRole('button',{name:'Reverse cash in lieu…',exact:true}).click();
   await page.getByLabel('Reason for reversal').fill('fraction payment withdrawn');
   await page.getByRole('button',{name:'Review and reverse'}).click();
   await page.getByRole('button',{name:'Accept changed gains'}).click();
   await expect(page.getByRole('alertdialog')).toBeHidden();
-  await page.goto(`/app/transactions?transaction_id=${p.splitID}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${p.splitID}`);
   await page.getByRole('button',{name:'Reverse split…',exact:true}).click();
   await page.getByLabel('Reason for reversal').fill('withdraw split');
   await page.getByRole('button',{name:'Review and reverse'}).click();
@@ -117,7 +118,7 @@ test('a specific-lot cash-in-lieu correction changes currency without hidden old
   await form.getByRole('button',{name:'Record cash in lieu',exact:true}).click();
   const original=await(await posted).json();
   await expect(form).toBeHidden();
-  await page.goto(`/app/transactions?transaction_id=${original.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${original.transaction.id}`);
   await page.getByRole('button',{name:'Correct cash in lieu',exact:true}).click();
   const correction=page.getByRole('dialog',{name:'Correct cash in lieu',exact:true});
   await correction.getByLabel('Reason for correction').fill('cash and fraction belong to the other currency position');
@@ -149,7 +150,7 @@ test('a specific-lot cash-in-lieu correction changes currency without hidden old
 
 // The journey ends on the book-wide self-check sample, so it owns its book
 // (#398): no earlier spec's warnings can push the corrected payment out.
-for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of translationLocales) {
   ownedBookTest(`cash-in-lieu parent lineage, warning and correction remain usable in ${locale}`, async ({ page }) => {
     const p = await setup(page);
     const copy = JSON.parse(readFileSync(new URL(`../../frontend/messages/settings/${locale}.json`, import.meta.url), 'utf8')) as Record<string, string>;
@@ -171,15 +172,15 @@ for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
     const context=await apiJSON<{settled_operation_id:number;effective_settled_operation_id:number}>(page,'GET',`/api/v1/investments/transactions/${cash.transaction.id}/trade-correction-context`);
     expect(context.settled_operation_id).toBe(root.root_operation_id);
     expect(context.effective_settled_operation_id).toBe(replaced.operation_id);
-    await page.goto(`/app/transactions?transaction_id=${cash.transaction.id}`);
+    await page.goto(`/app/ledger/transactions?transaction_id=${cash.transaction.id}`);
     await page.getByRole('button',{name:copy.investments_cash_in_lieu_correct,exact:true}).click();
     const form=page.getByRole('dialog',{name:copy.investments_cash_in_lieu_correct,exact:true});
-    await expect(form.getByRole('link',{name:copy.investments_cash_in_lieu_current_parent.replace('{id}',String(replaced.operation_id))})).toHaveAttribute('href',`/app/transactions?transaction_id=${replaced.replacement.id}`);
+    await expect(form.getByRole('link',{name:copy.investments_cash_in_lieu_current_parent.replace('{id}',String(replaced.operation_id))})).toHaveAttribute('href',`/app/ledger/transactions?transaction_id=${replaced.replacement.id}`);
     await page.keyboard.press('Escape');
     const reversePath=`/api/v1/investments/transactions/${replaced.replacement.id}/reverse-split`;
     const reverse=await apiJSON<{gain_impact:{acknowledgement:string}}>(page,'POST',`${reversePath}/reconciliation-impact`,p.csrfToken,{reason:'Withdraw action'});
     await apiJSON(page,'POST',reversePath,p.csrfToken,{reason:'Withdraw action',gain_impact_acknowledgement:reverse.gain_impact.acknowledgement});
-    await page.goto(`/app/transactions?transaction_id=${cash.transaction.id}`);
+    await page.goto(`/app/ledger/transactions?transaction_id=${cash.transaction.id}`);
     await expect(page.getByTestId('investment-attribution-diagnostic')).toContainText(copy.investments_attribution_cash_parent_unresolved);
     await expectNoAccessibilityViolations(page,'cash-in-lieu parent diagnostic');
     await page.getByRole('button',{name:copy.investments_cash_in_lieu_correct,exact:true}).click();
@@ -196,7 +197,7 @@ for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
     await page.getByRole('alertdialog').getByRole('button',{name:copy.investments_gain_impact_confirm,exact:true}).click();
     const corrected=await(await saved).json() as {replacement:{transaction:{id:number}}};
     await expect(page.locator('aside[aria-label]')).toBeHidden();
-    await page.goto(`/app/transactions?transaction_id=${corrected.replacement.transaction.id}`);
+    await page.goto(`/app/ledger/transactions?transaction_id=${corrected.replacement.transaction.id}`);
     await expect(page.getByTestId('investment-attribution-diagnostic')).toContainText(copy.investments_attribution_cash_parent_unresolved);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
     const run=await apiJSON<{results:Array<{check_id:string;warning_count:number;warning_sample:Array<{transaction_id:number;reason:string}>}>}>(page,'POST','/api/v1/maintenance/self-check',p.csrfToken,{});
@@ -208,7 +209,7 @@ for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
 
 // #394: use existing transaction/history discovery, then preview and commit
 // against the exact selected original action in every supported parent family.
-for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of translationLocales) {
   for (const kind of locale === 'en' ? ['split', 'share-exchange', 'spin-off', 'cash-and-stock-merger'] : ['split']) {
     for (const reversed of [false, true]) {
       test(`historical ${kind} ${reversed ? 'reversal' : 'replacement'} admits mobile cash entry in ${locale}`, async ({page}) => {
@@ -243,7 +244,7 @@ for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
           await page.goto(`/app/investments?tab=splits&split_operation_id=${originalID}`);
           await page.getByRole('article').getByRole('button',{name:copy.investments_cash_in_lieu_title,exact:true}).click();
         } else {
-          await page.goto(`/app/transactions?transaction_id=${parentID}`);
+          await page.goto(`/app/ledger/transactions?transaction_id=${parentID}`);
           await page.getByRole('button',{name:copy.investments_cash_in_lieu_entry_action,exact:true}).click();
         }
         const form=page.getByRole('dialog',{name:copy.investments_cash_in_lieu_title,exact:true});
@@ -273,7 +274,7 @@ for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
         expect(source.settled_operation_id).toBe(originalID);
         if(reversed) {
           expect(source.effective_settled_operation_id).toBeFalsy();
-          await page.goto(`/app/transactions?transaction_id=${posted.transaction.id}`);
+          await page.goto(`/app/ledger/transactions?transaction_id=${posted.transaction.id}`);
           await expect(page.getByTestId('investment-attribution-diagnostic')).toContainText(copy.investments_attribution_cash_parent_unresolved);
         }
       });

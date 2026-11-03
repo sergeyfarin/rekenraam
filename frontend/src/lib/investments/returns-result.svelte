@@ -194,7 +194,7 @@
       <ul class="mt-3 space-y-2 text-sm">
         {#each result.attribution_fallbacks as fallback (`${fallback.transaction_id}-${fallback.date}`)}
           <li class="text-foreground">
-            <a href={`/app/transactions?transaction_id=${fallback.transaction_id}`} class="inline-flex min-h-11 items-center font-semibold underline underline-offset-2">{day(fallback.date)}</a>
+            <a href={`/app/ledger/transactions?transaction_id=${fallback.transaction_id}`} class="inline-flex min-h-11 items-center font-semibold underline underline-offset-2">{day(fallback.date)}</a>
             · {fallbackReasonText(fallback.reason)}
             · {fallback.counted ? m.returns_fallback_counted() : m.returns_fallback_not_counted()}
           </li>

@@ -98,7 +98,7 @@ test('a cash-and-stock merger previews the realized and carried basis and the de
   const listed = await apiJSON<{ lots: Array<{ source_transaction_id: number; remaining_quantity_value: string }> }>(
     page, 'GET', `/api/v1/investments/lots?account_id=${s.acquirer.holdingID}&commodity_id=${s.acquirer.commodity_id}`);
   expect(listed.lots.map((lot) => lot.remaining_quantity_value)).toEqual(['5']);
-  await page.goto(`/app/transactions?transaction_id=${listed.lots[0].source_transaction_id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${listed.lots[0].source_transaction_id}`);
   const detail = page.getByRole('group', { name: 'Cash-and-stock merger' });
   await expect(detail).toContainText(`${s.target.name} merged into ${s.acquirer.name} (1 new for 2 old)`);
   await expect(detail).toContainText(`Cash to ${s.cashName}`);
@@ -122,7 +122,7 @@ test('correcting a merger election restates its cash result on mobile', async ({
   await s.buy(40, '10', '10000');
   const merged = await s.merger();
 
-  await page.goto(`/app/transactions?transaction_id=${merged.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${merged.transaction.id}`);
   const detail = page.getByRole('group', { name: 'Cash-and-stock merger' });
   await detail.getByRole('button', { name: 'Correct merger…' }).click();
   const form = page.getByRole('dialog', { name: 'Correct this merger' });
@@ -156,7 +156,7 @@ test('reversing a merger whose new units were sold is refused with a translated 
   const merged = await s.merger();
   await s.sellNew(5, '2', '5000');
 
-  await page.goto(`/app/transactions?transaction_id=${merged.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${merged.transaction.id}`);
   await page.getByRole('button', { name: 'Reverse merger…' }).click();
   await page.getByLabel('Reason for reversal').fill('no merger happened');
   await page.getByRole('button', { name: 'Review and reverse' }).click();
@@ -168,7 +168,7 @@ test('reversing an unsold merger returns the old lot and removes the cash result
   await s.buy(40, '10', '10000');
   const merged = await s.merger();
 
-  await page.goto(`/app/transactions?transaction_id=${merged.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${merged.transaction.id}`);
   await page.getByRole('button', { name: 'Reverse merger…' }).click();
   await page.getByLabel('Reason for reversal').fill('no merger happened');
   await page.getByRole('button', { name: 'Review and reverse' }).click();
@@ -203,7 +203,7 @@ test('a merger correction of the reference preserves exact unedited source evide
     source_evidence: { reference: 'offer document', revision: 'EXACT:9007199254740993' }
   }));
   const merger = JSON.parse(created) as { transaction: { id: number } };
-  await page.goto(`/app/transactions?transaction_id=${merger.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${merger.transaction.id}`);
   await page.getByRole('group', { name: 'Cash-and-stock merger' }).getByRole('button', { name: 'Correct merger…' }).click();
   const form = page.getByRole('dialog', { name: 'Correct this merger' });
   await expect(form.getByLabel('Broker or statement reference')).toHaveValue('offer document');

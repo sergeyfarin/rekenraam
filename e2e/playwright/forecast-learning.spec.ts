@@ -73,7 +73,7 @@ test('[acceptance] estimated spending is opt-in, explained and reversible', asyn
   // estimates changes nothing, not an absolute transaction count.
   const ledgerBefore = await apiJSON<{ transactions: unknown[] }>(page, 'GET', '/api/v1/transactions?limit=200');
 
-  const base = `/app/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false`;
+  const base = `/app/planning/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false`;
   await page.goto(base);
   await expect(page.getByRole('heading', { name: 'Forecast', exact: true })).toBeVisible();
 
@@ -152,7 +152,7 @@ test('[acceptance] a category without enough history says why', async ({ page })
 
   await postPurchase(page, daysFromTodayISO(-10), account.id, groceries.id, currencyID, '4000');
 
-  const url = `/app/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false`
+  const url = `/app/planning/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false`
     + `&spending_model=adaptive_v1&history_complete_from=${mondayWeeksAgo(3)}`;
   await page.goto(url);
 
@@ -179,7 +179,7 @@ test('[acceptance] a seasonal request explains the 36-month requirement', async 
     await postPurchase(page, weekdayWeeksAgo(week, 2), account.id, groceries.id, currencyID, '6000');
   }
 
-  const url = `/app/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false`
+  const url = `/app/planning/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false`
     + `&spending_model=adaptive_v1&history_complete_from=${mondayWeeksAgo(20)}`
     + `&expense_category_id=${groceries.id}&expense_pattern=${groceries.id}:annual_seasonal`;
   await page.goto(url);
@@ -193,7 +193,7 @@ test('[acceptance] a seasonal request explains the 36-month requirement', async 
 test('[acceptance] a malformed learned-spending URL is rejected, not ignored', async ({ page }) => {
   await readyForLedger(page);
   // A model parameter without the model would silently do nothing if accepted.
-  await page.goto('/app/forecast?horizon_days=30&history_complete_from=2024-01-01');
+  await page.goto('/app/planning/forecast?horizon_days=30&history_complete_from=2024-01-01');
   await expect(page.getByText('These forecast filters are invalid', { exact: false })).toBeVisible();
 });
 
@@ -204,7 +204,7 @@ test('[acceptance] impossible forecast history links never request a forecast; c
   page.on('request', (request) => {
     if (new URL(request.url()).pathname.startsWith('/api/v1/forecasts/')) forecastRequests.push(request.url());
   });
-  const historyLink = (date: string) => `/app/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false`
+  const historyLink = (date: string) => `/app/planning/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false`
     + `&spending_model=adaptive_v1&history_complete_from=${date}`;
 
   for (const date of ['2026-02-31', '2026-02-29', '2026-04-31', '2026-13-01']) {

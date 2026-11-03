@@ -104,10 +104,10 @@ test('a split adjustment is labelled and correcting the split revises the later 
   await s.trade('sell', 5, '10', '10000'); // FIFO: 10 of 20 split shares, basis 50.00, gain 50.00
   await s.trade('buy', 25, '2', '2000'); // entitled to the split: an adjustment of +2
 
-  await page.goto(`/app/accounts/${s.holdingID}/register`);
+  await page.goto(`/app/ledger/accounts/${s.holdingID}/register`);
   await expect(page.getByText('Split adjustment')).toBeVisible();
 
-  await page.goto(`/app/transactions?transaction_id=${split.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${split.transaction.id}`);
   await page.getByRole('button', { name: 'Correct split…' }).click();
   const form = page.getByRole('dialog', { name: 'Correct this split' });
   await expect(form.getByLabel('New shares')).toHaveValue('2');
@@ -132,7 +132,7 @@ test('reversing a split a later sale depends on is refused with a translated rea
   const split = await s.split(20, 2, 1);
   await s.trade('sell', 5, '15', '15000'); // only possible after the split
 
-  await page.goto(`/app/transactions?transaction_id=${split.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${split.transaction.id}`);
   await page.getByRole('button', { name: 'Reverse split…' }).click();
   await page.getByLabel('Reason for reversal').fill('no split happened');
   await page.getByRole('button', { name: 'Review and reverse' }).click();
@@ -156,7 +156,7 @@ test('an empty holding records a zero-delta split and a later backdated acquisit
   expect(saved.transaction).toBeNull();
   expect(saved.operation_id).toBeGreaterThan(0);
   await s.trade('buy', 30, '10', '10000');
-  await page.goto(`/app/accounts/${s.holdingID}/register`);
+  await page.goto(`/app/ledger/accounts/${s.holdingID}/register`);
   await expect(page.getByText('Split adjustment')).toBeVisible();
 });
 
@@ -200,7 +200,7 @@ test('a journal-free split is inspected, corrected, settled and reversed by oper
   await expect(settlement).toBeHidden();
   await expect(active.getByRole('button', { name: 'Reverse split…' })).toBeEnabled();
   const cash = await (await posted).json();
-  await page.goto(`/app/transactions?transaction_id=${cash.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${cash.transaction.id}`);
   await page.getByRole('button', {name:'Correct cash in lieu',exact:true}).click();
   const cashCorrection=page.getByRole('dialog',{name:'Correct cash in lieu',exact:true});
   await cashCorrection.getByLabel('Reason for correction').fill('broker proceeds revised');
@@ -213,7 +213,7 @@ test('a journal-free split is inspected, corrected, settled and reversed by oper
   await page.getByRole('button',{name:'Accept changed gains'}).click();
   const corrected=await(await correctedResponse).json();
   await expect(cashCorrection).toBeHidden();
-  await page.goto(`/app/transactions?transaction_id=${corrected.replacement.transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${corrected.replacement.transaction.id}`);
   await page.getByRole('button', { name: 'Reverse cash in lieu…', exact: true }).click();
   await page.getByLabel('Reason for reversal').fill('fraction payment withdrawn');
   await page.getByRole('button', { name: 'Review and reverse' }).click();
@@ -243,7 +243,7 @@ test('a split ratio correction preserves exact unedited source evidence', async 
     source_evidence: { reference: 'issuer notice', revision: 'EXACT:9007199254740993', nested: { rate: 'EXACT:0.1000000000000000055511151231257827' } }
   }));
   const transactionID = (JSON.parse(created) as { transaction: { id: number } }).transaction.id;
-  await page.goto(`/app/transactions?transaction_id=${transactionID}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${transactionID}`);
   await page.getByRole('button', { name: 'Correct split…' }).click();
   const form = page.getByRole('dialog', { name: 'Correct this split' });
   await expect(form.getByLabel('Broker or statement reference')).toHaveValue('issuer notice');

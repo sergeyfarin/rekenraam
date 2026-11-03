@@ -47,7 +47,7 @@ test('crypto instrument, holding, explicit quotes and CSV lots work on a phone',
   await page.getByRole('button', { name: 'Disable quotes', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Disable quotes', exact: true })).toHaveCount(0);
 
-  await page.goto('/app/import');
+  await page.goto('/app/ledger/import');
   await page.getByLabel('Crypto CSV', { exact: true }).check();
   await page.getByRole('combobox', { name: 'Holding account', exact: true }).selectOption(String(holding.id));
   await page.getByRole('combobox', { name: 'Cash account', exact: true }).selectOption(String(cash.id));

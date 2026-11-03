@@ -8,6 +8,7 @@
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import RefreshCw from '@lucide/svelte/icons/refresh-cw';
   import { attentionQueryKey, attentionQueryOptions } from '#lib/api/attention.ts';
+  import { homeQueryKey } from '#lib/api/home.ts';
   import { provideAttention } from '#lib/attention/context.ts';
   import { attentionSummary, sourceBadge } from '#lib/attention/model.ts';
   import { getLocale } from '#lib/paraglide/runtime.js';
@@ -15,7 +16,9 @@
   import PageHeader from '#lib/components/page-header.svelte';
   import Panel from '#lib/components/panel.svelte';
   import AppHeader from '#lib/navigation/app-header.svelte';
-  import { canonicalURL, routeFor, routes, sectionFor } from '#lib/navigation/routes.ts';
+  import KeyboardHelp from '#lib/navigation/keyboard-help.svelte';
+  import TransactionEntryDialog from '#lib/transactions/transaction-entry-dialog.svelte';
+  import { canonicalURL, routeFor, routes, sectionFor, type PageWidth } from '#lib/navigation/routes.ts';
   import { authSessionQueryOptions, logout } from '#lib/api/auth.ts';
   import { setupStatusQueryOptions } from '#lib/api/setup.ts';
   import { APIClientError } from '#lib/api/client.ts';
@@ -81,17 +84,21 @@
   });
   // Settings pages share one heading; the side list beside it names the page.
   const heading = $derived(entry?.section === 'settings' ? m.settings_title() : pageTitle);
+  // The column narrows from the shell's left edge rather than re-centring, so
+  // header, tab row and page keep one left edge at every width (#459).
+  const widths: Record<PageWidth, string> = { narrow: 'max-w-[45rem]', standard: 'max-w-[75rem]', fluid: '' };
 
   const attention = createQuery(() => ({ ...attentionQueryOptions(), enabled: shellState === 'ready' && !shouldRedirectHome }));
   provideAttention(() => attention);
   const queryClient = useQueryClient();
-  // Refetch the shared count after successful API writes, including commands
+  // Refetch the shared count and Home's summaries after successful API writes, including commands
   // implemented with async handlers rather than TanStack mutations.
   onMount(() => {
     const middleware: Middleware = {
       onResponse({ request, response }) {
         if (response.ok && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
           void queryClient.invalidateQueries({ queryKey: attentionQueryKey });
+          void queryClient.invalidateQueries({ queryKey: homeQueryKey });
         }
       }
     };
@@ -187,9 +194,19 @@
   />
 
   <main id="main-content" tabindex="-1" class="mx-auto max-w-[100rem] px-4 pb-10 pt-5 outline-none sm:px-6 lg:px-8">
-    {#if !entry?.ownHeader}
-      <PageHeader title={heading} />
-    {/if}
-    {@render children()}
+    <div class={widths[entry?.width ?? 'fluid']} data-page-width={entry?.width ?? 'fluid'}>
+      {#if !entry?.ownHeader}
+        <PageHeader title={heading} />
+      {/if}
+      {@render children()}
+    </div>
   </main>
+  <KeyboardHelp />
+{/if}
+
+<!-- Outside the shell's states: a failed background session or setup refresh
+     swaps the page for the shell error, but must not discard an unsaved entry
+     (#477). Signing out does. -->
+{#if !shouldRedirectHome}
+  <TransactionEntryDialog />
 {/if}

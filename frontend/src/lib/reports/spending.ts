@@ -253,5 +253,5 @@ export function spendingDrillDownHref(
   mode: SpendingMode
 ): string | undefined {
   const params = spendingDrillDownQuery(row, groupBy, mode);
-  return params ? `/app/transactions?${params.toString()}` : undefined;
+  return params ? `/app/ledger/transactions?${params.toString()}` : undefined;
 }

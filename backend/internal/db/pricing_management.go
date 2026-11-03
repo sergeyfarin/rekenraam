@@ -34,9 +34,11 @@ type PricingWorkspaceRecord struct {
 // silently capped observation list. One read transaction keeps pair discovery
 // and candidates together; no provider or durable write participates.
 //
-// visitCurrencyPosting folds posted currency amounts without materializing the
-// ledger. It runs inside this snapshot and must not perform database I/O.
-func (r *PricingRepository) PriceManagementSnapshot(ctx context.Context, bookID int64, asOf string, fxBaseID int64, visitCurrencyPosting func(LedgerAccountRecord, LedgerPostingRecord), boundaries ...ObservationBoundary) (PricingWorkspaceRecord, error) {
+// visitPosting folds posted amounts, currency and otherwise, without
+// materializing the ledger: an unpriced instrument balance is an exposure as
+// much as a foreign-currency one. It runs inside this snapshot and must not
+// perform database I/O.
+func (r *PricingRepository) PriceManagementSnapshot(ctx context.Context, bookID int64, asOf string, fxBaseID int64, visitPosting func(LedgerAccountRecord, LedgerPostingRecord), boundaries ...ObservationBoundary) (PricingWorkspaceRecord, error) {
 	result := PricingWorkspaceRecord{Commodities: []PricingCommodityRecord{}, Pairs: []PricingPairRecord{}, Candidates: []PriceObservationRecord{}}
 	boundary, err := r.observationBoundary(ctx, bookID, boundaries)
 	if err != nil {
@@ -49,8 +51,8 @@ func (r *PricingRepository) PriceManagementSnapshot(ctx context.Context, bookID 
 		return result, fmt.Errorf("begin price workspace: %w", err)
 	}
 	defer rollbackTx(ctx, tx)
-	if visitCurrencyPosting != nil {
-		if err := streamPricingCurrencyPostings(ctx, tx, bookID, asOf, visitCurrencyPosting); err != nil {
+	if visitPosting != nil {
+		if err := streamPricingPostings(ctx, tx, bookID, asOf, visitPosting); err != nil {
 			return result, err
 		}
 	}
@@ -153,7 +155,7 @@ func (r *PricingRepository) PriceManagementSnapshot(ctx context.Context, bookID 
 // LedgerAccountsAsOf. Status is deliberately left to the consumer: closure
 // does not erase a balance. Current versions, entry dates and deletion follow
 // LedgerPostingsThrough; coefficients never enter SQLite SUM or a float.
-func streamPricingCurrencyPostings(ctx context.Context, tx *sql.Tx, bookID int64, asOf string, visit func(LedgerAccountRecord, LedgerPostingRecord)) error {
+func streamPricingPostings(ctx context.Context, tx *sql.Tx, bookID int64, asOf string, visit func(LedgerAccountRecord, LedgerPostingRecord)) error {
 	rows, err := tx.QueryContext(ctx, `
 		SELECT a.id, av.account_class, a.system_role,
 			pv.commodity_id, pv.quantity_value, pv.quantity_scale
@@ -168,10 +170,10 @@ func streamPricingCurrencyPostings(ctx context.Context, tx *sql.Tx, bookID int64
 			WHERE candidate.account_id = a.id AND candidate.effective_from <= ?
 			ORDER BY candidate.effective_from DESC, candidate.version_seq DESC LIMIT 1)
 		WHERE tv.book_id = ? AND tv.status = 'posted' AND t.deleted_at IS NULL
-			AND je.entry_date <= ? AND c.kind = 'currency'
+			AND je.entry_date <= ?
 	`, asOf, bookID, asOf)
 	if err != nil {
-		return fmt.Errorf("read pricing currency postings: %w", err)
+		return fmt.Errorf("read pricing postings: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -179,13 +181,13 @@ func streamPricingCurrencyPostings(ctx context.Context, tx *sql.Tx, bookID int64
 		var posting LedgerPostingRecord
 		if err := rows.Scan(&account.ID, &account.AccountClass, &account.SystemRole,
 			&posting.CommodityID, &posting.QuantityValue, &posting.QuantityScale); err != nil {
-			return fmt.Errorf("scan pricing currency posting: %w", err)
+			return fmt.Errorf("scan pricing posting: %w", err)
 		}
 		posting.AccountID = account.ID
 		visit(account, posting)
 	}
 	if err := rows.Err(); err != nil {
-		return fmt.Errorf("iterate pricing currency postings: %w", err)
+		return fmt.Errorf("iterate pricing postings: %w", err)
 	}
 	return nil
 }

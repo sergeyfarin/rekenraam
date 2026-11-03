@@ -140,6 +140,48 @@ func TestValuationRefusesAStaleQuoteAcrossConflictingSplits(t *testing.T) {
 // selected observation directly, not through RateTable, under the same rule.
 // As of 02-03 the 01-31 quote prices pre-split units: 20 × 100 / 2 = 1,000
 // against the 1,000 basis. As of 02-04 the post-split quote, 50, is fresh.
+// Prices judges a pair by what valuation can do with it, not by age alone: a
+// recent quote across a day the holdings disagree on prices unknown units,
+// so Home's "needs a price" link must still list it.
+func TestPricingCoverageRefusesARecentQuoteAcrossConflictingSplits(t *testing.T) {
+	t.Parallel()
+	f := newReturnsFixture(t)
+	_, err := f.database.Exec(`UPDATE books SET default_currency_commodity_id=? WHERE id=1`, f.eurCommodityID)
+	require.NoError(t, err)
+	second := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
+	for holding, ratio := range map[int64]int64{f.holdingAccountID: 2, second: 3} {
+		input := splitInput(f.investmentsTestFixture, "2026-02-02", ratio, 1)
+		input.HoldingAccountID = holding
+		_, err := acknowledgedSplit(context.Background(), f.investmentService, input)
+		require.NoError(t, err)
+	}
+
+	stock := func(asOf string) PricingCoverage {
+		t.Helper()
+		workspace, err := f.pricing.Workspace(context.Background(), asOf)
+		require.NoError(t, err)
+		for _, coverage := range workspace.Coverage {
+			if coverage.BaseCommodityID == f.stockCommodityID && coverage.QuoteCommodityID == f.eurCommodityID {
+				return coverage
+			}
+		}
+		t.Fatalf("no stock coverage on %s: %+v", asOf, workspace.Coverage)
+		return PricingCoverage{}
+	}
+	before := stock("2026-02-01")
+	require.Equal(t, "usable", before.Status, "before the split day the quote is current")
+
+	across := stock("2026-02-03")
+	require.NotNil(t, across.AgeDays)
+	require.LessOrEqual(t, *across.AgeDays, DefaultPricingStalenessDays, "recent enough by age alone")
+	require.Equal(t, "missing", across.Status)
+	require.Equal(t, RateMissingConflictingSplits, across.Reason)
+	require.NotNil(t, across.Observation, "the quote stays visible with why it cannot be used")
+
+	f.price(t, "2026-02-04", 5000)
+	require.Equal(t, "usable", stock("2026-02-04").Status, "a quote after the split day is unaffected")
+}
+
 func TestUnrealizedGainsRescaleAStalePreSplitQuote(t *testing.T) {
 	t.Parallel()
 	f := splitValuationFixture(t)

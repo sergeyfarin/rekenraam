@@ -133,7 +133,7 @@ func TestPersonalAccessTokenAPIReadScopesAndDefaultDeny(t *testing.T) {
 		{"GET", "/api/v1/auth/session"}, {"GET", "/api/v1/auth/events"}, {"GET", "/api/v1/auth/mfa"},
 		{"GET", "/api/v1/auth/tokens"}, {"POST", "/api/v1/auth/tokens"}, {"DELETE", "/api/v1/auth/tokens/1"},
 		{"GET", "/api/v1/settings/preferences"}, {"GET", "/api/v1/setup/status"}, {"POST", "/api/v1/auth/login"},
-		{"GET", "/api/v1/attention"}, {"GET", "/api/v1/maintenance/backups"}, {"GET", "/api/v1/exports/bundle.zip"}, {"GET", "/api/v1/investments/positions"},
+		{"GET", "/api/v1/attention"}, {"GET", "/api/v1/home"}, {"GET", "/api/v1/maintenance/backups"}, {"GET", "/api/v1/exports/bundle.zip"}, {"GET", "/api/v1/investments/positions"},
 		{"POST", "/api/v1/transactions"}, {"PATCH", fmt.Sprintf("/api/v1/transactions/%d", transaction.ID)},
 		{"POST", fmt.Sprintf("/api/v1/transactions/%d/void", transaction.ID)}, {"DELETE", fmt.Sprintf("/api/v1/transactions/%d", transaction.ID)},
 		{"GET", "/api/v1/accounts/1/register/extra"}, {"GET", "/api/v1/not-added-yet"},

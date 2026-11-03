@@ -163,7 +163,7 @@ test('a spending row drills down to exactly its transactions', async ({ page }) 
   await page.getByRole('link', { name: 'Groceries' }).first().click();
 
   // The link carries the report's own semantics, not just its dates.
-  await expect(page).toHaveURL(/\/app\/transactions\?/);
+  await expect(page).toHaveURL(/\/app\/ledger\/transactions\?/);
   await expect(page).toHaveURL(/date_basis=entry/);
   await expect(page).toHaveURL(/status=posted/);
   await expect(page).toHaveURL(new RegExp(`category_id=${category('expense_food_groceries')}`));

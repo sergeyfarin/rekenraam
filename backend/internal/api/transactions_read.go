@@ -48,7 +48,14 @@ func readTransaction(logger *slog.Logger, authService *app.AuthService, transact
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toTransactionResponse(transaction))
+		conversion, err := transactionService.ExchangeConversion(r.Context(), transaction)
+		if err != nil {
+			writeTransactionServiceError(w, r, logger, "read exchange conversion", err)
+			return
+		}
+		response := toTransactionResponse(transaction)
+		response.ExchangeConversion = toExchangeConversionResponse(conversion)
+		writeJSON(w, http.StatusOK, response)
 	}
 }
 

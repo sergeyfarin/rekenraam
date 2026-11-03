@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatExactMoney, formatQuantity, formatMoney, formatRatio, joinCommodityAmount } from './format';
+import { formatExactMoney, formatHomeMoney, formatQuantity, formatMoney, formatRatio, joinCommodityAmount } from './format';
 import { divideAmountsForDisplay, formatLedgerAmount, parseDecimalAmount } from './amount';
 
 describe('formatQuantity', () => {
@@ -236,5 +236,39 @@ describe('hide amounts (#456)', () => {
       }
     } finally { amountPrivacy.hidden = false; }
     expect(formatQuantity('12345', 2, 'en')).toBe('123.45');
+  });
+});
+
+describe('Home rounding (#476)', () => {
+  it.each([
+    ['5675000', 2, '56,750'],
+    ['61249', 2, '612'],
+    ['61250', 2, '613'],
+    ['-61250', 2, '-613'],
+    ['10000', 2, '100'],
+    ['9640', 2, '96.40'],
+    ['9999', 2, '99.99'],
+    ['99995', 3, '100'],
+    ['-9640', 2, '-96.40'],
+    ['0', 2, '0.00']
+  ])('%s at scale %i shows %s', (value, scale, expected) => {
+    expect(formatHomeMoney(value, scale, 2, 'en-US')).toBe(expected);
+  });
+
+  it.each([
+    ['en', '56,750', '96.40'],
+    ['de', '56.750', '96,40'],
+    ['nl', '56.750', '96,40'],
+    ['fr', '56 750', '96,40'],
+    ['es', '56.750', '96,40'],
+    ['ru', '56 750', '96,40']
+  ])('follows %s separators', (locale, large, small) => {
+    expect(formatHomeMoney('5675000', 2, 2, locale)).toBe(large);
+    expect(formatHomeMoney('9640', 2, 2, locale)).toBe(small);
+  });
+
+  it('keeps a zero-scale currency whole', () => {
+    expect(formatHomeMoney('1234', 0, 0, 'en-US')).toBe('1,234');
+    expect(formatHomeMoney('96', 0, 0, 'en-US')).toBe('96');
   });
 });

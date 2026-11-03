@@ -52,7 +52,7 @@ test('reordering on the main list applies in every account both entries share', 
   const coffee = await s.create(`Coffee ${s.suffix}`, [s.posting(s.checking.id, '-300'), s.posting(s.category.id, '300')]);
   const salary = await s.create(`Salary ${s.suffix}`, [s.posting(s.savings.id, '-5000'), s.posting(s.checking.id, '5000')], 'transfer');
 
-  await page.goto(`/app/transactions?account_id=${s.checking.id}`);
+  await page.goto(`/app/ledger/transactions?account_id=${s.checking.id}`);
   await expect(row(page, `Salary ${s.suffix}`)).toBeVisible();
   // Off by default: no arrows until the mode starts.
   await expect(page.getByRole('button', { name: 'Move earlier in the day' })).toHaveCount(0);
@@ -72,7 +72,7 @@ test('only in this account reorders one register and leaves the other', async ({
   const first = await s.create(`Transfer one ${s.suffix}`, [s.posting(s.checking.id, '-1000'), s.posting(s.savings.id, '1000')], 'transfer');
   const second = await s.create(`Transfer two ${s.suffix}`, [s.posting(s.checking.id, '-2000'), s.posting(s.savings.id, '2000')], 'transfer');
 
-  await page.goto(`/app/accounts/${s.savings.id}/register`);
+  await page.goto(`/app/ledger/accounts/${s.savings.id}/register`);
   await page.getByRole('button', { name: 'Reorder' }).click();
   await page.getByLabel('Only in this account').check();
   await expect(page.getByText('Other screens keep their order.')).toBeVisible();
@@ -87,7 +87,7 @@ test('reordering in a category applies in the account both entries share', async
   const bread = await s.create(`Bread ${s.suffix}`, [s.posting(s.checking.id, '-250'), s.posting(s.category.id, '250')]);
   const milk = await s.create(`Milk ${s.suffix}`, [s.posting(s.checking.id, '-120'), s.posting(s.category.id, '120')]);
 
-  await page.goto(`/app/categories/${s.category.id}`);
+  await page.goto(`/app/ledger/categories/${s.category.id}`);
   await page.getByRole('button', { name: 'Reorder' }).click();
   const later = row(page, `Bread ${s.suffix}`).getByRole('button', { name: 'Move later in the day' });
   await expect(later).toBeVisible();
@@ -115,7 +115,7 @@ test('each posting of a split is its own register row and moves alone', async ({
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
 
-  await page.goto(`/app/accounts/${s.checking.id}/register`);
+  await page.goto(`/app/ledger/accounts/${s.checking.id}/register`);
   const rows = page.getByRole('row').filter({ hasText: `Split ${s.suffix}` });
   await expect(rows).toHaveCount(3);
   for (const amount of ['1.01', '2.02', '4.04']) await expect(rows.filter({ hasText: amount })).toHaveCount(1);

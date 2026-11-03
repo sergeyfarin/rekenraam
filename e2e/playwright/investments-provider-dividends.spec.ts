@@ -58,7 +58,7 @@ test('[acceptance] a provider dividend is reviewed, completed and posted through
   await page.goto('/app/investments');
   await page.getByRole('link', { name: /^Suggestions/ }).click();
   await page.getByRole('button', { name: 'Check provider dividends', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Dividend check queued for listings:');
+  await expect(page.getByRole('status').filter({ hasText: 'Dividend check queued for listings:' })).toBeVisible();
 
   const card = page.getByTestId('event-suggestion').filter({ hasText: name });
   await expect(card).toBeVisible({ timeout: 30_000 });
@@ -181,7 +181,7 @@ test('a repaired dividend shows source mismatch and keeps its original provider 
     reason: 'Different payer on statement', replacement: { transaction_date: s.paymentDate, commodity_id: other.commodity_id,
       cash_account_id: s.cash.id, cash_commodity_id: s.currencyID, income_account_id: s.income.id, amount_value: '480', amount_scale: 2 }
   });
-  await page.goto(`/app/transactions?transaction_id=${replacement.replacement_transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${replacement.replacement_transaction.id}`);
   await expect(page.getByTestId('investment-attribution-diagnostic')).toContainText('These details differ from the linked provider evidence');
   await expectNoAccessibilityViolations(page, 'dividend source mismatch');
   await page.getByRole('button', { name: 'Correct dividend…', exact: true }).click();
@@ -192,7 +192,7 @@ test('a repaired dividend shows source mismatch and keeps its original provider 
   await form.getByRole('button', { name: 'Review and replace', exact: true }).click();
   const cleared = await (await saved).json() as { replacement_transaction: { id: number } };
   await expect(form).toBeHidden();
-  await page.goto(`/app/transactions?transaction_id=${cleared.replacement_transaction.id}`);
+  await page.goto(`/app/ledger/transactions?transaction_id=${cleared.replacement_transaction.id}`);
   await expect(page.getByTestId('investment-attribution-diagnostic')).toContainText('Some attribution context is missing');
   await expect(page.getByTestId('investment-attribution-diagnostic')).not.toContainText('These details differ');
   await page.goto('/app/investments');
@@ -200,7 +200,7 @@ test('a repaired dividend shows source mismatch and keeps its original provider 
   const history = page.getByRole('listitem').filter({ hasText: s.name }).filter({ hasText: 'Accepted' });
   await expect(history.getByTestId('settled-event-evidence')).toContainText('Announced per share');
   await expect(history.getByTestId('settled-event-evidence')).toContainText('0.5');
-  await expect(history.locator(`a[href="/app/transactions?transaction_id=${accepted.generated_transaction_id}"]`)).toBeVisible();
+  await expect(history.locator(`a[href="/app/ledger/transactions?transaction_id=${accepted.generated_transaction_id}"]`)).toBeVisible();
   await expect(history).not.toContainText('Different payer');
   const coverage = await apiJSON<{ unassigned: Array<{ transaction_id: number; cash: { value: string; scale: number } }> }>(page, 'GET', '/api/v1/investments/income-coverage');
   const item = coverage.unassigned.find(row => row.transaction_id === cleared.replacement_transaction.id)!;
