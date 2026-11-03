@@ -40,7 +40,10 @@ shows that a thin Wails host can reuse the same Go handler, SQLite file and
 Svelte UI. A local-data desktop edition is technically credible, but it adds
 per-OS packaging, signing, updates, WebView differences and support. It should
 continue through the existing demand/spike/ADR gates; it should not fork the
-ledger or create a second business API.
+ledger or create a second business API. Current product requirements still say
+native desktop is out of scope, so shipping it would require an ADR that
+changes that scope; "pursued" here means continuing the gated path, not making
+a release promise.
 
 **Treat hosted service as a separate business decision.** Managed single-tenant
 hosting is the least risky hosted experiment and could reuse the same binary and
