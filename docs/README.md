@@ -205,8 +205,12 @@ revalidates Go against Python, Rust, TypeScript and other options, and records
 the conditions that would justify a revisit.
 [2026-11-03 CI and test performance profile](reviews/ci-test-performance-profile-2026-11-03.md)
 measures the current CI/test path and finds native SQLite and browser work
-dominant, not Go-language overhead. Both are analysis only; the current Go,
-SvelteKit and SQLite decisions remain in force.
+dominant, not Go-language overhead.
+Frontend framework choice:
+[2026-11-03 frontend framework review](reviews/frontend-framework-choice-review-2026-11-03.md)
+revalidates SvelteKit/Svelte against React, Vue, Solid, Angular and other
+options for the static, embedded browser UI. All three are analysis only; the
+current Go, SvelteKit and SQLite decisions remain in force.
 
 - [R18 reporting policy](plans/investment-reporting-plan.md) — live observation selection (#203), named basis/valuation profiles, research recommendations and delivery slices (#118, #230–#235).
 - [R13 returns contract](plans/investment-returns-plan.md) — returns_v1: portfolio boundary, position-anchored flow classification, TTWROR/IRR equations, failure states, expected cases and slices (#119).

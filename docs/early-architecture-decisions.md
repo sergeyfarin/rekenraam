@@ -38,7 +38,9 @@ The [2026-11-03 language choice review](reviews/language-choice-review-2026-11-0
 and [CI/test performance profile](reviews/ci-test-performance-profile-2026-11-03.md)
 revalidated this choice. Current backend time is dominated by native SQLite,
 and current CI time by browser/accessibility work; neither is Go-language
-overhead. The reviews do not change this runtime shape.
+overhead. The [frontend framework review](reviews/frontend-framework-choice-review-2026-11-03.md)
+also revalidated SvelteKit for the same static, embedded UI shape. The reviews
+do not change this runtime shape.
 
 ## Database And Migrations
 
