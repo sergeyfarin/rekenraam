@@ -1,9 +1,15 @@
 @import "tailwindcss";
+/* Fonts ship with the app (OFL-1.1, bundled from npm): no font CDN is ever contacted.
+   Each file declares unicode-range subsets, so browsers fetch only the scripts a page uses. */
+@import "@fontsource-variable/inter";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/ibm-plex-mono/600.css";
 
 :root {
   color-scheme: light;
 
-  --font-sans: "Inter Variable", "Inter", "IBM Plex Sans", "Segoe UI", sans-serif;
+  --font-sans: "Inter Variable", "Segoe UI", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", "SFMono-Regular", "SF Mono", monospace;
 
   --color-background: oklch(0.976 0.009 108);
