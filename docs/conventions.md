@@ -792,6 +792,7 @@ has actual installations, its migration files are immutable.
   workflows do not create tags or publish releases; actual publication needs
   explicit owner instruction and installed-release migration safeguards.
 - The codebase is destined for public open-source release (AGPL-3.0, per `docs/product-requirements.md`). Treat the repository and its full git history as public: never commit secrets, real credentials, personal data, or real financial records — including in test fixtures, docs examples, and `.archive/`. Test values must be obviously fake.
+- No third-party runtime resources. The app, the public website and design mockups load fonts, icons, images, scripts and styles only from files in this repository or the npm lockfile, never from Google Fonts, CDNs or other hosts: a finance app must not tell a third party when it is opened. Icons are inline SVG; fonts come from a local `@font-face` file or a system font stack. The app CSP keeps every loading directive same-origin (`'self'`, `data:` or `'none'`, guarded by `TestSecurityMiddlewareCSPLoadsOnlySameOriginResources`), and `website/build.test.mjs` rejects font CDN hosts. Outbound calls the user configures (market-data and online-import providers) run from the backend, not the browser.
 - Security must not depend on source secrecy. Any mechanism that would break if an attacker read the code is wrong by design.
 - Treat local-network deployment as safer than public deployment, but never as fully trusted.
 - Local authentication must exist before real data entry.
