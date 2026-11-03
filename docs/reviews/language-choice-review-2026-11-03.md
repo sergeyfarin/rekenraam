@@ -27,11 +27,14 @@ prompted by two recurring intuitions:
 
 **Keep Go.** No measured part of the current product is slow because it is
 written in Go. The 2026-11-03 profile found the backend's time dominated by
-native SQLite calls, statement preparation and per-connection schema loading,
-not by Go arithmetic, JSON, HTTP or goroutine scheduling. The CI critical path
-is browser/axe work, not backend execution. A backend rewrite would spend
-months re-proving financial behaviour while leaving the measured bottlenecks
-in place.
+native calls, statement preparation and per-connection schema loading, not by
+Go arithmetic, JSON, HTTP or goroutine scheduling. The cgo bucket includes the
+Go-to-C boundary as well as native execution, so it does not isolate SQLite
+engine time; no controlled language/binding comparison was run. The defensible
+conclusion is **no demonstrated rewrite benefit**, not proof that a rewrite
+cannot help. The CI critical path is browser/axe work, not backend execution. A
+backend rewrite would spend months re-proving financial behaviour while leaving
+the measured bottlenecks in place.
 
 This is not a claim that Go is universally better. Python is a better fit for
 small scripts, data exploration and some AI workflows; Rust is a better fit for
@@ -43,7 +46,7 @@ advantage is decisive for a single-user, self-hosted, SQLite-backed ledger.
 | Concern | A backend language switch would change it | Evidence in this repo |
 |---|---|---|
 | API/service correctness | New implementation risk; same accounting rules | 2,622 passing application leaf cases, 82.8% backend statement coverage; ledger invariants are enforced in services, SQL and tests |
-| SQLite time | **Almost nothing** if SQLite remains the engine | 86.6% of sampled large-book CPU is in `runtime.cgocall`; 58.7% of the application test profile is cgo |
+| SQLite/native time | Not isolated by the current profile; a language or binding change is not proven to help or hurt | 86.6% of sampled large-book CPU is `runtime.cgocall`, which includes the Go-to-C boundary and native execution, not pure SQLite engine time |
 | Statement preparation / schema load | Only if the data layer or schema changes | 28.7% of test CPU in `sqlite3_prepare_v2`; 16.9% in driver connection open |
 | Browser/E2E time | Nothing | E2E browser steps are 705–750 s medians; route/sub-view `Evaluate` (axe/layout) dominates |
 | Single-binary deployment | Go is already the simplest fit | One 33 MiB binary embeds the static frontend; one process in Docker |
@@ -194,8 +197,10 @@ production backend for this app without a new, measured reason.
   surface; Rust is not automatically a smaller supply chain than Go.
 - SQLite remains SQLite. `rusqlite` also binds the C engine; a pure-Rust database
   would be a data/product migration, not a language swap. The 2026-11-03
-  large-book profile puts 86.6% of sampled CPU in cgo, so a Rust rewrite of the
-  Go layer cannot remove the dominant cost.
+  large-book profile puts 86.6% of sampled CPU in cgo, but that bucket includes
+  the Go-to-C boundary and native execution; it does not prove a Rust rewrite
+  would recover or preserve a specific fraction. No controlled
+  language/binding comparison was run.
 - Tauri adds Rust and a second native toolchain to a Go application. The
   desktop review already compared this and preferred Wails for the current
   shape.

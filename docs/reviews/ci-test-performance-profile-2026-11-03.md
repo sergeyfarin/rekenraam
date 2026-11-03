@@ -9,12 +9,16 @@ time of measurement, 2026-11-03).
 ## Answer
 
 There is **no measured Go-language slowdown or memory leak that a Rust rewrite
-would fix**. The backend spends most of its sampled CPU inside native SQLite:
-86.6% of the large-book profile and 58.7% of the application test profile are
-`runtime.cgocall`. Within the test profile, statement preparation is 28.7% and
-driver connection/schema loading is 16.9%. The remaining Go work — HTTP, JSON,
-exact arithmetic, CSV/zip writing, orchestration — is a minority and has no
-profile signature that justifies a second language.
+would demonstrably fix**. The backend spends most of its sampled CPU in native
+calls: 86.6% of the large-book profile and 58.7% of the application test
+profile are `runtime.cgocall`. That bucket includes both the Go-to-C transition
+and the native execution beneath it; these profiles do **not** separate them,
+so they cannot establish how much a different binding or language could
+recover. Within the test profile, statement preparation is 28.7% and driver
+connection/schema loading is 16.9%. The remaining Go work — HTTP, JSON, exact
+arithmetic, CSV/zip writing, orchestration — is a minority and has no profile
+signature that justifies a second language. No controlled Go-versus-Rust
+binding comparison was run.
 
 CI is not backend-bound either. The two browser jobs take roughly 705–750 s
 each by median, while the backend race step is about 270 s, coverage about
@@ -157,7 +161,8 @@ CPU-seconds**, **1,579 MiB** max RSS, **2,622 passing**, **0 failing**, **4
 skipped** leaf cases.
 
 Selected cumulative samples (overlapping; a cgo call can contain the deeper
-SQLite frames):
+SQLite frames). `runtime.cgocall` includes the Go-to-C transition **and** the
+native execution beneath it; it is not a pure SQLite-engine measurement:
 
 | Frame | CPU seconds | Share |
 |---|---:|---:|
@@ -199,11 +204,14 @@ the same test sampled **43.95 CPU-seconds**, of which **38.07 s (86.62%)** was
 26.2% and the self-check 25.9% (overlapping callers). The seed also contributes
 cgo time.
 
-This is the strongest single argument against a Rust rewrite for performance:
-the upper-bound workload is already SQLite-bound. Changing the Go layer cannot
-recover the 86.6%; using a different SQLite binding still calls the same native
-engine, and replacing SQLite would be a data/product decision with much larger
-correctness and migration risk.
+This is strong evidence that the upper-bound workload is dominated by native
+calls, but it is not a controlled language/binding comparison. The 86.6%
+`runtime.cgocall` bucket includes the Go-to-C boundary as well as native
+execution, so it cannot prove that a different Go layer or SQLite binding would
+recover or preserve a specific fraction. It also cannot show that replacing
+SQLite itself would help; that would be a data/product decision with much
+larger correctness and migration risk. The defensible conclusion is **no
+demonstrated rewrite benefit**, not an unrecoverable 86.6%.
 
 ## Frontend and build memory
 
@@ -270,21 +278,27 @@ python3 docs/reviews/fixtures/ci-test-profile-2026-11-03.py \
 # Full backend gate; timing runs must bypass the test cache
 GOFLAGS=-count=1 GO_PHASE_TIMINGS=1 /usr/bin/time -v ./scripts/test-backend.sh
 
-# Isolated application CPU/heap profile
-cd backend
-source ../scripts/native-sqlite-env.sh
-go test -race -count=1 -p 1 -timeout=15m ./internal/app \
-  -cpuprofile=/tmp/app.cpu -memprofile=/tmp/app.mem -json >/tmp/app.json
-go tool pprof -top -cum -nodecount=50 /tmp/app.cpu
-go tool pprof -top -sample_index=alloc_space -nodecount=25 /tmp/app.mem
+# Isolated application CPU/heap profile; the subshell keeps the repo root current
+(
+  cd backend
+  source ../scripts/native-sqlite-env.sh
+  go test -race -count=1 -p 1 -timeout=15m ./internal/app \
+    -cpuprofile=/tmp/app.cpu -memprofile=/tmp/app.mem -json >/tmp/app.json
+  go tool pprof -top -cum -nodecount=50 /tmp/app.cpu
+  go tool pprof -top -sample_index=alloc_space -nodecount=25 /tmp/app.mem
+)
 
-# Large-book runtime and profile
+# Large-book runtime and profile (from the repo root)
 ./scripts/measure-large-book.sh
-REKENRAAM_LARGE_BOOK=1 go test -count=1 -timeout=15m \
-  -run '^TestLargeBookExportAndSelfCheckStayBounded$' ./internal/app \
-  -cpuprofile=/tmp/large-book.cpu -memprofile=/tmp/large-book.mem
+(
+  cd backend
+  source ../scripts/native-sqlite-env.sh
+  REKENRAAM_LARGE_BOOK=1 go test -count=1 -timeout=15m \
+    -run '^TestLargeBookExportAndSelfCheckStayBounded$' ./internal/app \
+    -cpuprofile=/tmp/large-book.cpu -memprofile=/tmp/large-book.mem
+)
 
-# Frontend checks and build
+# Frontend checks and build (from the repo root)
 /usr/bin/time -v ./scripts/test-frontend.sh
 /usr/bin/time -v pnpm build
 ```

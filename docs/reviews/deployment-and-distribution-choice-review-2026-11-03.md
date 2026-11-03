@@ -39,11 +39,11 @@ external service required for core use.
 shows that a thin Wails host can reuse the same Go handler, SQLite file and
 Svelte UI. A local-data desktop edition is technically credible, but it adds
 per-OS packaging, signing, updates, WebView differences and support. It should
-continue through the existing demand/spike/ADR gates; it should not fork the
-ledger or create a second business API. Current product requirements still say
-native desktop is out of scope, so shipping it would require an ADR that
-changes that scope; "pursued" here means continuing the gated path, not making
-a release promise.
+continue through the existing demand, stable-Wails-v3, spike and ADR gates; it
+should not fork the ledger or create a second business API. Current product
+requirements still say native desktop is out of scope, so shipping it would
+require an ADR that changes that scope; "pursued" here means continuing the
+gated path, not making a release promise.
 
 **Treat hosted service as a separate business decision.** Managed single-tenant
 hosting is the least risky hosted experiment and could reuse the same binary and
@@ -223,8 +223,9 @@ handler and Svelte UI.
 
 **Transition cost from here:** Medium–high. The shared runtime extraction,
 Wails host, data/secret paths, packaging/signing, update path and per-OS test
-matrix are new. The existing desktop review already defines the gates; no
-desktop implementation is claimed by this review.
+matrix are new. The existing desktop review already defines the gates,
+including waiting for a stable Wails v3 release before reconsidering
+implementation; no desktop implementation is claimed by this review.
 
 ### Hybrid desktop + sync / remote server client
 
@@ -340,8 +341,10 @@ health/upgrade checks and support, with no core architecture change.
 
 ## Revisit triggers and gates
 
-- **Desktop:** confirmed user demand, a successful one-OS Wails conformance
-  spike, and an ADR that changes the current native-desktop scope.
+- **Desktop:** confirmed user demand; **stable Wails v3 available and pinned**
+  (or an explicit owner decision accepting a pinned v2 plus a later v3
+  migration); a successful one-OS Wails conformance spike; and an ADR that
+  changes the current native-desktop scope.
 - **Managed hosting:** marketplace/community demand evidence, operational
   readiness (MFA, backups, monitoring, incident response), support capacity and
   a clear data-processing/privacy position.

@@ -47,7 +47,7 @@ deliberately avoids.
 | Deployment shape | PostgreSQL/MySQL need a server, network, credentials and lifecycle management | SQLite is embedded in the same ~33 MiB binary; warm startup 76 ms, idle RSS 23–28 MiB |
 | Backup and restore | Server dump/basebackup/WAL policy instead of one file and SQLite's online backup API | Current product backs up/verifies the SQLite file and restores it with the app stopped |
 | Concurrency | SQLite has one writer; PostgreSQL/MySQL support concurrent writers and richer isolation | Current scope is one owner and one app process; workers already serialize writes |
-| Large reads/reports | A server may parallelize more work across connections/nodes | 250k-posting export 11.1 s and self-check 10.9 s; both SQLite-bound |
+| Large reads/reports | A server may parallelize more work across connections/nodes | 250k-posting export 11.1 s and self-check 10.9 s; both dominated by native calls |
 | Desktop | SQLite is a natural local-file database; a server database conflicts with local desktop ownership | Desktop review assumes local SQLite and no separate service |
 | Hosted SaaS | SQLite can serve single-tenant instances; multi-tenant SaaS usually wants PostgreSQL | Current product is self-hosted and single-tenant by design |
 | Exact decimals and constraints | Schema, triggers, CHECKs and tests would be ported and re-proved | 118 tables, 168 triggers, 106 indexes, 16 views, about 214 KiB of schema SQL |
@@ -307,13 +307,15 @@ The startup figures used the existing `da2563b4` binary; later `main` commits
 only patch frontend dependencies. This fresh large-book repeat is slightly
 faster than the earlier performance-profile run (12.9 s export / 12.8 s
 self-check at `da2563b4`); shared-host variance is expected. The earlier
-application and large-book profiles attribute the backend's time to SQLite
-itself: 58.7% cgo in the application test profile, 86.6% cgo in the large-book
-profile, with statement preparation and connection/schema loading as the
-largest named subsets. That is the database doing the work; it is not
-Go overhead, and it does not disappear by replacing SQLite with PostgreSQL. A
-PostgreSQL deployment would move the same logical work to a server plus a
-network protocol, with different concurrency and operational trade-offs.
+application and large-book profiles attribute the backend's time to native
+calls: 58.7% cgo in the application test profile and 86.6% cgo in the
+large-book profile, with statement preparation and connection/schema loading as
+the largest named subsets. The cgo bucket includes both the Go-to-C transition
+and native execution, so it does not isolate SQLite engine CPU. It shows the
+dominant cost is outside pure Go code, but it does not prove a different
+binding would recover a specific fraction. Replacing SQLite with PostgreSQL
+would move the logical work to a server plus a network protocol, with different
+concurrency and operational trade-offs; no live PostgreSQL benchmark was run.
 
 A separate 500-transaction commit probe compared the admitted FULL policy with
 the diagnostic NORMAL mode on the same native engine:

@@ -4588,6 +4588,7 @@
   "limitations": [
     "One local host and one CI runner class; hosted timings include runner scheduling and cache variance.",
     "Job wall time includes runner queueing. Step medians are the execution comparison; one retained run waited about an hour before its first step while the browser step itself took 733 s.",
+    "runtime.cgocall includes both the Go-to-C transition and native execution; it does not isolate SQLite engine CPU, so the profile cannot prove how much a different binding or language could recover.",
     "Race instrumentation and test parallelism inflate CPU and memory relative to production. The profile is for attribution, not a latency benchmark.",
     "The native SQLite C engine is not instrumented by Go race detection and is not resolved completely by Go CPU profiles.",
     "No controlled Python/Rust implementation was benchmarked. The language conclusion follows the measured location of cost in this codebase."
