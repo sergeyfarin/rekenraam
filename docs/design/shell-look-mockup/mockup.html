@@ -121,5 +121,8 @@ const spend = `<div class="layout"><div>
 <section><h2>Filter</h2><div class="field">Accounts<span class="input">All <span>▾</span></span></div><div class="field">Categories<span class="input">All <span>▾</span></span></div><div class="field">Payees<span class="input">All <span>▾</span></span></div></section>
 <section><h2>Tasks</h2><a>Print</a><a>Open in Transactions</a></section>
 </aside></div>`;
-document.getElementById('root').innerHTML = header + (page === 'inv' ? inv : spend) + (q.get('label') ? `<span class="label">${q.get('label')}</span>` : '');
+const root = document.getElementById('root');
+root.innerHTML = header + (page === 'inv' ? inv : spend);
+// The ?label= caption comes from the URL, so it is inserted as text, never parsed as HTML.
+if (q.get('label')) { const label = document.createElement('span'); label.className = 'label'; label.textContent = q.get('label'); root.append(label); }
 </script></body></html>

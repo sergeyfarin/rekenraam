@@ -29,11 +29,16 @@ test('all app locales have complete website catalogs and fully rendered pages', 
       const relative = match[1].replace(/^\//, '');
       await access(join(result.outputDirectory, relative, relative.endsWith('/') || !relative ? 'index.html' : ''));
     }
-    assert.ok(!html.includes('fonts.googleapis.com'));
+    // No web-font CDNs: compare parsed hostnames exactly, not substrings of the HTML.
+    const externalHosts = new Set([...html.matchAll(/https?:\/\/[^\s"'<>)]+/g)].map(match => new URL(match[0]).hostname));
+    for (const fontHost of ['fonts.googleapis.com', 'fonts.gstatic.com']) assert.ok(!externalHosts.has(fontHost), `${locale}: loads ${fontHost}`);
     assert.ok(html.includes("script-src 'self'"));
   }
   assert.ok((await readFile(join(result.outputDirectory, '404.html'), 'utf8')).includes('content="noindex"'));
-  assert.ok((await readFile(join(result.outputDirectory, 'sitemap.xml'), 'utf8')).includes('https://rekenraam.com/ru/'));
+  // Compare parsed <loc> entries exactly rather than substring-matching the XML.
+  const sitemap = await readFile(join(result.outputDirectory, 'sitemap.xml'), 'utf8');
+  const sitemapLocs = [...sitemap.matchAll(/<loc>([^<]*)<\/loc>/g)].map(match => new URL(match[1]));
+  assert.ok(sitemapLocs.some(url => url.origin === 'https://rekenraam.com' && url.pathname === '/ru/'));
 });
 
 test('a project Pages base path keeps language links and assets under that path', async t => {
