@@ -116,6 +116,11 @@ Ratings describe this product, not a generic benchmark.
 
 **Transition cost from here:** None; this is the current database.
 
+The engine choice is separate from the driver binding. ADR 0014 selected the
+bundled native SQLite engine over `modernc.org/sqlite` after matched
+performance evidence; the pure-Go driver remains a portability fallback, not a
+second production database.
+
 ## PostgreSQL
 
 **What it would bring from scratch**
@@ -170,6 +175,11 @@ HA-hosted; it is not justified by the current single-user workload.
 
 **Transition cost from here:** High, comparable to PostgreSQL, with less
 strategic benefit for a product that would otherwise choose PostgreSQL.
+
+SQL Server, Oracle, Firebird and similar server databases are mature options,
+but they share the server/network/operations burden and add licensing,
+platform or ecosystem constraints without an advantage for this single-user
+local app. They are not a better migration target than PostgreSQL.
 
 ## DuckDB
 

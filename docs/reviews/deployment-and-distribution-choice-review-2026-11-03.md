@@ -122,6 +122,11 @@ from-scratch design.
 - A self-hosted instance has no built-in multi-device sync beyond reaching the
   same server.
 
+A local-only browser launch is the same model: start the binary on the laptop
+and open localhost. It is the cheapest desktop-like path because there is no
+installer, native shell or second packaging matrix, but it is not an installed
+application and still leaves update/backup/startup handling to the user.
+
 **Transition cost from here:** None; this is the current product.
 
 ### Managed single-tenant hosting
