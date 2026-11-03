@@ -6,6 +6,15 @@ import { join } from 'node:path';
 import { build, readCatalogs, siteConfig } from './build.mjs';
 
 const locales = ['en', 'es', 'fr', 'nl', 'de', 'ru'];
+const fontHosts = ['fonts.googleapis.com', 'fonts.gstatic.com'];
+
+// Hostnames of every absolute (`https://…`) or protocol-relative (`//…`) URL in
+// the text, in any quoting or CSS url(), resolved against the site origin.
+function linkedHosts(text, origin = 'https://rekenraam.com') {
+  return new Set([...text.matchAll(/(?:https?:)?\/\/[^\s"'<>()]+/g)]
+    .filter(match => URL.canParse(match[0], origin))
+    .map(match => new URL(match[0], origin).hostname));
+}
 
 test('all app locales have complete website catalogs and fully rendered pages', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'rekenraam-site-test-'));
@@ -30,8 +39,8 @@ test('all app locales have complete website catalogs and fully rendered pages', 
       await access(join(result.outputDirectory, relative, relative.endsWith('/') || !relative ? 'index.html' : ''));
     }
     // No web-font CDNs: compare parsed hostnames exactly, not substrings of the HTML.
-    const externalHosts = new Set([...html.matchAll(/https?:\/\/[^\s"'<>)]+/g)].map(match => new URL(match[0]).hostname));
-    for (const fontHost of ['fonts.googleapis.com', 'fonts.gstatic.com']) assert.ok(!externalHosts.has(fontHost), `${locale}: loads ${fontHost}`);
+    const hosts = linkedHosts(html);
+    for (const fontHost of fontHosts) assert.ok(!hosts.has(fontHost), `${locale}: loads ${fontHost}`);
     assert.ok(html.includes("script-src 'self'"));
   }
   assert.ok((await readFile(join(result.outputDirectory, '404.html'), 'utf8')).includes('content="noindex"'));
@@ -95,4 +104,17 @@ test('translated text is escaped rather than interpreted as markup', async t => 
 test('publishing paths reject malformed paths and origins', () => {
   for (const basePath of ['/../private', '//example.com', '/a?b', '/a\\b']) assert.throws(() => siteConfig({ basePath }));
   for (const origin of ['http://rekenraam.com', 'https://rekenraam.com/path', 'https://rekenraam.com/?q=x', 'https://user:pass@example.com']) assert.throws(() => siteConfig({ origin }));
+});
+
+test('font-host detection covers absolute, protocol-relative and CSS URLs', () => {
+  for (const html of [
+    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter">',
+    "<link rel='stylesheet' href='//fonts.googleapis.com/css2?family=Inter'>",
+    '<link rel=stylesheet href=//fonts.googleapis.com/css2>',
+    '<style>@font-face { src: url(//fonts.gstatic.com/s/inter.woff2) }</style>',
+    "<style>@import url('http://fonts.googleapis.com/css');</style>",
+  ]) assert.ok(fontHosts.some(host => linkedHosts(html).has(host)), html);
+  // Lookalike hosts and same-site paths are not font CDNs.
+  for (const html of ['<a href="https://fonts.googleapis.com.example.net/">', '<a href="/fonts.googleapis.com/">', '<a href="https://example.com/?u=fonts.googleapis.com">'])
+    assert.ok(!fontHosts.some(host => linkedHosts(html).has(host)), html);
 });
