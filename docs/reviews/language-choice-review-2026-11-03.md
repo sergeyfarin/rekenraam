@@ -72,7 +72,22 @@ Ratings describe this product, not theoretical language benchmarks.
 | Dependency/supply chain | Small core, 8 direct modules | Often large crate graph; proc macros/build scripts | Large package graph; native wheels | Very large transitive graph | Varies |
 | AI/LLM familiarity | Good, below Python/TS | Good and growing | Best | Best | Varies |
 | Financial ecosystem fit | Good stdlib + exact custom types | Good but more assembly required | Good libraries, weaker typing/performance | Good web ecosystem, weaker numeric runtime | C#/Java finance ecosystems strong |
-| Migration cost from here | None | Very high | Very high | High | High |
+
+A language's from-scratch fit and the cost of moving this repository are
+different questions. The ratings above describe the former. The table below
+isolates the latter; a high transition cost does not make an option a bad
+language in general, and a good from-scratch fit does not make a migration
+worthwhile now.
+
+### Transition cost from the current Go app
+
+| Option | Transition from here | Main risks |
+|---|---|---|
+| Go | None; this is the current backend | None |
+| Python | Full backend rewrite | Re-prove HTTP/auth, services, repositories, SQL, workers, backups, exact decimals and the whole test suite |
+| Rust | Full backend rewrite, or an isolated FFI component | Same rewrite plus FFI/build/runtime boundaries; a component still needs differential tests and packaging |
+| TypeScript/Node | Full backend rewrite | Same rewrite plus Node/native-SQLite packaging, worker-thread and dependency-graph risk |
+| Other | Full backend rewrite | The same scope plus its own runtime, tooling and ecosystem risk |
 
 ## Go as-is
 
@@ -116,6 +131,8 @@ Ratings describe this product, not theoretical language benchmarks.
   API generation, focused tests and the compiler. It should not drive a
   production rewrite on its own.
 
+**Transition cost from here:** None; this is the current implementation.
+
 ## Python
 
 **What it would bring**
@@ -145,9 +162,12 @@ Ratings describe this product, not theoretical language benchmarks.
 - The measured bottlenecks would remain. SQLite via Python still calls SQLite;
   statement preparation and schema loading do not become cheaper. The
   browser-driven CI path is untouched.
-- The archive review explicitly says not to port Python implementation details
-  directly; the current Go code has since added ledger, investment, correction
-  and reconciliation behaviour that would need re-proving.
+
+**Transition cost from here:** Very high. It would replace the HTTP layer,
+application services, repositories, SQL, auth, workers, backup/restore,
+exact-decimal handling and the current test suite. The archive review says not
+to port Python implementation details directly; the ledger, investment,
+correction and reconciliation behaviour added since then would need re-proving.
 
 **Verdict:** excellent for analysis tools and experiments; not a better
 production backend for this app without a new, measured reason.
@@ -172,10 +192,6 @@ production backend for this app without a new, measured reason.
 - A large crate graph is common once `serde`, `tokio`, HTTP, TLS, CLI and
   database crates are assembled. Proc macros and build scripts expand the audit
   surface; Rust is not automatically a smaller supply chain than Go.
-- A rewrite means reimplementing HTTP middleware, authentication, CSRF,
-  session/token handling, migrations, backup/restore, workers and the exact
-  decimal/ledger rules, then re-earning the existing test suite. A partial
-  Rust component would add an FFI boundary and two runtimes.
 - SQLite remains SQLite. `rusqlite` also binds the C engine; a pure-Rust database
   would be a data/product migration, not a language swap. The 2026-11-03
   large-book profile puts 86.6% of sampled CPU in cgo, so a Rust rewrite of the
@@ -183,6 +199,13 @@ production backend for this app without a new, measured reason.
 - Tauri adds Rust and a second native toolchain to a Go application. The
   desktop review already compared this and preferred Wails for the current
   shape.
+
+**Transition cost from here:** Very high for a full backend rewrite. It would
+reimplement HTTP middleware, authentication, CSRF, session/token handling,
+migrations, backup/restore, workers and the exact decimal/ledger rules, then
+re-earn the existing test suite. An isolated Rust component is a smaller
+transition but adds an FFI boundary, a second runtime/toolchain and
+differential-test obligations.
 
 **Verdict:** technically the strongest runtime alternative, but there is no
 measured hotspot that justifies it today. Reconsider only for an isolated,
@@ -212,6 +235,11 @@ profiled, pure-CPU component after Go/SQL optimization has been exhausted.
 - The measured backend and CI costs do not move. Browser time remains browser
   time; SQLite remains SQLite.
 
+**Transition cost from here:** High. It is a full backend rewrite in another
+runtime, with the same HTTP/auth/service/repository/SQL/worker/backup/test
+scope as Python or Rust, plus Node/native-SQLite packaging and worker-thread
+constraints.
+
 **Verdict:** reasonable for an all-TypeScript product, but not a clear upgrade
 for this deployment shape and not a fix for any measured bottleneck.
 
@@ -225,6 +253,9 @@ for this deployment shape and not a fix for any measured bottleneck.
 | C / C++ | Maximum control and speed | Manual memory safety is a poor trade for financial correctness and long-lived maintenance |
 | Zig | Low-level control with a smaller language | Immature ecosystem/tooling for this server, SQLite and desktop surface; no measured need |
 | Dart / Flutter | Strong cross-platform UI | Would duplicate or replace the web UI and does not improve the current backend bottlenecks |
+
+Any other backend option carries the same full-rewrite transition cost as
+Python, Rust or TypeScript, plus its own runtime, tooling and ecosystem risk.
 
 ## Why Go remains the coherent choice
 

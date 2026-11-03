@@ -48,7 +48,6 @@ ecosystem, not a demonstrated user-facing improvement.
 | Browser/CI time | Mostly unchanged; browser and axe still dominate | E2E app step median 750.5 s, audits 728.0 s; `Evaluate` dominates |
 | Build time / memory | New compiler/bundler trade-offs | 62.5 s build, about 1,731 MiB peak RSS; Vite/Svelte/Tailwind callbacks |
 | AI-assisted coding | React has a larger model corpus; Svelte needs more explicit conventions | No production measurement; not a runtime or correctness property |
-| Migration cost | Very high: every route, component, form and browser journey | 35 page routes, 3 layouts, 138 library Svelte components, 979 unit tests, 469 E2E attempts |
 
 ## Current stack and measured shape
 
@@ -63,8 +62,10 @@ At the current `main` line the frontend uses:
 - Paraglide for compile-time localization; `openapi-fetch` for the typed API.
 - Playwright with axe for browser accessibility and layout sweeps.
 
-The build measured at `da2563b4` (the only later frontend change on `main` is
-the adapter-static 4.0.0 → 4.0.1 patch) produced:
+The build measured at `da2563b4` produced the figures below. Later `main`
+commits only patch frontend dependencies — adapter-static 4.0.1,
+`@inlang/paraglide-js` 2.29.3 and `tailwind-variants` 4.0.1 — with no framework
+or runtime change.
 
 | Measurement | Value |
 |---|---:|
@@ -101,7 +102,23 @@ Ratings describe this product, not theoretical benchmarks.
 | AI/LLM familiarity | Good, below React | Best | Good | Lower | Good | Good | Good outside web |
 | Build speed / memory | Adequate | Adequate | Adequate | Strong | Heavy | Strong | Heavy |
 | Desktop/mobile reuse | Strong via Wails | Strong via Electron/Tauri | Strong | Possible | Possible | Strong | Separate UI |
-| Migration cost from here | None | Very high | Very high | Very high | Very high | Very high | Very high |
+
+A framework's from-scratch fit and the cost of moving this UI are different
+questions. The ratings above describe the former. The table below isolates the
+latter; a high transition cost does not make a framework a bad choice in
+general, and a good from-scratch fit does not make a migration worthwhile now.
+
+### Transition cost from the current SvelteKit UI
+
+| Option | Transition from here | Main risks |
+|---|---|---|
+| SvelteKit | None; this is the current UI | None |
+| React | Full UI rewrite | Rewrite every route/component/form, rebuild localization and test harness, re-prove accessibility |
+| Vue | Full UI rewrite | Same scope plus Nuxt/SPA decisions and ecosystem translation |
+| Solid | Full UI rewrite | Same scope plus smaller component/accessibility ecosystem |
+| Angular | Full UI rewrite | Same scope plus heavier runtime/tooling and framework conventions |
+| HTMX / vanilla | Full UI and server-rendering rewrite | Moves state into Go, changes the static-embedding shape, reworks every interaction |
+| Flutter / native | Second UI product | Duplicates screens and loses the shared browser/accessibility test surface |
 
 ## SvelteKit as-is
 
@@ -155,6 +172,8 @@ Ratings describe this product, not theoretical benchmarks.
   the public website is a separate static build, and the app does not need
   server-rendered marketing pages.
 
+**Transition cost from here:** None; this is the current UI.
+
 ## React
 
 **What it would bring**
@@ -178,8 +197,11 @@ Ratings describe this product, not theoretical benchmarks.
 - React's larger dependency graph and faster-moving ecosystem increase the
   review surface. The app already carries TanStack and Bits UI equivalents; the
   marginal ecosystem gain is small for these screens.
-- Migration cost is very high: 35 routes, 138 library components, 149 rune-based
-  files, 979 unit tests and 469 browser attempts.
+
+**Transition cost from here:** Very high. It would rewrite 35 routes, 138
+library components, 149 rune-based files, the localization boundary and the
+browser-test evidence: 979 unit tests and 469 browser attempts would need a new
+harness or a route-by-route replacement.
 
 **Verdict:** the strongest alternative on ecosystem and AI familiarity, but it
 solves no measured problem and gives up the static/compiled fit. Revisit only if
@@ -199,9 +221,12 @@ a required capability has no Svelte path.
   Vue rewrite would also be a Vite SPA.
 - The component/state ecosystem is strong but not clearly better than the
   current Svelte + TanStack + Bits UI combination for these screens.
-- The AI/LLM corpus is smaller than React's and the migration cost is the same
-  order as React.
+- The AI/LLM corpus is smaller than React's.
 - There is no measured runtime or build benefit that would justify the rewrite.
+
+**Transition cost from here:** Very high. The route/component/form/localization
+and browser-test scope is effectively the same as React, with an additional
+Vue/Nuxt-versus-Vite decision.
 
 **Verdict:** a credible alternative for a new project, but not an upgrade for
 this one.
@@ -222,7 +247,10 @@ this one.
   this kind of app.
 - Svelte already provides compiled reactivity and a small measured payload; the
   performance headroom is not a current constraint.
-- The migration cost is high and the long-term maintenance pool is smaller.
+- The long-term maintenance pool is smaller.
+
+**Transition cost from here:** Very high. The full UI, localization and
+accessibility/browser test suite would be rewritten onto a smaller ecosystem.
 
 **Verdict:** technically interesting, but the performance gain is unmeasured and
 the ecosystem risk is higher.
@@ -242,6 +270,9 @@ the ecosystem risk is higher.
 - Slower builds and a larger migration surface.
 - The app already has explicit routing, typed API access, forms and tests; it
   does not need Angular's full platform.
+
+**Transition cost from here:** Very high. It is a full UI rewrite onto a heavier
+platform, with no measured benefit for this deployment shape.
 
 **Verdict:** a poor fit for this product's size, deployment shape and maintenance
 model.
@@ -264,6 +295,10 @@ model.
 - A server-rendered UI would conflict with the accepted static-embedding shape
   and require an ADR change.
 
+**Transition cost from here:** Very high. It is not a component swap: it would
+move state and rendering into Go, rewrite the routes as HTML fragments, replace
+the typed client boundary and redo the browser/accessibility tests.
+
 **Verdict:** good for content sites and simple CRUD, not for this interactive
 ledger UI without a significant architecture change.
 
@@ -277,6 +312,9 @@ ledger UI without a significant architecture change.
   language and a steep maintenance trade-off.
 - **Flutter/native** would duplicate the UI and lose the browser/accessibility
   test surface; native desktop remains out of scope under the desktop review.
+
+Each of these carries the same full-UI transition cost as React or Vue, plus its
+own runtime or language risk. None removes the current browser/axe cost.
 
 ## Why SvelteKit remains the coherent choice
 

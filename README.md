@@ -18,8 +18,11 @@ structures are still changing.
 keeps the server a typed, small single binary with simple concurrency.
 [SvelteKit](docs/reviews/frontend-framework-choice-review-2026-11-03.md)
 compiles the UI to static assets that the same binary embeds and serves.
-[Self-hosting](docs/product-requirements.md#product-intent) keeps your records,
-backups and exports on a host you control, with no required cloud account.
+[SQLite](docs/reviews/database-choice-review-2026-11-03.md) keeps the database
+a local file with no server to run, which also simplifies backup and the
+optional desktop host. [Self-hosting](docs/reviews/deployment-and-distribution-choice-review-2026-11-03.md)
+keeps your records, backups and exports on a host you control, with no required
+cloud account.
 
 *Rekenraam* is Dutch for abacus.
 

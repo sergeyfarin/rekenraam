@@ -209,8 +209,21 @@ dominant, not Go-language overhead.
 Frontend framework choice:
 [2026-11-03 frontend framework review](reviews/frontend-framework-choice-review-2026-11-03.md)
 revalidates SvelteKit/Svelte against React, Vue, Solid, Angular and other
-options for the static, embedded browser UI. All three are analysis only; the
-current Go, SvelteKit and SQLite decisions remain in force.
+options for the static, embedded browser UI.
+Database choice:
+[2026-11-03 database review](reviews/database-choice-review-2026-11-03.md)
+compares SQLite with PostgreSQL, MySQL/MariaDB, DuckDB, libSQL/Turso,
+distributed SQL, document and embedded key-value options.
+Deployment and distribution:
+[2026-11-03 deployment and distribution review](reviews/deployment-and-distribution-choice-review-2026-11-03.md)
+compares self-hosted, desktop, managed single-tenant, multi-tenant SaaS, hybrid
+sync, PWA, marketplace and serverless directions. All five documents are
+analysis only; the current Go, SvelteKit, SQLite and self-hosted decisions
+remain in force, with desktop retained as a gated optional host. Each review
+separates from-scratch fit from the cost of transitioning the current
+repository. The deployment review also maps adjacent decisions already governed
+elsewhere and the ones not yet separately reviewed (API protocol, ORM/query
+builder, job broker, observability, multi-user and sync/mobile).
 
 - [R18 reporting policy](plans/investment-reporting-plan.md) — live observation selection (#203), named basis/valuation profiles, research recommendations and delivery slices (#118, #230–#235).
 - [R13 returns contract](plans/investment-returns-plan.md) — returns_v1: portfolio boundary, position-anchored flow classification, TTWROR/IRR equations, failure states, expected cases and slices (#119).
