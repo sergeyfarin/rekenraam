@@ -1,0 +1,163 @@
+{
+  "schema": 1,
+  "generated_at": "2026-11-03T08:44:28.827517+00:00",
+  "source": {
+    "commit": "bc9a2bfb",
+    "branch": "upstream/main",
+    "date": "2026-11-03"
+  },
+  "conditions": {
+    "host": "6 vCPU AMD EPYC 3251, 5.2 GiB RAM, Linux 7.0.0-42",
+    "toolchain": "Go 1.27.3, GCC 15.2.0; native SQLite 3.53.4 via mattn/go-sqlite3 v1.14.52",
+    "native": "CGO, fts5,netgo,osusergo, WAL/FULL, statement cache 0",
+    "caveat": "Shared development VM; timings are observations, not service-level objectives. The commit probe compares a diagnostic NORMAL mode with the shipped FULL policy."
+  },
+  "large_book": {
+    "command": "BENCH=1 ./scripts/measure-large-book.sh",
+    "fixture": "250,000 posted postings over 3,020 accounts, two currencies, five years",
+    "test_wall_s": 40.409,
+    "bundle_export": {
+      "wall_s": 11.113,
+      "allocated_mib": 433,
+      "peak_live_heap_mib": 12
+    },
+    "self_check": {
+      "wall_s": 10.918,
+      "allocated_mib": 137,
+      "peak_live_heap_mib": 41
+    },
+    "attention": {
+      "wall_s": 2.41,
+      "allocated_mib": 101,
+      "peak_live_heap_mib": 3
+    },
+    "home": {
+      "wall_s": 3.791,
+      "allocated_mib": 290,
+      "peak_live_heap_mib": 117
+    },
+    "benchmarks": {
+      "BundleExport": {
+        "ns_per_op": 10591688275,
+        "bytes_per_op": 453821560,
+        "allocs_per_op": 14708932
+      },
+      "SelfCheck": {
+        "ns_per_op": 10638097177,
+        "bytes_per_op": 143572344,
+        "allocs_per_op": 6733256
+      }
+    },
+    "script_wall_s": 100.89,
+    "script_max_rss_kb": 912388,
+    "note": "Script max RSS includes benchmark compilation/execution; the test-only run previously peaked near 301 MiB."
+  },
+  "sqlite_commit_probe": {
+    "description": "Isolated native SQLite WAL commit probe; 500 transactions with TEXT values, two balanced postings and one audit row. Includes preparation, writes and commit. Separate upstream driver connection permits diagnostic NORMAL comparison; shipped app always uses FULL. Not a complete application workflow or production latency guarantee.",
+    "runs": [
+      {
+        "commits": 500,
+        "effective_synchronous": 1,
+        "elapsed_seconds": 0.057257052,
+        "max_transaction_ms": 13.145851,
+        "median_transaction_ms": 0.07270499999999999,
+        "mode": "NORMAL",
+        "p95_transaction_ms": 0.111021,
+        "round": 1
+      },
+      {
+        "commits": 500,
+        "effective_synchronous": 2,
+        "elapsed_seconds": 4.5103741379999995,
+        "max_transaction_ms": 79.309993,
+        "median_transaction_ms": 4.4461355000000005,
+        "mode": "FULL",
+        "p95_transaction_ms": 74.496619,
+        "round": 1
+      },
+      {
+        "commits": 500,
+        "effective_synchronous": 2,
+        "elapsed_seconds": 2.371015279,
+        "max_transaction_ms": 74.411399,
+        "median_transaction_ms": 4.448266,
+        "mode": "FULL",
+        "p95_transaction_ms": 5.213938,
+        "round": 2
+      },
+      {
+        "commits": 500,
+        "effective_synchronous": 1,
+        "elapsed_seconds": 0.059902326,
+        "max_transaction_ms": 14.523613,
+        "median_transaction_ms": 0.078286,
+        "mode": "NORMAL",
+        "p95_transaction_ms": 0.113211,
+        "round": 2
+      },
+      {
+        "commits": 500,
+        "effective_synchronous": 1,
+        "elapsed_seconds": 0.058368841,
+        "max_transaction_ms": 13.388341,
+        "median_transaction_ms": 0.073346,
+        "mode": "NORMAL",
+        "p95_transaction_ms": 0.109361,
+        "round": 3
+      },
+      {
+        "commits": 500,
+        "effective_synchronous": 2,
+        "elapsed_seconds": 3.873852388,
+        "max_transaction_ms": 78.454115,
+        "median_transaction_ms": 4.458311,
+        "mode": "FULL",
+        "p95_transaction_ms": 7.964262,
+        "round": 3
+      }
+    ]
+  },
+  "sqlite_schema_probe": {
+    "database": "empty database after startup migrations",
+    "file_bytes": 1581056,
+    "page_size": 4096,
+    "page_count": 386,
+    "journal_mode": "wal",
+    "objects": {
+      "tables": 118,
+      "indexes": 106,
+      "triggers": 168,
+      "views": 16
+    },
+    "stored_sql_bytes": 214190
+  },
+  "deployment_probe": {
+    "binary": "dist/rekenraam",
+    "binary_bytes": 34422072,
+    "linked_libraries": [
+      "libm.so.6",
+      "libc.so.6",
+      "ld-linux-x86-64.so.2"
+    ],
+    "no_system_libsqlite3": true,
+    "cold_startup_ms": 269,
+    "cold_rss_kb": 28704,
+    "threads": 11,
+    "warm_startup_ms": 76,
+    "warm_rss_kb": 23088,
+    "empty_database_bytes_after_close": 1581056,
+    "binary_source": "da2563b4; later main commits only patch frontend dependencies, so the served Go runtime shape is unchanged"
+  },
+  "reproduction": {
+    "large_book": "BENCH=1 ./scripts/measure-large-book.sh",
+    "commit_probe": "TMPDIR=.tmp/go-tmp ./scripts/go-backend.sh run ../docs/reviews/sqlite-full-commit-probe.go",
+    "schema": "open the migrated database with Python sqlite3 and query sqlite_master, pragma page_size/page_count, and os.path.getsize",
+    "deployment": "start dist/rekenraam serve with APP_ENV=development, a temporary DATABASE_URL and HTTP_ADDR=127.0.0.1:16999; poll /healthz; read VmRSS from /proc/PID/status; stop with SIGTERM"
+  },
+  "limitations": [
+    "No live PostgreSQL/MySQL benchmark was run: that would require porting the full schema and repository workload, and a generic pgbench number would not be comparable.",
+    "The commit probe uses a tiny synthetic schema, not the application transaction path or the production schema.",
+    "The deployment startup probe used a development build; release candidate startup/signing evidence remains separate.",
+    "Shared-host storage and CPU variance affect commit and large-book timings."
+  ]
+}

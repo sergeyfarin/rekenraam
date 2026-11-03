@@ -202,6 +202,32 @@ It evaluates a thin Wails host, required architecture and release work, ongoing
 cost, and repository strategy. It is analysis only; native desktop remains out
 of scope until an accepted ADR changes the product decision.
 
+Backend language and runtime performance:
+[2026-11-03 language choice review](reviews/language-choice-review-2026-11-03.md)
+revalidates Go against Python, Rust, TypeScript and other options, and records
+the conditions that would justify a revisit.
+[2026-11-03 CI and test performance profile](reviews/ci-test-performance-profile-2026-11-03.md)
+measures the current CI/test path and finds native SQLite and browser work
+dominant, not Go-language overhead.
+Frontend framework choice:
+[2026-11-03 frontend framework review](reviews/frontend-framework-choice-review-2026-11-03.md)
+revalidates SvelteKit/Svelte against React, Vue, Solid, Angular and other
+options for the static, embedded browser UI.
+Database choice:
+[2026-11-03 database review](reviews/database-choice-review-2026-11-03.md)
+compares SQLite with PostgreSQL, MySQL/MariaDB, DuckDB, libSQL/Turso,
+distributed SQL, document and embedded key-value options.
+Deployment and distribution:
+[2026-11-03 deployment and distribution review](reviews/deployment-and-distribution-choice-review-2026-11-03.md)
+compares self-hosted, desktop, managed single-tenant, multi-tenant SaaS, hybrid
+sync, PWA, marketplace and serverless directions. All five documents are
+analysis only; the current Go, SvelteKit, SQLite and self-hosted decisions
+remain in force, with desktop retained as a gated optional host. Each review
+separates from-scratch fit from the cost of transitioning the current
+repository. The deployment review also maps adjacent decisions already governed
+elsewhere and the ones not yet separately reviewed (API protocol, ORM/query
+builder, job broker, observability, multi-user and sync/mobile).
+
 - [R18 reporting policy](plans/investment-reporting-plan.md) — live observation selection (#203), named basis/valuation profiles, research recommendations and delivery slices (#118, #230–#235).
 - [R13 returns contract](plans/investment-returns-plan.md) — returns_v1: portfolio boundary, position-anchored flow classification, TTWROR/IRR equations, failure states, expected cases and slices (#119).
 - [R18 completion audit](reviews/r18-completion-audit-2026-10-15.md) — delivery evidence, date-default fix and independent follow-ups #237/#238.
