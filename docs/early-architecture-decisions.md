@@ -34,6 +34,12 @@ Reasons:
 - One origin for frontend and API.
 - Fewer moving parts while the product model is still forming.
 
+The [2026-11-03 language choice review](reviews/language-choice-review-2026-11-03.md)
+and [CI/test performance profile](reviews/ci-test-performance-profile-2026-11-03.md)
+revalidated this choice. Current backend time is dominated by native SQLite,
+and current CI time by browser/accessibility work; neither is Go-language
+overhead. The reviews do not change this runtime shape.
+
 ## Database And Migrations
 
 Use SQLite as the primary database.

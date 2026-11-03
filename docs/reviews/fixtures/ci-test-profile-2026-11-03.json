@@ -1,0 +1,4595 @@
+{
+  "schema": 1,
+  "generated_at": "2026-11-03T06:54:17.755191+00:00",
+  "source": {
+    "commit": "da2563b43d1f610b52d9865b62a1b1c4e1e05524",
+    "branch": "upstream/main",
+    "measured": "2026-11-03",
+    "host": "6 vCPU AMD EPYC 3251, 5.2 GiB, Linux 7.0.0-42"
+  },
+  "purpose": "Profile the current CI and test paths; determine whether any measured hotspot is Go-language overhead that a Rust component could remove.",
+  "conditions": {
+    "ci_runner": "GitHub-hosted ubuntu-latest; E2E artifact reports 4 vCPU AMD EPYC 7763 and 16 GiB, three Playwright workers",
+    "local": "6 vCPU AMD EPYC 3251, 5.2 GiB RAM, Linux 7.0.0-42; Go 1.27.3, GCC 15.2.0, Node 24.22.1, pnpm 12.11.2; no competing jobs",
+    "native": "CGO_ENABLED=1, fts5,netgo,osusergo, FULL synchronous, statement cache 0",
+    "race": "Go race detector; the native SQLite C engine is outside it (ADR 0014/0016)"
+  },
+  "ci": {
+    "runs": [
+      {
+        "id": 41530724953,
+        "head_sha": "da2563b43d1f610b52d9865b62a1b1c4e1e05524",
+        "event": "push",
+        "created_at": "2026-11-02T21:42:01Z",
+        "updated_at": "2026-11-02T21:55:44Z",
+        "wall_seconds": 823.0,
+        "jobs": [
+          {
+            "name": "Frontend Check",
+            "conclusion": "success",
+            "wall_seconds": 115.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 6.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run frontend check",
+                "seconds": 55.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check and build public website",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Integrated Build",
+            "conclusion": "success",
+            "wall_seconds": 69.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 10.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 3.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 7.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Build single binary",
+                "seconds": 37.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "E2E Smoke (app)",
+            "conclusion": "success",
+            "wall_seconds": 787.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 14.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 8.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install Chromium",
+                "seconds": 41.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run browser smoke journeys",
+                "seconds": 683.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Upload browser timings",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload Playwright report",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "E2E Smoke (audits)",
+            "conclusion": "success",
+            "wall_seconds": 819.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 15.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 7.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install Chromium",
+                "seconds": 20.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run browser smoke journeys",
+                "seconds": 765.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Upload browser timings",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload Playwright report",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Backend Coverage",
+            "conclusion": "success",
+            "wall_seconds": 159.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 17.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run backend tests with coverage",
+                "seconds": 131.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload coverage profile",
+                "seconds": 3.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Report and enforce the coverage floor",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Backend Tests",
+            "conclusion": "success",
+            "wall_seconds": 280.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 3.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 14.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check Go cache configuration",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check CI event policy",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check release artifact contract",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run backend tests",
+                "seconds": 257.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": 41358032132,
+        "head_sha": "2c9f0ac4cafdcc5933b94405cd939d50a922612d",
+        "event": "push",
+        "created_at": "2026-11-01T22:37:05Z",
+        "updated_at": "2026-11-01T22:50:08Z",
+        "wall_seconds": 783.0,
+        "jobs": [
+          {
+            "name": "Integrated Build",
+            "conclusion": "success",
+            "wall_seconds": 76.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 13.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 8.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Build single binary",
+                "seconds": 41.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 4.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Backend Tests",
+            "conclusion": "success",
+            "wall_seconds": 181.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 14.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check Go cache configuration",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check CI event policy",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check release artifact contract",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run backend tests",
+                "seconds": 154.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 5.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "E2E Smoke (app)",
+            "conclusion": "success",
+            "wall_seconds": 755.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 11.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 6.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install Chromium",
+                "seconds": 23.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run browser smoke journeys",
+                "seconds": 699.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 4.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload browser timings",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload Playwright report",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "E2E Smoke (audits)",
+            "conclusion": "success",
+            "wall_seconds": 781.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 3.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 14.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 7.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install Chromium",
+                "seconds": 20.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run browser smoke journeys",
+                "seconds": 724.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 4.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload browser timings",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload Playwright report",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Backend Coverage",
+            "conclusion": "success",
+            "wall_seconds": 160.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 3.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 15.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run backend tests with coverage",
+                "seconds": 128.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload coverage profile",
+                "seconds": 3.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Report and enforce the coverage floor",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 7.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Frontend Check",
+            "conclusion": "success",
+            "wall_seconds": 93.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 3.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 7.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run frontend check",
+                "seconds": 75.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check and build public website",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": 41354953044,
+        "head_sha": "21faac9f95898805b5b95e6f176d5d6c8e23894d",
+        "event": "push",
+        "created_at": "2026-11-01T22:01:14Z",
+        "updated_at": "2026-11-01T22:16:46Z",
+        "wall_seconds": 932.0,
+        "jobs": [
+          {
+            "name": "Integrated Build",
+            "conclusion": "success",
+            "wall_seconds": 68.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 13.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 8.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Build single binary",
+                "seconds": 34.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Backend Coverage",
+            "conclusion": "success",
+            "wall_seconds": 147.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 13.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run backend tests with coverage",
+                "seconds": 127.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload coverage profile",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Report and enforce the coverage floor",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Frontend Check",
+            "conclusion": "success",
+            "wall_seconds": 91.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 8.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run frontend check",
+                "seconds": 72.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check and build public website",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "E2E Smoke (app)",
+            "conclusion": "success",
+            "wall_seconds": 911.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 14.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 7.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install Chromium",
+                "seconds": 35.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run browser smoke journeys",
+                "seconds": 843.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Upload browser timings",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload Playwright report",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Backend Tests",
+            "conclusion": "success",
+            "wall_seconds": 276.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 15.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check Go cache configuration",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check CI event policy",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check release artifact contract",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run backend tests",
+                "seconds": 253.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "E2E Smoke (audits)",
+            "conclusion": "success",
+            "wall_seconds": 615.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 6.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 3.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 5.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install Chromium",
+                "seconds": 32.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run browser smoke journeys",
+                "seconds": 558.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload browser timings",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload Playwright report",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": 41328464687,
+        "head_sha": "14f20ec7b0449e47583a88f25f644141a505c7d7",
+        "event": "push",
+        "created_at": "2026-11-01T16:51:33Z",
+        "updated_at": "2026-11-01T17:05:46Z",
+        "wall_seconds": 853.0,
+        "jobs": [
+          {
+            "name": "Frontend Check",
+            "conclusion": "success",
+            "wall_seconds": 87.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 7.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run frontend check",
+                "seconds": 70.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check and build public website",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Backend Tests",
+            "conclusion": "success",
+            "wall_seconds": 327.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 14.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check Go cache configuration",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check CI event policy",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check release artifact contract",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run backend tests",
+                "seconds": 297.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 5.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Integrated Build",
+            "conclusion": "success",
+            "wall_seconds": 77.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 10.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 5.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Build single binary",
+                "seconds": 50.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 3.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "E2E Smoke (audits)",
+            "conclusion": "success",
+            "wall_seconds": 804.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 3.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 12.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 7.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install Chromium",
+                "seconds": 20.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run browser smoke journeys",
+                "seconds": 747.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 4.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload browser timings",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload Playwright report",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Backend Coverage",
+            "conclusion": "success",
+            "wall_seconds": 215.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 16.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run backend tests with coverage",
+                "seconds": 183.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload coverage profile",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Report and enforce the coverage floor",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 7.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "E2E Smoke (app)",
+            "conclusion": "success",
+            "wall_seconds": 851.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 10.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 6.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install Chromium",
+                "seconds": 18.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run browser smoke journeys",
+                "seconds": 802.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 4.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload browser timings",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload Playwright report",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": 41318999728,
+        "head_sha": "f399b65b66d8333898037e01c2aab068b421ae85",
+        "event": "push",
+        "created_at": "2026-11-01T15:00:37Z",
+        "updated_at": "2026-11-01T15:15:30Z",
+        "wall_seconds": 893.0,
+        "jobs": [
+          {
+            "name": "Backend Coverage",
+            "conclusion": "success",
+            "wall_seconds": 195.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 11.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run backend tests with coverage",
+                "seconds": 171.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload coverage profile",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Report and enforce the coverage floor",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 6.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Backend Tests",
+            "conclusion": "success",
+            "wall_seconds": 332.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 3.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 12.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check Go cache configuration",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check CI event policy",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check release artifact contract",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run backend tests",
+                "seconds": 306.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 6.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "E2E Smoke (app)",
+            "conclusion": "success",
+            "wall_seconds": 890.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 13.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 7.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install Chromium",
+                "seconds": 20.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run browser smoke journeys",
+                "seconds": 834.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 4.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload browser timings",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload Playwright report",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Integrated Build",
+            "conclusion": "success",
+            "wall_seconds": 87.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 12.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 7.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Build single binary",
+                "seconds": 53.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 4.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "E2E Smoke (audits)",
+            "conclusion": "success",
+            "wall_seconds": 785.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 10.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 6.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install Chromium",
+                "seconds": 24.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run browser smoke journeys",
+                "seconds": 732.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 3.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload browser timings",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload Playwright report",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Frontend Check",
+            "conclusion": "success",
+            "wall_seconds": 93.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 7.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 3.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run frontend check",
+                "seconds": 74.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check and build public website",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": 41311802795,
+        "head_sha": "2008875628076688d8748a8724a5e1e818e1e0b4",
+        "event": "push",
+        "created_at": "2026-11-01T13:33:06Z",
+        "updated_at": "2026-11-01T13:44:47Z",
+        "wall_seconds": 701.0,
+        "jobs": [
+          {
+            "name": "Frontend Check",
+            "conclusion": "success",
+            "wall_seconds": 83.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 6.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run frontend check",
+                "seconds": 68.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check and build public website",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Integrated Build",
+            "conclusion": "success",
+            "wall_seconds": 74.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 12.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 7.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Build single binary",
+                "seconds": 40.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 4.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "E2E Smoke (app)",
+            "conclusion": "success",
+            "wall_seconds": 699.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 12.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 7.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install Chromium",
+                "seconds": 21.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run browser smoke journeys",
+                "seconds": 644.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 4.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload browser timings",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload Playwright report",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Backend Tests",
+            "conclusion": "success",
+            "wall_seconds": 356.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 3.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 11.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check Go cache configuration",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check CI event policy",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check release artifact contract",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run backend tests",
+                "seconds": 332.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 5.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Backend Coverage",
+            "conclusion": "success",
+            "wall_seconds": 215.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 11.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run backend tests with coverage",
+                "seconds": 189.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload coverage profile",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Report and enforce the coverage floor",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 5.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "E2E Smoke (audits)",
+            "conclusion": "success",
+            "wall_seconds": 556.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 9.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 6.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install Chromium",
+                "seconds": 17.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run browser smoke journeys",
+                "seconds": 511.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 4.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload browser timings",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload Playwright report",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": 41286530486,
+        "head_sha": "c78d7712d7ce03a121b7609772aba350e415f331",
+        "event": "push",
+        "created_at": "2026-11-01T07:52:53Z",
+        "updated_at": "2026-11-01T09:05:51Z",
+        "wall_seconds": 4378.0,
+        "jobs": [
+          {
+            "name": "E2E Smoke (audits)",
+            "conclusion": "success",
+            "wall_seconds": 4376.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 10.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 5.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install Chromium",
+                "seconds": 18.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run browser smoke journeys",
+                "seconds": 733.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Upload browser timings",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload Playwright report",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Backend Coverage",
+            "conclusion": "success",
+            "wall_seconds": 142.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 3.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 11.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run backend tests with coverage",
+                "seconds": 121.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload coverage profile",
+                "seconds": 3.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Report and enforce the coverage floor",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Frontend Check",
+            "conclusion": "success",
+            "wall_seconds": 69.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 3.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 6.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run frontend check",
+                "seconds": 54.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check and build public website",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Integrated Build",
+            "conclusion": "success",
+            "wall_seconds": 59.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 9.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 6.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Build single binary",
+                "seconds": 33.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Backend Tests",
+            "conclusion": "success",
+            "wall_seconds": 211.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 11.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check Go cache configuration",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check CI event policy",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check release artifact contract",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run backend tests",
+                "seconds": 191.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "E2E Smoke (app)",
+            "conclusion": "success",
+            "wall_seconds": 4304.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 3.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 14.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 11.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install Chromium",
+                "seconds": 29.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run browser smoke journeys",
+                "seconds": 634.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Upload browser timings",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload Playwright report",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": 41283856463,
+        "head_sha": "d96d805f6c2df779ddb37d4fefcad5fa9bc46e4e",
+        "event": "push",
+        "created_at": "2026-11-01T07:12:30Z",
+        "updated_at": "2026-11-01T07:27:08Z",
+        "wall_seconds": 878.0,
+        "jobs": [
+          {
+            "name": "E2E Smoke (app)",
+            "conclusion": "success",
+            "wall_seconds": 760.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 9.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 6.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 3.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install Chromium",
+                "seconds": 17.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run browser smoke journeys",
+                "seconds": 711.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 4.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload browser timings",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload Playwright report",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Backend Coverage",
+            "conclusion": "success",
+            "wall_seconds": 270.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 8.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run backend tests with coverage",
+                "seconds": 250.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload coverage profile",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Report and enforce the coverage floor",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 3.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Frontend Check",
+            "conclusion": "success",
+            "wall_seconds": 82.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 5.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run frontend check",
+                "seconds": 69.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check and build public website",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Integrated Build",
+            "conclusion": "success",
+            "wall_seconds": 151.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 9.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 5.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Build single binary",
+                "seconds": 125.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 4.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "Backend Tests",
+            "conclusion": "success",
+            "wall_seconds": 302.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 9.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check Go cache configuration",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check CI event policy",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Check release artifact contract",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run backend tests",
+                "seconds": 284.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          },
+          {
+            "name": "E2E Smoke (audits)",
+            "conclusion": "success",
+            "wall_seconds": 876.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/checkout@v7",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run ./.github/actions/setup-go-cache",
+                "seconds": 8.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run actions/setup-node@v7",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run pnpm/action-setup@v6.1.0",
+                "seconds": 5.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install dependencies",
+                "seconds": 2.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Install Chromium",
+                "seconds": 23.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Run browser smoke journeys",
+                "seconds": 826.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Save refreshed Go cache",
+                "seconds": 3.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload browser timings",
+                "seconds": 1.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Upload Playwright report",
+                "seconds": 0.0,
+                "conclusion": "skipped"
+              },
+              {
+                "name": "Post Run pnpm/action-setup@v6.1.0",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/setup-node@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run ./.github/actions/setup-go-cache",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Post Run actions/checkout@v7",
+                "seconds": 0.0,
+                "conclusion": "success"
+              },
+              {
+                "name": "Complete job",
+                "seconds": 0.0,
+                "conclusion": "success"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "job_medians": {
+      "Backend Coverage": {
+        "median": 177.5,
+        "min": 142.0,
+        "max": 270.0,
+        "runs": 8
+      },
+      "Backend Tests": {
+        "median": 291.0,
+        "min": 181.0,
+        "max": 356.0,
+        "runs": 8
+      },
+      "E2E Smoke (app)": {
+        "median": 819.0,
+        "min": 699.0,
+        "max": 4304.0,
+        "runs": 8
+      },
+      "E2E Smoke (audits)": {
+        "median": 794.5,
+        "min": 556.0,
+        "max": 4376.0,
+        "runs": 8
+      },
+      "Frontend Check": {
+        "median": 89.0,
+        "min": 69.0,
+        "max": 115.0,
+        "runs": 8
+      },
+      "Integrated Build": {
+        "median": 75.0,
+        "min": 59.0,
+        "max": 151.0,
+        "runs": 8
+      }
+    },
+    "step_medians": [
+      {
+        "job": "E2E Smoke (audits)",
+        "step": "Run browser smoke journeys",
+        "median": 732.5,
+        "min": 511.0,
+        "max": 826.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (app)",
+        "step": "Run browser smoke journeys",
+        "median": 705.0,
+        "min": 634.0,
+        "max": 843.0,
+        "runs": 8
+      },
+      {
+        "job": "Backend Tests",
+        "step": "Run backend tests",
+        "median": 270.5,
+        "min": 154.0,
+        "max": 332.0,
+        "runs": 8
+      },
+      {
+        "job": "Backend Coverage",
+        "step": "Run backend tests with coverage",
+        "median": 151.0,
+        "min": 121.0,
+        "max": 250.0,
+        "runs": 8
+      },
+      {
+        "job": "Frontend Check",
+        "step": "Run frontend check",
+        "median": 69.5,
+        "min": 54.0,
+        "max": 75.0,
+        "runs": 8
+      },
+      {
+        "job": "Integrated Build",
+        "step": "Build single binary",
+        "median": 40.5,
+        "min": 33.0,
+        "max": 125.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (app)",
+        "step": "Install Chromium",
+        "median": 22.0,
+        "min": 17.0,
+        "max": 41.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (audits)",
+        "step": "Install Chromium",
+        "median": 20.0,
+        "min": 17.0,
+        "max": 32.0,
+        "runs": 8
+      },
+      {
+        "job": "Backend Tests",
+        "step": "Run ./.github/actions/setup-go-cache",
+        "median": 13.0,
+        "min": 9.0,
+        "max": 15.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (app)",
+        "step": "Run ./.github/actions/setup-go-cache",
+        "median": 12.5,
+        "min": 9.0,
+        "max": 14.0,
+        "runs": 8
+      },
+      {
+        "job": "Backend Coverage",
+        "step": "Run ./.github/actions/setup-go-cache",
+        "median": 12.0,
+        "min": 8.0,
+        "max": 17.0,
+        "runs": 8
+      },
+      {
+        "job": "Integrated Build",
+        "step": "Run ./.github/actions/setup-go-cache",
+        "median": 11.0,
+        "min": 9.0,
+        "max": 13.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (audits)",
+        "step": "Run ./.github/actions/setup-go-cache",
+        "median": 10.0,
+        "min": 6.0,
+        "max": 15.0,
+        "runs": 8
+      },
+      {
+        "job": "Integrated Build",
+        "step": "Run pnpm/action-setup@v6.1.0",
+        "median": 7.0,
+        "min": 5.0,
+        "max": 8.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (app)",
+        "step": "Run pnpm/action-setup@v6.1.0",
+        "median": 7.0,
+        "min": 6.0,
+        "max": 11.0,
+        "runs": 8
+      },
+      {
+        "job": "Frontend Check",
+        "step": "Run pnpm/action-setup@v6.1.0",
+        "median": 6.5,
+        "min": 5.0,
+        "max": 8.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (audits)",
+        "step": "Run pnpm/action-setup@v6.1.0",
+        "median": 6.0,
+        "min": 5.0,
+        "max": 7.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (app)",
+        "step": "Save refreshed Go cache",
+        "median": 4.0,
+        "min": 0.0,
+        "max": 4.0,
+        "runs": 8
+      },
+      {
+        "job": "Backend Coverage",
+        "step": "Save refreshed Go cache",
+        "median": 4.0,
+        "min": 0.0,
+        "max": 7.0,
+        "runs": 8
+      },
+      {
+        "job": "Integrated Build",
+        "step": "Save refreshed Go cache",
+        "median": 3.5,
+        "min": 0.0,
+        "max": 4.0,
+        "runs": 8
+      },
+      {
+        "job": "Backend Tests",
+        "step": "Save refreshed Go cache",
+        "median": 3.5,
+        "min": 0.0,
+        "max": 6.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (audits)",
+        "step": "Save refreshed Go cache",
+        "median": 3.0,
+        "min": 0.0,
+        "max": 4.0,
+        "runs": 8
+      },
+      {
+        "job": "Frontend Check",
+        "step": "Run actions/checkout@v7",
+        "median": 2.0,
+        "min": 2.0,
+        "max": 3.0,
+        "runs": 8
+      },
+      {
+        "job": "Frontend Check",
+        "step": "Install dependencies",
+        "median": 2.0,
+        "min": 1.0,
+        "max": 3.0,
+        "runs": 8
+      },
+      {
+        "job": "Integrated Build",
+        "step": "Run actions/checkout@v7",
+        "median": 2.0,
+        "min": 2.0,
+        "max": 2.0,
+        "runs": 8
+      },
+      {
+        "job": "Integrated Build",
+        "step": "Install dependencies",
+        "median": 2.0,
+        "min": 1.0,
+        "max": 2.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (app)",
+        "step": "Run actions/checkout@v7",
+        "median": 2.0,
+        "min": 1.0,
+        "max": 3.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (app)",
+        "step": "Install dependencies",
+        "median": 2.0,
+        "min": 1.0,
+        "max": 3.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (audits)",
+        "step": "Run actions/checkout@v7",
+        "median": 2.0,
+        "min": 2.0,
+        "max": 3.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (audits)",
+        "step": "Install dependencies",
+        "median": 2.0,
+        "min": 1.0,
+        "max": 2.0,
+        "runs": 8
+      },
+      {
+        "job": "Backend Coverage",
+        "step": "Run actions/checkout@v7",
+        "median": 2.0,
+        "min": 1.0,
+        "max": 3.0,
+        "runs": 8
+      },
+      {
+        "job": "Backend Coverage",
+        "step": "Upload coverage profile",
+        "median": 2.0,
+        "min": 1.0,
+        "max": 3.0,
+        "runs": 8
+      },
+      {
+        "job": "Backend Tests",
+        "step": "Run actions/checkout@v7",
+        "median": 2.0,
+        "min": 1.0,
+        "max": 3.0,
+        "runs": 8
+      },
+      {
+        "job": "Backend Tests",
+        "step": "Check Go cache configuration",
+        "median": 2.0,
+        "min": 1.0,
+        "max": 2.0,
+        "runs": 8
+      },
+      {
+        "job": "Frontend Check",
+        "step": "Set up job",
+        "median": 1.0,
+        "min": 0.0,
+        "max": 2.0,
+        "runs": 8
+      },
+      {
+        "job": "Frontend Check",
+        "step": "Run actions/setup-node@v7",
+        "median": 1.0,
+        "min": 0.0,
+        "max": 2.0,
+        "runs": 8
+      },
+      {
+        "job": "Integrated Build",
+        "step": "Set up job",
+        "median": 1.0,
+        "min": 0.0,
+        "max": 2.0,
+        "runs": 8
+      },
+      {
+        "job": "Integrated Build",
+        "step": "Run actions/setup-node@v7",
+        "median": 1.0,
+        "min": 0.0,
+        "max": 3.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (app)",
+        "step": "Set up job",
+        "median": 1.0,
+        "min": 1.0,
+        "max": 2.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (app)",
+        "step": "Upload browser timings",
+        "median": 1.0,
+        "min": 1.0,
+        "max": 2.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (audits)",
+        "step": "Set up job",
+        "median": 1.0,
+        "min": 1.0,
+        "max": 2.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (audits)",
+        "step": "Run actions/setup-node@v7",
+        "median": 1.0,
+        "min": 0.0,
+        "max": 3.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (audits)",
+        "step": "Upload browser timings",
+        "median": 1.0,
+        "min": 0.0,
+        "max": 2.0,
+        "runs": 8
+      },
+      {
+        "job": "Backend Coverage",
+        "step": "Set up job",
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "runs": 8
+      },
+      {
+        "job": "Backend Tests",
+        "step": "Set up job",
+        "median": 1.0,
+        "min": 0.0,
+        "max": 1.0,
+        "runs": 8
+      },
+      {
+        "job": "Frontend Check",
+        "step": "Post Run actions/setup-node@v7",
+        "median": 0.5,
+        "min": 0.0,
+        "max": 1.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (app)",
+        "step": "Run actions/setup-node@v7",
+        "median": 0.5,
+        "min": 0.0,
+        "max": 2.0,
+        "runs": 8
+      },
+      {
+        "job": "Frontend Check",
+        "step": "Check and build public website",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "runs": 8
+      },
+      {
+        "job": "Frontend Check",
+        "step": "Post Run pnpm/action-setup@v6.1.0",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 1.0,
+        "runs": 8
+      },
+      {
+        "job": "Frontend Check",
+        "step": "Post Run actions/checkout@v7",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 1.0,
+        "runs": 8
+      },
+      {
+        "job": "Frontend Check",
+        "step": "Complete job",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "runs": 8
+      },
+      {
+        "job": "Integrated Build",
+        "step": "Post Run pnpm/action-setup@v6.1.0",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 1.0,
+        "runs": 8
+      },
+      {
+        "job": "Integrated Build",
+        "step": "Post Run actions/setup-node@v7",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 1.0,
+        "runs": 8
+      },
+      {
+        "job": "Integrated Build",
+        "step": "Post Run ./.github/actions/setup-go-cache",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 1.0,
+        "runs": 8
+      },
+      {
+        "job": "Integrated Build",
+        "step": "Post Run actions/checkout@v7",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 1.0,
+        "runs": 8
+      },
+      {
+        "job": "Integrated Build",
+        "step": "Complete job",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (app)",
+        "step": "Upload Playwright report",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (app)",
+        "step": "Post Run pnpm/action-setup@v6.1.0",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 1.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (app)",
+        "step": "Post Run actions/setup-node@v7",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 1.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (app)",
+        "step": "Post Run ./.github/actions/setup-go-cache",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 1.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (app)",
+        "step": "Post Run actions/checkout@v7",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (app)",
+        "step": "Complete job",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (audits)",
+        "step": "Upload Playwright report",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (audits)",
+        "step": "Post Run pnpm/action-setup@v6.1.0",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 1.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (audits)",
+        "step": "Post Run actions/setup-node@v7",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (audits)",
+        "step": "Post Run ./.github/actions/setup-go-cache",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 1.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (audits)",
+        "step": "Post Run actions/checkout@v7",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 1.0,
+        "runs": 8
+      },
+      {
+        "job": "E2E Smoke (audits)",
+        "step": "Complete job",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "runs": 8
+      },
+      {
+        "job": "Backend Coverage",
+        "step": "Report and enforce the coverage floor",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "runs": 8
+      },
+      {
+        "job": "Backend Coverage",
+        "step": "Post Run ./.github/actions/setup-go-cache",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 1.0,
+        "runs": 8
+      },
+      {
+        "job": "Backend Coverage",
+        "step": "Post Run actions/checkout@v7",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 1.0,
+        "runs": 8
+      },
+      {
+        "job": "Backend Coverage",
+        "step": "Complete job",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "runs": 8
+      },
+      {
+        "job": "Backend Tests",
+        "step": "Check CI event policy",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 1.0,
+        "runs": 8
+      },
+      {
+        "job": "Backend Tests",
+        "step": "Check release artifact contract",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 1.0,
+        "runs": 8
+      },
+      {
+        "job": "Backend Tests",
+        "step": "Post Run ./.github/actions/setup-go-cache",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 1.0,
+        "runs": 8
+      },
+      {
+        "job": "Backend Tests",
+        "step": "Post Run actions/checkout@v7",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 1.0,
+        "runs": 8
+      },
+      {
+        "job": "Backend Tests",
+        "step": "Complete job",
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "runs": 8
+      }
+    ]
+  },
+  "browser_timings": {
+    "app": {
+      "source": "da2563b43d1f610b52d9865b62a1b1c4e1e05524",
+      "status": "passed",
+      "duration_s": 667.9,
+      "setup_s": 50.8,
+      "build_s": 50.8,
+      "workers": 3,
+      "runner": {
+        "platform": "linux",
+        "arch": "x64",
+        "node": "v24.22.1",
+        "cpus": 4,
+        "available_parallelism": 4,
+        "cpu_model": "AMD EPYC 7763 64-Core Processor",
+        "memory_bytes": 16759443456
+      },
+      "selected": 455,
+      "attempts": 455,
+      "projects": {
+        "app": {
+          "attempts": 451,
+          "case_seconds": 1765.8,
+          "median_s": 3.35,
+          "max_s": 15.8
+        },
+        "observation-selection": {
+          "attempts": 2,
+          "case_seconds": 9.6,
+          "median_s": 4.81,
+          "max_s": 5.0
+        },
+        "bootstrap": {
+          "attempts": 2,
+          "case_seconds": 3.4,
+          "median_s": 1.71,
+          "max_s": 2.5
+        }
+      },
+      "slowest_attempts": [
+        {
+          "project": "app",
+          "title": "switching a receiving-bank exchange to split keeps its conversion day",
+          "seconds": 15.8
+        },
+        {
+          "project": "app",
+          "title": "recorded capital-return excess, revisions and unknown results in en on mobile",
+          "seconds": 15.2
+        },
+        {
+          "project": "app",
+          "title": "phone search fills the screen, traps focus and passes axe in light",
+          "seconds": 13.1
+        },
+        {
+          "project": "app",
+          "title": "recorded capital-return excess, revisions and unknown results in ru on mobile",
+          "seconds": 12.8
+        },
+        {
+          "project": "app",
+          "title": "phone search fills the screen, traps focus and passes axe in dark",
+          "seconds": 12.8
+        },
+        {
+          "project": "app",
+          "title": "a repaired dividend shows source mismatch and keeps its original provider evidence",
+          "seconds": 12.2
+        },
+        {
+          "project": "app",
+          "title": "section paths preserve old links and filtered register history at 1280px (#460)",
+          "seconds": 11.7
+        },
+        {
+          "project": "app",
+          "title": "section paths preserve old links and filtered register history at 390px (#460)",
+          "seconds": 11.7
+        },
+        {
+          "project": "app",
+          "title": "[acceptance] Transactions separates All, Drafts and Deleted and restores from Deleted",
+          "seconds": 10.9
+        },
+        {
+          "project": "app",
+          "title": "shared search navigates pages and reference objects with keyboard and scoped localized matching",
+          "seconds": 10.0
+        },
+        {
+          "project": "app",
+          "title": "separate_tax payer entry, assignment and clearing work in en",
+          "seconds": 9.9
+        },
+        {
+          "project": "app",
+          "title": "desktop Home: command bar, tiles and the entry dialog by keyboard in dark",
+          "seconds": 9.7
+        }
+      ],
+      "api_action_seconds": {
+        "Evaluate": 430.7,
+        "Click": 329.2,
+        "Navigate": 119.0,
+        "Fill": 46.7,
+        "Create page": 45.4,
+        "Wait for event": 45.2,
+        "Select option": 16.2,
+        "Press": 9.2,
+        "Focus": 7.9,
+        "Reload": 5.6,
+        "Set input files": 5.2,
+        "Close context": 5.1
+      },
+      "step_category_seconds": {
+        "hook": 136.1,
+        "fixture": 96.0,
+        "test.step": 17.3
+      }
+    },
+    "audits": {
+      "source": "da2563b43d1f610b52d9865b62a1b1c4e1e05524",
+      "status": "passed",
+      "duration_s": 751.8,
+      "setup_s": 42.2,
+      "build_s": 42.2,
+      "workers": 3,
+      "runner": {
+        "platform": "linux",
+        "arch": "x64",
+        "node": "v24.22.1",
+        "cpus": 4,
+        "available_parallelism": 4,
+        "cpu_model": "AMD EPYC 7763 64-Core Processor",
+        "memory_bytes": 16759435264
+      },
+      "selected": 14,
+      "attempts": 14,
+      "projects": {
+        "subview-sweep": {
+          "attempts": 8,
+          "case_seconds": 1293.4,
+          "median_s": 163.06,
+          "max_s": 175.8
+        },
+        "route-sweep": {
+          "attempts": 6,
+          "case_seconds": 704.5,
+          "median_s": 118.83,
+          "max_s": 277.4
+        }
+      },
+      "slowest_attempts": [
+        {
+          "project": "route-sweep",
+          "title": "every route fits the phone and declares its language in every locale",
+          "seconds": 277.4
+        },
+        {
+          "project": "subview-sweep",
+          "title": "every sub-view passes axe, fits and closes: de desktop",
+          "seconds": 175.8
+        },
+        {
+          "project": "subview-sweep",
+          "title": "every sub-view passes axe, fits and closes: dark desktop",
+          "seconds": 173.9
+        },
+        {
+          "project": "route-sweep",
+          "title": "every route passes axe and fits the phone in the light theme",
+          "seconds": 172.4
+        },
+        {
+          "project": "subview-sweep",
+          "title": "every sub-view passes axe, fits and closes: light desktop",
+          "seconds": 171.3
+        },
+        {
+          "project": "route-sweep",
+          "title": "every route passes axe and fits the phone in the dark theme",
+          "seconds": 171.2
+        },
+        {
+          "project": "subview-sweep",
+          "title": "every sub-view passes axe, fits and closes: de 390",
+          "seconds": 163.2
+        },
+        {
+          "project": "subview-sweep",
+          "title": "every sub-view passes axe, fits and closes: ru desktop",
+          "seconds": 162.9
+        },
+        {
+          "project": "subview-sweep",
+          "title": "every sub-view passes axe, fits and closes: dark 390",
+          "seconds": 162.4
+        },
+        {
+          "project": "subview-sweep",
+          "title": "every sub-view passes axe, fits and closes: light 390",
+          "seconds": 161.5
+        },
+        {
+          "project": "subview-sweep",
+          "title": "every sub-view passes axe, fits and closes: ru 390",
+          "seconds": 122.3
+        },
+        {
+          "project": "route-sweep",
+          "title": "every data route shows an accessible error state when its data fails",
+          "seconds": 66.5
+        }
+      ],
+      "api_action_seconds": {
+        "Evaluate": 1195.0,
+        "Navigate": 134.5,
+        "Wait for selector": 84.1,
+        "Click": 61.1,
+        "Create page": 58.9,
+        "Set viewport size": 13.5,
+        "Press": 8.3,
+        "Close page": 5.3,
+        "Query count": 4.2,
+        "Select option": 2.0,
+        "Fill": 2.0,
+        "Screenshot": 2.0
+      },
+      "step_category_seconds": {
+        "test.step": 1981.3,
+        "hook": 34.4,
+        "fixture": 30.3
+      }
+    }
+  },
+  "local": {
+    "backend_gate": {
+      "command": "GOFLAGS=-count=1 GO_PHASE_TIMINGS=1 /usr/bin/time -v ./scripts/test-backend.sh",
+      "result": "pass",
+      "wall_s": 315.16,
+      "max_rss_kb": 2037160,
+      "phases": {
+        "modules": {
+          "wall_s": 0.0
+        },
+        "vet": {
+          "wall_s": 18.07,
+          "user_s": 70.79,
+          "sys_s": 3.87
+        },
+        "race_compile_vet": {
+          "wall_s": 47.22,
+          "user_s": 105.17,
+          "sys_s": 6.51
+        },
+        "race_tests": {
+          "wall_s": 249.4,
+          "user_s": 817.23,
+          "sys_s": 337.98
+        }
+      },
+      "package_wall_s": {
+        "cmd/rekenraam": 54.907,
+        "internal/api": 130.491,
+        "internal/app": 188.404,
+        "internal/appruntime": 3.142,
+        "internal/config": 1.017,
+        "internal/db": 95.468,
+        "internal/exact": 1.024,
+        "internal/marketdata": 1.077,
+        "internal/onlinesource/trading212": 1.062,
+        "internal/recur": 1.044,
+        "internal/secretbox": 1.029,
+        "internal/testdb": 4.462,
+        "internal/totp": 1.015,
+        "internal/web": 1.037,
+        "migrations": 1.014
+      }
+    },
+    "app_profile": {
+      "command": "go test -race -count=1 -p 1 -timeout=15m ./internal/app -cpuprofile=app.cpu -memprofile=app.mem -json",
+      "result": "pass",
+      "wall_s": 201.67,
+      "profile_duration_s": 195.27,
+      "total_cpu_s": 717.23,
+      "max_rss_kb": 1617204,
+      "outcomes": {
+        "leaf_cases": 2626,
+        "pass": 2622,
+        "fail": 0,
+        "skip": 4,
+        "terminal_test_pass_events": 2879,
+        "skipped": [
+          "TestPaymentInLieuAttributionCostByDensity",
+          "TestPaymentInLieuAdmissionCostByDensity",
+          "TestMeasureReplaySelfCheckRuntime",
+          "TestLargeBookExportAndSelfCheckStayBounded"
+        ]
+      },
+      "selected_samples": {
+        "runtime.cgocall_flat_s": 418.25,
+        "runtime.cgocall_flat_pct": 58.31,
+        "runtime.cgocall_cum_s": 421.09,
+        "runtime.cgocall_cum_pct": 58.71,
+        "sqlite3_prepare_v2_cum_s": 205.6,
+        "sqlite3_prepare_v2_cum_pct": 28.67,
+        "SQLiteDriver.Open_cum_s": 120.98,
+        "SQLiteDriver.Open_cum_pct": 16.87,
+        "SelfCheckService.RunSelfCheck_cum_s": 66.84,
+        "SelfCheckService.RunSelfCheck_cum_pct": 9.32,
+        "testdb.Open_cum_s": 70.94,
+        "testdb.Open_cum_pct": 9.89,
+        "db.OpenReadOnly_cum_s": 23.58,
+        "db.OpenReadOnly_cum_pct": 3.29,
+        "SQLiteConn.Close_cum_s": 32.5,
+        "SQLiteConn.Close_cum_pct": 4.53,
+        "goose.ParseSQLMigration_cum_s": 7.73,
+        "goose.ParseSQLMigration_cum_pct": 1.08,
+        "argon2.processBlockSSE_cum_s": 26.74,
+        "argon2.processBlockSSE_cum_pct": 3.73
+      },
+      "alloc_space_top": {
+        "goose.sqlparser.init.func1_pct": 65.36,
+        "argon2.initBlocks_pct": 20.66,
+        "flate/zip_pct_approx": 7.7
+      },
+      "inuse_space_at_end_kb": 4194.74
+    },
+    "large_book": {
+      "command": "./scripts/measure-large-book.sh",
+      "fixture": "250,000 posted postings across 3,020 accounts, two currencies, five years",
+      "result": "pass",
+      "test_s": 47.57,
+      "max_rss_kb": 308692,
+      "bundle_export": {
+        "wall_s": 12.851,
+        "allocated_mib": 433,
+        "peak_live_heap_mib": 13
+      },
+      "self_check": {
+        "wall_s": 12.808,
+        "allocated_mib": 137,
+        "peak_live_heap_mib": 40
+      },
+      "attention": {
+        "wall_s": 2.9,
+        "allocated_mib": 101,
+        "peak_live_heap_mib": 3
+      },
+      "home": {
+        "wall_s": 4.247,
+        "allocated_mib": 290,
+        "peak_live_heap_mib": 113
+      }
+    },
+    "large_book_profile": {
+      "command": "REKENRAAM_LARGE_BOOK=1 go test -count=1 -timeout=15m -run ^TestLargeBookExportAndSelfCheckStayBounded$ ./internal/app -cpuprofile=large-book.cpu -memprofile=large-book.mem",
+      "result": "pass",
+      "test_s": 42.513,
+      "max_rss_kb": 324256,
+      "total_cpu_s": 43.95,
+      "selected_samples": {
+        "runtime.cgocall_flat_s": 38.07,
+        "runtime.cgocall_flat_pct": 86.62,
+        "sqlite3_step_internal_cum_s": 24.19,
+        "sqlite3_step_internal_cum_pct": 55.04,
+        "SQLiteRows.Next_cum_s": 26.17,
+        "SQLiteRows.Next_cum_pct": 59.54,
+        "seedLargeBook_cum_s": 12.76,
+        "seedLargeBook_cum_pct": 29.03,
+        "ExportService.WriteBundle_cum_s": 11.53,
+        "ExportService.WriteBundle_cum_pct": 26.23,
+        "SelfCheckService.RunSelfCheck_cum_s": 11.4,
+        "SelfCheckService.RunSelfCheck_cum_pct": 25.94,
+        "HomeService.Home_cum_s": 3.98,
+        "HomeService.Home_cum_pct": 9.06
+      }
+    },
+    "frontend_check": {
+      "command": "/usr/bin/time -v ./scripts/test-frontend.sh",
+      "result": "pass",
+      "wall_s": 96.66,
+      "max_rss_kb": 1759060,
+      "vitest_s": 27.88,
+      "test_files": 79,
+      "tests": 979
+    },
+    "build": {
+      "command": "/usr/bin/time -v pnpm build",
+      "result": "pass",
+      "wall_s": 62.45,
+      "max_rss_kb": 1772760,
+      "plugin_note": "93% of the Vite build time was in JavaScript callbacks; 61% vite-plugin-svelte compile, 30% Tailwind generation"
+    },
+    "coverage": {
+      "total_pct": 82.8,
+      "floor_pct": 73.0,
+      "artifact_bytes": 3681527
+    }
+  },
+  "profile_reports": {
+    "app_cpu_cumulative": "File: app.test\nBuild ID: fd182f24cc4c59f4b7cf2b31ce6efb9ad76fb172\nType: cpu\nTime: 2026-11-03 06:44:31 UTC\nDuration: 195.27s, Total samples = 717.23s (367.31%)\nShowing nodes accounting for 576.91s, 80.44% of 717.23s total\nDropped 5132 nodes (cum <= 3.59s)\nShowing top 50 nodes out of 308\n      flat  flat%   sum%        cum   cum%\n         0     0%     0%    487.17s 67.92%  testing.tRunner\n   418.25s 58.31% 58.31%    421.09s 58.71%  runtime.cgocall\n     0.51s 0.071% 58.39%    276.80s 38.59%  database/sql.withLock\n     0.18s 0.025% 58.41%    205.60s 28.67%  github.com/mattn/go-sqlite3.(*SQLiteConn).prepare\n     0.08s 0.011% 58.42%    201.41s 28.08%  github.com/mattn/go-sqlite3.(*SQLiteConn).prepare.func2 (inline)\n     0.05s 0.007% 58.43%    200.96s 28.02%  github.com/mattn/go-sqlite3._Cfunc__sqlite3_prepare_v2_internal\n     0.07s 0.0098% 58.44%    198.21s 27.64%  database/sql.(*DB).retry\n     0.12s 0.017% 58.46%    185.49s 25.86%  github.com/mattn/go-sqlite3.(*SQLiteConn).prepareWithCache\n     0.24s 0.033% 58.49%    157.92s 22.02%  database/sql.(*DB).queryDC\n   156.25s 21.79% 80.27%    156.25s 21.79%  runtime._ExternalCode\n         0     0% 80.27%    156.25s 21.79%  runtime._System\n     0.02s 0.0028% 80.28%       154s 21.47%  database/sql.(*DB).queryDC.func1\n     0.09s 0.013% 80.29%    153.11s 21.35%  database/sql.ctxDriverQuery\n     0.05s 0.007% 80.30%    152.98s 21.33%  github.com/mattn/go-sqlite3.(*SQLiteConn).QueryContext\n     0.21s 0.029% 80.33%    152.93s 21.32%  github.com/mattn/go-sqlite3.(*SQLiteConn).query\n     0.09s 0.013% 80.34%    121.31s 16.91%  database/sql.(*DB).conn\n         0     0% 80.34%    120.98s 16.87%  database/sql.dsnConnector.Connect\n     0.02s 0.0028% 80.34%    120.98s 16.87%  github.com/mattn/go-sqlite3.(*SQLiteDriver).Open\n         0     0% 80.34%    119.54s 16.67%  github.com/mattn/go-sqlite3.(*SQLiteDriver).Open.func6\n         0     0% 80.34%    119.50s 16.66%  github.com/mattn/go-sqlite3.(*SQLiteDriver).Open.func6.1 (inline)\n         0     0% 80.34%    119.50s 16.66%  github.com/mattn/go-sqlite3._Cfunc_sqlite3_exec\n         0     0% 80.34%    109.36s 15.25%  database/sql.(*DB).PingContext\n         0     0% 80.34%    109.34s 15.24%  database/sql.(*DB).PingContext.func1\n     0.03s 0.0042% 80.35%    107.84s 15.04%  database/sql.(*Tx).QueryContext\n     0.01s 0.0014% 80.35%     83.91s 11.70%  rekenraam/backend/internal/db.Open\n     0.01s 0.0014% 80.35%     70.94s  9.89%  rekenraam/backend/internal/testdb.Open\n         0     0% 80.35%     66.84s  9.32%  rekenraam/backend/internal/app.(*SelfCheckService).RunSelfCheck\n     0.01s 0.0014% 80.35%     65.31s  9.11%  rekenraam/backend/internal/app.openConnectionTestDatabase\n     0.01s 0.0014% 80.35%     65.20s  9.09%  rekenraam/backend/internal/app.(*SelfCheckService).executeChecks\n         0     0% 80.35%     64.67s  9.02%  rekenraam/backend/internal/app.newInvestmentsTestFixtureWithOptions\n         0     0% 80.35%     62.26s  8.68%  rekenraam/backend/internal/db.insertTransactionWithAuditEventTx\n     0.02s 0.0028% 80.35%     62.24s  8.68%  database/sql.(*DB).QueryContext\n     0.02s 0.0028% 80.36%     62.14s  8.66%  database/sql.(*DB).QueryContext.func1\n     0.03s 0.0042% 80.36%     62.11s  8.66%  database/sql.(*DB).query\n         0     0% 80.36%     62.05s  8.65%  rekenraam/backend/internal/app.newInvestmentsTestFixture\n     0.11s 0.015% 80.38%     57.91s  8.07%  github.com/mattn/go-sqlite3.(*SQLiteConn).exec\n     0.01s 0.0014% 80.38%     57.86s  8.07%  rekenraam/backend/internal/db.createTransactionWithAuditTx\n     0.08s 0.011% 80.39%     56.33s  7.85%  database/sql.(*DB).execDC\n     0.03s 0.0042% 80.39%     55.71s  7.77%  database/sql.(*DB).execDC.func2\n     0.03s 0.0042% 80.40%     55.44s  7.73%  rekenraam/backend/internal/db.runInvestmentJournalsWithGuardTx[go.shape.ad6b052b05a6eb5526ca2cde963e56be2c28acf94757a4a894f95e9da9ba3e51]\n     0.05s 0.007% 80.40%     55.06s  7.68%  database/sql.ctxDriverExec\n     0.01s 0.0014% 80.41%     54.99s  7.67%  github.com/mattn/go-sqlite3.(*SQLiteConn).ExecContext\n     0.05s 0.007% 80.41%     52.81s  7.36%  rekenraam/backend/internal/db.(*TransactionRepository).insertTransactionVersion\n     0.01s 0.0014% 80.41%     47.20s  6.58%  rekenraam/backend/internal/app.requireInvestmentSelfCheckPasses\n     0.01s 0.0014% 80.41%     43.53s  6.07%  rekenraam/backend/internal/db.executeInvestmentJournalsWithGuardTx[go.shape.ad6b052b05a6eb5526ca2cde963e56be2c28acf94757a4a894f95e9da9ba3e51]\n     0.03s 0.0042% 80.42%     42.90s  5.98%  database/sql.(*Tx).ExecContext\n         0     0% 80.42%     40.13s  5.60%  rekenraam/backend/internal/app.mustRunInvestmentSelfCheck\n     0.12s 0.017% 80.44%     38.29s  5.34%  database/sql.(*Rows).Next\n         0     0% 80.44%     37.59s  5.24%  rekenraam/backend/internal/app.requireKnownBasisSelfCheckPasses\n         0     0% 80.44%     35.07s  4.89%  rekenraam/backend/internal/db.executeInvestmentWriteTx[go.shape.ad6b052b05a6eb5526ca2cde963e56be2c28acf94757a4a894f95e9da9ba3e51]\n",
+    "app_cpu_flat": "File: app.test\nBuild ID: fd182f24cc4c59f4b7cf2b31ce6efb9ad76fb172\nType: cpu\nTime: 2026-11-03 06:44:31 UTC\nDuration: 195.27s, Total samples = 717.23s (367.31%)\nShowing nodes accounting for 634.55s, 88.47% of 717.23s total\nDropped 5132 nodes (cum <= 3.59s)\nShowing top 25 nodes out of 308\n      flat  flat%   sum%        cum   cum%\n   418.25s 58.31% 58.31%    421.09s 58.71%  runtime.cgocall\n   156.25s 21.79% 80.10%    156.25s 21.79%  runtime._ExternalCode\n    11.60s  1.62% 81.72%     11.60s  1.62%  racecall\n    10.01s  1.40% 83.11%     10.01s  1.40%  golang.org/x/crypto/argon2.blamkaSSE4\n     8.22s  1.15% 84.26%      8.22s  1.15%  golang.org/x/crypto/argon2.xorBlocksSSE2\n     8.16s  1.14% 85.40%      8.16s  1.14%  runtime.memclrNoHeapPointers\n     6.85s  0.96% 86.35%      6.85s  0.96%  golang.org/x/crypto/argon2.mixBlocksSSE2\n     6.20s  0.86% 87.22%      6.20s  0.86%  runtime.futex\n     1.27s  0.18% 87.39%     26.74s  3.73%  golang.org/x/crypto/argon2.processBlockSSE\n     1.09s  0.15% 87.55%      6.16s  0.86%  runtime.newobject\n     0.78s  0.11% 87.65%      4.73s  0.66%  database/sql.convertAssignRows\n     0.73s   0.1% 87.76%     19.34s  2.70%  runtime.mallocgc\n     0.55s 0.077% 87.83%     27.60s  3.85%  golang.org/x/crypto/argon2.processBlocks.func1\n     0.54s 0.075% 87.91%      4.94s  0.69%  runtime.mallocgcSmallScanNoHeader\n     0.53s 0.074% 87.98%      4.37s  0.61%  runtime.checkptrAlignment\n     0.51s 0.071% 88.05%    276.80s 38.59%  database/sql.withLock\n     0.44s 0.061% 88.11%     16.12s  2.25%  database/sql.(*Rows).close\n     0.44s 0.061% 88.18%     11.77s  1.64%  runtime.makeslice\n     0.38s 0.053% 88.23%      4.96s  0.69%  github.com/mattn/go-sqlite3.(*SQLiteRows).readStepResultLocked\n     0.35s 0.049% 88.28%      4.40s  0.61%  runtime.scanSpan\n     0.34s 0.047% 88.32%     30.47s  4.25%  database/sql.(*Rows).nextLocked\n     0.34s 0.047% 88.37%      6.14s  0.86%  runtime.findRunnable\n     0.27s 0.038% 88.41%     26.63s  3.71%  github.com/mattn/go-sqlite3.(*SQLiteRows).Next\n     0.24s 0.033% 88.44%    157.92s 22.02%  database/sql.(*DB).queryDC\n     0.21s 0.029% 88.47%    152.93s 21.32%  github.com/mattn/go-sqlite3.(*SQLiteConn).query\n",
+    "app_alloc_space": "File: app.test\nBuild ID: fd182f24cc4c59f4b7cf2b31ce6efb9ad76fb172\nType: alloc_space\nTime: 2026-11-03 06:47:48 UTC\nShowing nodes accounting for 37164.77MB, 94.19% of 39456MB total\nDropped 3135 nodes (cum <= 197.28MB)\nShowing top 25 nodes out of 71\n      flat  flat%   sum%        cum   cum%\n25789.65MB 65.36% 65.36% 25789.65MB 65.36%  github.com/pressly/goose/v3/internal/sqlparser.init.func1\n    8151MB 20.66% 86.02%     8151MB 20.66%  golang.org/x/crypto/argon2.initBlocks\n 1085.56MB  2.75% 88.77%  1085.56MB  2.75%  compress/flate.newFastEnc (inline)\n  771.12MB  1.95% 90.73%  2054.46MB  5.21%  compress/flate.NewWriter (inline)\n  566.85MB  1.44% 92.16%   566.85MB  1.44%  compress/flate.(*fastGen).addBlock\n  328.81MB  0.83% 93.00%   328.81MB  0.83%  compress/flate.(*fastGen).reset\n  162.23MB  0.41% 93.41%  1283.34MB  3.25%  compress/flate.(*compressor).init\n  104.52MB  0.26% 93.67%   350.04MB  0.89%  database/sql.(*DB).queryDC\n   97.45MB  0.25% 93.92%   338.07MB  0.86%  rekenraam/backend/internal/app.(*forecastBuild).makeSeries\n   75.02MB  0.19% 94.11%   414.05MB  1.05%  database/sql.(*Rows).nextLocked\n   14.02MB 0.036% 94.15%  3023.18MB  7.66%  rekenraam/backend/internal/app.exportedBundle\n       6MB 0.015% 94.16% 25803.66MB 65.40%  github.com/pressly/goose/v3/internal/sqlparser.ParseSQLMigration\n    3.50MB 0.0089% 94.17%   280.57MB  0.71%  rekenraam/backend/internal/db.(*TransactionRepository).insertTransactionVersion\n       3MB 0.0076% 94.18%  2943.77MB  7.46%  archive/zip.(*Writer).CreateHeader\n       2MB 0.0051% 94.18%  2980.70MB  7.55%  rekenraam/backend/internal/app.(*ExportService).WriteBundle.func2\n    1.50MB 0.0038% 94.19%   267.68MB  0.68%  rekenraam/backend/internal/db.runInvestmentJournalsWithGuardTx[go.shape.ad6b052b05a6eb5526ca2cde963e56be2c28acf94757a4a894f95e9da9ba3e51]\n       1MB 0.0025% 94.19%  3097.26MB  7.85%  rekenraam/backend/internal/app.(*ExportService).WriteBundle\n    0.53MB 0.0013% 94.19%   339.11MB  0.86%  rekenraam/backend/internal/app.(*forecastBuild).finish\n    0.50MB 0.0013% 94.19%  2944.27MB  7.46%  archive/zip.(*Writer).Create (inline)\n    0.50MB 0.0013% 94.19%   308.57MB  0.78%  rekenraam/backend/internal/db.insertTransactionWithAuditEventTx\n         0     0% 94.19%   882.40MB  2.24%  archive/zip.(*Writer).prepare\n         0     0% 94.19%   900.55MB  2.28%  archive/zip.(*fileWriter).close\n         0     0% 94.19%   899.55MB  2.28%  archive/zip.(*pooledFlateWriter).Close\n         0     0% 94.19%  2053.82MB  5.21%  archive/zip.init.0.func2\n         0     0% 94.19%  2053.82MB  5.21%  archive/zip.newFlateWriter\n",
+    "large_book_cpu_cumulative": "File: app.test\nBuild ID: 62d68627661c8cd1a177f3fd28b9fa582d2e925a\nType: cpu\nTime: 2026-11-03 06:52:22 UTC\nDuration: 42.49s, Total samples = 43.95s (103.44%)\nShowing nodes accounting for 38.13s, 86.76% of 43.95s total\nDropped 427 nodes (cum <= 0.22s)\nShowing top 45 nodes out of 114\n      flat  flat%   sum%        cum   cum%\n         0     0%     0%     42.38s 96.43%  testing.tRunner\n         0     0%     0%     42.35s 96.36%  rekenraam/backend/internal/app.TestLargeBookExportAndSelfCheckStayBounded\n    38.07s 86.62% 86.62%     38.16s 86.83%  runtime.cgocall\n         0     0% 86.62%     26.26s 59.75%  database/sql.(*Rows).Next\n     0.01s 0.023% 86.64%     26.26s 59.75%  database/sql.(*Rows).Next.func1\n     0.01s 0.023% 86.67%     26.18s 59.57%  database/sql.(*Rows).nextLocked\n     0.01s 0.023% 86.69%     26.17s 59.54%  github.com/mattn/go-sqlite3.(*SQLiteRows).Next\n         0     0% 86.69%     24.19s 55.04%  github.com/mattn/go-sqlite3.(*SQLiteRows).Next.func1 (inline)\n     0.01s 0.023% 86.71%     24.19s 55.04%  github.com/mattn/go-sqlite3._Cfunc__sqlite3_step_internal\n         0     0% 86.71%     12.79s 29.10%  database/sql.withLock\n         0     0% 86.71%     12.76s 29.03%  rekenraam/backend/internal/app.seedLargeBook\n         0     0% 86.71%     12.75s 29.01%  github.com/mattn/go-sqlite3.(*SQLiteConn).exec\n         0     0% 86.71%     12.64s 28.76%  database/sql.(*DB).execDC\n         0     0% 86.71%     12.64s 28.76%  database/sql.(*DB).execDC.func2\n         0     0% 86.71%     12.64s 28.76%  database/sql.(*Tx).ExecContext\n         0     0% 86.71%     12.64s 28.76%  database/sql.ctxDriverExec\n         0     0% 86.71%     12.64s 28.76%  github.com/mattn/go-sqlite3.(*SQLiteConn).ExecContext\n         0     0% 86.71%     11.53s 26.23%  rekenraam/backend/internal/app.(*ExportService).WriteBundle\n         0     0% 86.71%     11.53s 26.23%  rekenraam/backend/internal/app.exportLargeBook\n         0     0% 86.71%     11.40s 25.94%  rekenraam/backend/internal/app.(*SelfCheckService).RunSelfCheck\n         0     0% 86.71%     11.40s 25.94%  rekenraam/backend/internal/app.(*SelfCheckService).executeChecks\n         0     0% 86.71%     10.57s 24.05%  github.com/mattn/go-sqlite3.(*SQLiteStmt).exec\n         0     0% 86.71%     10.57s 24.05%  github.com/mattn/go-sqlite3.(*SQLiteStmt).execSync\n         0     0% 86.71%     10.57s 24.05%  github.com/mattn/go-sqlite3.(*SQLiteStmt).execSync.func2 (inline)\n         0     0% 86.71%     10.57s 24.05%  github.com/mattn/go-sqlite3._Cfunc__sqlite3_step_row_internal\n         0     0% 86.71%      6.03s 13.72%  rekenraam/backend/internal/app.(*ExportService).WriteBundle.func2\n         0     0% 86.71%         6s 13.65%  rekenraam/backend/internal/app.(*ExportService).WriteBundle.func4\n         0     0% 86.71%         6s 13.65%  rekenraam/backend/internal/app.(*ExportService).writeBundleLedger\n     0.01s 0.023% 86.73%         6s 13.65%  rekenraam/backend/internal/db.(*ExportRepository).StreamLedgerPostings\n         0     0% 86.73%      5.55s 12.63%  database/sql.(*Row).Scan\n         0     0% 86.73%      3.98s  9.06%  rekenraam/backend/internal/app.(*HomeService).Home\n         0     0% 86.73%      3.98s  9.06%  rekenraam/backend/internal/app.(*HomeService).compose\n         0     0% 86.73%      3.12s  7.10%  rekenraam/backend/internal/db.(*SelfCheckRepository).CountStructuralAnomaly\n         0     0% 86.73%      3.03s  6.89%  rekenraam/backend/internal/db.(*ExportRepository).LedgerExportTotals\n         0     0% 86.73%      2.92s  6.64%  rekenraam/backend/internal/app.(*TransactionService).HomeBriefing\n         0     0% 86.73%      2.88s  6.55%  rekenraam/backend/internal/app.(*TransactionService).foldHome\n         0     0% 86.73%      2.85s  6.48%  rekenraam/backend/internal/app.(*TransactionService).foldHome.func1\n         0     0% 86.73%      2.85s  6.48%  rekenraam/backend/internal/app.netWorthScopedSeriesTotals\n         0     0% 86.73%      2.85s  6.48%  rekenraam/backend/internal/db.(*TransactionRepository).WithLedgerSnapshot\n         0     0% 86.73%      2.74s  6.23%  rekenraam/backend/internal/app.(*SelfCheckService).balanceChecks\n     0.01s 0.023% 86.76%      2.74s  6.23%  rekenraam/backend/internal/db.queryLedgerPostings\n         0     0% 86.76%      2.71s  6.17%  rekenraam/backend/internal/db.(*SelfCheckRepository).StreamPostedPostings\n         0     0% 86.76%      2.70s  6.14%  rekenraam/backend/internal/app.(*SelfCheckService).sqliteIntegrityCheck\n         0     0% 86.76%      2.70s  6.14%  rekenraam/backend/internal/db.(*SelfCheckRepository).SQLiteIntegrity\n         0     0% 86.76%      2.68s  6.10%  rekenraam/backend/internal/app.(*AttentionService).Read\n",
+    "large_book_cpu_flat": "File: app.test\nBuild ID: 62d68627661c8cd1a177f3fd28b9fa582d2e925a\nType: cpu\nTime: 2026-11-03 06:52:22 UTC\nDuration: 42.49s, Total samples = 43.95s (103.44%)\nShowing nodes accounting for 40.19s, 91.44% of 43.95s total\nDropped 427 nodes (cum <= 0.22s)\nShowing top 25 nodes out of 114\n      flat  flat%   sum%        cum   cum%\n    38.07s 86.62% 86.62%     38.16s 86.83%  runtime.cgocall\n     0.33s  0.75% 87.37%      1.18s  2.68%  database/sql.convertAssignRows\n     0.29s  0.66% 88.03%      0.29s  0.66%  runtime.futex\n     0.23s  0.52% 88.56%      0.33s  0.75%  runtime.mallocgcTinySC2\n     0.19s  0.43% 88.99%      1.94s  4.41%  github.com/mattn/go-sqlite3.(*SQLiteRows).readStepResultLocked\n     0.17s  0.39% 89.37%      0.29s  0.66%  runtime.tryDeferToSpanScan\n     0.16s  0.36% 89.74%      0.48s  1.09%  math/big.nat.scan\n     0.15s  0.34% 90.08%      1.33s  3.03%  database/sql.(*Rows).scanLocked\n     0.10s  0.23% 90.31%      0.31s  0.71%  runtime.scanObjectsSmall\n     0.09s   0.2% 90.51%      0.24s  0.55%  compress/flate.(*fastEncL5).encode\n     0.07s  0.16% 90.67%      0.72s  1.64%  runtime.mallocgc\n     0.06s  0.14% 90.81%      0.61s  1.39%  encoding/csv.(*Writer).Write\n     0.05s  0.11% 90.92%      0.25s  0.57%  runtime.convTstring\n     0.04s 0.091% 91.01%      0.34s  0.77%  bufio.(*Writer).WriteString\n     0.04s 0.091% 91.10%      0.52s  1.18%  runtime.findRunnable\n     0.03s 0.068% 91.17%      0.54s  1.23%  math/big.(*Int).scan\n     0.03s 0.068% 91.24%      0.38s  0.86%  runtime.scanSpan\n     0.02s 0.046% 91.29%      0.57s  1.30%  math/big.(*Int).setFromScanner\n     0.01s 0.023% 91.31%      0.30s  0.68%  archive/zip.(*fileWriter).Write\n     0.01s 0.023% 91.33%     26.26s 59.75%  database/sql.(*Rows).Next.func1\n     0.01s 0.023% 91.35%      1.38s  3.14%  database/sql.(*Rows).Scan\n     0.01s 0.023% 91.38%     26.18s 59.57%  database/sql.(*Rows).nextLocked\n     0.01s 0.023% 91.40%     26.17s 59.54%  github.com/mattn/go-sqlite3.(*SQLiteRows).Next\n     0.01s 0.023% 91.42%     24.19s 55.04%  github.com/mattn/go-sqlite3._Cfunc__sqlite3_step_internal\n     0.01s 0.023% 91.44%      0.70s  1.59%  math/big.(*Int).SetString\n",
+    "large_book_alloc_space": "File: app.test\nBuild ID: 62d68627661c8cd1a177f3fd28b9fa582d2e925a\nType: alloc_space\nTime: 2026-11-03 06:53:05 UTC\nShowing nodes accounting for 995.21MB, 96.72% of 1028.94MB total\nDropped 140 nodes (cum <= 5.14MB)\nShowing top 25 nodes out of 80\n      flat  flat%   sum%        cum   cum%\n  204.61MB 19.89% 19.89%   236.61MB 23.00%  rekenraam/backend/internal/db.queryLedgerPostings\n  146.08MB 14.20% 34.08%   156.58MB 15.22%  rekenraam/backend/internal/app.ledgerExportRow\n  119.55MB 11.62% 45.70%   373.64MB 36.31%  rekenraam/backend/internal/db.(*ExportRepository).StreamLedgerPostings\n  112.50MB 10.93% 56.64%      156MB 15.16%  github.com/mattn/go-sqlite3.(*SQLiteRows).readStepResultLocked\n   99.50MB  9.67% 66.31%    99.50MB  9.67%  strings.NewReader (inline)\n   66.51MB  6.46% 72.77%   107.51MB 10.45%  rekenraam/backend/internal/db.streamPricingPostings\n   50.50MB  4.91% 77.68%    50.50MB  4.91%  math/big.nat.make (inline)\n   43.50MB  4.23% 81.91%    43.50MB  4.23%  github.com/mattn/go-sqlite3._Cfunc_GoStringN (inline)\n   29.23MB  2.84% 84.75%    94.74MB  9.21%  rekenraam/backend/internal/app.(*SelfCheckService).balanceChecks.func1\n   20.01MB  1.94% 86.69%    20.01MB  1.94%  github.com/pressly/goose/v3/internal/sqlparser.init.func1\n      18MB  1.75% 88.44%   153.24MB 14.89%  rekenraam/backend/internal/db.(*SelfCheckRepository).StreamPostedPostings\n   15.51MB  1.51% 89.95%    15.51MB  1.51%  rekenraam/backend/internal/app.ledgerAccountMap\n      12MB  1.17% 91.11%       15MB  1.46%  math/big.(*Int).Text (inline)\n   11.50MB  1.12% 92.23%    62.50MB  6.07%  rekenraam/backend/internal/db.(*ExportRepository).StreamTrialBalancePostings\n    9.50MB  0.92% 93.16%     9.50MB  0.92%  math/big.NewInt (inline)\n    6.43MB  0.62% 93.78%     6.43MB  0.62%  rekenraam/backend/internal/db.(*ExportRepository).ExportAccounts\n    6.12MB   0.6% 94.38%     6.12MB   0.6%  rekenraam/backend/internal/app.(*ledgerAccountTimeline).snapshotThrough\n    5.64MB  0.55% 94.92%     6.64MB  0.65%  rekenraam/backend/internal/db.ledgerAccountsAsOf\n    5.50MB  0.53% 95.46%     8.50MB  0.83%  rekenraam/backend/internal/exact.Pow10\n    5.50MB  0.53% 95.99%     5.50MB  0.53%  internal/strconv.FormatInt\n    5.50MB  0.53% 96.53%       15MB  1.46%  rekenraam/backend/internal/exact.NewScaledInt (inline)\n    0.50MB 0.049% 96.58%      157MB 15.26%  database/sql.(*Rows).nextLocked\n    0.50MB 0.049% 96.62%       22MB  2.14%  rekenraam/backend/internal/app.addPosting\n    0.50MB 0.049% 96.67%    21.01MB  2.04%  github.com/pressly/goose/v3/internal/sqlparser.ParseSQLMigration\n    0.50MB 0.049% 96.72%    22.50MB  2.19%  rekenraam/backend/internal/app.foldPosting\n"
+  },
+  "raw_artifacts": {
+    "app.cpu_sha256": "6787ca82d2504ed80e86f98794050cae1e9378cce1157c045d4928b5a04f2276",
+    "app.mem_sha256": "cfb8fdaada147b18bc75bcd75a5879e7d5af45aa5dd5900e8b094e760776c91d",
+    "app-profile.json_sha256": "5de16ea8a69b16ad6c138836acdf6c23d4382782d1f10752c55257e3c971c7f6",
+    "ci-timings.json_sha256": "d4ae96a4ff52e1451f85ba961dcc766095e0f2932b5f64612fab2546487cd9cb"
+  },
+  "limitations": [
+    "One local host and one CI runner class; hosted timings include runner scheduling and cache variance.",
+    "Job wall time includes runner queueing. Step medians are the execution comparison; one retained run waited about an hour before its first step while the browser step itself took 733 s.",
+    "Race instrumentation and test parallelism inflate CPU and memory relative to production. The profile is for attribution, not a latency benchmark.",
+    "The native SQLite C engine is not instrumented by Go race detection and is not resolved completely by Go CPU profiles.",
+    "No controlled Python/Rust implementation was benchmarked. The language conclusion follows the measured location of cost in this codebase."
+  ]
+}
