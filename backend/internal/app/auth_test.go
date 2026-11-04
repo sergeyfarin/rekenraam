@@ -46,6 +46,21 @@ func TestParsePasswordHashRejectsOutOfRangeArgonParameters(t *testing.T) {
 			replacement: "m=19456,t=2,p=0",
 			message:     "argon2 parallelism parameter out of range",
 		},
+		{
+			name:        "memory above verification cap",
+			replacement: "m=1048577,t=2,p=1",
+			message:     "argon2 memory parameter out of range",
+		},
+		{
+			name:        "iterations above verification cap",
+			replacement: "m=19456,t=65,p=1",
+			message:     "argon2 iterations parameter out of range",
+		},
+		{
+			name:        "memory is negative",
+			replacement: "m=-1,t=2,p=1",
+			message:     `parse argon2 parameter "m": strconv.ParseUint: parsing "-1": invalid syntax`,
+		},
 	}
 
 	for _, tc := range cases {
@@ -59,6 +74,26 @@ func TestParsePasswordHashRejectsOutOfRangeArgonParameters(t *testing.T) {
 			assert.Equal(t, tc.message, err.Error())
 		})
 	}
+}
+
+func TestParsePasswordHashRejectsOutOfRangeArgonVersion(t *testing.T) {
+	t.Parallel()
+
+	_, err := parsePasswordHash("$argon2id$v=4294967296$m=19456,t=2,p=1$yFKjVHLDHsBTRk6lkk88Zg$dJ6u65HlcVuyRD4M7ArLq5QvFzwFgceJMsq/DIucXd0")
+
+	require.Error(t, err)
+	assert.Equal(t, "argon2 version parameter out of range", err.Error())
+}
+
+func TestParsePasswordHashAcceptsMaximumArgonParameters(t *testing.T) {
+	t.Parallel()
+
+	parsed, err := parsePasswordHash("$argon2id$v=19$m=1048576,t=64,p=255$yFKjVHLDHsBTRk6lkk88Zg$dJ6u65HlcVuyRD4M7ArLq5QvFzwFgceJMsq/DIucXd0")
+
+	require.NoError(t, err)
+	assert.Equal(t, uint32(maxArgon2MemoryKiB), parsed.MemoryKiB)
+	assert.Equal(t, uint32(maxArgon2Iterations), parsed.Iterations)
+	assert.Equal(t, uint8(maxArgon2Parallelism), parsed.Parallelism)
 }
 
 func TestParsePasswordHashAcceptsConfiguredArgonParameters(t *testing.T) {

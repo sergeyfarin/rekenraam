@@ -27,6 +27,7 @@ Implementation rules:
 5. Store no plaintext passwords and no reversible password encryption.
 6. Keep parameters upgradeable so future logins can rehash with stronger settings when needed.
 7. Owner setup and local owner recovery require passwords between 12 Unicode characters and 1024 bytes.
+8. Treat parameters read from a stored hash as bounded input: verification rejects memory above 1 GiB, iterations above 64, or parallelism outside 1–255, so one login attempt has a bounded cost while upgrades keep ample headroom.
 
 First-run setup is a guided workflow whose complete target state is:
 
