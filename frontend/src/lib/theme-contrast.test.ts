@@ -64,6 +64,7 @@ function tokenBlocks(): Map<string, Record<string, RGB>> {
 }
 
 const blocks = tokenBlocks();
+const shellTint = Number(/\.shell-bar\s*\{[^}]*var\(--color-background\) (\d+)%/.exec(css)?.[1]) / 100;
 const accentTint = Number(/\.status-accent-soft\s*\{[^}]*var\(--color-accent\) (\d+)%/.exec(css)?.[1]) / 100;
 const surfaces = ['background', 'surface', 'surface-strong', 'toolbar', 'control', 'row-hover'];
 
@@ -94,6 +95,7 @@ const combinations = (['light', 'dark'] as const).flatMap((theme) =>
 describe('theme contrast', () => {
   it('reads the accent tint from app.css', () => {
     expect(accentTint).toBeGreaterThan(0);
+    expect(shellTint).toBeGreaterThan(0);
     expect(combinations).toHaveLength(30);
   });
 
@@ -123,6 +125,12 @@ describe('theme contrast', () => {
           [`accent text on ${surface}`, contrast(p['accent'], p[surface])]
         ])
       ];
+      // The sticky shell bar is translucent: page content scrolls beneath it,
+      // so its muted tab text must hold AA over any opaque token fill there
+      // (#501: a bg-foreground control under an 84% tint read 4.41:1).
+      for (const [name, backdrop] of Object.entries(p)) {
+        pairs.push([`muted shell text over ${name}`, contrast(p['muted'], over(p['background'], shellTint, backdrop))]);
+      }
       const failing = pairs.filter(([, ratio]) => ratio < AA).map(([name, ratio]) => `${name} ${ratio.toFixed(2)}:1`);
       expect(failing).toEqual([]);
     });

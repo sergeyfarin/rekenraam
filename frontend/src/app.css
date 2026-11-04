@@ -385,8 +385,11 @@
    * menus, dialogs) is never translucent, and neither is the bar for someone
    * who asked for less transparency.
    */
+  /* Content scrolls beneath this tint, so muted tab text must stay at AA over the
+     darkest fill that can sit behind it: 84% read 4.41:1 over a bg-foreground control.
+     theme-contrast.test.ts pins the floor for every palette. */
   .shell-bar {
-    background-color: color-mix(in oklab, var(--color-background) 84%, transparent);
+    background-color: color-mix(in oklab, var(--color-background) 94%, transparent);
     backdrop-filter: blur(12px);
   }
 
