@@ -118,6 +118,10 @@ func TestParsePasswordHashRejectsOutOfRangeSaltAndHashLengths(t *testing.T) {
 		{"empty salt", "", hash32, "argon2 salt length out of range"},
 		{"salt too short", encode(minArgon2SaltLength - 1), hash32, "argon2 salt length out of range"},
 		{"salt too long", encode(maxArgon2SaltLength + 1), hash32, "argon2 salt length out of range"},
+		// Oversized values are rejected on encoded length before decoding, so
+		// even invalid base64 reports the length error rather than allocating.
+		{"oversized invalid salt", strings.Repeat("!", 1<<16), hash32, "argon2 salt length out of range"},
+		{"oversized invalid hash", salt16, strings.Repeat("!", 1<<16), "argon2 hash length out of range"},
 	}
 
 	for _, tc := range cases {
@@ -137,6 +141,24 @@ func TestParsePasswordHashRejectsOutOfRangeSaltAndHashLengths(t *testing.T) {
 				assert.Error(t, verifyErr)
 			})
 		})
+	}
+}
+
+func TestParsePasswordHashAcceptsBoundarySaltAndHashLengths(t *testing.T) {
+	t.Parallel()
+
+	for _, n := range [][2]int{
+		{minArgon2SaltLength, minArgon2HashLength},
+		{maxArgon2SaltLength, maxArgon2HashLength},
+	} {
+		salt := base64.RawStdEncoding.EncodeToString(make([]byte, n[0]))
+		hash := base64.RawStdEncoding.EncodeToString(make([]byte, n[1]))
+
+		parsed, err := parsePasswordHash("$argon2id$v=19$m=19456,t=2,p=1$" + salt + "$" + hash)
+
+		require.NoError(t, err)
+		assert.Len(t, parsed.Salt, n[0])
+		assert.Len(t, parsed.Hash, n[1])
 	}
 }
 

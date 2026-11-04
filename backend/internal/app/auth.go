@@ -719,20 +719,13 @@ func parsePasswordHash(encodedHash string) (parsedPasswordHash, error) {
 		return parsedPasswordHash{}, err
 	}
 
-	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
+	salt, err := decodeArgonField(parts[4], "salt", minArgon2SaltLength, maxArgon2SaltLength)
 	if err != nil {
-		return parsedPasswordHash{}, fmt.Errorf("decode argon2 salt: %w", err)
+		return parsedPasswordHash{}, err
 	}
-
-	hash, err := base64.RawStdEncoding.DecodeString(parts[5])
+	hash, err := decodeArgonField(parts[5], "hash", minArgon2HashLength, maxArgon2HashLength)
 	if err != nil {
-		return parsedPasswordHash{}, fmt.Errorf("decode argon2 hash: %w", err)
-	}
-	if len(salt) < minArgon2SaltLength || len(salt) > maxArgon2SaltLength {
-		return parsedPasswordHash{}, fmt.Errorf("argon2 salt length out of range")
-	}
-	if len(hash) < minArgon2HashLength || len(hash) > maxArgon2HashLength {
-		return parsedPasswordHash{}, fmt.Errorf("argon2 hash length out of range")
+		return parsedPasswordHash{}, err
 	}
 
 	return parsedPasswordHash{
@@ -964,6 +957,23 @@ func readArgonUint8Parameter(segment, expectedKey, name string, minValue, maxVal
 		return 0, argonParameterParseError(expectedKey, name, err)
 	}
 	return checkArgonParameterRange(uint8(parsedValue), name, minValue, maxValue)
+}
+
+// decodeArgonField rejects an oversized encoded value before decoding so a
+// malformed stored hash cannot force a large allocation, then checks the exact
+// decoded length.
+func decodeArgonField(encoded, name string, minLength, maxLength int) ([]byte, error) {
+	if base64.RawStdEncoding.DecodedLen(len(encoded)) > maxLength {
+		return nil, fmt.Errorf("argon2 %s length out of range", name)
+	}
+	decoded, err := base64.RawStdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("decode argon2 %s: %w", name, err)
+	}
+	if len(decoded) < minLength || len(decoded) > maxLength {
+		return nil, fmt.Errorf("argon2 %s length out of range", name)
+	}
+	return decoded, nil
 }
 
 func argonParameterValue(segment string, expectedKey string) (string, error) {

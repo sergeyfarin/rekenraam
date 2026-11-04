@@ -75,7 +75,8 @@ deriving a key, verification rejects a stored hash unless:
 
 - memory is 1 KiB–256 MiB (the total argon2 allocation, not per lane);
 - iterations are 1–8 and parallelism is 1–16;
-- the decoded salt is 8–64 bytes and the decoded hash is 16–64 bytes.
+- the decoded salt is 8–64 bytes and the decoded hash is 16–64 bytes; an
+  oversized encoded value is rejected before base64 decoding allocates.
 
 Memory × iterations is then at most about 54× the configured 19 MiB × 2
 profile, which bounds one login attempt on a small self-hosted container while
