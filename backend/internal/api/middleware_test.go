@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	sqlite "github.com/mattn/go-sqlite3"
@@ -120,6 +121,35 @@ func TestSecurityMiddlewareDisablesAuthResponseCaching(t *testing.T) {
 	require.Equal(t, http.StatusNoContent, res.Code)
 	assert.Equal(t, "no-store", res.Header().Get("Cache-Control"))
 	assert.Equal(t, "no-cache", res.Header().Get("Pragma"))
+}
+
+// The app must never load fonts, icons, scripts, styles or images from a third
+// party (docs/conventions.md, Security And Deployment Conventions): every CSP
+// source is same-origin, inline or data:, never a host or scheme wildcard.
+func TestSecurityMiddlewareCSPLoadsOnlySameOriginResources(t *testing.T) {
+	t.Parallel()
+
+	handler := withSecurityHeaders(HandlerOptions{}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	allowed := map[string]bool{"'self'": true, "'none'": true, "'unsafe-inline'": true, "data:": true}
+	directives := map[string]bool{}
+	for _, directive := range strings.Split(res.Header().Get("Content-Security-Policy"), ";") {
+		fields := strings.Fields(directive)
+		if len(fields) == 0 {
+			continue
+		}
+		directives[fields[0]] = true
+		for _, source := range fields[1:] {
+			assert.True(t, allowed[source], "%s allows non-local source %q", fields[0], source)
+		}
+	}
+	for _, name := range []string{"default-src", "script-src", "style-src", "font-src", "img-src", "connect-src"} {
+		assert.True(t, directives[name], "CSP must set %s explicitly", name)
+	}
 }
 
 func TestSecurityMiddlewareSetsHSTSOnlyForHTTPS(t *testing.T) {

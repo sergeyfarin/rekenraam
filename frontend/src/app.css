@@ -1,9 +1,15 @@
 @import "tailwindcss";
+/* Fonts ship with the app (OFL-1.1, bundled from npm): no font CDN is ever contacted.
+   Each file declares unicode-range subsets, so browsers fetch only the scripts a page uses. */
+@import "@fontsource-variable/inter";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/ibm-plex-mono/600.css";
 
 :root {
   color-scheme: light;
 
-  --font-sans: "Inter Variable", "Inter", "IBM Plex Sans", "Segoe UI", sans-serif;
+  --font-sans: "Inter Variable", "Segoe UI", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", "SFMono-Regular", "SF Mono", monospace;
 
   --color-background: oklch(0.976 0.009 108);
@@ -379,8 +385,11 @@
    * menus, dialogs) is never translucent, and neither is the bar for someone
    * who asked for less transparency.
    */
+  /* Content scrolls beneath this tint, so muted tab text must stay at AA over the
+     darkest fill that can sit behind it: 84% read 4.41:1 over a bg-foreground control.
+     theme-contrast.test.ts pins the floor for every palette. */
   .shell-bar {
-    background-color: color-mix(in oklab, var(--color-background) 84%, transparent);
+    background-color: color-mix(in oklab, var(--color-background) 94%, transparent);
     backdrop-filter: blur(12px);
   }
 
