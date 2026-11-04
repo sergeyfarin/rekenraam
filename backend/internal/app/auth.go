@@ -696,7 +696,7 @@ func parsePasswordHash(encodedHash string) (parsedPasswordHash, error) {
 		return parsedPasswordHash{}, fmt.Errorf("unsupported password hash algorithm: %s", parts[1])
 	}
 
-	version, err := readArgonUint32Parameter(parts[2], "v", "version", 0)
+	version, err := readArgonUint32Parameter(parts[2], "v", "version", 0, math.MaxUint32)
 	if err != nil {
 		return parsedPasswordHash{}, err
 	}
@@ -706,27 +706,26 @@ func parsePasswordHash(encodedHash string) (parsedPasswordHash, error) {
 		return parsedPasswordHash{}, fmt.Errorf("invalid argon2 parameter segment")
 	}
 
-	memoryKiB, err := readArgonUint32Parameter(parameters[0], "m", "memory", 1)
+	memoryKiB, err := readArgonUint32Parameter(parameters[0], "m", "memory", 1, maxArgon2MemoryKiB)
 	if err != nil {
 		return parsedPasswordHash{}, err
 	}
-	iterations, err := readArgonUint32Parameter(parameters[1], "t", "iterations", 1)
+	iterations, err := readArgonUint32Parameter(parameters[1], "t", "iterations", 1, maxArgon2Iterations)
 	if err != nil {
 		return parsedPasswordHash{}, err
 	}
-	parallelism, err := readArgonUint8Parameter(parameters[2], "p", "parallelism", 1)
+	parallelism, err := readArgonUint8Parameter(parameters[2], "p", "parallelism", 1, maxArgon2Parallelism)
 	if err != nil {
 		return parsedPasswordHash{}, err
 	}
 
-	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
+	salt, err := decodeArgonField(parts[4], "salt", minArgon2SaltLength, maxArgon2SaltLength)
 	if err != nil {
-		return parsedPasswordHash{}, fmt.Errorf("decode argon2 salt: %w", err)
+		return parsedPasswordHash{}, err
 	}
-
-	hash, err := base64.RawStdEncoding.DecodeString(parts[5])
+	hash, err := decodeArgonField(parts[5], "hash", minArgon2HashLength, maxArgon2HashLength)
 	if err != nil {
-		return parsedPasswordHash{}, fmt.Errorf("decode argon2 hash: %w", err)
+		return parsedPasswordHash{}, err
 	}
 
 	return parsedPasswordHash{
@@ -919,38 +918,62 @@ func (s *AuthService) approveDevice(ctx context.Context, userID int64, clientIP 
 	return token, nil
 }
 
-func readArgonUint32Parameter(segment string, expectedKey string, name string, minValue uint64) (uint32, error) {
+// Verification caps for parameters read from a stored hash (ADR 0003). They
+// bound the memory and CPU one login attempt can cost: memory is the total
+// argon2 allocation (not per lane), and memory x iterations is at most ~54x the
+// configured 19 MiB x 2 profile. The caps still admit the RFC 9106 and OWASP
+// recommended profiles so stronger settings can be adopted by rehash.
+const (
+	maxArgon2MemoryKiB   = 256 * 1024 // 256 MiB
+	maxArgon2Iterations  = 8
+	maxArgon2Parallelism = 16
+	minArgon2SaltLength  = 8
+	maxArgon2SaltLength  = 64
+	minArgon2HashLength  = 16
+	maxArgon2HashLength  = 64
+)
+
+// readArgonUint32Parameter and readArgonUint8Parameter parse with a constant
+// bit size so the narrowing conversion is provably in range.
+func readArgonUint32Parameter(segment, expectedKey, name string, minValue, maxValue uint32) (uint32, error) {
 	value, err := argonParameterValue(segment, expectedKey)
 	if err != nil {
 		return 0, err
 	}
-
-	parsedValue, err := strconv.ParseUint(value, 10, 64)
+	parsedValue, err := strconv.ParseUint(value, 10, 32)
 	if err != nil {
-		return 0, fmt.Errorf("parse argon2 parameter %q: %w", expectedKey, err)
+		return 0, argonParameterParseError(expectedKey, name, err)
 	}
-	if parsedValue < minValue || parsedValue > math.MaxUint32 {
-		return 0, fmt.Errorf("argon2 %s parameter out of range", name)
-	}
-
-	return uint32(parsedValue), nil
+	return checkArgonParameterRange(uint32(parsedValue), name, minValue, maxValue)
 }
 
-func readArgonUint8Parameter(segment string, expectedKey string, name string, minValue uint64) (uint8, error) {
+func readArgonUint8Parameter(segment, expectedKey, name string, minValue, maxValue uint8) (uint8, error) {
 	value, err := argonParameterValue(segment, expectedKey)
 	if err != nil {
 		return 0, err
 	}
-
-	parsedValue, err := strconv.ParseUint(value, 10, 64)
+	parsedValue, err := strconv.ParseUint(value, 10, 8)
 	if err != nil {
-		return 0, fmt.Errorf("parse argon2 parameter %q: %w", expectedKey, err)
+		return 0, argonParameterParseError(expectedKey, name, err)
 	}
-	if parsedValue < minValue || parsedValue > math.MaxUint8 {
-		return 0, fmt.Errorf("argon2 %s parameter out of range", name)
-	}
+	return checkArgonParameterRange(uint8(parsedValue), name, minValue, maxValue)
+}
 
-	return uint8(parsedValue), nil
+// decodeArgonField rejects an oversized encoded value before decoding so a
+// malformed stored hash cannot force a large allocation, then checks the exact
+// decoded length.
+func decodeArgonField(encoded, name string, minLength, maxLength int) ([]byte, error) {
+	if base64.RawStdEncoding.DecodedLen(len(encoded)) > maxLength {
+		return nil, fmt.Errorf("argon2 %s length out of range", name)
+	}
+	decoded, err := base64.RawStdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("decode argon2 %s: %w", name, err)
+	}
+	if len(decoded) < minLength || len(decoded) > maxLength {
+		return nil, fmt.Errorf("argon2 %s length out of range", name)
+	}
+	return decoded, nil
 }
 
 func argonParameterValue(segment string, expectedKey string) (string, error) {
@@ -958,8 +981,25 @@ func argonParameterValue(segment string, expectedKey string) (string, error) {
 	if !ok || key != expectedKey {
 		return "", fmt.Errorf("invalid argon2 parameter %q", segment)
 	}
-
 	return value, nil
+}
+
+func argonParameterParseError(expectedKey, name string, err error) error {
+	if errors.Is(err, strconv.ErrRange) {
+		return argonParameterRangeError(name)
+	}
+	return fmt.Errorf("parse argon2 parameter %q: %w", expectedKey, err)
+}
+
+func checkArgonParameterRange[T uint8 | uint32](value T, name string, minValue, maxValue T) (T, error) {
+	if value < minValue || value > maxValue {
+		return 0, argonParameterRangeError(name)
+	}
+	return value, nil
+}
+
+func argonParameterRangeError(name string) error {
+	return fmt.Errorf("argon2 %s parameter out of range", name)
 }
 
 func hashSessionToken(token string) string {
