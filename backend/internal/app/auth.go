@@ -80,10 +80,10 @@ type loginThrottleScope struct {
 }
 
 type parsedPasswordHash struct {
-	Version     int
-	MemoryKiB   int
-	Iterations  int
-	Parallelism int
+	Version     uint32
+	MemoryKiB   uint32
+	Iterations  uint32
+	Parallelism uint8
 	Salt        []byte
 	Hash        []byte
 }
@@ -679,9 +679,9 @@ func verifyPassword(password string, encodedHash string) (bool, error) {
 	derivedHash := argon2.IDKey(
 		[]byte(password),
 		parsedHash.Salt,
-		uint32(parsedHash.Iterations),
-		uint32(parsedHash.MemoryKiB),
-		uint8(parsedHash.Parallelism),
+		parsedHash.Iterations,
+		parsedHash.MemoryKiB,
+		parsedHash.Parallelism,
 		uint32(len(parsedHash.Hash)),
 	)
 	return subtle.ConstantTimeCompare(parsedHash.Hash, derivedHash) == 1, nil
@@ -696,7 +696,7 @@ func parsePasswordHash(encodedHash string) (parsedPasswordHash, error) {
 		return parsedPasswordHash{}, fmt.Errorf("unsupported password hash algorithm: %s", parts[1])
 	}
 
-	version, err := readArgonParameter(parts[2], "v")
+	version, err := readArgonUint32Parameter(parts[2], "v", "version", 0)
 	if err != nil {
 		return parsedPasswordHash{}, err
 	}
@@ -706,19 +706,16 @@ func parsePasswordHash(encodedHash string) (parsedPasswordHash, error) {
 		return parsedPasswordHash{}, fmt.Errorf("invalid argon2 parameter segment")
 	}
 
-	memoryKiB, err := readArgonParameter(parameters[0], "m")
+	memoryKiB, err := readArgonUint32Parameter(parameters[0], "m", "memory", 1)
 	if err != nil {
 		return parsedPasswordHash{}, err
 	}
-	iterations, err := readArgonParameter(parameters[1], "t")
+	iterations, err := readArgonUint32Parameter(parameters[1], "t", "iterations", 1)
 	if err != nil {
 		return parsedPasswordHash{}, err
 	}
-	parallelism, err := readArgonParameter(parameters[2], "p")
+	parallelism, err := readArgonUint8Parameter(parameters[2], "p", "parallelism", 1)
 	if err != nil {
-		return parsedPasswordHash{}, err
-	}
-	if err := validateArgonParameters(version, memoryKiB, iterations, parallelism); err != nil {
 		return parsedPasswordHash{}, err
 	}
 
@@ -740,22 +737,6 @@ func parsePasswordHash(encodedHash string) (parsedPasswordHash, error) {
 		Salt:        salt,
 		Hash:        hash,
 	}, nil
-}
-
-func validateArgonParameters(version, memoryKiB, iterations, parallelism int) error {
-	if version < 0 || version > math.MaxUint32 {
-		return fmt.Errorf("argon2 version out of range")
-	}
-	if memoryKiB <= 0 || memoryKiB > math.MaxUint32 {
-		return fmt.Errorf("argon2 memory parameter out of range")
-	}
-	if iterations <= 0 || iterations > math.MaxUint32 {
-		return fmt.Errorf("argon2 iterations parameter out of range")
-	}
-	if parallelism <= 0 || parallelism > math.MaxUint8 {
-		return fmt.Errorf("argon2 parallelism parameter out of range")
-	}
-	return nil
 }
 
 func (s *AuthService) passwordNeedsRehash(ctx context.Context, encodedHash string) bool {
@@ -938,18 +919,47 @@ func (s *AuthService) approveDevice(ctx context.Context, userID int64, clientIP 
 	return token, nil
 }
 
-func readArgonParameter(segment string, expectedKey string) (int, error) {
-	key, value, ok := strings.Cut(segment, "=")
-	if !ok || key != expectedKey {
-		return 0, fmt.Errorf("invalid argon2 parameter %q", segment)
+func readArgonUint32Parameter(segment string, expectedKey string, name string, minValue uint64) (uint32, error) {
+	value, err := argonParameterValue(segment, expectedKey)
+	if err != nil {
+		return 0, err
 	}
 
-	parsedValue, err := strconv.Atoi(value)
+	parsedValue, err := strconv.ParseUint(value, 10, 64)
 	if err != nil {
 		return 0, fmt.Errorf("parse argon2 parameter %q: %w", expectedKey, err)
 	}
+	if parsedValue < minValue || parsedValue > math.MaxUint32 {
+		return 0, fmt.Errorf("argon2 %s parameter out of range", name)
+	}
 
-	return parsedValue, nil
+	return uint32(parsedValue), nil
+}
+
+func readArgonUint8Parameter(segment string, expectedKey string, name string, minValue uint64) (uint8, error) {
+	value, err := argonParameterValue(segment, expectedKey)
+	if err != nil {
+		return 0, err
+	}
+
+	parsedValue, err := strconv.ParseUint(value, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse argon2 parameter %q: %w", expectedKey, err)
+	}
+	if parsedValue < minValue || parsedValue > math.MaxUint8 {
+		return 0, fmt.Errorf("argon2 %s parameter out of range", name)
+	}
+
+	return uint8(parsedValue), nil
+}
+
+func argonParameterValue(segment string, expectedKey string) (string, error) {
+	key, value, ok := strings.Cut(segment, "=")
+	if !ok || key != expectedKey {
+		return "", fmt.Errorf("invalid argon2 parameter %q", segment)
+	}
+
+	return value, nil
 }
 
 func hashSessionToken(token string) string {

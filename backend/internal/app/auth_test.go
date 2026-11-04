@@ -67,10 +67,10 @@ func TestParsePasswordHashAcceptsConfiguredArgonParameters(t *testing.T) {
 	parsed, err := parsePasswordHash("$argon2id$v=19$m=19456,t=2,p=1$yFKjVHLDHsBTRk6lkk88Zg$dJ6u65HlcVuyRD4M7ArLq5QvFzwFgceJMsq/DIucXd0")
 
 	require.NoError(t, err)
-	assert.Equal(t, 19, parsed.Version)
-	assert.Equal(t, argon2MemoryKiB, parsed.MemoryKiB)
-	assert.Equal(t, argon2Iterations, parsed.Iterations)
-	assert.Equal(t, argon2Parallelism, parsed.Parallelism)
+	assert.Equal(t, uint32(19), parsed.Version)
+	assert.Equal(t, uint32(argon2MemoryKiB), parsed.MemoryKiB)
+	assert.Equal(t, uint32(argon2Iterations), parsed.Iterations)
+	assert.Equal(t, uint8(argon2Parallelism), parsed.Parallelism)
 	assert.Len(t, parsed.Salt, argon2SaltLength)
 	assert.Len(t, parsed.Hash, argon2KeyLength)
 }
