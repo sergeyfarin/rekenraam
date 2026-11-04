@@ -6,7 +6,7 @@ Accepted
 
 ## Date
 
-2026-05-30
+2026-05-30; amended 2026-11-04 for bounded verification parameters (#504).
 
 ## Context
 
@@ -27,7 +27,7 @@ Implementation rules:
 5. Store no plaintext passwords and no reversible password encryption.
 6. Keep parameters upgradeable so future logins can rehash with stronger settings when needed.
 7. Owner setup and local owner recovery require passwords between 12 Unicode characters and 1024 bytes.
-8. Treat parameters read from a stored hash as bounded input: verification rejects memory above 1 GiB, iterations above 64, or parallelism outside 1–255, so one login attempt has a bounded cost while upgrades keep ample headroom.
+8. Treat parameters read from a stored hash as bounded input before verification (see the 2026-11-04 amendment).
 
 First-run setup is a guided workflow whose complete target state is:
 
@@ -66,3 +66,19 @@ This workflow is implemented incrementally:
 - Revisit password reset and failed-login throttling parameters before auth is exposed beyond localhost development.
 - Define the exact system account roles before account setup lands.
 - Define the initial default category set before category setup lands.
+
+## Amendment — bounded verification parameters, 2026-11-04
+
+Stored hashes are self-describing (rule 2), so verification would otherwise
+spend whatever memory and time a malformed or tampered row requests. Before
+deriving a key, verification rejects a stored hash unless:
+
+- memory is 1 KiB–256 MiB (the total argon2 allocation, not per lane);
+- iterations are 1–8 and parallelism is 1–16;
+- the decoded salt is 8–64 bytes and the decoded hash is 16–64 bytes.
+
+Memory × iterations is then at most about 54× the configured 19 MiB × 2
+profile, which bounds one login attempt on a small self-hosted container while
+still admitting the RFC 9106 second recommended profile (64 MiB, t=3, p=4) and
+the OWASP Argon2id profiles for future rehash upgrades (rule 6). Adopting a
+profile beyond these caps requires amending this ADR and the caps together.

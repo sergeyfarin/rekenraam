@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"io"
 	"log/slog"
 	"strings"
@@ -48,13 +49,23 @@ func TestParsePasswordHashRejectsOutOfRangeArgonParameters(t *testing.T) {
 		},
 		{
 			name:        "memory above verification cap",
-			replacement: "m=1048577,t=2,p=1",
+			replacement: "m=262145,t=2,p=1",
 			message:     "argon2 memory parameter out of range",
 		},
 		{
 			name:        "iterations above verification cap",
-			replacement: "m=19456,t=65,p=1",
+			replacement: "m=19456,t=9,p=1",
 			message:     "argon2 iterations parameter out of range",
+		},
+		{
+			name:        "parallelism above verification cap",
+			replacement: "m=19456,t=2,p=17",
+			message:     "argon2 parallelism parameter out of range",
+		},
+		{
+			name:        "parallelism overflows uint8 by a lot",
+			replacement: "m=19456,t=2,p=4294967296",
+			message:     "argon2 parallelism parameter out of range",
 		},
 		{
 			name:        "memory is negative",
@@ -85,10 +96,54 @@ func TestParsePasswordHashRejectsOutOfRangeArgonVersion(t *testing.T) {
 	assert.Equal(t, "argon2 version parameter out of range", err.Error())
 }
 
+func TestParsePasswordHashRejectsOutOfRangeSaltAndHashLengths(t *testing.T) {
+	t.Parallel()
+
+	const (
+		salt16 = "yFKjVHLDHsBTRk6lkk88Zg"
+		hash32 = "dJ6u65HlcVuyRD4M7ArLq5QvFzwFgceJMsq/DIucXd0"
+	)
+	encode := func(n int) string {
+		return base64.RawStdEncoding.EncodeToString(make([]byte, n))
+	}
+	cases := []struct {
+		name    string
+		salt    string
+		hash    string
+		message string
+	}{
+		{"empty hash", salt16, "", "argon2 hash length out of range"},
+		{"hash too short", salt16, encode(minArgon2HashLength - 1), "argon2 hash length out of range"},
+		{"hash too long", salt16, encode(maxArgon2HashLength + 1), "argon2 hash length out of range"},
+		{"empty salt", "", hash32, "argon2 salt length out of range"},
+		{"salt too short", encode(minArgon2SaltLength - 1), hash32, "argon2 salt length out of range"},
+		{"salt too long", encode(maxArgon2SaltLength + 1), hash32, "argon2 salt length out of range"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			encodedHash := "$argon2id$v=19$m=19456,t=2,p=1$" + tc.salt + "$" + tc.hash
+			_, err := parsePasswordHash(encodedHash)
+			require.Error(t, err)
+			assert.Equal(t, tc.message, err.Error())
+
+			// verifyPassword must reject before deriving; an empty hash used
+			// to reach argon2.IDKey with keyLen 0 and panic in blake2b.
+			require.NotPanics(t, func() {
+				ok, verifyErr := verifyPassword("correct horse battery staple", encodedHash)
+				assert.False(t, ok)
+				assert.Error(t, verifyErr)
+			})
+		})
+	}
+}
+
 func TestParsePasswordHashAcceptsMaximumArgonParameters(t *testing.T) {
 	t.Parallel()
 
-	parsed, err := parsePasswordHash("$argon2id$v=19$m=1048576,t=64,p=255$yFKjVHLDHsBTRk6lkk88Zg$dJ6u65HlcVuyRD4M7ArLq5QvFzwFgceJMsq/DIucXd0")
+	parsed, err := parsePasswordHash("$argon2id$v=19$m=262144,t=8,p=16$yFKjVHLDHsBTRk6lkk88Zg$dJ6u65HlcVuyRD4M7ArLq5QvFzwFgceJMsq/DIucXd0")
 
 	require.NoError(t, err)
 	assert.Equal(t, uint32(maxArgon2MemoryKiB), parsed.MemoryKiB)

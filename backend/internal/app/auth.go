@@ -728,6 +728,12 @@ func parsePasswordHash(encodedHash string) (parsedPasswordHash, error) {
 	if err != nil {
 		return parsedPasswordHash{}, fmt.Errorf("decode argon2 hash: %w", err)
 	}
+	if len(salt) < minArgon2SaltLength || len(salt) > maxArgon2SaltLength {
+		return parsedPasswordHash{}, fmt.Errorf("argon2 salt length out of range")
+	}
+	if len(hash) < minArgon2HashLength || len(hash) > maxArgon2HashLength {
+		return parsedPasswordHash{}, fmt.Errorf("argon2 hash length out of range")
+	}
 
 	return parsedPasswordHash{
 		Version:     version,
@@ -919,13 +925,19 @@ func (s *AuthService) approveDevice(ctx context.Context, userID int64, clientIP 
 	return token, nil
 }
 
-// Verification caps for argon2 parameters read from a stored hash. They bound
-// the CPU and memory a single login attempt can cost while leaving ample
-// headroom above the configured profile for future rehash upgrades.
+// Verification caps for parameters read from a stored hash (ADR 0003). They
+// bound the memory and CPU one login attempt can cost: memory is the total
+// argon2 allocation (not per lane), and memory x iterations is at most ~54x the
+// configured 19 MiB x 2 profile. The caps still admit the RFC 9106 and OWASP
+// recommended profiles so stronger settings can be adopted by rehash.
 const (
-	maxArgon2MemoryKiB   = 1024 * 1024 // 1 GiB
-	maxArgon2Iterations  = 64
-	maxArgon2Parallelism = math.MaxUint8
+	maxArgon2MemoryKiB   = 256 * 1024 // 256 MiB
+	maxArgon2Iterations  = 8
+	maxArgon2Parallelism = 16
+	minArgon2SaltLength  = 8
+	maxArgon2SaltLength  = 64
+	minArgon2HashLength  = 16
+	maxArgon2HashLength  = 64
 )
 
 // readArgonUint32Parameter and readArgonUint8Parameter parse with a constant
