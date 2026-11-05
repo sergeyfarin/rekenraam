@@ -1239,7 +1239,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 
 	version, err := EmbeddedMigrationVersion()
 	require.NoError(t, err)
-	assert.Equal(t, int64(5), version, "the unused v0.1 baseline, #417's category-version delete guard, #481's transfer sides and #485's posting links and their history")
+	assert.Equal(t, int64(6), version, "the unused v0.1 baseline, #417's category-version delete guard, #481's transfer sides and #485's posting links, their history and evidence")
 
 	ctx := context.Background()
 	database, err := Open(ctx, SQLiteFileURL(filepath.Join(t.TempDir(), "schema.sqlite")))
@@ -1270,7 +1270,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 	assert.Equal(t, map[string]int{
 		"index":   108,
 		"table":   118,
-		"trigger": 171,
+		"trigger": 172,
 		"view":    17,
 	}, objectCounts, "the migrated head must retain every schema object")
 	assert.Equal(t, "view", objects["valid_investment_dividend_facts"])
@@ -1303,6 +1303,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 	assert.Equal(t, "trigger", objects["investment_capital_return_facts_valid"])
 	assert.Equal(t, "table", objects["import_posting_links"])
 	assert.Equal(t, "trigger", objects["import_posting_links_valid"])
+	assert.Equal(t, "trigger", objects["import_posting_links_evidence"])
 	assert.Equal(t, "table", objects["import_posting_link_retirements"])
 	assert.Equal(t, "view", objects["active_import_posting_links"])
 	assert.Equal(t, "trigger", objects["import_commit_identity_effects_not_linked"])

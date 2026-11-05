@@ -5,7 +5,7 @@ post:
     event (import.posting.unlink). Nothing in the ledger changes. The link and
     its retirement stay as evidence and the row keeps its import identity, so
     re-importing it is still a duplicate and it can be linked again through
-    reassign. expected_link_id names the link the owner reviewed.
+    reassign. expected_link_id names the link the owner reviewed, expected_link_active (true) its reviewed state.
   parameters:
     - in: path
       name: identity_id

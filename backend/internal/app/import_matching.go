@@ -434,16 +434,21 @@ type CorrectStatementLinkInput struct {
 	RequestID      string
 	IdentityID     int64
 	ExpectedLinkID int64
-	Reason         string
-	TransactionID  int64
-	LineKey        string
-	PostedOn       string
+	// ExpectedLinkActive is whether the owner reviewed that link as active.
+	// Unlinking retires a link without changing its ID, so the ID alone does
+	// not bind what was reviewed.
+	ExpectedLinkActive *bool
+	Reason             string
+	TransactionID      int64
+	LineKey            string
+	PostedOn           string
 }
 
 func (input CorrectStatementLinkInput) params(occurredAt string) db.ImportPostingLinkCorrectionParams {
 	return db.ImportPostingLinkCorrectionParams{
 		BookID: BookID, IdentityID: input.IdentityID, ExpectedLinkID: input.ExpectedLinkID,
-		Reason: strings.TrimSpace(input.Reason), TransactionID: input.TransactionID, LineKey: input.LineKey,
+		ExpectedLinkActive: input.ExpectedLinkActive != nil && *input.ExpectedLinkActive,
+		Reason:             strings.TrimSpace(input.Reason), TransactionID: input.TransactionID, LineKey: input.LineKey,
 		ActorUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID, RequestID: input.RequestID, OccurredAt: occurredAt,
 	}
 }
@@ -452,8 +457,8 @@ func validateStatementLinkCorrection(input CorrectStatementLinkInput) error {
 	if input.OwnerUserID <= 0 {
 		return ValidationError{Message: "owner user is required"}
 	}
-	if input.ExpectedLinkID <= 0 {
-		return ValidationError{Message: "expected_link_id is required"}
+	if input.ExpectedLinkID <= 0 || input.ExpectedLinkActive == nil {
+		return ValidationError{Message: "expected_link_id and expected_link_active are required"}
 	}
 	if strings.TrimSpace(input.Reason) == "" {
 		return ValidationError{Message: "a reason is required"}

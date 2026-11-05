@@ -366,7 +366,16 @@ from a statement row's import identity to an existing posting, with
 stay in the file; a row's active link is its newest unretired one. An identity
 with links and no effects wrote no journal of its own. Like identities and
 effects, links are exported for the whole book, also in scoped archives, so a
-link may name a transaction outside the scope.
+link may name a transaction outside the scope. The same version appends
+`target_status` and `target_deleted` (the target transaction's current state)
+and the posting version the owner linked: `linked_transaction_version_id`,
+`linked_account_id`, `linked_commodity_id`, `linked_quantity_value`,
+`linked_quantity_scale` and `linked_posted_on`. `transaction_id` with
+`posting_line_key` joins a `ledger.csv` row only while the target is posted,
+undeleted and in scope; a link to a target voided or deleted since stays in the
+file, and its `linked_*` columns state the evidence that `ledger.csv` no longer
+carries. This is the one exception to the resolvable-ids rule below, and it is
+explicit in each row.
 
 ### Resolvable ids (2026-10-18, #322)
 

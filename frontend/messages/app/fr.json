@@ -2060,5 +2060,6 @@
   "statement_links_loading": "Chargement des transactions correspondantes…",
   "statement_links_cancel": "Annuler",
   "statement_links_confirm_reassign": "Déplacer le lien",
-  "statement_links_confirm_unlink": "Délier la ligne"
+  "statement_links_confirm_unlink": "Délier la ligne",
+  "statement_links_already_unlinked": "Cette ligne de relevé est déjà déliée."
 }

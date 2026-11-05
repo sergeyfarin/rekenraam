@@ -33,7 +33,8 @@ func (f importMatchFixture) linkedRow(t *testing.T, transfer Transaction, row st
 }
 
 func (f importMatchFixture) correction(link ImportStatementLink, reason string) CorrectStatementLinkInput {
-	return CorrectStatementLinkInput{OwnerUserID: f.ownerUserID, IdentityID: link.IdentityID, ExpectedLinkID: link.LinkID, Reason: reason}
+	active := link.Active
+	return CorrectStatementLinkInput{OwnerUserID: f.ownerUserID, IdentityID: link.IdentityID, ExpectedLinkID: link.LinkID, ExpectedLinkActive: &active, Reason: reason}
 }
 
 func (f importMatchFixture) count(t *testing.T, query string, args ...any) int {
@@ -185,6 +186,9 @@ func TestBundleExportsImportPostingLinksWithTheirHistory(t *testing.T) {
 	wrong := f.transfer(t, "2026-06-08", "2026-06-09")
 	right := f.transfer(t, "2026-06-09", "2026-06-11")
 	_, link := f.linkedRow(t, wrong, statementRow{"2026-06-10", "100.00", "Savings top-up"}, "2026-06-09")
+	// The recovery scenario: the wrong transfer is voided, then the link moves.
+	_, err := f.transactionService.VoidTransaction(ctx, VoidTransactionInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", TransactionID: wrong.ID, ChangeReason: "entered twice"})
+	require.NoError(t, err)
 	input := f.correction(link, "linked to the wrong transfer")
 	input.TransactionID, input.LineKey, input.PostedOn = right.ID, lineKeyOn(t, right, f.savingsAccountID), "2026-06-11"
 	require.NoError(t, f.importService.ReassignStatementRow(ctx, input))
@@ -193,20 +197,27 @@ func TestBundleExportsImportPostingLinksWithTheirHistory(t *testing.T) {
 	require.NoError(t, NewExportService(db.NewExportRepository(f.database)).WriteBundle(ctx, &out, ExportFilter{}))
 	archive, err := zip.NewReader(bytes.NewReader(out.Bytes()), int64(out.Len()))
 	require.NoError(t, err)
-	var rows [][]string
-	for _, entry := range archive.File {
-		if entry.Name != "import-posting-links.csv" {
-			continue
+	table := func(name string) [][]string {
+		for _, entry := range archive.File {
+			if entry.Name != name {
+				continue
+			}
+			reader, err := entry.Open()
+			require.NoError(t, err)
+			raw, err := io.ReadAll(reader)
+			require.NoError(t, err)
+			rows, err := csv.NewReader(strings.NewReader(strings.TrimPrefix(string(raw), "\xef\xbb\xbf"))).ReadAll()
+			require.NoError(t, err)
+			return rows
 		}
-		reader, err := entry.Open()
-		require.NoError(t, err)
-		raw, err := io.ReadAll(reader)
-		require.NoError(t, err)
-		rows, err = csv.NewReader(strings.NewReader(strings.TrimPrefix(string(raw), "\xef\xbb\xbf"))).ReadAll()
-		require.NoError(t, err)
+		t.Fatalf("%s is missing from the bundle", name)
+		return nil
 	}
+	rows := table("import-posting-links.csv")
 	require.Len(t, rows, 3, "header, the retired link and its successor")
-	assert.Equal(t, []string{"link_id", "identity_id", "transaction_id", "posting_line_key", "replaces_link_id", "linked_at", "audit_event_id", "retired_at", "retired_audit_event_id", "retire_reason"}, rows[0])
+	assert.Equal(t, []string{"link_id", "identity_id", "transaction_id", "posting_line_key", "replaces_link_id", "linked_at", "audit_event_id",
+		"retired_at", "retired_audit_event_id", "retire_reason", "target_status", "target_deleted", "linked_transaction_version_id",
+		"linked_account_id", "linked_commodity_id", "linked_quantity_value", "linked_quantity_scale", "linked_posted_on"}, rows[0])
 	identity := strconv.FormatInt(link.IdentityID, 10)
 	first, successor := rows[1], rows[2]
 	assert.Equal(t, []string{identity, strconv.FormatInt(wrong.ID, 10), lineKeyOn(t, wrong, f.savingsAccountID), ""}, first[1:5])
@@ -215,4 +226,72 @@ func TestBundleExportsImportPostingLinksWithTheirHistory(t *testing.T) {
 	assert.Equal(t, []string{identity, strconv.FormatInt(right.ID, 10), lineKeyOn(t, right, f.savingsAccountID), first[0]}, successor[1:5])
 	assert.Empty(t, successor[7], "the successor is active")
 	assert.Equal(t, first[8], successor[6], "one audit event retires and appends")
+
+	// The voided target is not in ledger.csv; the link says so and keeps its evidence.
+	savings, eur := strconv.FormatInt(f.savingsAccountID, 10), strconv.FormatInt(f.eurCommodityID, 10)
+	assert.Equal(t, []string{"voided", "0"}, first[10:12])
+	assert.Equal(t, strconv.FormatInt(wrong.VersionID, 10), first[12], "the version the owner linked")
+	assert.Equal(t, []string{savings, eur, "10000", "2", "2026-06-09"}, first[13:18])
+	assert.Equal(t, []string{"posted", "0"}, successor[10:12])
+	assert.Equal(t, []string{savings, eur, "10000", "2", "2026-06-11"}, successor[13:18])
+
+	ledger := table("ledger.csv")
+	column := map[string]int{}
+	for i, name := range ledger[0] {
+		column[name] = i
+	}
+	inLedger := func(transactionID, lineKey string) bool {
+		for _, row := range ledger[1:] {
+			if row[column["transaction_id"]] == transactionID && row[column["posting_line_key"]] == lineKey {
+				return true
+			}
+		}
+		return false
+	}
+	assert.False(t, inLedger(first[2], first[3]), "a voided target is outside ledger.csv")
+	assert.True(t, inLedger(successor[2], successor[3]), "a posted target joins its ledger.csv row")
+}
+
+// Second review: unlinking keeps the link ID, so a reassignment reviewed
+// while the link was active must still be refused after another tab
+// unlinks it; relinking needs a review of the row as unlinked.
+func TestStatementLinkReassignmentRefusesAfterAnInterveningUnlink(t *testing.T) {
+	t.Parallel()
+	f := newImportMatchFixture(t)
+	ctx := context.Background()
+	wrong := f.transfer(t, "2026-06-08", "2026-06-09")
+	right := f.transfer(t, "2026-06-09", "2026-06-11")
+	_, reviewed := f.linkedRow(t, wrong, statementRow{"2026-06-10", "100.00", "Savings top-up"}, "2026-06-09")
+
+	// Tab B unlinks after tab A loaded the active link.
+	require.NoError(t, f.importService.UnlinkStatementRow(ctx, f.correction(reviewed, "tab B")))
+
+	staleMove := f.correction(reviewed, "tab A")
+	staleMove.TransactionID, staleMove.LineKey, staleMove.PostedOn = right.ID, lineKeyOn(t, right, f.savingsAccountID), "2026-06-11"
+	assert.ErrorIs(t, f.importService.ReassignStatementRow(ctx, staleMove), ErrImportStatementLinkStale)
+	assert.Equal(t, 1, f.linkCount(t), "no successor appended")
+	assert.Equal(t, 0, f.count(t, `SELECT COUNT(*) FROM audit_events WHERE operation = 'import.posting.reassign'`))
+
+	missing := staleMove
+	missing.ExpectedLinkActive = nil
+	var validation ValidationError
+	assert.ErrorAs(t, f.importService.ReassignStatementRow(ctx, missing), &validation, "the reviewed state is required")
+
+	// Reviewed again as unlinked, the row is linked again.
+	links, err := f.importService.StatementLinks(ctx, wrong.ID)
+	require.NoError(t, err)
+	require.Len(t, links, 1)
+	require.False(t, links[0].Active)
+	relink := f.correction(links[0], "it was the top-up")
+	relink.TransactionID, relink.LineKey, relink.PostedOn = staleMove.TransactionID, staleMove.LineKey, staleMove.PostedOn
+	require.NoError(t, f.importService.ReassignStatementRow(ctx, relink))
+	assert.Equal(t, 2, f.linkCount(t))
+
+	// And an unlink request that reviewed the row as unlinked is refused.
+	moved, err := f.importService.StatementLinks(ctx, right.ID)
+	require.NoError(t, err)
+	unlinkedReview := f.correction(moved[0], "confused")
+	inactive := false
+	unlinkedReview.ExpectedLinkActive = &inactive
+	assert.ErrorIs(t, f.importService.UnlinkStatementRow(ctx, unlinkedReview), ErrImportStatementLinkStale)
 }

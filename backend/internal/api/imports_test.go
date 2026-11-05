@@ -1173,7 +1173,7 @@ func TestStatementLinkEndpoints_UnknownRowReturnsNotFound(t *testing.T) {
 	assert.Equal(t, http.StatusOK, listed.Code)
 	assert.JSONEq(t, `{"links":[]}`, listed.Body.String())
 	assert.Equal(t, http.StatusNotFound, request(http.MethodGet, "/api/v1/import-identities/999999/link-candidates", "").Code)
-	unlink := request(http.MethodPost, "/api/v1/import-identities/999999/unlink", `{"expected_link_id":1,"reason":"wrong"}`)
+	unlink := request(http.MethodPost, "/api/v1/import-identities/999999/unlink", `{"expected_link_id":1,"expected_link_active":true,"reason":"wrong"}`)
 	assert.Equal(t, http.StatusNotFound, unlink.Code, unlink.Body.String())
 	missingReason := request(http.MethodPost, "/api/v1/import-identities/999999/reassign", `{"expected_link_id":1,"reason":""}`)
 	assert.Equal(t, http.StatusBadRequest, missingReason.Code, missingReason.Body.String())

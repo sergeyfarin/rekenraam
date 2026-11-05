@@ -2060,5 +2060,6 @@
   "statement_links_loading": "Cargando transacciones coincidentes…",
   "statement_links_cancel": "Cancelar",
   "statement_links_confirm_reassign": "Mover vínculo",
-  "statement_links_confirm_unlink": "Desvincular fila"
+  "statement_links_confirm_unlink": "Desvincular fila",
+  "statement_links_already_unlinked": "Esta fila del extracto ya está desvinculada."
 }

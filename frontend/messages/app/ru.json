@@ -2124,5 +2124,6 @@
   "statement_links_loading": "Загрузка совпадающих операций…",
   "statement_links_cancel": "Отмена",
   "statement_links_confirm_reassign": "Перенести связь",
-  "statement_links_confirm_unlink": "Снять связь"
+  "statement_links_confirm_unlink": "Снять связь",
+  "statement_links_already_unlinked": "Связь этой строки выписки уже снята."
 }

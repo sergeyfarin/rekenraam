@@ -5,7 +5,7 @@ post:
     (import.posting.reassign) that retires the current link, if it is still
     active, with the owner's reason and appends the successor naming the link
     it replaces. The write transaction checks that the row's latest link is
-    expected_link_id, rereads the target and refuses one that is not posted,
+    expected_link_id in the reviewed state (expected_link_active), rereads the target and refuses one that is not posted,
     is linked to another row, or no longer matches the row (account,
     commodity, exact amount, window) or the reviewed posted_on day. Nothing in
     the ledger changes.
