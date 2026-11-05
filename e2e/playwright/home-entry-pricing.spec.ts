@@ -27,16 +27,16 @@ test('saving the first foreign-currency transaction over Prices lists the rate i
 
   await page.locator('#main-content').focus();
   await page.keyboard.press('n');
-  const dialog = page.getByRole('dialog', { name: 'Add transaction', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'New transaction', exact: true });
   await dialog.getByLabel('Date', { exact: true }).fill(todayISO());
   await dialog.getByLabel('Description', { exact: true }).fill('Dinner in Reykjavik');
   await dialog.getByRole('combobox', { name: 'Account', exact: true }).selectOption({ label: account.name });
   await dialog.getByRole('combobox', { name: 'Currency', exact: true }).selectOption({ label: 'ISK' });
-  await dialog.getByLabel('Amount', { exact: true }).fill('-4500');
+  await dialog.getByLabel('Amount', { exact: true }).fill('4500');
   await dialog.getByPlaceholder('Search categories').fill(category.name);
   await dialog.locator('ul[role="listbox"] button[role="option"]').filter({ hasText: category.name }).first().click();
   const refreshed = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/v1/pricing/workspace' && response.ok());
-  await dialog.getByRole('button', { name: 'Add transaction', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Save transaction', exact: true }).click();
   const workspace = await (await refreshed).json() as { coverage: Array<{ base_commodity_id: number; status: string }> };
   expect(workspace.coverage.find(item => item.base_commodity_id === isk)).toMatchObject({ status: 'missing' });
   await expect(dialog).toHaveCount(0);

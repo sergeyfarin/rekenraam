@@ -21,13 +21,13 @@ for (const locale of allLocales) {
     await expect(page.getByRole('button', { name: languages[locale], exact: true })).toHaveAttribute('aria-pressed', 'true');
     await page.goto('/app/ledger/transactions');
     await page.getByRole('button', { name: messages.transactions_form_create_title, exact: true }).click();
-    let form = page.locator('form').filter({ has: page.getByRole('heading', { name: messages.transactions_form_create_title, exact: true }) });
+    let form = page.getByRole('region', { name: messages.transactions_form_create_title, exact: true });
     await form.getByLabel(messages.transactions_field_date, { exact: true }).fill(todayISO());
     await form.getByLabel(messages.transactions_field_description, { exact: true }).fill(description);
     await form.getByRole('combobox', { name: messages.transactions_field_account, exact: true }).selectOption({ label: account.name });
     await expect(form.getByLabel(messages.transactions_field_amount, { exact: true })).toHaveAttribute('placeholder', locale === 'en' ? '0.00' : '0,00');
     const grouped = new Intl.NumberFormat(locale).format(90071992547409n) + (locale === 'en' ? '.93' : ',93');
-    await form.getByLabel(messages.transactions_field_amount, { exact: true }).fill(`-${grouped}`);
+    await form.getByLabel(messages.transactions_field_amount, { exact: true }).fill(grouped);
     await form.getByPlaceholder(messages.transactions_field_category_placeholder).click();
     await form.locator('ul[role="listbox"] button[role="option"]').first().click();
 
@@ -43,9 +43,11 @@ for (const locale of allLocales) {
     // Rehydration and conversion to split entry must use the same locale as
     // parsing, including amounts above JavaScript's safe integer boundary.
     await page.getByRole('complementary').getByRole('button', { name: messages.transactions_panel_edit, exact: true }).click();
-    form = page.locator('form').filter({ has: page.getByRole('heading', { name: messages.transactions_form_edit_title, exact: true }) });
+    form = page.getByRole('region', { name: messages.transactions_form_edit_title, exact: true });
     const decimal = locale === 'en' ? '.' : ',';
-    await expect(form.getByLabel(messages.transactions_field_amount, { exact: true })).toHaveValue(`-90071992547409${decimal}93`);
+    // A positive amount, its direction shown beside it (#506).
+    await expect(form.getByLabel(messages.transactions_field_amount, { exact: true })).toHaveValue(`90071992547409${decimal}93`);
+    await expect(form.getByRole('radio', { name: messages.transactions_entry_tab_withdrawal, exact: true })).toBeChecked();
     await form.getByRole('button', { name: messages.transactions_tier_switch_split, exact: true }).click();
     await expect(form.getByLabel(messages.transactions_field_posting_amount, { exact: true }).nth(0)).toHaveValue(`-90071992547409${decimal}93`);
     await expect(form.getByLabel(messages.transactions_field_posting_amount, { exact: true }).nth(1)).toHaveValue(`90071992547409${decimal}93`);

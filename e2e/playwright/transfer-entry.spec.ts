@@ -5,11 +5,11 @@ import { daysFromTodayISO, todayISO } from './support/dates';
 import { expectNoAccessibilityViolations, focusIsInside } from './support/a11y';
 import { createCashAccount, ensureCurrency, readyForLedger } from './support/ledger';
 
-// Transfer entry (#481): the shared entry dialog in Transfer mode, from Home's
+// Transfer entry (#481): New transaction's Transfer tab (#506), from Home's
 // tile, search and an account register. One currency or two, each side on its
 // own day, a fee on Bank fees; a saved transfer reopens in Transfer mode.
 
-const transferDialog = (page: Page) => page.getByRole('dialog', { name: 'Transfer between accounts', exact: true });
+const transferDialog = (page: Page) => page.getByRole('dialog', { name: 'New transaction', exact: true });
 const shortcuts = (page: Page) => page.getByRole('list', { name: 'Shortcuts', exact: true });
 
 type Journal = {
@@ -49,6 +49,7 @@ for (const theme of ['light', 'dark'] as const) {
     await page.keyboard.press('Enter');
     const dialog = transferDialog(page);
     await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('tab', { name: 'Transfer', exact: true })).toHaveAttribute('aria-selected', 'true');
     await expect.poll(() => focusIsInside(dialog)).toBe(true);
     await expectNoAccessibilityViolations(page, `desktop transfer dialog ${theme}`);
 
@@ -60,7 +61,7 @@ for (const theme of ['light', 'dark'] as const) {
     await dialog.getByRole('combobox', { name: 'From account', exact: true }).selectOption({ label: checking.name });
     await dialog.getByRole('combobox', { name: 'To account', exact: true }).selectOption({ label: checking.name });
     await dialog.getByLabel('Amount', { exact: true }).fill('50.00');
-    await dialog.getByRole('button', { name: 'Add transaction', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Save transaction', exact: true }).click();
     await expect(dialog.getByText('From and To must be different accounts.')).toBeVisible();
     expect(posts).toEqual([]);
 
@@ -72,7 +73,7 @@ for (const theme of ['light', 'dark'] as const) {
     await dialog.getByLabel('Arrives on', { exact: true }).fill(arrival);
     await expectNoAccessibilityViolations(page, `desktop transfer dialog filled ${theme}`);
     const created = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/transactions');
-    await dialog.getByRole('button', { name: 'Add transaction', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Save transaction', exact: true }).click();
     expect((await created).status()).toBe(201);
     const { id } = await (await created).json() as { id: number };
     await expect(dialog).toHaveCount(0);
@@ -112,11 +113,14 @@ test.describe('on a touch phone', () => {
     const dollars = await createCashAccount(page, csrfToken, `Exchange dollars ${suffix}`, currencyID);
     const description = `Exchange ${suffix}`;
 
+    // The register's one New transaction, on its Transfer tab (#506), in the
+    // register's own side panel: a full-screen sheet on a phone.
     await page.goto(`/app/ledger/accounts/${euro.id}/register`);
-    await page.getByRole('button', { name: 'Transfer', exact: true }).tap();
-    const dialog = transferDialog(page);
-    await expect(dialog).toBeVisible();
-    await expect.poll(() => dialog.evaluate(node => Math.round(node.getBoundingClientRect().width))).toBe(390);
+    await page.getByRole('button', { name: 'New transaction', exact: true }).tap();
+    const dialog = page.getByRole('region', { name: 'New transaction', exact: true });
+    await dialog.getByRole('tab', { name: 'Transfer', exact: true }).tap();
+    await expect(dialog.getByRole('tab', { name: 'Transfer', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await expect.poll(() => page.getByRole('complementary', { name: 'Actions' }).evaluate(node => Math.round(node.getBoundingClientRect().width))).toBe(390);
     // The register's account is the transfer's From.
     await expect(dialog.getByRole('combobox', { name: 'From account', exact: true })).toHaveValue(String(euro.id));
     await dialog.getByLabel('Description', { exact: true }).fill(description);
@@ -127,7 +131,7 @@ test.describe('on a touch phone', () => {
     await expectNoAccessibilityViolations(page, 'phone exchange dialog');
 
     const created = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/transactions');
-    await dialog.getByRole('button', { name: 'Add transaction', exact: true }).tap();
+    await dialog.getByRole('button', { name: 'Save transaction', exact: true }).tap();
     expect((await created).status()).toBe(201);
     const { id } = await (await created).json() as { id: number };
     await expect(dialog).toHaveCount(0);

@@ -1,7 +1,6 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
   import Plus from '@lucide/svelte/icons/plus';
-  import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import ModalDialog from '#lib/components/modal-dialog.svelte';
   import { authSessionQueryOptions } from '#lib/api/auth.ts';
   import BuyForm from '#lib/investments/buy-form.svelte';
@@ -22,16 +21,17 @@
   import { m } from '#lib/paraglide/messages.js';
 
   // Investment entry (#186): the record buttons and their forms, shared by
-  // the Investments screen, a holding account's register and an instrument's
-  // view. The screen passes what it already knows as `prefill`; every form
-  // takes that one shape. `menu` folds the buttons behind one toggle for a
-  // toolbar; `buttons` shows them all.
+  // the Investments screen and New transaction's Investment tab, which a
+  // holding account's register and an instrument's view open (#506). The
+  // screen passes what it already knows as `prefill`; every form takes that
+  // one shape.
   let {
     prefill,
-    layout = 'buttons'
+    onSaved
   }: {
     prefill?: InvestmentPrefill;
-    layout?: 'buttons' | 'menu';
+    /** A form saved; New transaction's Investment tab closes the entry (#506). */
+    onSaved?: () => void;
   } = $props();
 
   const sessionQuery = createQuery(() => authSessionQueryOptions());
@@ -62,14 +62,13 @@
   ];
 
   let active = $state<Activity | null>(null);
-  let menuOpen = $state(false);
-  let menuButton = $state<HTMLButtonElement>();
+  let opener: HTMLElement | null = null;
   let writeOffSaved = $state(false);
   const titleID = $derived(activities.find((activity) => activity.id === active)?.titleID);
 
-  function open(activity: Activity) {
+  function open(activity: Activity, event: MouseEvent) {
     writeOffSaved = false;
-    menuOpen = false;
+    opener = event.currentTarget as HTMLElement;
     active = activity;
   }
 
@@ -82,49 +81,33 @@
   function saved() {
     writeOffSaved = active === 'write-off';
     close();
+    onSaved?.();
   }
 </script>
-
-{#if layout === 'menu'}
-  <button
-    bind:this={menuButton}
-    type="button"
-    aria-expanded={menuOpen}
-    aria-controls="investment-entry-menu"
-    onclick={() => (menuOpen = !menuOpen)}
-    class="inline-flex min-h-11 items-center gap-2 rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90"
-  >
-    <Plus size={16} aria-hidden="true" />
-    {m.register_record_investment_activity()}
-    <ChevronDown size={14} aria-hidden="true" class={menuOpen ? 'rotate-180' : ''} />
-  </button>
-{/if}
 
 {#if writeOffSaved}
   <p role="status" class="w-full text-sm text-foreground">{m.investments_write_off_success()}</p>
 {/if}
 
-{#if layout === 'buttons' || menuOpen}
-  <div id="investment-entry-menu" class="flex w-full flex-wrap gap-2">
-    {#each activities as activity, index (activity.id)}
-      <button
-        type="button"
-        onclick={() => open(activity.id)}
-        class={layout === 'buttons' && index === 0
-          ? 'inline-flex min-h-10 items-center gap-2 rounded-(--radius-control) bg-foreground px-3 py-2 text-sm font-semibold text-background transition hover:opacity-90'
-          : 'inline-flex min-h-10 items-center gap-2 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover'}
-      >
-        {#if layout === 'buttons' && index === 0}<Plus size={14} aria-hidden="true" />{/if}
-        {activity.label()}
-      </button>
-    {/each}
-  </div>
-{/if}
+<div class="flex w-full flex-wrap gap-2">
+  {#each activities as activity, index (activity.id)}
+    <button
+      type="button"
+      onclick={(event) => open(activity.id, event)}
+      class={index === 0
+        ? 'inline-flex min-h-10 items-center gap-2 rounded-(--radius-control) bg-foreground px-3 py-2 text-sm font-semibold text-background transition hover:opacity-90'
+        : 'inline-flex min-h-10 items-center gap-2 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover'}
+    >
+      {#if index === 0}<Plus size={14} aria-hidden="true" />{/if}
+      {activity.label()}
+    </button>
+  {/each}
+</div>
 
 {#if active === 'write-off'}
   <WriteOffForm {csrfToken} {prefill} onSaved={saved} onCancel={close} />
 {:else if active !== null}
-  <ModalDialog labelledby={titleID} onCancel={close} closeOnBackdrop fallbackFocus={() => menuButton} class="max-w-lg">
+  <ModalDialog labelledby={titleID} onCancel={close} closeOnBackdrop fallbackFocus={() => opener} class="max-w-lg">
   <div class="p-6">
     {#if active === 'buy'}
       <BuyForm {csrfToken} {prefill} onSaved={saved} onCancel={close} />

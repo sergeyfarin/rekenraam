@@ -5,13 +5,13 @@ import { createCashAccount, readyForLedger } from './support/ledger';
 
 /**
  * #459: the page header carries the page's main action. Transactions, an
- * account register and a category put *Add transaction* there, prefilled for
+ * account register and a category put *New transaction* there, prefilled for
  * the page, so entry works by touch; N and `?` are keyboard extras that never
  * act while typing, and page widths keep the shell's left edge.
  */
 
 const pageHeader = (page: Page) => page.locator('main header').first();
-const addForm = (page: Page) => page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction', exact: true }) });
+const addForm = (page: Page) => page.getByRole('region', { name: 'New transaction', exact: true });
 
 async function seed(page: Page) {
   const { csrfToken, currencyID } = await readyForLedger(page);
@@ -26,13 +26,13 @@ async function seed(page: Page) {
 test.describe('on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 
-  test('Add transaction is tapped from each page header and starts from that page', async ({ page }) => {
+  test('New transaction is tapped from each page header and starts from that page', async ({ page }) => {
     const { account, category } = await seed(page);
     const noSidewaysScroll = async () => expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 
     await page.goto('/app/ledger/transactions');
     await expect(pageHeader(page).getByRole('heading', { level: 1, name: 'Transactions' })).toBeVisible();
-    await pageHeader(page).getByRole('button', { name: 'Add transaction', exact: true }).tap();
+    await pageHeader(page).getByRole('button', { name: 'New transaction', exact: true }).tap();
     await expect(addForm(page)).toBeVisible();
     await addForm(page).getByRole('button', { name: 'Cancel', exact: true }).first().tap();
 
@@ -41,14 +41,14 @@ test.describe('on a phone', () => {
     await expect(pageHeader(page).getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Accounts', exact: true }))
       .toHaveAttribute('href', '/app/ledger/accounts');
     await noSidewaysScroll();
-    await pageHeader(page).getByRole('button', { name: 'Add transaction', exact: true }).tap();
+    await pageHeader(page).getByRole('button', { name: 'New transaction', exact: true }).tap();
     await expect(addForm(page).getByLabel('Account').locator('option:checked')).toHaveText(account.name);
     await noSidewaysScroll();
     await addForm(page).getByRole('button', { name: 'Cancel', exact: true }).first().tap();
 
     await page.goto(`/app/ledger/categories/${category.id}`);
     await expect(pageHeader(page).getByRole('heading', { level: 1, name: category.name })).toBeVisible();
-    await pageHeader(page).getByRole('button', { name: 'Add transaction', exact: true }).tap();
+    await pageHeader(page).getByRole('button', { name: 'New transaction', exact: true }).tap();
     await expect(addForm(page).getByText(category.name)).toBeVisible();
     await addForm(page).getByRole('button', { name: 'Cancel', exact: true }).first().tap();
 
@@ -108,7 +108,7 @@ test('N and ? work from the keyboard and never while typing', async ({ page }) =
   await page.keyboard.press('?');
   const help = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
   await expect(help).toBeVisible();
-  for (const label of ['Search pages, accounts and commands', 'Add transaction', 'Show this list']) {
+  for (const label of ['Search pages, accounts and commands', 'New transaction', 'Show this list']) {
     await expect(help.getByText(label, { exact: true })).toBeVisible();
   }
   await expect(help.locator('kbd', { hasText: /^N$/ })).toBeVisible();
@@ -123,7 +123,7 @@ test('N and ? work from the keyboard and never while typing', async ({ page }) =
   await page.goto('/app');
   await page.locator('#main-content').focus();
   await page.keyboard.press('n');
-  await expect(page.getByRole('dialog', { name: 'Add transaction', exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'New transaction', exact: true })).toBeVisible();
   await expect(addForm(page)).toBeVisible();
   await expect(page).toHaveURL((url) => url.pathname === '/app' && !url.searchParams.has('create'));
 });

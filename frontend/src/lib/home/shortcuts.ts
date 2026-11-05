@@ -3,7 +3,7 @@ import { m } from '#lib/paraglide/messages.js';
 /**
  * Home's shortcut tiles (#477). The set is fixed until personalization (#438)
  * lets the owner move, rename, remove and add them; an account register tile
- * joins once pins (#442) exist. Add transaction leads; it and Transfer (#481)
+ * joins once pins (#442) exist. New transaction leads; it and Transfer (#481)
  * are the actions, opening the shared entry dialog; the rest are links.
  */
 export type ShortcutID = 'add' | 'transfer' | 'import' | 'transactions' | 'spending';

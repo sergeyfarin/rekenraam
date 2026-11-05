@@ -21,16 +21,20 @@
     enabled: !!account && accountEntryKind(account) === 'investments'
   }));
 
-  // A new transaction starts in this account (#185). A holding account's
-  // activity is entered as investment commands instead, with the holding and
-  // its instrument pre-selected (#186).
+  // New transaction starts in this account (#185). A holding account starts
+  // on the Investment tab with the holding and its instrument pre-selected
+  // (#186); its cash tabs ask for a cash account, never posting to the
+  // holding (#506).
   const create = $derived.by<TransactionWorkspaceCreate>(() => {
     if (!account) return { kind: 'none' };
     switch (accountEntryKind(account)) {
       case 'editor':
-        return { kind: 'editor', defaults: { accountID: account.id } };
+        return { kind: 'entry', defaults: { accountID: account.id } };
       case 'investments':
-        return { kind: 'investment', prefill: holdingAccountPrefill(account, instrumentsQuery.data?.instruments ?? []) };
+        return {
+          kind: 'entry',
+          defaults: { accountID: account.id, tab: 'investment', investment: holdingAccountPrefill(account, instrumentsQuery.data?.instruments ?? []) }
+        };
       default:
         return { kind: 'none' };
     }

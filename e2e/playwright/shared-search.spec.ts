@@ -134,12 +134,12 @@ test('commands open an unsaved editor, shortcuts respect editable and modal fiel
   await expect(search(page)).toHaveAttribute('aria-expanded', 'false');
   await filter.press('Control+k');
   await expect(search(page)).toBeFocused();
-  await search(page).fill('Add transaction');
+  await search(page).fill('New transaction');
   await page.keyboard.press('Enter');
-  const heading = page.getByRole('heading', { name: 'Add transaction', exact: true });
+  const heading = page.getByRole('heading', { name: 'New transaction', exact: true });
   await expect(heading).toBeVisible();
-  const form = page.locator('form').filter({ has: heading });
-  await form.getByLabel('Amount', { exact: true }).fill('-12.34');
+  const form = page.getByRole('region', { name: 'New transaction', exact: true });
+  await form.getByLabel('Amount', { exact: true }).fill('12.34');
   await form.getByLabel('Description', { exact: true }).fill('/');
   await expect(search(page)).toHaveAttribute('aria-expanded', 'false');
   await expect(page).toHaveURL(url => url.pathname === '/app/ledger/transactions' && !url.searchParams.has('create') && url.searchParams.get('q') === 'sample/');
@@ -189,7 +189,7 @@ test('search coverage failure remains explicit and retries without hiding pages 
   await page.keyboard.press('/');
   await expect(page.getByText('Some objects could not be loaded. Page links and commands are still available.')).toBeVisible();
   await expect(page.getByRole('alert')).toBeVisible();
-  await expect(page.getByRole('option').filter({ hasText: 'Add transaction' })).toBeVisible();
+  await expect(page.getByRole('option').filter({ hasText: 'New transaction' })).toBeVisible();
   await page.unroute('**/api/v1/search/catalog*');
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: /Showing/ })).toBeVisible();
@@ -221,17 +221,17 @@ test('phone Add command hands focus to transaction entry', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/app');
   await page.getByRole('button', { name: 'Search pages, accounts, commands…', exact: true }).click();
-  await search(page).fill('Add transaction');
+  await search(page).fill('New transaction');
   await page.keyboard.press('Enter');
   // Home has no editor of its own: the command opens the shared entry sheet (#477).
-  const panel = page.getByRole('dialog', { name: 'Add transaction', exact: true });
+  const panel = page.getByRole('dialog', { name: 'New transaction', exact: true });
   await expect(page.getByRole('dialog', { name: 'Search', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Add transaction', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'New transaction', exact: true })).toBeVisible();
   await expect.poll(() => panel.evaluate(node => node.contains(document.activeElement))).toBe(true);
   await page.keyboard.press('Control+k');
   await expect(page.getByRole('dialog', { name: 'Search', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('heading', { name: 'Add transaction', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'New transaction', exact: true })).toHaveCount(0);
 });
 
 test('merged Preferences is still searchable as language and appearance', async ({ page }) => {

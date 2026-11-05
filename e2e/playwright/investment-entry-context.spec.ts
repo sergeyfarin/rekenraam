@@ -6,10 +6,10 @@ import { expectNoAccessibilityViolations } from './support/a11y';
 
 /**
  * #186: investment activity is entered where the user is working. A holding
- * account's register and an instrument's view offer the investment record
- * forms with the holding and instrument already chosen, on a phone-sized
- * screen, and neither offers the generic editor that would write an
- * investment-linked posting.
+ * account's register and an instrument's view open New transaction on its
+ * Investment tab (#506), whose record forms start with the holding and
+ * instrument already chosen, on a phone-sized screen; its cash tabs never
+ * post to the holding.
  */
 
 test.use({ viewport: { width: 390, height: 844 } });
@@ -29,9 +29,11 @@ async function setup(page: Page) {
   return { csrfToken, currencyID, suffix, name, instrument, holding, cash };
 }
 
-async function openActivity(page: Page, menuLabel: string, activityLabel: string) {
-  await page.getByRole('button', { name: menuLabel }).click();
-  await page.getByRole('button', { name: activityLabel, exact: true }).click();
+async function openActivity(page: Page, activityLabel: string) {
+  await page.getByRole('button', { name: 'New transaction', exact: true }).click();
+  const entry = page.getByRole('region', { name: 'New transaction', exact: true });
+  await expect(entry.getByRole('tab', { name: 'Investment', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await entry.getByRole('button', { name: activityLabel, exact: true }).click();
 }
 
 test('a holding register records a pre-filled buy and opens it in the investment detail', async ({ page }) => {
@@ -40,12 +42,7 @@ test('a holding register records a pre-filled buy and opens it in the investment
 
   await page.goto(`/app/ledger/accounts/${holding.id}/register`);
   await expect(page.getByRole('heading', { name: `Context holding ${suffix}` })).toBeVisible();
-  // The investment entry point replaces the generic one; wait for it so the
-  // absence below is checked on a rendered register, not a loading one.
-  await expect(page.getByRole('button', { name: 'Record investment activity' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Add transaction' })).toHaveCount(0);
-
-  await openActivity(page, 'Record investment activity', 'Record buy');
+  await openActivity(page, 'Record buy');
   const dialog = page.getByRole('dialog');
   await expect(dialog.locator('#buy-instrument')).toHaveValue(name);
   await expect(dialog.locator('#buy-holding-account')).toHaveValue(String(holding.id));
@@ -83,9 +80,8 @@ test('an instrument view lists its activity and pre-fills the instrument and its
   await expect(page.getByRole('heading', { name: new RegExp(name) })).toBeVisible();
   await expect(page.getByText(memo)).toBeVisible();
   await expect(page.getByText('+3')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Add transaction' })).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Record investment activity' }).click();
+  await page.getByRole('button', { name: 'New transaction', exact: true }).click();
   await expectNoAccessibilityViolations(page, 'instrument view investment entry');
   await page.getByRole('button', { name: 'Record sell', exact: true }).click();
   const dialog = page.getByRole('dialog');
@@ -94,21 +90,21 @@ test('an instrument view lists its activity and pre-fills the instrument and its
 });
 
 const contextLocales: Array<[string, string, string]> = [
-  ['en', 'Record investment activity', 'Back to investments'],
-  ['de', 'Wertpapiervorgang erfassen', 'Zurück zur Geldanlage'],
-  ['es', 'Registrar operación de inversión', 'Volver a inversiones'],
-  ['fr', 'Enregistrer une opération de placement', 'Retour aux investissements'],
-  ['nl', 'Beleggingsactiviteit vastleggen', 'Terug naar beleggingen'],
-  ['ru', 'Записать инвестиционную операцию', 'Назад к инвестициям']
+  ['en', 'New transaction', 'Back to investments'],
+  ['de', 'Neue Transaktion', 'Zurück zur Geldanlage'],
+  ['es', 'Nueva transacción', 'Volver a inversiones'],
+  ['fr', 'Nouvelle transaction', 'Retour aux investissements'],
+  ['nl', 'Nieuwe transactie', 'Terug naar beleggingen'],
+  ['ru', 'Новая транзакция', 'Назад к инвестициям']
 ];
 for (const [locale, menu, back] of contextLocales) {
   test(`investment entry in context is translated in ${locale}`, async ({ page }) => {
     const { holding, instrument } = await setup(page);
     await page.evaluate((value) => localStorage.setItem('PARAGLIDE_LOCALE', value), locale);
     await page.goto(`/app/ledger/accounts/${holding.id}/register`);
-    await expect(page.getByRole('button', { name: menu })).toBeVisible();
+    await expect(page.getByRole('button', { name: menu, exact: true })).toBeVisible();
     await page.goto(`/app/investments/instruments/${instrument.commodity_id}`);
-    await expect(page.getByRole('button', { name: menu })).toBeVisible();
+    await expect(page.getByRole('button', { name: menu, exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: back })).toBeVisible();
   });
 }
@@ -168,7 +164,7 @@ test('an instrument records, corrects and reverses separately paid withholding t
   });
   const memo = `Separate withholding ${suffix}`;
   await page.goto(`/app/investments/instruments/${instrument.commodity_id}`);
-  await openActivity(page, 'Record investment activity', 'Record withholding tax');
+  await openActivity(page, 'Record withholding tax');
   const entry = page.getByRole('dialog', { name: 'Record separate withholding tax' });
   await expect(entry.locator('#div-instrument')).toHaveValue(name);
   await expect(entry.locator('#div-income-account')).toHaveCount(0);

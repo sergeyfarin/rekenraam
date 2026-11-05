@@ -12,9 +12,9 @@ import { createCashAccount, expectSavedTransaction, readyForLedger } from './sup
 test.use({ viewport: { width: 390, height: 844 } });
 
 async function addForm(page: Page) {
-  await page.getByRole('button', { name: 'Add transaction' }).click();
-  await expect(page.getByRole('heading', { name: 'Add transaction' })).toBeVisible();
-  return page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction' }) });
+  await page.getByRole('button', { name: 'New transaction' }).click();
+  await expect(page.getByRole('heading', { name: 'New transaction' })).toBeVisible();
+  return page.getByRole('region', { name: 'New transaction', exact: true });
 }
 
 test('a transaction entered in an account register starts in that account', async ({ page }) => {
@@ -29,10 +29,10 @@ test('a transaction entered in an account register starts in that account', asyn
   await expect(form.getByLabel('Account').locator('option:checked')).toHaveText(account.name);
   await form.getByLabel('Date').fill(todayISO());
   await form.getByLabel('Description').fill(description);
-  await form.getByLabel('Amount').fill('-12.40');
+  await form.getByLabel('Amount').fill('12.40');
   await form.getByPlaceholder('Search categories').click();
   await form.locator('ul[role="listbox"] button[role="option"]').first().click();
-  await form.getByRole('button', { name: 'Add transaction' }).click();
+  await form.getByRole('button', { name: 'Save transaction' }).click();
   await expectSavedTransaction(page, description);
 
   // The register lists it without a reload.
@@ -56,8 +56,8 @@ test('a transaction entered in a category starts in that category', async ({ pag
   await form.getByLabel('Date').fill(todayISO());
   await form.getByLabel('Description').fill(description);
   await form.getByLabel('Account').selectOption({ label: account.name });
-  await form.getByLabel('Amount').fill('-30.00');
-  await form.getByRole('button', { name: 'Add transaction' }).click();
+  await form.getByLabel('Amount').fill('30.00');
+  await form.getByRole('button', { name: 'Save transaction' }).click();
   await expectSavedTransaction(page, description);
 
   const listed = await apiJSON<{ transactions: Array<{ description: string }> }>(

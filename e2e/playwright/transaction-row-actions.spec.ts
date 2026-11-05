@@ -80,8 +80,8 @@ test('a stale edit is refused, the editor reloads the newer version and its save
   const s = await seed(page);
   await page.goto(s.paths.journal);
   await row(page, s.description).getByRole('button', { name: 'Edit', exact: true }).click();
-  const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Edit transaction', exact: true }) });
-  await expect(form.getByLabel('Amount', { exact: true })).toHaveValue('-4.50');
+  const form = page.getByRole('region', { name: 'Edit transaction', exact: true });
+  await expect(form.getByLabel('Amount', { exact: true })).toHaveValue('4.50');
 
   // Another tab changes the amount to 9.00 while this form is open.
   type Stored = { version_id: number; description: string; journal_entries: Array<{ postings: Array<{ line_key: string; account_id: number; quantity_value: string }> }> };
@@ -100,7 +100,7 @@ test('a stale edit is refused, the editor reloads the newer version and its save
   await form.getByRole('button', { name: 'Save transaction', exact: true }).click();
   expect((await refused).status()).toBe(409);
   await expect(form.getByRole('status').filter({ hasText: 'The form now shows the latest version' })).toBeVisible();
-  await expect(form.getByLabel('Amount', { exact: true })).toHaveValue('-9.00');
+  await expect(form.getByLabel('Amount', { exact: true })).toHaveValue('9.00');
   const kept = await apiJSON<Stored>(page, 'GET', `/api/v1/transactions/${s.transaction.id}`);
   expect(kept.journal_entries[0].postings.find((p) => p.account_id === s.account.id)?.quantity_value).toBe('-900');
 

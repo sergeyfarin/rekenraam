@@ -45,16 +45,16 @@ test('a card purchase posted the next day lists on its posting day', async ({ pa
   const tomorrow = daysFromTodayISO(1);
 
   await page.goto(`/app/ledger/accounts/${card.id}/register`);
-  await page.getByRole('button', { name: 'Add transaction' }).click();
-  const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction' }) });
+  await page.getByRole('button', { name: 'New transaction' }).click();
+  const form = page.getByRole('region', { name: 'New transaction', exact: true });
   await form.getByLabel('Date', { exact: true }).fill(today);
   await form.getByRole('button', { name: 'Posted on another day' }).click();
   await form.getByLabel('Posted on').fill(tomorrow);
   await form.getByLabel('Description').fill(description);
-  await form.getByLabel('Amount').fill('-25.00');
+  await form.getByLabel('Amount').fill('25.00');
   await form.getByPlaceholder('Search categories').fill(categoryName);
   await form.locator('ul[role="listbox"] button[role="option"]').filter({ hasText: categoryName }).click();
-  await form.getByRole('button', { name: 'Add transaction' }).click();
+  await form.getByRole('button', { name: 'Save transaction' }).click();
 
   await expect.poll(async () => (await register(page, card.id)).map((entry) => [entry.transaction_date, entry.entry_date, entry.posting.quantity_value]))
     .toEqual([[today, tomorrow, '-2500']]);
@@ -75,7 +75,7 @@ test('a two-day transfer posts each leg on its day and survives an edit', async 
   const arrival = daysFromTodayISO(2);
 
   await page.goto(`/app/ledger/transactions?account_id=${checking.id}`);
-  await page.getByRole('button', { name: 'Add transaction' }).click();
+  await page.getByRole('button', { name: 'New transaction' }).click();
   const form = page.getByRole('complementary', { name: 'Actions' });
   await form.getByLabel('Date', { exact: true }).fill(today);
   await form.getByLabel('Description').fill(description);
@@ -88,7 +88,7 @@ test('a two-day transfer posts each leg on its day and survives an edit', async 
   await amounts.nth(1).fill('100.00');
   await form.getByRole('button', { name: 'Posted on another day' }).nth(1).click();
   await form.getByLabel('Posted on').fill(arrival);
-  await form.getByRole('button', { name: 'Add transaction' }).click();
+  await form.getByRole('button', { name: 'Save transaction' }).click();
 
   await expect.poll(async () => (await register(page, savings.id)).map((entry) => [entry.entry_date, entry.running_balance.normal_quantity_value]))
     .toEqual([[arrival, '10000']]);

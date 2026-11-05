@@ -11,8 +11,8 @@ test.describe.serial('release preflight journeys', () => {
     const savings = await createCashAccount(page, csrfToken, `Preflight savings ${suffix}`, currencyID);
 
     await page.goto('/app/ledger/transactions');
-    await page.getByRole('button', { name: 'Add transaction' }).click();
-    const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction' }) });
+    await page.getByRole('button', { name: 'New transaction' }).click();
+    const form = page.getByRole('region', { name: 'New transaction', exact: true });
     await form.getByLabel('Date').fill(todayISO());
     await form.getByLabel('Description').fill(`Preflight transfer ${suffix}`);
     await form.getByRole('button', { name: 'Use split entry' }).click();
@@ -24,7 +24,7 @@ test.describe.serial('release preflight journeys', () => {
     await accounts.nth(1).selectOption({ label: savings.name });
     await amounts.nth(1).fill('25.00');
     await expect(form.getByText('Balanced')).toBeVisible();
-    await form.getByRole('button', { name: 'Add transaction' }).click();
+    await form.getByRole('button', { name: 'Save transaction' }).click();
 
     await expectSavedTransaction(page, `Preflight transfer ${suffix}`);
   });
@@ -130,29 +130,31 @@ test.describe.serial('release preflight journeys', () => {
     const account = await createCashAccount(page, csrfToken, `Preflight mobile ${suffix}`, currencyID);
 
     await page.goto('/app/ledger/transactions');
-    await page.getByRole('button', { name: 'Add transaction' }).click();
-    const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction' }) });
+    await page.getByRole('button', { name: 'New transaction' }).click();
+    const form = page.getByRole('region', { name: 'New transaction', exact: true });
     await form.getByLabel('Date').fill(todayISO());
     await form.getByLabel('Description').fill(`Preflight mobile entry ${suffix}`);
     await form.getByLabel('Account').selectOption(String(account.id));
-    await form.getByLabel('Amount').fill('-3.50');
+    await form.getByLabel('Amount').fill('3.50');
     await form.getByPlaceholder('Search categories').click();
     await form.locator('ul[role="listbox"] button[role="option"]').first().click();
-    await form.getByRole('button', { name: 'Add transaction' }).click();
+    await form.getByRole('button', { name: 'Save transaction' }).click();
     await expectSavedTransaction(page, `Preflight mobile entry ${suffix}`);
   });
 });
 
+/** A deposit of `amount` (positive; the Deposit tab sets its direction, #506). */
 async function createSimpleTransaction(page: Page, accountID: number, description: string, amount: string) {
   await page.goto('/app/ledger/transactions');
-  await page.getByRole('button', { name: 'Add transaction' }).click();
-  const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction' }) });
+  await page.getByRole('button', { name: 'New transaction' }).click();
+  const form = page.getByRole('region', { name: 'New transaction', exact: true });
+  await form.getByRole('tab', { name: 'Deposit', exact: true }).click();
   await form.getByLabel('Date').fill(todayISO());
   await form.getByLabel('Description').fill(description);
   await form.getByLabel('Account').selectOption(String(accountID));
   await form.getByLabel('Amount').fill(amount);
   await form.getByPlaceholder('Search categories').click();
   await form.locator('ul[role="listbox"] button[role="option"]').first().click();
-  await form.getByRole('button', { name: 'Add transaction' }).click();
+  await form.getByRole('button', { name: 'Save transaction' }).click();
   await expectSavedTransaction(page, description);
 }

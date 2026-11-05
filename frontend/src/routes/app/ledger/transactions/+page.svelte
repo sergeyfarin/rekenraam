@@ -46,7 +46,7 @@
   const create = $derived.by<TransactionWorkspaceCreate>(() => {
     if (view === 'deleted') return { kind: 'none' };
     const account = (accountsQuery.data?.accounts ?? []).find((item) => item.id === filteredAccountID);
-    return { kind: 'editor', defaults: account && isOrdinaryEntryAccount(account) ? { accountID: account.id } : undefined };
+    return { kind: 'entry', defaults: account && isOrdinaryEntryAccount(account) ? { accountID: account.id } : undefined };
   });
 </script>
 
