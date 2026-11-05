@@ -156,7 +156,7 @@ Deliver incrementally, tracked in #441, in this order:
    **Transaction entry (owner, 2026-11-05), tracked in #491:** one *New
    transaction* workflow from every entry point, with modes chosen by
    account context ([design](design/home-and-navigation.md#transaction-entry)).
-   Slices in order: shell, ordinary modes and editable account (#506);
+   Slices in order: shell, four stable tabs, shared entry context and editable account (#506);
    Investment mode and settlement candidates (#507); preservation across
    changes (#508). *Move to account…* for posted transactions (#509) is
    independent and starts with an audit of the existing edit and correction

@@ -422,30 +422,81 @@ What stays the same:
 
 ### Modes by account context
 
-| Context | Modes |
+**Four stable tabs (owner, 2026-11-05).** Every entry shows the same four
+tabs in the same places, so position never shifts with the account. Labels
+follow the account, and each mode has a restrained accent:
+
+| Mode | Most accounts | Credit card | Accent |
+|---|---|---|---|
+| Money out | Withdrawal | Charge | red |
+| Money in | Deposit | Credit | green |
+| Between own accounts | Transfer | Transfer | blue |
+| Investment activity | Investment | Investment | purple |
+
+**Credit cards**
+- *Charge* and *Credit* apply to credit cards only. Loans and mortgages
+  keep *Withdrawal* and *Deposit*.
+- A merchant refund or an adjustment is a *Credit*.
+- Paying the card from another of the owner's accounts is a *Transfer*,
+  which records both sides together. A short note under *Credit* says so,
+  so a card repayment is never entered as a separate deposit that
+  duplicates the checking movement.
+
+**Tabs outside their natural context**
+- *Investment* from a bank account is **muted but selectable**, never
+  disabled. A bank account can fund an investment; what's missing is the
+  holding. Selecting it:
+  - keeps the bank account as *Pay from*
+  - asks for the holding account, the instrument and the Activity
+  - keeps the date and memo already entered
+
+  Its note reads "Choose a holding account to record an investment".
+- Starting from a holding, a cash mode asks for the cash account
+  explicitly. It never posts cash to the holding (T-96).
+
+**Accents**
+- Red and green mark **entry direction**, never good, bad, profit or loss.
+- Each mode has its own semantic tokens, separate from the error colour
+  (`--color-danger`) and from the gain and loss colours. A Withdrawal must
+  never look like an error.
+- The accent shows only as the selected tab's underline or soft background
+  and a small icon. Inactive tabs and the form surface stay neutral, and
+  amounts keep the normal text colour.
+- Label, icon and the selected indicator carry the mode without colour.
+  Both themes meet contrast.
+
+| Context | Starting mode |
 |---|---|
-| Ordinary account (checking, savings, cash, e-money, credit card, loan) | Withdrawal · Deposit · Transfer |
-| Brokerage (the container holding cash and positions) | Withdrawal · Deposit · Transfer · Investment |
-| A holding (from an instrument page or a position) | Starts in Investment; cash modes need a cash account |
-| None (Home, search, `N` without an account page) | All four. Withdrawal is first, so a grocery payment stays quick |
+| Ordinary account (checking, savings, cash, e-money, credit card, loan) | Withdrawal (Charge on a card); Investment muted |
+| Brokerage (the container holding cash and positions) | Withdrawal; all four fully available |
+| A holding (from an instrument page or a position) | Investment; cash modes ask for a cash account |
+| None (Home, search, `N` without an account page) | Withdrawal, so a grocery payment stays quick |
 
 **Withdrawal and Deposit**
-- The owner enters a positive amount. The mode and the account's posting rules decide the direction, replacing today's signed amount.
-- They describe direction relative to the account, not expense or income: a refund is a Deposit against a category, and liability movements and transfers keep their accounting treatment.
-- On a credit card or other liability the labels read naturally for that account. The proposal is *Charge* and *Payment or refund*, with the same meaning; this is open for the owner to confirm.
-- Split entry and the existing advanced journal paths (today's split and locked editor tiers) stay reachable. Tabs organize entry; they never reduce the shapes the ledger can already hold.
+- The owner enters a positive amount. The mode and the account's posting
+  rules decide the direction, replacing today's signed amount.
+- They describe direction relative to the account, not expense or income: a
+  refund is a Deposit (Credit) against a category, and liability movements
+  and transfers keep their accounting treatment.
+- Split entry and the existing advanced journal paths (today's split and
+  locked editor tiers) stay reachable. Tabs organize entry; they never
+  reduce the shapes the ledger can already hold.
 
-**Transfer** is today's transfer entry (#481): one operation between two of the owner's accounts.
+**Transfer** is today's transfer entry (#481): one operation between two of
+the owner's accounts.
 
 **Investment** has an **Activity** selector:
 - grouped as Trades, Income, Shares and Corporate actions
 - arrow keys and localized type-ahead
-- share movements named *Shares in*, *Move shares between holdings* and *Shares out*, so they never read as the cash Transfer tab
+- share movements named *Shares in*, *Move shares between holdings* and
+  *Shares out*, so they never read as the cash Transfer tab
 
 **Changing account**
-- It can change the modes on offer. If the current mode or activity no longer fits, the entry says what to choose and keeps the unfinished work.
-- It never turns a Withdrawal into a Buy, and never picks an activity on the owner's behalf.
-- Holding accounts never take ordinary cash postings (T-96).
+- It changes labels and which roles need choosing, never the tab positions.
+  If the current activity no longer fits, the entry says what to choose and
+  keeps the unfinished work.
+- It never turns a Withdrawal into a Buy, never picks an activity, and never
+  changes which account receives a posting without the owner's choice.
 
 ### Account context is not a posting role
 
@@ -455,7 +506,10 @@ A transaction involves accounts in roles:
 - Brokerage cash has ordinary fees, deposits and withdrawals.
 - A split or reinvestment may move no cash.
 
-Starting from a bank account never rules out an investment. Choosing Investment keeps the bank account as a settlement candidate and asks for the holding. Valid participants come from the backend's existing role and capability rules.
+Starting from a bank account never rules out an investment: the muted
+*Investment* tab is the route. Selecting it keeps the bank account as a
+settlement candidate (*Pay from*) and asks for the holding. Valid
+participants come from the backend's existing role and capability rules.
 
 ### Settlement account defaults
 
@@ -464,17 +518,32 @@ Today nothing links a holding to its settlement account. The explicit relations 
 - an import connection's cash account
 
 The rule:
-- **Preselect** a candidate, and show its name, only when exactly one applies:
-  - the brokerage container has one `brokerage_cash` child in the operation's currency, or
-  - the starting page is that cash account (for example the bank register the entry began from).
-- **The owner chooses** in every other case:
+- **The owner's choice wins.** An account the owner selected stays
+  selected. Automatic selection applies only while no explicit selection
+  exists. A query refresh or a newly found candidate never overwrites it.
+- **Candidates** come from explicit relations only:
+  - the brokerage container's `brokerage_cash` children
+  - the cash account the entry started from
+
+  They are combined and deduplicated, then checked for role, currency and
+  validity at the posting date.
+- **Preselect** only when exactly one valid candidate remains, and show its
+  name. A single eligible cash child is a suggestion, not proof that every
+  operation settles there.
+- **The owner chooses** when two different valid candidates remain (for
+  example the starting bank account and a brokerage cash account), and in
+  every other case:
   - several cash currencies
   - no candidate
   - a margin or other permitted liability account
   - a dividend paid elsewhere
 - **No cash account** is requested for activities that move no cash.
-- **Nothing is guessed** from institution names.
-- **A stored per-holding default** is a separate decision, made only if this rule proves insufficient.
+- **Not defaults:**
+  - an import connection's cash mapping, which is evidence for that
+    connection's workflow, not a manual-entry default
+  - anything guessed from institution names
+- **A stored per-holding default** is a separate decision, made only if
+  this rule proves insufficient.
 
 ### Shared context and working copies
 
@@ -500,7 +569,12 @@ Working copies:
 
 - Withdrawal ↔ Deposit keep the positive magnitude.
 - Compatible activities keep the share quantity and an explicitly entered unit price (Buy ↔ Sell, Short sale ↔ Short cover).
-- Cash, fees and net settlement are recomputed with the chosen activity's exact arithmetic, and the resulting cash movement is shown. A net cash figure is never reused as if fees and direction were unchanged.
+- Entered charges are financial facts. Each activity keeps its own entered
+  charges in its working copy. Derived totals and the cash movement are
+  recomputed from the active activity's inputs with its exact arithmetic,
+  and the resulting cash movement is shown. Another activity's fee is never
+  invented, overwritten or carried without a defined compatibility rule, and
+  a net cash figure is never reused as if fees and direction were unchanged.
 - An ordinary cash amount never becomes an investment's gross amount, net settlement, fee or cost basis.
 - Lot allocations, basis elections, corporate-action ratios and other declarations stay with their own activity.
 - Entered facts are never replaced by market prices or inferred values.
@@ -536,9 +610,9 @@ Guardrails:
 
 | Slice | Issue |
 |---|---|
-| Entry shell and routing: one *New transaction*, Withdrawal / Deposit / Transfer for ordinary accounts, editable account | #506 |
+| Entry shell and routing: one *New transaction*, four stable tabs with labels and accents, shared entry context with basic preservation and preview invalidation, editable account | #506 |
 | Investment mode: brokerage and holding contexts, Activity selector, settlement candidates | #507 |
-| Preservation across account, mode and activity changes; preview invalidation | #508 |
+| Activity-specific restoration across activities and accounts, full acceptance coverage | #508 |
 | Move to account for posted transactions | #509 |
 
 #491 tracks the first three slices. Move to account is its own issue.
