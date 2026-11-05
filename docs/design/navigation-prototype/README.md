@@ -43,7 +43,7 @@ After the owner's ten comments: widgets are denser and section headings carry
 no counts; the brand is the Home link; accounts are grouped by institution
 with an *Institutions* view; a brokerage is one account showing its cash and
 positions (no holding accounts in lists); page actions say *Add transaction*
-(brokerages add *Record trade or dividend*); "Trash" became Transactions ›
+(brokerages add *New transaction*, which opens the investment type chooser); "Trash" became Transactions ›
 *Deleted*; Settings has five pages, and *Preferences* holds language, theme
 and the Home page settings. The full capability map is in the
 [navigation review](../../reviews/navigation-and-pages-options-2026-10-29.md#coverage-review-after-the-prototype-2026-10-29).

@@ -640,13 +640,43 @@ Payment in lieu, Return of capital), Move (Transfer in, Move between
 holdings, Transfer out) and Corporate actions (Split, Share exchange,
 Cash-and-stock merger, Spin-off), with type-ahead and arrow keys. A sheet on
 phones; never a small dropdown. Choosing a type opens that type's existing
-form with the page's prefill (holding, instrument, account). To change type
-the owner goes back to the chooser; if anything was entered, the form asks
-before discarding it. Fields are not carried between forms: carrying them
-needs per-pair preservation rules, the area that needed three repairs in
-#481. Carrying fields between near-identical forms (Buy and Sell, Dividend and
-Reinvested dividend) can be proposed later on its own. Investment account
-registers use the same button and chooser instead of their *Record* menu.
+form with the page's prefill (holding, instrument, account).
+
+**Changing type (revised 2026-11-05 after review).** The open form shows its
+type with a *Change type* control. Changing type keeps what still applies,
+so correcting a first choice never means typing it all again:
+- **Shared context** is one browser-only draft for the whole entry, not a
+  copy per form. It holds:
+  - the instrument (by its stable ID, where it plays the same role)
+  - the holding or brokerage account
+  - the cash account and currency, where that role applies
+  - memo and reference
+  - the **main date**
+
+  Each type declares one main date: the trade date for trades and
+  write-offs, the payment date for income, the effective date for transfers
+  and corporate actions. Secondary dates (settlement, ex-dividend, payable,
+  original acquisition) belong to their own type and never take another
+  type's date.
+- **Amounts, quantities, fees, ratios and lot choices** carry only between
+  pairs where they mean the same thing: Buy ↔ Sell, and Short sale ↔ Short
+  cover (quantity, gross or net amount, charges). Lot allocations never carry.
+  Everything else stays in the original type's working copy. Switching back
+  restores it, with the shared context as it is now: a date changed while in
+  Sell is the date when returning to Buy.
+- **Validation:** every save runs the chosen type's own checks and review
+  (holdings, lots, gains, reconciliation). A review shown for one type never
+  authorizes another.
+- **Discarding:** a confirmation appears only when something would actually
+  be lost, such as closing the entry or leaving the page with unsaved working
+  copies. Nothing is stored on the server until save.
+- **Scope:** this is for new, unsaved entries only. Changing the type of a
+  posted operation stays with its correction workflow.
+
+Investment account registers and instrument pages use the same button and
+chooser, prefilled from that page, in place of their *Record* menu. Forms stay
+separate components with typed commands. A coherent entry does not need one
+universal form or endpoint.
 
 **The task rail is withdrawn (2026-11-05).** On 2026-11-01 a right-hand rail
 listing commands and report filters was chosen ([mockup](shell-look-mockup/README.md)).
@@ -669,7 +699,9 @@ selection or to the work in progress:
 - the reconciliation summary (statement balance, cleared, difference,
   finish) on Reconcile
 
-On phones each opens as a full-screen modal.
+The first two open as a full-screen modal on phones. Reconcile places its
+summary below the list instead, which suits a summary you read after
+ticking rows. Both are valid; each page chooses.
 
 **Candidates, deferred** (each needs its own case):
 - **Import batch review:** the selected row's details, its link or match
@@ -682,9 +714,14 @@ On phones each opens as a full-screen modal.
 - **Budgets:** the month's totals (left to assign, overspent) kept in view
   while editing categories.
 
+**What a panel is for:** the current selection or task, *including* the
+actions that decide it. Transaction detail has *Edit* and *Correct*;
+Reconcile's summary has *Finish* and *Void*, beside the numbers they depend
+on.
+
 **Not for:**
-- commands, which belong in the page header's action slot, a chooser, or a
-  row's ⋯ menu
+- a directory of the page's commands (the withdrawn rail), which belong in
+  the page header's action slot, a chooser, or a row's ⋯ menu
 - navigation (the account list was rejected 2026-10-29)
 - help or promotion
 
@@ -693,7 +730,8 @@ On phones each opens as a full-screen modal.
   two panels.
 - One width token in place of today's 22, 24 and 26rem.
 - Sticky.
-- A full-screen modal on phones.
+- On phones, a full-screen modal or a section below the list, whichever
+  fits the task.
 - Adoption needs a task check first: the page's common tasks with mouse,
   keyboard and phone, and nothing important left below the fold.
 
@@ -733,7 +771,11 @@ On phones each opens as a full-screen modal.
   accounts, pinned or offered in the account switcher; their positions show
   on the brokerage account page and on the instrument page.
 - **Page actions name what they add:** *Add transaction*; brokerage accounts,
-  instruments and Investments Overview also show *Record trade or dividend*.
+  instrument pages and Investments Overview also show *New transaction*,
+  which opens the investment type chooser prefilled from the page
+  ([side panels](#side-panels)). A brokerage context suggests investment
+  types, but ordinary cash movements and fees stay reachable through *Add
+  transaction*.
 - Before #442 fixes grouping and the pin limit, count a real book (#449) (accounts
   by kind, holdings per broker, closed accounts, categories by depth, payees,
   postings per account over 90 days) and record the result in the review.
@@ -771,7 +813,7 @@ Sequencing belongs in the roadmap; acceptance in the issues.
 | Review page: everything needing attention and background status | #453 |
 | Settings in five pages; Trash becomes Transactions › Deleted; ledger export moves to Reports › Export | #446 |
 | Import views: Files, Connections, Rules and profiles, Dividends | #447 |
-| Ledger overview: accounts by institution, Institutions view, brokerage as one account, *Record trade or dividend* | #448 |
+| Ledger overview: accounts by institution, Institutions view, brokerage as one account, investment *New transaction* | #448 |
 | Planning and Reports overviews | #450 |
 | Payees page | #443 |
 | Tags view | #444 |
@@ -783,7 +825,7 @@ Sequencing belongs in the roadmap; acceptance in the issues.
 | Density: compact and comfortable rows | #451 |
 | Shell look: olive two-tint rows, joined section tab, green place markers, card contrast | #489 |
 | Search button with centred search dialog | #490 |
-| Investments *New transaction* with a type chooser, also on investment registers | #491 |
+| Investments *New transaction* with a type chooser and *Change type* that keeps what applies, also on registers and instrument pages | #491 |
 | Report filters take less space above the figures (later: filter bar or side panel, after a task check) | #492 |
 | Two-key navigation shortcuts | #452 |
 
@@ -803,8 +845,8 @@ Sequencing belongs in the roadmap; acceptance in the issues.
   with a type chooser.
 - A task rail listing commands (chosen 2026-11-01, withdrawn 2026-11-05):
   see [side panels](#side-panels).
-- A type field that switches forms in place inside the investment editor:
-  deferred; the chooser avoids preservation rules.
+- Discarding everything on a type change (proposed and withdrawn the same
+  day, 2026-11-05): replaced by explicit preservation rules.
 - A fixed-order map with a separate shortlist: replaced by My Home plus More
   to explore.
 - Compact previews in More to explore: real-size widgets instead.
