@@ -147,15 +147,20 @@ Deliver incrementally, tracked in #441, in this order:
    account-list state and Home widget (#482, configurable window, default 60
    days). Pinned accounts on the Accounts widget arrive with #442
    and entered values in the briefing with #454.
-3. **Shell look and investment entry (owner, 2026-11-01, revised
-   2026-11-05), next:** olive two-tint header rows with the current section
-   as a joined tab (#489); a *Search Ctrl K* button opening the centred
-   search (#490); one *New transaction* button with a type chooser on
-   Investments and investment registers (#491). All three are small and
-   independent. The task rail was withdrawn; where a right-hand panel earns
-   its place is recorded under
-   [side panels](design/home-and-navigation.md#side-panels), and report
-   filters (#492) moved to *Deliberately later*.
+3. **Shell look (owner, 2026-11-01), next:** olive two-tint header rows
+   with the current section as a joined tab (#489) and a *Search Ctrl K*
+   button opening the centred search (#490); small and independent. The
+   task rail was withdrawn on 2026-11-05: where a right-hand panel earns its
+   place is under [side panels](design/home-and-navigation.md#side-panels),
+   and report filters (#492) moved to *Deliberately later*.
+   **Transaction entry (owner, 2026-11-05), tracked in #491:** one *New
+   transaction* workflow from every entry point, with modes chosen by
+   account context ([design](design/home-and-navigation.md#transaction-entry)).
+   Slices in order: shell, ordinary modes and editable account (#506);
+   Investment mode and settlement candidates (#507); preservation across
+   changes (#508). *Move to account…* for posted transactions (#509) is
+   independent and starts with an audit of the existing edit and correction
+   paths.
 4. **Pages in their new places**, in any order after #436: settings in five
    pages with Trash moved to Transactions › Deleted and export to Reports
    (#446) delivered 2026-10-31; Import views (#447); Ledger overview with

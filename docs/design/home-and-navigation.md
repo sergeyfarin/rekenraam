@@ -103,7 +103,7 @@ header on every page.
   Overviews hold their section's state and actions, never a copy of Home:
   *Ledger overview* is the accounts list (pinned accounts first, then every
   account by institution, with an *Institutions* view) and the ledger's
-  actions (Add transaction, Transfer, Import file, Reconcile, Add account);
+  actions (New transaction, Transfer, Import file, Reconcile, Add account);
   it replaces the separate Accounts page. *Planning overview* shows the
   month's budget status, recurring items due and the forecast's low point.
   *Reports overview* lists every report with its latest figure and saved
@@ -336,12 +336,14 @@ acceptance; this foundation does not claim their behavior.
 ## Shortcuts
 
 - Tiles with an icon and a label of up to two lines, Firefox New Tab style.
-- **Add transaction** is the first tile by default, in the accent colour.
+- **New transaction** is the first tile by default, in the accent colour
+  (named *Add transaction* until #506; see [Transaction entry](#transaction-entry)).
+  The Transfer tile opens the same entry in its Transfer mode.
   It can be moved but not removed. On other pages it is reachable through
   search (“add”), the keyboard shortcut N and the Transactions page.
 - Other tiles are actions (Transfer, Import file, Reconcile an account) or
   links to a page or saved view (an account register, a filtered report).
-  Defaults: Add transaction, Transfer, Import file, Transactions, Spending by
+  Defaults: New transaction, Transfer, Import file, Transactions, Spending by
   category, Checking.
 - Each tile has a ⋯ menu (Move left/right, Rename, Remove); a final
   “+ Add shortcut” tile lists the remaining options. Phones show the first
@@ -359,6 +361,9 @@ and a More disclosure listing the rest in order, so a tile moved past the
 third (Add included, once #438 allows moving) stays reachable.
 
 ### Shared entry dialog (#477)
+
+This dialog becomes the host of the one [transaction entry](#transaction-entry)
+workflow (#506); the record below is what #477 delivered.
 
 *Add transaction* on Home, `N` and search's *Add transaction* command on a
 page without its own editor open one shared dialog: the existing transaction
@@ -386,6 +391,157 @@ budgets, forecast, reconciliation, brokerage cash reads and Prices coverage
 beneath updates in place, plus Home and the attention count — and announces
 *Transaction added* with a link to the transaction. Nothing posts without the
 editor's own save.
+
+## Transaction entry
+
+Owner decision 2026-11-05 (#491). This supersedes the Investments-only
+*New transaction* and *Change type* text of the same day. Delivery slices are
+listed [at the end of this section](#entry-delivery).
+
+### One workflow, one button
+
+There is one primary *New transaction* button. Every entry point opens the same entry workflow, prefilled from where it started:
+- Home's first tile
+- `N`
+- search's *New transaction* command
+- account registers and category pages
+- instrument pages and Investments
+
+Where the workflow is hosted:
+- Pages with an in-place editor (registers, Transactions) host it in their side panel.
+- Everywhere else, the [shared entry dialog](#shared-entry-dialog-477) hosts it.
+
+How defaults behave:
+- The starting page's defaults apply once, when the entry opens. They never overwrite a choice the owner makes afterwards.
+- The starting account stays editable until save.
+
+What stays the same:
+- Specialized form components, typed backend commands and their financial guards stay.
+- The workflow organizes them; it does not replace them.
+- There are no separate launchers for ordinary and investment entry.
+
+### Modes by account context
+
+| Context | Modes |
+|---|---|
+| Ordinary account (checking, savings, cash, e-money, credit card, loan) | Withdrawal · Deposit · Transfer |
+| Brokerage (the container holding cash and positions) | Withdrawal · Deposit · Transfer · Investment |
+| A holding (from an instrument page or a position) | Starts in Investment; cash modes need a cash account |
+| None (Home, search, `N` without an account page) | All four. Withdrawal is first, so a grocery payment stays quick |
+
+**Withdrawal and Deposit**
+- The owner enters a positive amount. The mode and the account's posting rules decide the direction, replacing today's signed amount.
+- They describe direction relative to the account, not expense or income: a refund is a Deposit against a category, and liability movements and transfers keep their accounting treatment.
+- On a credit card or other liability the labels read naturally for that account. The proposal is *Charge* and *Payment or refund*, with the same meaning; this is open for the owner to confirm.
+- Split entry and the existing advanced journal paths (today's split and locked editor tiers) stay reachable. Tabs organize entry; they never reduce the shapes the ledger can already hold.
+
+**Transfer** is today's transfer entry (#481): one operation between two of the owner's accounts.
+
+**Investment** has an **Activity** selector:
+- grouped as Trades, Income, Shares and Corporate actions
+- arrow keys and localized type-ahead
+- share movements named *Shares in*, *Move shares between holdings* and *Shares out*, so they never read as the cash Transfer tab
+
+**Changing account**
+- It can change the modes on offer. If the current mode or activity no longer fits, the entry says what to choose and keeps the unfinished work.
+- It never turns a Withdrawal into a Buy, and never picks an activity on the owner's behalf.
+- Holding accounts never take ordinary cash postings (T-96).
+
+### Account context is not a posting role
+
+A transaction involves accounts in roles:
+- A Buy adds shares to a holding and pays from a settlement account.
+- A dividend names a stock and may arrive in an ordinary bank account.
+- Brokerage cash has ordinary fees, deposits and withdrawals.
+- A split or reinvestment may move no cash.
+
+Starting from a bank account never rules out an investment. Choosing Investment keeps the bank account as a settlement candidate and asks for the holding. Valid participants come from the backend's existing role and capability rules.
+
+### Settlement account defaults
+
+Today nothing links a holding to its settlement account. The explicit relations that do exist are:
+- the account hierarchy: a brokerage container's `brokerage_cash` children
+- an import connection's cash account
+
+The rule:
+- **Preselect** a candidate, and show its name, only when exactly one applies:
+  - the brokerage container has one `brokerage_cash` child in the operation's currency, or
+  - the starting page is that cash account (for example the bank register the entry began from).
+- **The owner chooses** in every other case:
+  - several cash currencies
+  - no candidate
+  - a margin or other permitted liability account
+  - a dividend paid elsewhere
+- **No cash account** is requested for activities that move no cash.
+- **Nothing is guessed** from institution names.
+- **A stored per-holding default** is a separate decision, made only if this rule proves insufficient.
+
+### Shared context and working copies
+
+One browser-only entry context holds, by stable ID:
+- the latest **main date**
+- the holding or brokerage, and settlement-account selections
+- the instrument, where it plays the same role
+- currency, where applicable
+- memo and reference
+
+A value changed in one mode is the value every other mode sees. Restoring Buy's unfinished fields never brings back a date older than one entered in Sell.
+
+Main and secondary dates:
+- Each activity declares its **main date**: trade date for trades and write-offs, payment date for income, effective date for transfers and corporate actions. It is shown under that activity's own label.
+- Secondary dates stay in their own working copies and are revalidated, never mapped from another role: settlement, ex-dividend, payable, original acquisition and transfer-side posting dates.
+
+Working copies:
+- Fields specific to a mode or activity stay in its working copy for as long as the entry is open, so switching back restores them.
+- These are unsaved browser state, not `draft` transactions.
+- A selection that becomes invalid stays identified, with an explanation and a request to correct it. Nothing is silently substituted.
+
+### Amounts by meaning
+
+- Withdrawal ↔ Deposit keep the positive magnitude.
+- Compatible activities keep the share quantity and an explicitly entered unit price (Buy ↔ Sell, Short sale ↔ Short cover).
+- Cash, fees and net settlement are recomputed with the chosen activity's exact arithmetic, and the resulting cash movement is shown. A net cash figure is never reused as if fees and direction were unchanged.
+- An ordinary cash amount never becomes an investment's gross amount, net settlement, fee or cost basis.
+- Lot allocations, basis elections, corporate-action ratios and other declarations stay with their own activity.
+- Entered facts are never replaced by market prices or inferred values.
+- A transfer between the owner's accounts is one operation, and a share purchase is one operation with its cash effect. One movement is never entered twice.
+
+### Switching never posts
+
+- Switching mode, activity or account creates no ledger entries, lot effects or background work.
+- Save runs only the active mode's command and validation.
+- Any change to financial meaning invalidates a shown preview or approval. A Buy review never authorizes a Sell, and a review for one account never authorizes another.
+- While a save is in flight, account, mode and activity cannot change.
+- A discard confirmation appears only when work would actually be lost.
+- Changing the type of a *posted* operation stays with its correction workflows.
+
+### Move to account (posted transactions)
+
+A register row's *Move to account…* moves the selected posting to another account:
+- **Counterparts are kept:** the category and other counterpart postings stay, unless a supported rebuild is required.
+- **Ambiguous rows ask:** a row with several postings, or an unclear side, names the affected postings and asks the owner to choose.
+- **Transfers:** the owner picks the From or To side; an invalid result, such as a same-account transfer, is refused.
+- **Atomic and audited:** the original stays intact until one audited change commits, through the existing edit or correction lifecycle. A failed or stale attempt leaves it untouched.
+
+Guardrails:
+- **Reconciliation:** checkpoints are reviewed on both the source and destination accounts, with the existing override.
+- **Currency:** the recorded commodity and amount are kept. A destination with a different currency never converts or relabels silently.
+- **Eligibility:** the destination must be valid at the posting date.
+- **Statement evidence:** it is kept and any disagreement is disclosed (#485).
+- **Investment operations:** they move only through investment correction commands. Correcting a wrong brokerage is not a share transfer.
+- **Concurrency:** state is rechecked atomically at commit.
+- **Type:** a move never changes the operation's financial type.
+
+### Entry delivery
+
+| Slice | Issue |
+|---|---|
+| Entry shell and routing: one *New transaction*, Withdrawal / Deposit / Transfer for ordinary accounts, editable account | #506 |
+| Investment mode: brokerage and holding contexts, Activity selector, settlement candidates | #507 |
+| Preservation across account, mode and activity changes; preview invalidation | #508 |
+| Move to account for posted transactions | #509 |
+
+#491 tracks the first three slices. Move to account is its own issue.
 
 ## Widgets
 
@@ -632,51 +788,8 @@ switcher in the title slot remain #442.
 
 ### Side panels
 
-**Investments entry (owner, 2026-11-05).** Investments shows one *New
-transaction* button where the 17 *Record …* buttons were. It opens a **type
-chooser**: a full-size list grouped as Trades (Buy, Sell, Short sale, Short
-cover, Write-off), Income (Dividend, Reinvested dividend, Withholding tax,
-Payment in lieu, Return of capital), Move (Transfer in, Move between
-holdings, Transfer out) and Corporate actions (Split, Share exchange,
-Cash-and-stock merger, Spin-off), with type-ahead and arrow keys. A sheet on
-phones; never a small dropdown. Choosing a type opens that type's existing
-form with the page's prefill (holding, instrument, account).
-
-**Changing type (revised 2026-11-05 after review).** The open form shows its
-type with a *Change type* control. Changing type keeps what still applies,
-so correcting a first choice never means typing it all again:
-- **Shared context** is one browser-only draft for the whole entry, not a
-  copy per form. It holds:
-  - the instrument (by its stable ID, where it plays the same role)
-  - the holding or brokerage account
-  - the cash account and currency, where that role applies
-  - memo and reference
-  - the **main date**
-
-  Each type declares one main date: the trade date for trades and
-  write-offs, the payment date for income, the effective date for transfers
-  and corporate actions. Secondary dates (settlement, ex-dividend, payable,
-  original acquisition) belong to their own type and never take another
-  type's date.
-- **Amounts, quantities, fees, ratios and lot choices** carry only between
-  pairs where they mean the same thing: Buy ↔ Sell, and Short sale ↔ Short
-  cover (quantity, gross or net amount, charges). Lot allocations never carry.
-  Everything else stays in the original type's working copy. Switching back
-  restores it, with the shared context as it is now: a date changed while in
-  Sell is the date when returning to Buy.
-- **Validation:** every save runs the chosen type's own checks and review
-  (holdings, lots, gains, reconciliation). A review shown for one type never
-  authorizes another.
-- **Discarding:** a confirmation appears only when something would actually
-  be lost, such as closing the entry or leaving the page with unsaved working
-  copies. Nothing is stored on the server until save.
-- **Scope:** this is for new, unsaved entries only. Changing the type of a
-  posted operation stays with its correction workflow.
-
-Investment account registers and instrument pages use the same button and
-chooser, prefilled from that page, in place of their *Record* menu. Forms stay
-separate components with typed commands. A coherent entry does not need one
-universal form or endpoint.
+**Investment entry** is part of the one entry workflow; see
+[Transaction entry](#transaction-entry).
 
 **The task rail is withdrawn (2026-11-05).** On 2026-11-01 a right-hand rail
 listing commands and report filters was chosen ([mockup](shell-look-mockup/README.md)).
@@ -770,12 +883,11 @@ on.
   holding accounts stay in the ledger model but are never listed as
   accounts, pinned or offered in the account switcher; their positions show
   on the brokerage account page and on the instrument page.
-- **Page actions name what they add:** *Add transaction*; brokerage accounts,
-  instrument pages and Investments Overview also show *New transaction*,
-  which opens the investment type chooser prefilled from the page
-  ([side panels](#side-panels)). A brokerage context suggests investment
-  types, but ordinary cash movements and fees stay reachable through *Add
-  transaction*.
+- **Page actions:** every page that offers entry shows the one *New
+  transaction* button, opening the [one entry workflow](#transaction-entry)
+  prefilled from the page. A brokerage offers the Investment mode beside
+  Withdrawal, Deposit and Transfer, so ordinary cash movements and fees stay
+  in the same entry.
 - Before #442 fixes grouping and the pin limit, count a real book (#449) (accounts
   by kind, holdings per broker, closed accounts, categories by depth, payees,
   postings per account over 90 days) and record the result in the review.
@@ -813,7 +925,7 @@ Sequencing belongs in the roadmap; acceptance in the issues.
 | Review page: everything needing attention and background status | #453 |
 | Settings in five pages; Trash becomes Transactions › Deleted; ledger export moves to Reports › Export | #446 |
 | Import views: Files, Connections, Rules and profiles, Dividends | #447 |
-| Ledger overview: accounts by institution, Institutions view, brokerage as one account, investment *New transaction* | #448 |
+| Ledger overview: accounts by institution, Institutions view, brokerage as one account, *New transaction* in brokerage context | #448 |
 | Planning and Reports overviews | #450 |
 | Payees page | #443 |
 | Tags view | #444 |
@@ -825,7 +937,8 @@ Sequencing belongs in the roadmap; acceptance in the issues.
 | Density: compact and comfortable rows | #451 |
 | Shell look: olive two-tint rows, joined section tab, green place markers, card contrast | #489 |
 | Search button with centred search dialog | #490 |
-| Investments *New transaction* with a type chooser and *Change type* that keeps what applies, also on registers and instrument pages | #491 |
+| One transaction entry: shell and ordinary modes (#506), Investment mode (#507), preservation (#508) | #491 |
+| Move to account for posted transactions | #509 |
 | Report filters take less space above the figures (later: filter bar or side panel, after a task check) | #492 |
 | Two-key navigation shortcuts | #452 |
 
@@ -841,12 +954,13 @@ Sequencing belongs in the roadmap; acceptance in the issues.
 - A compact search field in the header: replaced by the *Search Ctrl K*
   button.
 - A wall of record buttons, and folding them into a small dropdown. *Record
-  buy* as the Investments main action. Both replaced by *New transaction*
-  with a type chooser.
+  buy* as the Investments main action. Separate launchers for ordinary and
+  investment entry. All replaced by the one *New transaction* entry.
 - A task rail listing commands (chosen 2026-11-01, withdrawn 2026-11-05):
   see [side panels](#side-panels).
-- Discarding everything on a type change (proposed and withdrawn the same
-  day, 2026-11-05): replaced by explicit preservation rules.
+- Discarding everything on a type change, and carrying a Buy's net cash or
+  charges into a Sell (both proposed and withdrawn on 2026-11-05): replaced by
+  the preservation rules in [Transaction entry](#transaction-entry).
 - A fixed-order map with a separate shortlist: replaced by My Home plus More
   to explore.
 - Compact previews in More to explore: real-size widgets instead.
