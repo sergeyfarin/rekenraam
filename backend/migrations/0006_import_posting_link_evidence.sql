@@ -2,8 +2,14 @@
 -- #485 second review: a link names its line, which stays its identity across
 -- versions. As evidence it also keeps the posting version the owner linked,
 -- so an export can state the linked facts after the target is voided or
--- deleted and no longer in ledger.csv. Existing links take the line's version
--- current when they were recorded (best available; no release has them).
+-- deleted and no longer in ledger.csv. New links record it as they are
+-- written. Existing links (no release has them) are backfilled only where the
+-- order is certain, never from timestamps, which tie within a second: audit
+-- event ids follow commit order on the single writer, so the version linked
+-- is the line's latest version whose change event precedes the link's own
+-- event. A transaction with a version lacking a change event is not
+-- ordered, and its links stay without evidence (NULL, exported as
+-- unrecorded) rather than with a guess.
 ALTER TABLE import_posting_links ADD COLUMN linked_posting_version_id INTEGER
   REFERENCES posting_versions(id) ON DELETE RESTRICT;
 
@@ -14,8 +20,13 @@ UPDATE import_posting_links SET linked_posting_version_id = (
   SELECT candidate.id FROM posting_versions candidate
   JOIN transaction_versions version ON version.id = candidate.transaction_version_id
   WHERE candidate.posting_line_id = import_posting_links.posting_line_id
-    AND version.recorded_at <= import_posting_links.created_at
-  ORDER BY version.version_seq DESC, candidate.id DESC LIMIT 1
+    AND version.change_audit_event_id < import_posting_links.created_audit_event_id
+  ORDER BY version.change_audit_event_id DESC, candidate.id DESC LIMIT 1
+)
+WHERE NOT EXISTS (
+  SELECT 1 FROM transaction_versions unordered
+  WHERE unordered.transaction_id = import_posting_links.transaction_id
+    AND unordered.change_audit_event_id IS NULL
 );
 
 -- +goose StatementBegin

@@ -127,7 +127,8 @@ func (r *ExportRepository) ExportInvestmentFoundation(ctx context.Context, tx *s
 			retirement.retired_at, retirement.retired_audit_event_id, retirement.reason,
 			current.status, (target.deleted_at IS NOT NULL),
 			linked.transaction_version_id, linked.account_id, linked.commodity_id,
-			linked.quantity_value, linked.quantity_scale, linked_entry.entry_date
+			linked.quantity_value, linked.quantity_scale, linked_entry.entry_date,
+			CASE WHEN link.linked_posting_version_id IS NULL THEN 'unrecorded' ELSE 'recorded' END
 			FROM import_posting_links link JOIN posting_lines line ON line.id = link.posting_line_id
 			JOIN transactions target ON target.id = link.transaction_id
 			JOIN current_transaction_versions current ON current.transaction_id = target.id

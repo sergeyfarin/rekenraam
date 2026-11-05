@@ -375,7 +375,10 @@ and the posting version the owner linked: `linked_transaction_version_id`,
 undeleted and in scope; a link to a target voided or deleted since stays in the
 file, and its `linked_*` columns state the evidence that `ledger.csv` no longer
 carries. This is the one exception to the resolvable-ids rule below, and it is
-explicit in each row.
+explicit in each row. A final `linked_evidence` column is `recorded` when the
+`linked_*` columns are the version the owner linked, or `unrecorded` (those
+columns empty) for a link written before evidence was kept whose version could
+not be established from audit order; it is never estimated.
 
 ### Resolvable ids (2026-10-18, #322)
 

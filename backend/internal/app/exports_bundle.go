@@ -273,7 +273,7 @@ func (s *ExportService) WriteBundle(ctx context.Context, out io.Writer, filter E
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "import-effects", []string{"identity_id", "effect_seq", "operation_id", "transaction_id"})
 		}},
 		{"import-posting-links.csv", func(w io.Writer) (int64, error) {
-			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "import-posting-links", []string{"link_id", "identity_id", "transaction_id", "posting_line_key", "replaces_link_id", "linked_at", "audit_event_id", "retired_at", "retired_audit_event_id", "retire_reason", "target_status", "target_deleted", "linked_transaction_version_id", "linked_account_id", "linked_commodity_id", "linked_quantity_value", "linked_quantity_scale", "linked_posted_on"})
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "import-posting-links", []string{"link_id", "identity_id", "transaction_id", "posting_line_key", "replaces_link_id", "linked_at", "audit_event_id", "retired_at", "retired_audit_event_id", "retire_reason", "target_status", "target_deleted", "linked_transaction_version_id", "linked_account_id", "linked_commodity_id", "linked_quantity_value", "linked_quantity_scale", "linked_posted_on", "linked_evidence"})
 		}},
 		{"disposal-decisions.csv", func(w io.Writer) (int64, error) { return s.writeDisposalDecisionsCSV(ctx, w, snapshot) }},
 		{"disposal-allocations.csv", func(w io.Writer) (int64, error) { return s.writeDisposalAllocationsCSV(ctx, w, snapshot) }},
@@ -1054,7 +1054,10 @@ a ledger.csv row only while target_status is posted and target_deleted is 0
 (and the transaction is in scope); a link to a transaction voided or deleted
 since is still exported, and its linked_* columns state the line as it stood
 when linked: the transaction version, account, commodity, exact quantity and
-posting day.
+posting day. linked_evidence is recorded when those columns are the version
+the owner linked, or unrecorded (columns empty) for a link written before
+evidence was kept whose version could not be established; it is never
+estimated.
 Bundle schema 18 adds investment-returns-runs.csv with every immutable saved
 returns_v1 document (R13), its resolved request and descriptor, timestamps,
 actor and audit IDs, and SHA-256 fingerprints. All runs are included even in

@@ -9,11 +9,15 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/exact"
+	"rekenraam/backend/migrations"
 )
 
 // #485 review: a mistaken link is repaired by an audited unlink or
@@ -217,7 +221,7 @@ func TestBundleExportsImportPostingLinksWithTheirHistory(t *testing.T) {
 	require.Len(t, rows, 3, "header, the retired link and its successor")
 	assert.Equal(t, []string{"link_id", "identity_id", "transaction_id", "posting_line_key", "replaces_link_id", "linked_at", "audit_event_id",
 		"retired_at", "retired_audit_event_id", "retire_reason", "target_status", "target_deleted", "linked_transaction_version_id",
-		"linked_account_id", "linked_commodity_id", "linked_quantity_value", "linked_quantity_scale", "linked_posted_on"}, rows[0])
+		"linked_account_id", "linked_commodity_id", "linked_quantity_value", "linked_quantity_scale", "linked_posted_on", "linked_evidence"}, rows[0])
 	identity := strconv.FormatInt(link.IdentityID, 10)
 	first, successor := rows[1], rows[2]
 	assert.Equal(t, []string{identity, strconv.FormatInt(wrong.ID, 10), lineKeyOn(t, wrong, f.savingsAccountID), ""}, first[1:5])
@@ -231,9 +235,9 @@ func TestBundleExportsImportPostingLinksWithTheirHistory(t *testing.T) {
 	savings, eur := strconv.FormatInt(f.savingsAccountID, 10), strconv.FormatInt(f.eurCommodityID, 10)
 	assert.Equal(t, []string{"voided", "0"}, first[10:12])
 	assert.Equal(t, strconv.FormatInt(wrong.VersionID, 10), first[12], "the version the owner linked")
-	assert.Equal(t, []string{savings, eur, "10000", "2", "2026-06-09"}, first[13:18])
+	assert.Equal(t, []string{savings, eur, "10000", "2", "2026-06-09", "recorded"}, first[13:19])
 	assert.Equal(t, []string{"posted", "0"}, successor[10:12])
-	assert.Equal(t, []string{savings, eur, "10000", "2", "2026-06-11"}, successor[13:18])
+	assert.Equal(t, []string{savings, eur, "10000", "2", "2026-06-11", "recorded"}, successor[13:19])
 
 	ledger := table("ledger.csv")
 	column := map[string]int{}
@@ -294,4 +298,44 @@ func TestStatementLinkReassignmentRefusesAfterAnInterveningUnlink(t *testing.T) 
 	inactive := false
 	unlinkedReview.ExpectedLinkActive = &inactive
 	assert.ErrorIs(t, f.importService.UnlinkStatementRow(ctx, unlinkedReview), ErrImportStatementLinkStale)
+}
+
+// Third review: migration 0006 backfills the evidence of links written
+// before it. Timestamps tie within a second, so an edit committed in the same
+// second as the link would be taken for the version linked. The backfill
+// follows audit event order instead (the reviewer's probe).
+func TestImportPostingLinkEvidenceBackfillFollowsAuditOrderNotTimestamps(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f := newImportMatchFixture(t)
+	second := func() time.Time { return time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC) }
+	f.transactionService.SetNowForTest(second)
+	f.importService.SetNowForTest(second)
+	original := f.transfer(t, "2026-06-10", "2026-06-10")
+	_, link := f.linkedRow(t, original, statementRow{"2026-06-10", "100.00", "Top up"}, "2026-06-10")
+
+	// Back to the schema before evidence, then an amount edit in the same second.
+	provider, err := goose.NewProvider(goose.DialectSQLite3, f.database, migrations.FS)
+	require.NoError(t, err)
+	_, err = provider.DownTo(ctx, 5)
+	require.NoError(t, err)
+	posting := func(accountID int64, cents int64) PostingInput {
+		return PostingInput{LineKey: lineKeyOn(t, original, accountID), AccountID: accountID, PostedOn: "2026-06-10",
+			CommodityID: f.eurCommodityID, QuantityValue: exact.New(cents), QuantityScale: 2}
+	}
+	edited, err := f.transactionService.UpdateTransaction(ctx, UpdateTransactionInput{
+		OwnerUserID: f.ownerUserID, OriginType: "browser_api", TransactionID: original.ID, ChangeReason: "amount corrected after link",
+		Spec: TransactionInput{TransactionKind: "transfer", TransactionDate: "2026-06-10", Description: "To savings",
+			JournalEntries: []JournalEntryInput{{Postings: []PostingInput{posting(f.cashAccountID, -20000), posting(f.savingsAccountID, 20000)}}}},
+	})
+	require.NoError(t, err)
+	require.NotEqual(t, original.VersionID, edited.VersionID)
+	require.NoError(t, db.Migrate(ctx, f.database))
+
+	var amount string
+	var version int64
+	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT pv.quantity_value, pv.transaction_version_id
+		FROM import_posting_links l JOIN posting_versions pv ON pv.id = l.linked_posting_version_id WHERE l.id = ?`, link.LinkID).Scan(&amount, &version))
+	assert.Equal(t, "10000", amount, "the link evidences 100.00, not the later 200.00 edit")
+	assert.Equal(t, original.VersionID, version)
 }
