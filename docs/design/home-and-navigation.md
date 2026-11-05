@@ -446,11 +446,18 @@ follow the account, and each mode has a restrained accent:
 - *Investment* from a bank account is **muted but selectable**, never
   disabled. A bank account can fund an investment; what's missing is the
   holding. Selecting it:
-  - keeps the bank account as *Pay from*
+  - keeps the bank account as the **settlement account**, labelled by the
+    activity: *Pay from* for a purchase, *Pay into* for a sale or cash
+    dividend. Activities that move no cash (split, reinvestment) neither
+    show nor require it.
   - asks for the holding account, the instrument and the Activity
   - keeps the date and memo already entered
 
-  Its note reads "Choose a holding account to record an investment".
+  Muted means more account information is needed, not unavailable. When
+  active, the tab looks selected like any other: same selected indicator and
+  accent, never the disabled style. The explanation, "Choose a holding
+  account to record an investment", sits beside the holding-account picker,
+  not on the tab.
 - Starting from a holding, a cash mode asks for the cash account
   explicitly. It never posts cash to the holding (T-96).
 
@@ -508,7 +515,8 @@ A transaction involves accounts in roles:
 
 Starting from a bank account never rules out an investment: the muted
 *Investment* tab is the route. Selecting it keeps the bank account as a
-settlement candidate (*Pay from*) and asks for the holding. Valid
+settlement candidate (*Pay from* or *Pay into*, by activity) and asks for the
+holding. Valid
 participants come from the backend's existing role and capability rules.
 
 ### Settlement account defaults
