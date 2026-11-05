@@ -236,12 +236,18 @@ StatementLinkCandidatesResponse:
 CorrectStatementLinkRequest:
   type: object
   additionalProperties: false
-  required: [expected_link_id, reason]
+  required: [expected_link_id, expected_link_active, reason]
   properties:
     expected_link_id:
       type: integer
       format: int64
       description: The row's latest link as the owner reviewed it.
+    expected_link_active:
+      type: boolean
+      description: >-
+        Whether the owner reviewed that link as active. Unlinking keeps a
+        link's id, so a request prepared before another unlink (or relink) is
+        refused with IMPORT_LINK_STALE. Unlink requires true.
     reason: { type: string, description: Why the link changes; recorded on the audit event and the retirement. }
     transaction_id: { type: integer, format: int64, description: Reassign only. }
     line_key: { type: string, description: Reassign only. }

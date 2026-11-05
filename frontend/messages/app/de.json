@@ -2060,5 +2060,6 @@
   "statement_links_loading": "Passende Buchungen werden geladen…",
   "statement_links_cancel": "Abbrechen",
   "statement_links_confirm_reassign": "Verknüpfung verschieben",
-  "statement_links_confirm_unlink": "Verknüpfung lösen"
+  "statement_links_confirm_unlink": "Verknüpfung lösen",
+  "statement_links_already_unlinked": "Diese Auszugszeile ist bereits nicht mehr verknüpft."
 }

@@ -11826,7 +11826,7 @@ export interface paths {
         put?: never;
         /**
          * Unlink a statement row from the posting it links
-         * @description Retires the row's active link with the owner's reason under one audit event (import.posting.unlink). Nothing in the ledger changes. The link and its retirement stay as evidence and the row keeps its import identity, so re-importing it is still a duplicate and it can be linked again through reassign. expected_link_id names the link the owner reviewed.
+         * @description Retires the row's active link with the owner's reason under one audit event (import.posting.unlink). Nothing in the ledger changes. The link and its retirement stay as evidence and the row keeps its import identity, so re-importing it is still a duplicate and it can be linked again through reassign. expected_link_id names the link the owner reviewed, expected_link_active (true) its reviewed state.
          */
         post: {
             parameters: {
@@ -11926,7 +11926,7 @@ export interface paths {
         put?: never;
         /**
          * Move a statement row's link to another posting
-         * @description Links the row to the named posting line instead, under one audit event (import.posting.reassign) that retires the current link, if it is still active, with the owner's reason and appends the successor naming the link it replaces. The write transaction checks that the row's latest link is expected_link_id, rereads the target and refuses one that is not posted, is linked to another row, or no longer matches the row (account, commodity, exact amount, window) or the reviewed posted_on day. Nothing in the ledger changes.
+         * @description Links the row to the named posting line instead, under one audit event (import.posting.reassign) that retires the current link, if it is still active, with the owner's reason and appends the successor naming the link it replaces. The write transaction checks that the row's latest link is expected_link_id in the reviewed state (expected_link_active), rereads the target and refuses one that is not posted, is linked to another row, or no longer matches the row (account, commodity, exact amount, window) or the reviewed posted_on day. Nothing in the ledger changes.
          */
         post: {
             parameters: {
@@ -31678,6 +31678,8 @@ export interface components {
              * @description The row's latest link as the owner reviewed it.
              */
             expected_link_id: number;
+            /** @description Whether the owner reviewed that link as active. Unlinking keeps a link's id, so a request prepared before another unlink (or relink) is refused with IMPORT_LINK_STALE. Unlink requires true. */
+            expected_link_active: boolean;
             /** @description Why the link changes; recorded on the audit event and the retirement. */
             reason: string;
             /**

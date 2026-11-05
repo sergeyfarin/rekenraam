@@ -2060,5 +2060,6 @@
   "statement_links_loading": "Loading matching transactions…",
   "statement_links_cancel": "Cancel",
   "statement_links_confirm_reassign": "Move link",
-  "statement_links_confirm_unlink": "Unlink row"
+  "statement_links_confirm_unlink": "Unlink row",
+  "statement_links_already_unlinked": "This statement row is already unlinked."
 }

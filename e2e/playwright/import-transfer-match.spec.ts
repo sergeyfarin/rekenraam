@@ -212,3 +212,62 @@ test('a statement row linked to the wrong transfer is moved to the right one', a
   await expect(page.getByText('Already imported', { exact: true })).toBeVisible();
   expect(await transactionIDs(page, savings.id)).toHaveLength(2);
 });
+
+// Second review: another tab moves the link while the reassignment dialog is
+// open. The stale request is refused, the dialog reloads the row by its
+// identity (it is no longer listed on this transaction) and asks for a new
+// choice, and that choice succeeds.
+test('a reassignment refused because another tab moved the link is chosen again and succeeds', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const suffix = Date.now();
+  const checking = await createCashAccount(page, csrfToken, `Two tabs checking ${suffix}`, currencyID);
+  const savings = await createCashAccount(page, csrfToken, `Two tabs savings ${suffix}`, currencyID);
+  const transfer = (description: string) => apiJSON<{ id: number }>(page, 'POST', '/api/v1/transactions', csrfToken, {
+    transaction_kind: 'transfer', transaction_date: todayISO(), description,
+    journal_entries: [{ entry_date: todayISO(), entry_kind: 'ordinary', postings: [
+      { account_id: checking.id, commodity_id: currencyID, quantity_value: '-10000', quantity_scale: 2 },
+      { account_id: savings.id, commodity_id: currencyID, quantity_value: '10000', quantity_scale: 2 }
+    ] }]
+  }, [201]);
+  const wrong = await transfer(`Rent share ${suffix}`);
+  const other = await transfer(`Gym fee ${suffix}`);
+  const right = await transfer(`Savings top-up ${suffix}`);
+
+  await upload(page, 'two-tabs.csv', statement(todayISO(), 'Van betaalrekening', '100,00'), `Two tabs ${suffix}`);
+  await resolveTo(page, savings.id, currencyID);
+  await page.getByRole('button', { name: 'Check for transactions already entered' }).click();
+  await page.getByTestId('import-match-row').getByRole('radio', { name: new RegExp(`Link to Rent share ${suffix}`) }).check();
+  await page.getByRole('button', { name: 'Commit to ledger' }).click();
+  await expect(page.getByText('1 row linked to a transaction already in your ledger')).toBeVisible();
+
+  await page.goto(`/app/ledger/transactions?transaction_id=${wrong.id}`);
+  await page.getByTestId('statement-links').getByRole('button', { name: 'Link to another transaction' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Link this statement row to another transaction' });
+  const toRight = dialog.getByRole('radio', { name: new RegExp(`Link to Savings top-up ${suffix}`) });
+  await expect(toRight).toBeVisible();
+
+  // The other tab moves the row to the gym fee.
+  const { links } = await apiJSON<{ links: Array<{ identity_id: number; link_id: number; active: boolean }> }>(page, 'GET', `/api/v1/transactions/${wrong.id}/statement-links`);
+  const candidates = await apiJSON<{ candidates: Array<{ transaction_id: number; line_key: string; posted_on: string }> }>(page, 'GET', `/api/v1/import-identities/${links[0].identity_id}/link-candidates`);
+  const gym = candidates.candidates.find((candidate) => candidate.transaction_id === other.id);
+  if (!gym) throw new Error('the gym fee is not a candidate');
+  await apiJSON(page, 'POST', `/api/v1/import-identities/${links[0].identity_id}/reassign`, csrfToken, {
+    expected_link_id: links[0].link_id, expected_link_active: true, reason: 'other tab',
+    transaction_id: gym.transaction_id, line_key: gym.line_key, posted_on: gym.posted_on
+  }, [204]);
+
+  await toRight.check();
+  await dialog.getByLabel('Reason').fill('linked to the wrong transfer');
+  await dialog.getByRole('button', { name: 'Move link' }).click();
+  await expect(dialog.getByText('changed after you reviewed it', { exact: false })).toBeVisible();
+  await expect(toRight).not.toBeChecked();
+  await expect(dialog.getByRole('button', { name: 'Move link' })).toBeDisabled();
+
+  await toRight.check();
+  await dialog.getByRole('button', { name: 'Move link' }).click();
+  await expect(dialog).toHaveCount(0);
+  const moved = await apiJSON<{ links: Array<{ active: boolean }> }>(page, 'GET', `/api/v1/transactions/${right.id}/statement-links`);
+  expect(moved.links.map((link) => link.active)).toEqual([true]);
+  const left = await apiJSON<{ links: unknown[] }>(page, 'GET', `/api/v1/transactions/${other.id}/statement-links`);
+  expect(left.links).toEqual([]);
+});

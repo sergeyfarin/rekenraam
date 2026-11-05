@@ -89,6 +89,7 @@
     try {
       await correctStatementLink(dialog.link.identity_id, dialog.kind, {
         expected_link_id: dialog.link.link_id,
+        expected_link_active: dialog.link.active,
         reason: reason.trim(),
         ...(dialog.kind === 'reassign' && chosenCandidate
           ? { transaction_id: chosenCandidate.transaction_id, line_key: chosenCandidate.line_key, posted_on: chosenCandidate.posted_on }
@@ -98,12 +99,24 @@
       await queryClient.invalidateQueries({ queryKey: statementLinksQueryKey });
     } catch (error) {
       actionError = error;
-      if (error instanceof APIClientError && error.code === 'IMPORT_LINK_STALE') {
-        // Show the link and candidates as they are now; the owner chooses again.
+      if (error instanceof APIClientError && error.code === 'IMPORT_LINK_STALE' && dialog) {
+        // Another tab changed the row. Reload it by its identity, not from
+        // this transaction's list (a moved row is no longer listed here), so
+        // the next request names the link as it is now; the owner chooses
+        // again.
         chosen = '';
-        await queryClient.invalidateQueries({ queryKey: statementLinksQueryKey });
-        const current = (linksQuery.data?.links ?? []).find((link) => link.identity_id === dialog?.link.identity_id);
-        if (dialog && current) dialog = { ...dialog, link: current };
+        const identityId = dialog.link.identity_id;
+        try {
+          const current = await queryClient.fetchQuery({
+            queryKey: [...statementLinksQueryKey, 'candidates', identityId],
+            queryFn: () => getStatementLinkCandidates(identityId),
+            staleTime: 0
+          });
+          if (dialog?.link.identity_id === identityId) dialog = { ...dialog, link: current.link };
+        } catch (refreshError) {
+          actionError = refreshError;
+        }
+        await queryClient.invalidateQueries({ queryKey: statementLinksQueryKey, exact: false, refetchType: 'active' });
       }
     } finally {
       pending = false;
@@ -167,6 +180,10 @@
         </p>
       </div>
 
+      {#if dialog.kind === 'unlink' && !dialog.link.active}
+        <p role="status" class="text-sm text-warning">{m.statement_links_already_unlinked()}</p>
+      {/if}
+
       {#if dialog.kind === 'reassign'}
         {#if candidatesQuery.isPending}
           <p role="status" class="text-sm text-muted">{m.statement_links_loading()}</p>
@@ -207,7 +224,7 @@
         <button
           type="submit"
           class={btnPrimary}
-          disabled={pending || !reason.trim() || (dialog.kind === 'reassign' && !chosenCandidate)}
+          disabled={pending || !reason.trim() || (dialog.kind === 'reassign' && !chosenCandidate) || (dialog.kind === 'unlink' && !dialog.link.active)}
         >
           {dialog.kind === 'reassign' ? m.statement_links_confirm_reassign() : m.statement_links_confirm_unlink()}
         </button>

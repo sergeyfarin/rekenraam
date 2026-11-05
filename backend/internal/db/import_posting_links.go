@@ -13,6 +13,7 @@ import (
 type ImportPostingCandidateRecord struct {
 	TransactionID        int64
 	TransactionVersionID int64
+	PostingVersionID     int64
 	PostingLineID        int64
 	LineKey              string
 	TransactionDate      string
@@ -33,7 +34,7 @@ type ImportPostingCandidateRecord struct {
 // importPostingCandidateSelect reads postings of current posted, undeleted
 // transactions. Its caller filters it by account, commodity and day.
 const importPostingCandidateSelect = `
-	SELECT t.id, tv.id, line.id, line.line_key, tv.transaction_date, tv.transaction_kind,
+	SELECT t.id, tv.id, pv.id, line.id, line.line_key, tv.transaction_date, tv.transaction_kind,
 		entry.entry_date, pv.account_id, pv.commodity_id, pv.quantity_value, pv.quantity_scale,
 		COALESCE(tv.payee_name, ''), tv.description,
 		(EXISTS (SELECT 1 FROM active_import_posting_links link WHERE link.posting_line_id = line.id)
@@ -50,7 +51,7 @@ const importPostingCandidateSelect = `
 func scanImportPostingCandidate(row importStagedRowScanner) (ImportPostingCandidateRecord, error) {
 	var record ImportPostingCandidateRecord
 	var linked int
-	if err := row.Scan(&record.TransactionID, &record.TransactionVersionID, &record.PostingLineID, &record.LineKey,
+	if err := row.Scan(&record.TransactionID, &record.TransactionVersionID, &record.PostingVersionID, &record.PostingLineID, &record.LineKey,
 		&record.TransactionDate, &record.TransactionKind, &record.PostedOn, &record.AccountID, &record.CommodityID,
 		&record.QuantityValue, &record.QuantityScale, &record.PayeeName, &record.Description, &linked); err != nil {
 		return ImportPostingCandidateRecord{}, err
@@ -168,9 +169,9 @@ func (r *ImportRepository) LinkImportedPosting(ctx context.Context, params LinkI
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO import_posting_links (identity_id, book_id, transaction_id, posting_line_id, created_audit_event_id, created_at)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, identityID, identity.BookID, candidate.TransactionID, candidate.PostingLineID, auditEventID, identity.CreatedAt); err != nil {
+		INSERT INTO import_posting_links (identity_id, book_id, transaction_id, posting_line_id, linked_posting_version_id, created_audit_event_id, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, identityID, identity.BookID, candidate.TransactionID, candidate.PostingLineID, candidate.PostingVersionID, auditEventID, identity.CreatedAt); err != nil {
 		return fmt.Errorf("create import posting link: %w", err)
 	}
 	if err := commitImportStagedRowExec(ctx, tx, CommitImportStagedRowParams{
@@ -275,13 +276,17 @@ type ImportPostingLinkCorrectionParams struct {
 	BookID         int64
 	IdentityID     int64
 	ExpectedLinkID int64
-	Reason         string
-	TransactionID  int64
-	LineKey        string
-	ActorUserID    int64
-	AuthSessionID  int64
-	RequestID      string
-	OccurredAt     string
+	// ExpectedLinkActive is the reviewed state of that link: a reassignment
+	// prepared while it was active is refused once it has been unlinked, and
+	// relinking an unlinked row needs a review of it as unlinked (#485).
+	ExpectedLinkActive bool
+	Reason             string
+	TransactionID      int64
+	LineKey            string
+	ActorUserID        int64
+	AuthSessionID      int64
+	RequestID          string
+	OccurredAt         string
 }
 
 // latestImportPostingLinkTx reads a row's latest link and whether it is
@@ -330,7 +335,7 @@ func (r *ImportRepository) UnlinkImportedPosting(ctx context.Context, params Imp
 	if err != nil {
 		return err
 	}
-	if linkID != params.ExpectedLinkID || !active {
+	if linkID != params.ExpectedLinkID || !active || !params.ExpectedLinkActive {
 		return ErrImportPostingLinkStale
 	}
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
@@ -371,7 +376,7 @@ func (r *ImportRepository) ReassignImportedPosting(ctx context.Context, params I
 	if err != nil {
 		return err
 	}
-	if linkID != params.ExpectedLinkID {
+	if linkID != params.ExpectedLinkID || active != params.ExpectedLinkActive {
 		return ErrImportPostingLinkStale
 	}
 	candidate, err := scanImportPostingCandidate(tx.QueryRowContext(ctx, importPostingCandidateSelect+`
@@ -400,9 +405,9 @@ func (r *ImportRepository) ReassignImportedPosting(ctx context.Context, params I
 		}
 	}
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO import_posting_links (identity_id, book_id, transaction_id, posting_line_id, replaces_link_id, created_audit_event_id, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, params.IdentityID, params.BookID, candidate.TransactionID, candidate.PostingLineID, linkID, auditEventID, params.OccurredAt); err != nil {
+		INSERT INTO import_posting_links (identity_id, book_id, transaction_id, posting_line_id, linked_posting_version_id, replaces_link_id, created_audit_event_id, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, params.IdentityID, params.BookID, candidate.TransactionID, candidate.PostingLineID, candidate.PostingVersionID, linkID, auditEventID, params.OccurredAt); err != nil {
 		return fmt.Errorf("append reassigned statement link: %w", err)
 	}
 	if err := tx.Commit(); err != nil {

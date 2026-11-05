@@ -43,11 +43,13 @@ type statementLinkCandidatesResponse struct {
 }
 
 type correctStatementLinkRequest struct {
-	ExpectedLinkID int64  `json:"expected_link_id"`
-	Reason         string `json:"reason"`
-	TransactionID  int64  `json:"transaction_id,omitempty"`
-	LineKey        string `json:"line_key,omitempty"`
-	PostedOn       string `json:"posted_on,omitempty"`
+	ExpectedLinkID int64 `json:"expected_link_id"`
+	// ExpectedLinkActive is the reviewed state of that link; required.
+	ExpectedLinkActive *bool  `json:"expected_link_active"`
+	Reason             string `json:"reason"`
+	TransactionID      int64  `json:"transaction_id,omitempty"`
+	LineKey            string `json:"line_key,omitempty"`
+	PostedOn           string `json:"posted_on,omitempty"`
 }
 
 func toImportStatementLinkResponse(link app.ImportStatementLink) importStatementLinkResponse {
@@ -120,7 +122,7 @@ func correctStatementLink(logger *slog.Logger, authService *app.AuthService, imp
 		}
 		input := app.CorrectStatementLinkInput{
 			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
-			IdentityID: identityID, ExpectedLinkID: request.ExpectedLinkID, Reason: request.Reason,
+			IdentityID: identityID, ExpectedLinkID: request.ExpectedLinkID, ExpectedLinkActive: request.ExpectedLinkActive, Reason: request.Reason,
 			TransactionID: request.TransactionID, LineKey: request.LineKey, PostedOn: request.PostedOn,
 		}
 		var err error

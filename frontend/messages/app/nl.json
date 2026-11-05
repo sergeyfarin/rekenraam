@@ -2060,5 +2060,6 @@
   "statement_links_loading": "Overeenkomende transacties laden…",
   "statement_links_cancel": "Annuleren",
   "statement_links_confirm_reassign": "Koppeling verplaatsen",
-  "statement_links_confirm_unlink": "Regel ontkoppelen"
+  "statement_links_confirm_unlink": "Regel ontkoppelen",
+  "statement_links_already_unlinked": "Deze afschriftregel is al ontkoppeld."
 }
