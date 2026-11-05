@@ -2007,7 +2007,7 @@
     }
   ],
   "import_match_keep_new": "Mantener como transacción nueva",
-  "import_match_choose": "Coinciden varias transacciones. Elige una o mantén la fila como nueva.",
+  "import_match_choose": "Vincula esta fila a una de estas transacciones o mantenla como nueva.",
   "import_match_decide": "Decide las coincidencias de abajo y vuelve a importar.",
   "import_preview_dedupe_matched": "Ya existe",
   "import_result_linked": [
@@ -2041,5 +2041,24 @@
         "countPlural=*": "{n} filas coinciden con transacciones de tu libro y esperan tu decisión."
       }
     }
-  ]
+  ],
+  "api_error_import_link_stale": "Este vínculo del extracto, o la transacción a la que se movería, cambió después de que lo revisaras. Revísalo de nuevo.",
+  "statement_links_title": "Filas del extracto",
+  "statement_links_row": "{date}, {amount}, {payee}",
+  "statement_links_source": "Importada de {filename}",
+  "statement_links_status_linked": "Vinculada",
+  "statement_links_status_unlinked": "Desvinculada",
+  "statement_links_unlinked_reason": "Desvinculada el {date}: {reason}",
+  "statement_links_reassign": "Vincular a otra transacción",
+  "statement_links_unlink": "Desvincular",
+  "statement_links_reassign_title": "Vincular esta fila del extracto a otra transacción",
+  "statement_links_reassign_help": "Se muestran transacciones de la misma cuenta y moneda, por exactamente este importe, contabilizadas en un margen de {days} días de la fecha del extracto y no vinculadas a otra fila. El vínculo actual se conserva en el historial.",
+  "statement_links_reassign_empty": "Ninguna otra transacción coincide con esta fila del extracto.",
+  "statement_links_unlink_title": "Desvincular esta fila del extracto",
+  "statement_links_unlink_help": "La transacción no cambia. La fila se sigue reconociendo al volver a importar el extracto y puedes vincularla a una transacción más tarde. El vínculo se conserva en el historial.",
+  "statement_links_reason_label": "Motivo",
+  "statement_links_loading": "Cargando transacciones coincidentes…",
+  "statement_links_cancel": "Cancelar",
+  "statement_links_confirm_reassign": "Mover vínculo",
+  "statement_links_confirm_unlink": "Desvincular fila"
 }

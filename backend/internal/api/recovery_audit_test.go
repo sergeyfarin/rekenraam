@@ -551,7 +551,7 @@ func TestRecoveryAuditBundleReconstructsTheRegister(t *testing.T) {
 		Excluded []string `json:"excluded"`
 	}
 	require.NoError(t, json.Unmarshal(files["manifest.json"], &manifest))
-	assert.Equal(t, 18, manifest.SchemaVersion)
+	assert.Equal(t, 19, manifest.SchemaVersion)
 	listed := map[string]bool{}
 	for _, file := range manifest.Files {
 		listed[file.Name] = true

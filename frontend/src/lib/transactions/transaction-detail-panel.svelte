@@ -10,6 +10,7 @@
   import APIFormError from '#lib/components/api-form-error.svelte';
   import InvestmentCorrectionSection from './investment-correction-section.svelte';
   import ExchangeConversion from './exchange-conversion.svelte';
+  import StatementLinks from '#lib/imports/statement-links.svelte';
   import StatusBadge from '#lib/components/status-badge.svelte';
   import {
     voidTransaction,
@@ -471,6 +472,8 @@
   {#if isExchange}
     <ExchangeConversion {transaction} />
   {/if}
+
+  <StatementLinks transactionId={transaction.id} {csrfToken} />
 
   <!-- Note and reference -->
   {#if transaction.note_markdown}

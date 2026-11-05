@@ -23,17 +23,17 @@ function review(rowID: number, candidates: ImportMatchCandidate[], choice: Impor
 }
 
 describe('import match review (#485)', () => {
-  it('offers the only candidate and never preselects among several', () => {
-    expect(initialMatchChoice(review(1, [candidate(7)]))).toEqual(linkChoice(candidate(7)));
+  it('never preselects a candidate, even the only one (#485 review)', () => {
+    expect(initialMatchChoice(review(1, [candidate(7)]))).toBeUndefined();
     expect(initialMatchChoice(review(1, [candidate(7), candidate(8)]))).toBeUndefined();
   });
 
   it('keeps a standing decision, but not one the server no longer accepts', () => {
     expect(initialMatchChoice(review(1, [candidate(7), candidate(8)], linkChoice(candidate(8)), false))).toEqual(linkChoice(candidate(8)));
     expect(initialMatchChoice(review(1, [candidate(7)], keepAsNew, false))).toEqual(keepAsNew);
-    // The posting moved to another day: the old link is offered again only as the current candidate.
+    // The posting moved to another day: the old link no longer stands and is chosen again.
     const moved = review(1, [candidate(7, '2026-06-11')], linkChoice(candidate(7)), true);
-    expect(initialMatchChoice(moved)).toEqual(linkChoice(candidate(7, '2026-06-11')));
+    expect(initialMatchChoice(moved)).toBeUndefined();
   });
 
   it('counts a row undecided until its choice is one preview offers', () => {

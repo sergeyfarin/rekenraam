@@ -14,6 +14,8 @@
     choiceKey,
     keepAsNew,
     linkChoice,
+    matchCandidateLabel,
+    matchReasonText,
     undecidedMatchRows,
     type ImportMatchCandidate,
     type ImportMatchChoice,
@@ -65,19 +67,11 @@
   }
 
   function reason(candidate: ImportMatchCandidate): string {
-    const amount = money(candidate.quantity_value, candidate.quantity_scale, candidate.commodity_id);
-    const days = Math.abs(candidate.day_offset);
-    const n = new Intl.NumberFormat(locale).format(days);
-    if (candidate.day_offset > 0) return m.import_match_reason_after({ amount, count: days, n });
-    if (candidate.day_offset < 0) return m.import_match_reason_before({ amount, count: days, n });
-    return m.import_match_reason_same_day({ amount });
+    return matchReasonText(candidate, money(candidate.quantity_value, candidate.quantity_scale, candidate.commodity_id), locale);
   }
 
   function candidateLabel(candidate: ImportMatchCandidate): string {
-    return m.import_match_link_option({
-      description: candidate.description || candidate.payee_name || m.import_match_untitled(),
-      date: date(candidate.transaction_date)
-    });
+    return matchCandidateLabel(candidate, date(candidate.transaction_date));
   }
 </script>
 
@@ -112,7 +106,7 @@
         {@const current = choiceKey(choices.get(review.row_id))}
         <fieldset class="rounded-(--radius-control) border border-border p-3" data-testid="import-match-row">
           <legend class="px-1 text-sm font-semibold text-foreground">{rowHeading(review)}</legend>
-          {#if review.candidates.length > 1 && undecided.has(review.row_id)}
+          {#if undecided.has(review.row_id)}
             <p class="mb-2 text-sm text-warning">{m.import_match_choose()}</p>
           {/if}
           <div class="space-y-1">

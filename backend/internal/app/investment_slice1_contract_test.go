@@ -69,7 +69,7 @@ func TestInvestmentSlice1FreshAndSeededBundleContract(t *testing.T) {
 				} `json:"files"`
 			}
 			require.NoError(t, json.Unmarshal(files["manifest.json"], &manifest))
-			require.Equal(t, 18, manifest.SchemaVersion)
+			require.Equal(t, 19, manifest.SchemaVersion)
 			manifestRows := map[string]int64{}
 			for _, file := range manifest.Files {
 				manifestRows[file.Name] = file.Rows

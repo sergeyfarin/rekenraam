@@ -2007,7 +2007,7 @@
     }
   ],
   "import_match_keep_new": "Garder comme nouvelle transaction",
-  "import_match_choose": "Plusieurs transactions correspondent. Choisissez-en une ou gardez la ligne comme nouvelle.",
+  "import_match_choose": "Liez cette ligne à l'une de ces transactions, ou gardez-la comme nouvelle.",
   "import_match_decide": "Décidez des correspondances ci-dessous, puis importez à nouveau.",
   "import_preview_dedupe_matched": "Déjà présente",
   "import_result_linked": [
@@ -2041,5 +2041,24 @@
         "countPlural=*": "{n} lignes correspondent à des transactions de votre grand livre et attendent votre décision."
       }
     }
-  ]
+  ],
+  "api_error_import_link_stale": "Ce lien de relevé, ou la transaction vers laquelle il serait déplacé, a changé depuis votre vérification. Vérifiez-le à nouveau.",
+  "statement_links_title": "Lignes de relevé",
+  "statement_links_row": "{date}, {amount}, {payee}",
+  "statement_links_source": "Importée de {filename}",
+  "statement_links_status_linked": "Liée",
+  "statement_links_status_unlinked": "Déliée",
+  "statement_links_unlinked_reason": "Déliée le {date} : {reason}",
+  "statement_links_reassign": "Lier à une autre transaction",
+  "statement_links_unlink": "Délier",
+  "statement_links_reassign_title": "Lier cette ligne de relevé à une autre transaction",
+  "statement_links_reassign_help": "Sont listées les transactions du même compte et de la même devise, pour exactement ce montant, comptabilisées à {days} jours près de la date du relevé et non liées à une autre ligne. Le lien actuel est conservé dans l'historique.",
+  "statement_links_reassign_empty": "Aucune autre transaction ne correspond à cette ligne de relevé.",
+  "statement_links_unlink_title": "Délier cette ligne de relevé",
+  "statement_links_unlink_help": "La transaction reste inchangée. La ligne est toujours reconnue si le relevé est réimporté, et vous pourrez la lier plus tard à une transaction. Le lien est conservé dans l'historique.",
+  "statement_links_reason_label": "Motif",
+  "statement_links_loading": "Chargement des transactions correspondantes…",
+  "statement_links_cancel": "Annuler",
+  "statement_links_confirm_reassign": "Déplacer le lien",
+  "statement_links_confirm_unlink": "Délier la ligne"
 }

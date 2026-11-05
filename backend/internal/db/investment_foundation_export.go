@@ -118,6 +118,12 @@ func (r *ExportRepository) ExportInvestmentFoundation(ctx context.Context, tx *s
 		"import-effects": `SELECT e.identity_id, e.effect_seq, e.operation_id, e.transaction_id
 			FROM import_commit_identity_effects e JOIN import_commit_identities i ON i.id = e.identity_id
 			WHERE i.book_id = ? ORDER BY e.identity_id, e.effect_seq`,
+		"import-posting-links": `SELECT link.id, link.identity_id, link.transaction_id, line.line_key,
+			link.replaces_link_id, link.created_at, link.created_audit_event_id,
+			retirement.retired_at, retirement.retired_audit_event_id, retirement.reason
+			FROM import_posting_links link JOIN posting_lines line ON line.id = link.posting_line_id
+			LEFT JOIN import_posting_link_retirements retirement ON retirement.link_id = link.id
+			WHERE link.book_id = ? ORDER BY link.id`,
 		"disposal-revisions": `SELECT r.id, r.decision_id, r.revision_seq, r.caused_by_operation_id,
 			r.supersedes_revision_id, r.disposed_basis_value, r.disposed_basis_scale,
 			r.created_at, r.created_audit_event_id, r.basis_knowledge

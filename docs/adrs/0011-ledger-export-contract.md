@@ -355,6 +355,19 @@ corruption checks, not signatures. The inputs document holds the resolved
 request, the snapshot fingerprint and the output's descriptor; the returns
 plan owns the saved-run policy. Existing files and columns are unchanged.
 
+### Statement-row posting links (2026-11-05, #485)
+
+Manifest schema version 19 adds `import-posting-links.csv`: one row per link
+from a statement row's import identity to an existing posting, with
+`link_id`, `identity_id`, `transaction_id`, `posting_line_key` (with
+`transaction_id`, the ledger.csv row's line), `replaces_link_id`, `linked_at`,
+`audit_event_id`, and for a retired link `retired_at`,
+`retired_audit_event_id` and `retire_reason`. Unlinked and reassigned links
+stay in the file; a row's active link is its newest unretired one. An identity
+with links and no effects wrote no journal of its own. Like identities and
+effects, links are exported for the whole book, also in scoped archives, so a
+link may name a transaction outside the scope.
+
 ### Resolvable ids (2026-10-18, #322)
 
 Manifest schema version 15 makes every id column in the archive resolve to a

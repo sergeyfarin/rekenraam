@@ -155,7 +155,7 @@ func TestExportBundleChecksumsVerify(t *testing.T) {
 
 	for _, name := range []string{
 		"README.txt", "ledger.csv", "accounts.csv", "categories.csv", "payees.csv",
-		"commodities.csv", "tags.csv", "lots.csv", "investment-operations.csv", "import-identities.csv", "import-identity-effects.csv", "disposal-decisions.csv",
+		"commodities.csv", "tags.csv", "lots.csv", "investment-operations.csv", "import-identities.csv", "import-identity-effects.csv", "import-posting-links.csv", "disposal-decisions.csv",
 		"disposal-allocations.csv", "disposal-revisions.csv", "disposal-revision-allocations.csv",
 		"prices.csv", "trial-balance.csv", "manifest.json",
 	} {
@@ -172,7 +172,7 @@ func TestExportBundleChecksumsVerify(t *testing.T) {
 		assert.Equalf(t, int64(len(content)), file.Bytes, "%s byte count is wrong", file.Name)
 	}
 
-	assert.Equal(t, 18, bundle.manifest.SchemaVersion)
+	assert.Equal(t, 19, bundle.manifest.SchemaVersion)
 	assert.Equal(t, "journal_entry", bundle.manifest.SelectionUnit)
 	assert.True(t, bundle.manifest.IncludesSystemAccounts)
 	assert.True(t, bundle.manifest.AllTransactionsComplete)

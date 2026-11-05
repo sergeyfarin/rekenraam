@@ -632,6 +632,10 @@ func TestImportBatchEndpoints_RequireAuthentication(t *testing.T) {
 		{"short-candidates", http.MethodGet, "/api/v1/imports/1/rows/1/short-candidates"},
 		{"link-short", http.MethodPost, "/api/v1/imports/1/rows/1/link-short"},
 		{"discard", http.MethodPost, "/api/v1/imports/1/discard"},
+		{"statement-links", http.MethodGet, "/api/v1/transactions/1/statement-links"},
+		{"link-candidates", http.MethodGet, "/api/v1/import-identities/1/link-candidates"},
+		{"unlink", http.MethodPost, "/api/v1/import-identities/1/unlink"},
+		{"reassign", http.MethodPost, "/api/v1/import-identities/1/reassign"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1143,4 +1147,34 @@ func TestImportShortLinkErrorsUseStableCodes(t *testing.T) {
 		require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
 		assert.Equal(t, tc.code, body.Error.Code)
 	}
+}
+
+// #485 review: a statement row never linked has no link to inspect or
+// correct; a transaction no row was linked to lists none.
+func TestStatementLinkEndpoints_UnknownRowReturnsNotFound(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, _, _, _ := bootstrapImportAPITest(t, handler)
+
+	request := func(method, path, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.AddCookie(sessionCookie)
+		if method != http.MethodGet {
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-CSRF-Token", csrfToken)
+			req.Header.Set("Origin", "http://example.com")
+		}
+		res := httptest.NewRecorder()
+		handler.ServeHTTP(res, req)
+		return res
+	}
+	listed := request(http.MethodGet, "/api/v1/transactions/999999/statement-links", "")
+	assert.Equal(t, http.StatusOK, listed.Code)
+	assert.JSONEq(t, `{"links":[]}`, listed.Body.String())
+	assert.Equal(t, http.StatusNotFound, request(http.MethodGet, "/api/v1/import-identities/999999/link-candidates", "").Code)
+	unlink := request(http.MethodPost, "/api/v1/import-identities/999999/unlink", `{"expected_link_id":1,"reason":"wrong"}`)
+	assert.Equal(t, http.StatusNotFound, unlink.Code, unlink.Body.String())
+	missingReason := request(http.MethodPost, "/api/v1/import-identities/999999/reassign", `{"expected_link_id":1,"reason":""}`)
+	assert.Equal(t, http.StatusBadRequest, missingReason.Code, missingReason.Body.String())
 }

@@ -2071,7 +2071,7 @@
     }
   ],
   "import_match_keep_new": "Оставить новой операцией",
-  "import_match_choose": "Совпадает несколько операций. Выберите одну или оставьте строку новой.",
+  "import_match_choose": "Свяжите строку с одной из этих операций или оставьте её новой.",
   "import_match_decide": "Примите решения по совпадениям ниже и импортируйте снова.",
   "import_preview_dedupe_matched": "Уже есть",
   "import_result_linked": [
@@ -2105,5 +2105,24 @@
         "countPlural=*": "Строк, совпадающих с операциями в книге и ждущих вашего решения: {n}."
       }
     }
-  ]
+  ],
+  "api_error_import_link_stale": "Эта связь строки выписки или операция, к которой её переносят, изменилась после проверки. Проверьте снова.",
+  "statement_links_title": "Строки выписки",
+  "statement_links_row": "{date}, {amount}, {payee}",
+  "statement_links_source": "Импортировано из {filename}",
+  "statement_links_status_linked": "Связана",
+  "statement_links_status_unlinked": "Связь снята",
+  "statement_links_unlinked_reason": "Связь снята {date}: {reason}",
+  "statement_links_reassign": "Связать с другой операцией",
+  "statement_links_unlink": "Снять связь",
+  "statement_links_reassign_title": "Связать эту строку выписки с другой операцией",
+  "statement_links_reassign_help": "Показаны операции по тому же счёту и в той же валюте, точно на эту сумму, проведённые в пределах {days} дн. от даты выписки и не связанные с другой строкой. Текущая связь сохраняется в истории.",
+  "statement_links_reassign_empty": "Ни одна другая операция не совпадает с этой строкой выписки.",
+  "statement_links_unlink_title": "Снять связь этой строки выписки",
+  "statement_links_unlink_help": "Операция не меняется. Строка по-прежнему распознаётся при повторном импорте выписки, и её можно позже связать с операцией. Связь сохраняется в истории.",
+  "statement_links_reason_label": "Причина",
+  "statement_links_loading": "Загрузка совпадающих операций…",
+  "statement_links_cancel": "Отмена",
+  "statement_links_confirm_reassign": "Перенести связь",
+  "statement_links_confirm_unlink": "Снять связь"
 }

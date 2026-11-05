@@ -1,0 +1,67 @@
+post:
+  summary: Move a statement row's link to another posting
+  description: >
+    Links the row to the named posting line instead, under one audit event
+    (import.posting.reassign) that retires the current link, if it is still
+    active, with the owner's reason and appends the successor naming the link
+    it replaces. The write transaction checks that the row's latest link is
+    expected_link_id, rereads the target and refuses one that is not posted,
+    is linked to another row, or no longer matches the row (account,
+    commodity, exact amount, window) or the reviewed posted_on day. Nothing in
+    the ledger changes.
+  parameters:
+    - in: path
+      name: identity_id
+      required: true
+      schema: { type: integer, format: int64 }
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/CorrectStatementLinkRequest"
+  responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
+    "204":
+      description: Row linked to the new posting
+    "400":
+      description: Invalid request, or no reason, transaction, line key or posted_on
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: No statement row with this identity was linked to a posting
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: IMPORT_LINK_STALE — the row's link or the target posting changed after review; nothing changed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

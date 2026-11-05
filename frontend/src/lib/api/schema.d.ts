@@ -11670,6 +11670,351 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/transactions/{id}/statement-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the statement rows linked to a transaction
+         * @description #485: the CSV and QIF statement rows whose latest link names a line of this transaction — linked now, or last linked here and since unlinked (so the owner can link them again). Each carries the row's date, amount, payee and file, the line it links, and for an unlinked row when and why. A transaction no row was linked to has an empty list.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Statement links (no mutation) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ListStatementLinksResponse"];
+                    };
+                };
+                /** @description Invalid transaction id */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import-identities/{identity_id}/link-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the postings a linked statement row could move to
+         * @description The row's latest link and the postings the import match rule accepts for it now: its account and commodity, exactly its amount, posted within window_days of its date, and not linked to another row. The posting it links now is not listed.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    identity_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The row's link and its candidates (no mutation) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StatementLinkCandidatesResponse"];
+                    };
+                };
+                /** @description Invalid identity id */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description No statement row with this identity was linked to a posting */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import-identities/{identity_id}/unlink": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unlink a statement row from the posting it links
+         * @description Retires the row's active link with the owner's reason under one audit event (import.posting.unlink). Nothing in the ledger changes. The link and its retirement stay as evidence and the row keeps its import identity, so re-importing it is still a duplicate and it can be linked again through reassign. expected_link_id names the link the owner reviewed.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    identity_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CorrectStatementLinkRequest"];
+                };
+            };
+            responses: {
+                /** @description Row unlinked */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid request, or no reason */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description No statement row with this identity was linked to a posting */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description IMPORT_LINK_STALE — the row's latest link is not the reviewed one, or it is already unlinked; nothing changed */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                413: components["responses"]["JSONBodyTooLarge"];
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import-identities/{identity_id}/reassign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move a statement row's link to another posting
+         * @description Links the row to the named posting line instead, under one audit event (import.posting.reassign) that retires the current link, if it is still active, with the owner's reason and appends the successor naming the link it replaces. The write transaction checks that the row's latest link is expected_link_id, rereads the target and refuses one that is not posted, is linked to another row, or no longer matches the row (account, commodity, exact amount, window) or the reviewed posted_on day. Nothing in the ledger changes.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    identity_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CorrectStatementLinkRequest"];
+                };
+            };
+            responses: {
+                /** @description Row linked to the new posting */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid request, or no reason, transaction, line key or posted_on */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description No statement row with this identity was linked to a posting */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description IMPORT_LINK_STALE — the row's link or the target posting changed after review; nothing changed */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                413: components["responses"]["JSONBodyTooLarge"];
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/imports/{batch_id}/rows/{row_id}/short-candidates": {
         parameters: {
             query?: never;
@@ -31290,6 +31635,64 @@ export interface components {
             /** Format: date */
             posted_on?: string;
         };
+        /** @description A committed statement row's latest link (#485): the posting line it names and whether it is still active, with the row it records. An unlinked row carries when and why it was unlinked. */
+        ImportStatementLink: {
+            /** Format: int64 */
+            identity_id: number;
+            /** Format: int64 */
+            link_id: number;
+            /** Format: int64 */
+            transaction_id: number;
+            line_key: string;
+            /** Format: int64 */
+            account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            active: boolean;
+            /** Format: date-time */
+            linked_at: string;
+            /** Format: date-time */
+            retired_at?: string;
+            retire_reason?: string;
+            source_kind: string;
+            /** Format: int64 */
+            batch_id: number;
+            filename: string;
+            /** Format: date */
+            row_date: string;
+            row_amount_value: string;
+            row_amount_scale: number;
+            row_payee: string;
+        };
+        ListStatementLinksResponse: {
+            links: components["schemas"]["ImportStatementLink"][];
+        };
+        StatementLinkCandidatesResponse: {
+            link: components["schemas"]["ImportStatementLink"];
+            candidates: components["schemas"]["ImportMatchCandidate"][];
+            window_days: number;
+        };
+        CorrectStatementLinkRequest: {
+            /**
+             * Format: int64
+             * @description The row's latest link as the owner reviewed it.
+             */
+            expected_link_id: number;
+            /** @description Why the link changes; recorded on the audit event and the retirement. */
+            reason: string;
+            /**
+             * Format: int64
+             * @description Reassign only.
+             */
+            transaction_id?: number;
+            /** @description Reassign only. */
+            line_key?: string;
+            /**
+             * Format: date
+             * @description Reassign only; the target's posting day as reviewed.
+             */
+            posted_on?: string;
+        };
         /** @description An unlinked posting of a current posted transaction on the row's account, in its commodity, for exactly its amount, whose posted_on day is within window_days of the row's date. day_offset is posted_on minus the row date. */
         ImportMatchCandidate: {
             /** Format: int64 */
@@ -35128,7 +35531,7 @@ export interface components {
         };
         ErrorBody: {
             /** @enum {string} */
-            code: "VALIDATION_FAILED" | "DECODE_ERROR" | "REQUEST_TOO_LARGE" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "PRICE_IMPACT_STALE" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "MFA_AUTHENTICATOR_UNAVAILABLE" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "FORECAST_TOO_LARGE" | "FORECAST_BASIS_CHANGED" | "INVESTMENT_WORKFLOW_REQUIRED" | "INVESTMENT_EVENT_OUT_OF_ORDER" | "INVESTMENT_POSITION_SIDE_CONFLICT" | "INVESTMENT_SHORT_DEPENDENCY" | "INVESTMENT_TRANSFER_POOL_REQUIRED" | "INVESTMENT_TRANSFER_POOL_UNAVAILABLE" | "INVESTMENT_SALE_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SALE" | "INVESTMENT_SALE_CHANGED" | "INVESTMENT_SALE_DEPENDENCY" | "INVESTMENT_BUY_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_BUY" | "INVESTMENT_BUY_CHANGED" | "INVESTMENT_BUY_DEPENDENCY" | "INVESTMENT_DIVIDEND_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_DIVIDEND" | "INVESTMENT_DIVIDEND_CHANGED" | "INVESTMENT_PAYMENT_IN_LIEU_ALREADY_CORRECTED" | "INVESTMENT_PAYMENT_IN_LIEU_CHANGED" | "INVESTMENT_WRITE_OFF_ALREADY_CORRECTED" | "INVESTMENT_TRANSFER_ALREADY_CORRECTED" | "INVESTMENT_TRANSFER_CHANGED" | "INVESTMENT_TRANSFER_DEPENDENCY" | "INVESTMENT_IMPORTED_TRANSFER" | "INVESTMENT_TRANSFER_BASIS_RESOLVED" | "INVESTMENT_TRANSFER_BASIS_NOT_UNKNOWN" | "INVESTMENT_TRANSFER_BASIS_NOT_RESOLVED" | "INVESTMENT_BASIS_RESOLUTION_ALREADY_CORRECTED" | "INVESTMENT_BASIS_RESOLUTION_CHANGED" | "INVESTMENT_WRITE_OFF_CHANGED" | "INVESTMENT_REINVESTMENT_ALREADY_CORRECTED" | "INVESTMENT_REINVESTMENT_CHANGED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE" | "INVESTMENT_SPLIT_NO_HOLDINGS" | "INVESTMENT_CAPITAL_RETURN_DEPENDENCY" | "INVESTMENT_CAPITAL_RETURN_NO_HOLDINGS" | "INVESTMENT_CASH_IN_LIEU_SPLIT_UNAVAILABLE" | "INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPLIT_CHANGED" | "INVESTMENT_SPLIT_DEPENDENCY" | "INVESTMENT_SPLIT_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SPLIT" | "INVESTMENT_EXCHANGE_NO_HOLDINGS" | "INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE" | "INVESTMENT_EXCHANGE_CHANGED" | "INVESTMENT_EXCHANGE_ALREADY_CORRECTED" | "INVESTMENT_SPIN_OFF_NO_HOLDINGS" | "INVESTMENT_SPIN_OFF_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPIN_OFF_CHANGED" | "INVESTMENT_SPIN_OFF_ALREADY_CORRECTED" | "INVESTMENT_MERGER_ALREADY_CORRECTED" | "IMPORT_SPLIT_LINK_UNAVAILABLE" | "IMPORT_SHORT_LINK_UNAVAILABLE" | "IMPORT_SHORT_LINK_CHANGED" | "IMPORT_SHORT_LINK_MISMATCH" | "IMPORT_UPLOAD_TOO_LARGE" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "TRANSACTION_VERSION_STALE" | "RECONCILIATION_IMPACT_STALE" | "POSTING_ACCOUNT_VERSION_STALE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECONCILIATION_START_STALE" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
+            code: "VALIDATION_FAILED" | "DECODE_ERROR" | "REQUEST_TOO_LARGE" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "PRICE_IMPACT_STALE" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "MFA_AUTHENTICATOR_UNAVAILABLE" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "FORECAST_TOO_LARGE" | "FORECAST_BASIS_CHANGED" | "INVESTMENT_WORKFLOW_REQUIRED" | "INVESTMENT_EVENT_OUT_OF_ORDER" | "INVESTMENT_POSITION_SIDE_CONFLICT" | "INVESTMENT_SHORT_DEPENDENCY" | "INVESTMENT_TRANSFER_POOL_REQUIRED" | "INVESTMENT_TRANSFER_POOL_UNAVAILABLE" | "INVESTMENT_SALE_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SALE" | "INVESTMENT_SALE_CHANGED" | "INVESTMENT_SALE_DEPENDENCY" | "INVESTMENT_BUY_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_BUY" | "INVESTMENT_BUY_CHANGED" | "INVESTMENT_BUY_DEPENDENCY" | "INVESTMENT_DIVIDEND_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_DIVIDEND" | "INVESTMENT_DIVIDEND_CHANGED" | "INVESTMENT_PAYMENT_IN_LIEU_ALREADY_CORRECTED" | "INVESTMENT_PAYMENT_IN_LIEU_CHANGED" | "INVESTMENT_WRITE_OFF_ALREADY_CORRECTED" | "INVESTMENT_TRANSFER_ALREADY_CORRECTED" | "INVESTMENT_TRANSFER_CHANGED" | "INVESTMENT_TRANSFER_DEPENDENCY" | "INVESTMENT_IMPORTED_TRANSFER" | "INVESTMENT_TRANSFER_BASIS_RESOLVED" | "INVESTMENT_TRANSFER_BASIS_NOT_UNKNOWN" | "INVESTMENT_TRANSFER_BASIS_NOT_RESOLVED" | "INVESTMENT_BASIS_RESOLUTION_ALREADY_CORRECTED" | "INVESTMENT_BASIS_RESOLUTION_CHANGED" | "INVESTMENT_WRITE_OFF_CHANGED" | "INVESTMENT_REINVESTMENT_ALREADY_CORRECTED" | "INVESTMENT_REINVESTMENT_CHANGED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE" | "INVESTMENT_SPLIT_NO_HOLDINGS" | "INVESTMENT_CAPITAL_RETURN_DEPENDENCY" | "INVESTMENT_CAPITAL_RETURN_NO_HOLDINGS" | "INVESTMENT_CASH_IN_LIEU_SPLIT_UNAVAILABLE" | "INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPLIT_CHANGED" | "INVESTMENT_SPLIT_DEPENDENCY" | "INVESTMENT_SPLIT_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SPLIT" | "INVESTMENT_EXCHANGE_NO_HOLDINGS" | "INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE" | "INVESTMENT_EXCHANGE_CHANGED" | "INVESTMENT_EXCHANGE_ALREADY_CORRECTED" | "INVESTMENT_SPIN_OFF_NO_HOLDINGS" | "INVESTMENT_SPIN_OFF_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPIN_OFF_CHANGED" | "INVESTMENT_SPIN_OFF_ALREADY_CORRECTED" | "INVESTMENT_MERGER_ALREADY_CORRECTED" | "IMPORT_SPLIT_LINK_UNAVAILABLE" | "IMPORT_SHORT_LINK_UNAVAILABLE" | "IMPORT_SHORT_LINK_CHANGED" | "IMPORT_SHORT_LINK_MISMATCH" | "IMPORT_LINK_STALE" | "IMPORT_UPLOAD_TOO_LARGE" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "TRANSACTION_VERSION_STALE" | "RECONCILIATION_IMPACT_STALE" | "POSTING_ACCOUNT_VERSION_STALE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECONCILIATION_START_STALE" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
             message: string;
             /** @description On a reconciliation guard refusal of a generic ledger write (CONFLICT "reconciliation override is required", or RECONCILIATION_IMPACT_STALE): the checkpoints the write would invalidate right now. A reorder, which has no preview, binds its override to this set (#296). */
             checkpoint_ids?: number[];

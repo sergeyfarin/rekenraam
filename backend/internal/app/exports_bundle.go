@@ -22,7 +22,7 @@ import (
 // BundleSchemaVersion is the archive's own version, carried in manifest.json.
 // Columns are appended within a version; a change that cannot be made by
 // appending increments this and needs an ADR (ADR 0011).
-const BundleSchemaVersion = 18
+const BundleSchemaVersion = 19
 
 // bundleFile is one entry of the archive, recorded in the manifest with the
 // checksum computed while it was written.
@@ -271,6 +271,9 @@ func (s *ExportService) WriteBundle(ctx context.Context, out io.Writer, filter E
 		}},
 		{"import-identity-effects.csv", func(w io.Writer) (int64, error) {
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "import-effects", []string{"identity_id", "effect_seq", "operation_id", "transaction_id"})
+		}},
+		{"import-posting-links.csv", func(w io.Writer) (int64, error) {
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "import-posting-links", []string{"link_id", "identity_id", "transaction_id", "posting_line_key", "replaces_link_id", "linked_at", "audit_event_id", "retired_at", "retired_audit_event_id", "retire_reason"})
 		}},
 		{"disposal-decisions.csv", func(w io.Writer) (int64, error) { return s.writeDisposalDecisionsCSV(ctx, w, snapshot) }},
 		{"disposal-allocations.csv", func(w io.Writer) (int64, error) { return s.writeDisposalAllocationsCSV(ctx, w, snapshot) }},
@@ -967,6 +970,7 @@ value in this archive was ever a floating-point number.`,
   investment-fee-policy-versions.csv  dated, immutable charge policy versions
   import-identities.csv  committed source-row fingerprints and provenance
   import-identity-effects.csv  ordered operations and transactions per source row
+  import-posting-links.csv  statement rows linked to existing postings, with retired links kept
   disposal-decisions.csv  immutable resolved cost-basis elections
   disposal-allocations.csv  exact lot allocations for those elections
   disposal-clearing-allocations.csv  signed proceeds portions of pinned journal clearing postings
@@ -1040,6 +1044,12 @@ Both lots.csv and investment-lot-state.csv carry basis_knowledge for remaining
 projected basis. Unknown basis has empty amount/scale fields, never numeric
 zero; known zero remains explicit. Quantity and immutable opening facts remain
 separate from that current knowledge state.
+Bundle schema 19 adds import-posting-links.csv (#485): every link from a
+statement row's import identity to an existing posting, keyed by
+transaction_id and posting_line_key, including links later retired by an
+unlink or a reassignment (retired_at, retired_audit_event_id, retire_reason,
+and the successor's replaces_link_id). A row whose identity has links and no
+effects wrote no journal of its own.
 Bundle schema 18 adds investment-returns-runs.csv with every immutable saved
 returns_v1 document (R13), its resolved request and descriptor, timestamps,
 actor and audit IDs, and SHA-256 fingerprints. All runs are included even in

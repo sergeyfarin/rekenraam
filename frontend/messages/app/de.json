@@ -2007,7 +2007,7 @@
     }
   ],
   "import_match_keep_new": "Als neue Buchung behalten",
-  "import_match_choose": "Mehrere Buchungen passen. Wählen Sie eine aus oder behalten Sie die Zeile als neu.",
+  "import_match_choose": "Verknüpfen Sie diese Zeile mit einer dieser Buchungen oder behalten Sie sie als neu.",
   "import_match_decide": "Entscheiden Sie unten über die Treffer und importieren Sie dann erneut.",
   "import_preview_dedupe_matched": "Bereits vorhanden",
   "import_result_linked": [
@@ -2041,5 +2041,24 @@
         "countPlural=*": "{n} Zeilen passen zu vorhandenen Buchungen und warten auf Ihre Entscheidung."
       }
     }
-  ]
+  ],
+  "api_error_import_link_stale": "Diese Verknüpfung oder die Buchung, zu der sie wechseln soll, hat sich nach Ihrer Prüfung geändert. Prüfen Sie sie erneut.",
+  "statement_links_title": "Kontoauszugszeilen",
+  "statement_links_row": "{date}, {amount}, {payee}",
+  "statement_links_source": "Importiert aus {filename}",
+  "statement_links_status_linked": "Verknüpft",
+  "statement_links_status_unlinked": "Nicht verknüpft",
+  "statement_links_unlinked_reason": "Verknüpfung am {date} gelöst: {reason}",
+  "statement_links_reassign": "Mit anderer Buchung verknüpfen",
+  "statement_links_unlink": "Verknüpfung lösen",
+  "statement_links_reassign_title": "Diese Auszugszeile mit einer anderen Buchung verknüpfen",
+  "statement_links_reassign_help": "Aufgeführt sind Buchungen auf demselben Konto in derselben Währung, über genau diesen Betrag, gebucht innerhalb von {days} Tagen um das Auszugsdatum und mit keiner anderen Zeile verknüpft. Die bisherige Verknüpfung bleibt im Verlauf erhalten.",
+  "statement_links_reassign_empty": "Keine andere Buchung passt zu dieser Auszugszeile.",
+  "statement_links_unlink_title": "Verknüpfung dieser Auszugszeile lösen",
+  "statement_links_unlink_help": "Die Buchung bleibt unverändert. Die Zeile wird beim erneuten Import des Auszugs weiterhin erkannt, und Sie können sie später mit einer Buchung verknüpfen. Die Verknüpfung bleibt im Verlauf erhalten.",
+  "statement_links_reason_label": "Grund",
+  "statement_links_loading": "Passende Buchungen werden geladen…",
+  "statement_links_cancel": "Abbrechen",
+  "statement_links_confirm_reassign": "Verknüpfung verschieben",
+  "statement_links_confirm_unlink": "Verknüpfung lösen"
 }

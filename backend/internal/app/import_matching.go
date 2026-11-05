@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"rekenraam/backend/internal/db"
@@ -318,4 +319,202 @@ func (s *ImportService) commitMatchedImportRow(ctx context.Context, result *Comm
 		return true, fmt.Errorf("link row %d: %w", row.ID, err)
 	}
 	return true, nil
+}
+
+// --- Statement link corrections (#485 review) ---
+
+var (
+	// ErrImportStatementLinkNotFound means no statement row with that
+	// identity was ever linked to a posting.
+	ErrImportStatementLinkNotFound = errors.New("statement link not found")
+	// ErrImportStatementLinkStale means the row's latest link is not the one
+	// the owner reviewed, or the posting it would move to no longer matches.
+	// Nothing was written.
+	ErrImportStatementLinkStale = errors.New("statement link changed after review")
+)
+
+// ImportStatementLink is a committed statement row's latest link: where it
+// points, whether it is still active, and the row it records.
+type ImportStatementLink struct {
+	IdentityID    int64
+	LinkID        int64
+	TransactionID int64
+	LineKey       string
+	AccountID     int64
+	CommodityID   int64
+	Active        bool
+	LinkedAt      string
+	RetiredAt     string
+	RetireReason  string
+	SourceKind    string
+	BatchID       int64
+	Filename      string
+	RowDate       string
+	RowAmount     exact.Coefficient
+	RowScale      int
+	RowPayee      string
+}
+
+func toImportStatementLink(record db.ImportStatementLinkRecord) ImportStatementLink {
+	link := ImportStatementLink{
+		IdentityID: record.IdentityID, LinkID: record.LinkID, TransactionID: record.TransactionID,
+		LineKey: record.LineKey, AccountID: record.AccountID, Active: record.Active,
+		LinkedAt: record.LinkedAt, RetiredAt: record.RetiredAt, RetireReason: record.RetireReason,
+		SourceKind: record.SourceKind, BatchID: record.BatchID, Filename: record.Filename,
+	}
+	var normalized struct {
+		Date      string `json:"date"`
+		Amount    string `json:"amount"`
+		PayeeHint string `json:"payee_hint"`
+	}
+	if json.Unmarshal([]byte(record.NormalizedJSON), &normalized) == nil {
+		link.RowDate, link.RowPayee = normalized.Date, normalized.PayeeHint
+		if coefficient, scale, err := parseCanonicalAmount(normalized.Amount); err == nil {
+			link.RowAmount, link.RowScale = coefficient, scale
+		}
+	}
+	if resolution, err := parseResolutionJSON(record.ResolutionJSON); err == nil {
+		link.CommodityID = resolution.CommodityID
+	}
+	return link
+}
+
+// statementLinkMatchInput restates a linked row for the match rule: its
+// staged facts, resolved to the identity's account.
+func statementLinkMatchInput(record db.ImportStatementLinkRecord) (db.ImportBatchRecord, db.ImportStagedRowRecord, ImportRowResolution) {
+	resolution, _ := parseResolutionJSON(record.ResolutionJSON)
+	resolution.AccountID = record.AccountID
+	return db.ImportBatchRecord{SourceKind: record.SourceKind}, db.ImportStagedRowRecord{NormalizedJSON: record.NormalizedJSON}, resolution
+}
+
+// StatementLinks lists the statement rows whose latest link names a line of
+// the transaction, active or since unlinked.
+func (s *ImportService) StatementLinks(ctx context.Context, transactionID int64) ([]ImportStatementLink, error) {
+	records, err := s.repository.ImportStatementLinksForTransaction(ctx, BookID, transactionID)
+	if err != nil {
+		return nil, err
+	}
+	links := make([]ImportStatementLink, 0, len(records))
+	for _, record := range records {
+		links = append(links, toImportStatementLink(record))
+	}
+	return links, nil
+}
+
+func (s *ImportService) statementLinkRecord(ctx context.Context, identityID int64) (db.ImportStatementLinkRecord, error) {
+	record, err := s.repository.ImportStatementLinkByIdentity(ctx, BookID, identityID)
+	if errors.Is(err, db.ErrNotFound) {
+		return db.ImportStatementLinkRecord{}, ErrImportStatementLinkNotFound
+	}
+	return record, err
+}
+
+// StatementLinkCandidates lists the postings a linked row could move to, by
+// the same rule that matched it: its account and commodity, its exact
+// amount, within the window, not linked to another row.
+func (s *ImportService) StatementLinkCandidates(ctx context.Context, identityID int64) (ImportStatementLink, []ImportMatchCandidate, error) {
+	record, err := s.statementLinkRecord(ctx, identityID)
+	if err != nil {
+		return ImportStatementLink{}, nil, err
+	}
+	batch, row, resolution := statementLinkMatchInput(record)
+	candidates, _, err := s.importMatchCandidates(ctx, batch, row, resolution)
+	if err != nil {
+		return ImportStatementLink{}, nil, err
+	}
+	return toImportStatementLink(record), candidates, nil
+}
+
+// CorrectStatementLinkInput names a statement row, the link the owner
+// reviewed and why it changes; a reassignment also names the posting it
+// moves to and the posted_on day reviewed.
+type CorrectStatementLinkInput struct {
+	OwnerUserID    int64
+	AuthSessionID  int64
+	RequestID      string
+	IdentityID     int64
+	ExpectedLinkID int64
+	Reason         string
+	TransactionID  int64
+	LineKey        string
+	PostedOn       string
+}
+
+func (input CorrectStatementLinkInput) params(occurredAt string) db.ImportPostingLinkCorrectionParams {
+	return db.ImportPostingLinkCorrectionParams{
+		BookID: BookID, IdentityID: input.IdentityID, ExpectedLinkID: input.ExpectedLinkID,
+		Reason: strings.TrimSpace(input.Reason), TransactionID: input.TransactionID, LineKey: input.LineKey,
+		ActorUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID, RequestID: input.RequestID, OccurredAt: occurredAt,
+	}
+}
+
+func validateStatementLinkCorrection(input CorrectStatementLinkInput) error {
+	if input.OwnerUserID <= 0 {
+		return ValidationError{Message: "owner user is required"}
+	}
+	if input.ExpectedLinkID <= 0 {
+		return ValidationError{Message: "expected_link_id is required"}
+	}
+	if strings.TrimSpace(input.Reason) == "" {
+		return ValidationError{Message: "a reason is required"}
+	}
+	return nil
+}
+
+func statementLinkCorrectionError(err error) error {
+	switch {
+	case errors.Is(err, db.ErrImportPostingLinkStale):
+		return ErrImportStatementLinkStale
+	case errors.Is(err, db.ErrNotFound):
+		return ErrImportStatementLinkNotFound
+	}
+	return err
+}
+
+// UnlinkStatementRow retires a row's active link. Nothing in the ledger
+// changes; the link and its retirement stay as evidence, and the row keeps
+// its identity, so it can be linked again and re-importing it is still a
+// duplicate.
+func (s *ImportService) UnlinkStatementRow(ctx context.Context, input CorrectStatementLinkInput) error {
+	if err := validateStatementLinkCorrection(input); err != nil {
+		return err
+	}
+	if _, err := s.statementLinkRecord(ctx, input.IdentityID); err != nil {
+		return err
+	}
+	return statementLinkCorrectionError(s.repository.UnlinkImportedPosting(ctx, input.params(s.now().UTC().Format(time.RFC3339))))
+}
+
+// ReassignStatementRow moves a row's link to another posting the match rule
+// accepts for it. The write transaction rereads the target and refuses one
+// that no longer matches the row or the reviewed posted_on day.
+func (s *ImportService) ReassignStatementRow(ctx context.Context, input CorrectStatementLinkInput) error {
+	if err := validateStatementLinkCorrection(input); err != nil {
+		return err
+	}
+	if input.TransactionID <= 0 || input.LineKey == "" {
+		return ValidationError{Message: "a reassignment names a transaction and a line key"}
+	}
+	if _, err := parseCanonicalDate(input.PostedOn); err != nil {
+		return ValidationError{Message: "a reassignment names the posted_on day it was reviewed with"}
+	}
+	record, err := s.statementLinkRecord(ctx, input.IdentityID)
+	if err != nil {
+		return err
+	}
+	batch, row, resolution := statementLinkMatchInput(record)
+	matchRow, ok := importMatchEligible(batch, row, resolution)
+	if !ok {
+		return ErrImportStatementLinkStale
+	}
+	err = s.repository.ReassignImportedPosting(ctx, input.params(s.now().UTC().Format(time.RFC3339)), func(posting db.ImportPostingCandidateRecord, found bool) error {
+		if !found || posting.PostedOn != input.PostedOn {
+			return db.ErrImportPostingLinkStale
+		}
+		if _, matches := importPostingMatches(matchRow, resolution, posting); !matches {
+			return db.ErrImportPostingLinkStale
+		}
+		return nil
+	})
+	return statementLinkCorrectionError(err)
 }

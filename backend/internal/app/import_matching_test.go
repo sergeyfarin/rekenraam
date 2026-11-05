@@ -228,8 +228,9 @@ func TestImportMatchExchangeMatchesEachSideInItsOwnCurrency(t *testing.T) {
 	assert.Equal(t, 1, usdResult.LinkedCount)
 	assert.Equal(t, 1, eurResult.LinkedCount)
 	assert.Equal(t, before, f.transactionCount(t), "linking writes no journal")
-	links, err := f.importRepo.ImportPostingLinksForTransaction(context.Background(), BookID, exchange.ID)
+	links, err := f.importService.StatementLinks(context.Background(), exchange.ID)
 	require.NoError(t, err)
+	require.Len(t, links, 2)
 	assert.ElementsMatch(t, []string{lineKeyOn(t, exchange, f.cashAccountID), lineKeyOn(t, exchange, f.usdAccountID)},
 		[]string{links[0].LineKey, links[1].LineKey}, "each statement row links to its own side")
 }
@@ -293,7 +294,7 @@ func TestImportMatchSeveralCandidatesWaitForTheOwnersPick(t *testing.T) {
 	result := f.commit(t, batchID)
 	assert.Equal(t, 1, result.LinkedCount)
 	assert.Equal(t, "committed", result.Status)
-	links, err := f.importRepo.ImportPostingLinksForTransaction(context.Background(), BookID, second.ID)
+	links, err := f.importService.StatementLinks(context.Background(), second.ID)
 	require.NoError(t, err)
 	require.Len(t, links, 1, "the owner's pick, not the first candidate")
 }

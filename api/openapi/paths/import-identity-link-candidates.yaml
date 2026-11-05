@@ -1,0 +1,43 @@
+get:
+  summary: List the postings a linked statement row could move to
+  description: >
+    The row's latest link and the postings the import match rule accepts for
+    it now: its account and commodity, exactly its amount, posted within
+    window_days of its date, and not linked to another row. The posting it
+    links now is not listed.
+  parameters:
+    - in: path
+      name: identity_id
+      required: true
+      schema: { type: integer, format: int64 }
+  responses:
+    "200":
+      description: The row's link and its candidates (no mutation)
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/StatementLinkCandidatesResponse"
+    "400":
+      description: Invalid identity id
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: No statement row with this identity was linked to a posting
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

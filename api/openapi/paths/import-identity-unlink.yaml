@@ -1,0 +1,64 @@
+post:
+  summary: Unlink a statement row from the posting it links
+  description: >
+    Retires the row's active link with the owner's reason under one audit
+    event (import.posting.unlink). Nothing in the ledger changes. The link and
+    its retirement stay as evidence and the row keeps its import identity, so
+    re-importing it is still a duplicate and it can be linked again through
+    reassign. expected_link_id names the link the owner reviewed.
+  parameters:
+    - in: path
+      name: identity_id
+      required: true
+      schema: { type: integer, format: int64 }
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/CorrectStatementLinkRequest"
+  responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
+    "204":
+      description: Row unlinked
+    "400":
+      description: Invalid request, or no reason
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: No statement row with this identity was linked to a posting
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: IMPORT_LINK_STALE — the row's latest link is not the reviewed one, or it is already unlinked; nothing changed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

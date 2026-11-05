@@ -75,6 +75,7 @@ const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   IMPORT_SHORT_LINK_UNAVAILABLE: () => m.api_error_import_short_link_unavailable(),
   IMPORT_SHORT_LINK_CHANGED: () => m.api_error_import_short_link_changed(),
   IMPORT_SHORT_LINK_MISMATCH: () => m.api_error_import_short_link_mismatch(),
+  IMPORT_LINK_STALE: () => m.api_error_import_link_stale(),
   IMPORT_UPLOAD_TOO_LARGE: () => m.api_error_import_upload_too_large(),
   TRANSACTION_DRAFT_NOT_USER_CREATABLE: () => m.api_error_transaction_draft_not_user_creatable(),
   TRANSACTION_VERSION_STALE: () => m.api_error_transaction_version_stale(),

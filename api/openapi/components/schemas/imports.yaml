@@ -188,6 +188,64 @@ ImportMatchChoice:
     transaction_id: { type: integer, format: int64 }
     line_key: { type: string }
     posted_on: { type: string, format: date }
+ImportStatementLink:
+  type: object
+  description: >
+    A committed statement row's latest link (#485): the posting line it names
+    and whether it is still active, with the row it records. An unlinked row
+    carries when and why it was unlinked.
+  required: [identity_id, link_id, transaction_id, line_key, account_id, commodity_id, active, linked_at,
+    source_kind, batch_id, filename, row_date, row_amount_value, row_amount_scale, row_payee]
+  properties:
+    identity_id: { type: integer, format: int64 }
+    link_id: { type: integer, format: int64 }
+    transaction_id: { type: integer, format: int64 }
+    line_key: { type: string }
+    account_id: { type: integer, format: int64 }
+    commodity_id: { type: integer, format: int64 }
+    active: { type: boolean }
+    linked_at: { type: string, format: date-time }
+    retired_at: { type: string, format: date-time }
+    retire_reason: { type: string }
+    source_kind: { type: string }
+    batch_id: { type: integer, format: int64 }
+    filename: { type: string }
+    row_date: { type: string, format: date }
+    row_amount_value: { type: string }
+    row_amount_scale: { type: integer }
+    row_payee: { type: string }
+ListStatementLinksResponse:
+  type: object
+  required: [links]
+  properties:
+    links:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/ImportStatementLink"
+StatementLinkCandidatesResponse:
+  type: object
+  required: [link, candidates, window_days]
+  properties:
+    link:
+      $ref: "../../openapi.yaml#/components/schemas/ImportStatementLink"
+    candidates:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/ImportMatchCandidate"
+    window_days: { type: integer }
+CorrectStatementLinkRequest:
+  type: object
+  additionalProperties: false
+  required: [expected_link_id, reason]
+  properties:
+    expected_link_id:
+      type: integer
+      format: int64
+      description: The row's latest link as the owner reviewed it.
+    reason: { type: string, description: Why the link changes; recorded on the audit event and the retirement. }
+    transaction_id: { type: integer, format: int64, description: Reassign only. }
+    line_key: { type: string, description: Reassign only. }
+    posted_on: { type: string, format: date, description: Reassign only; the target's posting day as reviewed. }
 ImportMatchCandidate:
   type: object
   description: >-

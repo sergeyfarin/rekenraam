@@ -2007,7 +2007,7 @@
     }
   ],
   "import_match_keep_new": "Als nieuwe transactie houden",
-  "import_match_choose": "Meerdere transacties komen overeen. Kies er een of houd de regel als nieuw.",
+  "import_match_choose": "Koppel deze regel aan een van deze transacties, of houd hem als nieuw.",
   "import_match_decide": "Beslis hieronder over de overeenkomsten en importeer daarna opnieuw.",
   "import_preview_dedupe_matched": "Al aanwezig",
   "import_result_linked": [
@@ -2041,5 +2041,24 @@
         "countPlural=*": "{n} regels komen overeen met transacties in je grootboek en wachten op je beslissing."
       }
     }
-  ]
+  ],
+  "api_error_import_link_stale": "Deze koppeling, of de transactie waarnaar ze zou gaan, is gewijzigd nadat je ze bekeek. Bekijk ze opnieuw.",
+  "statement_links_title": "Afschriftregels",
+  "statement_links_row": "{date}, {amount}, {payee}",
+  "statement_links_source": "Geïmporteerd uit {filename}",
+  "statement_links_status_linked": "Gekoppeld",
+  "statement_links_status_unlinked": "Ontkoppeld",
+  "statement_links_unlinked_reason": "Ontkoppeld op {date}: {reason}",
+  "statement_links_reassign": "Aan andere transactie koppelen",
+  "statement_links_unlink": "Ontkoppelen",
+  "statement_links_reassign_title": "Deze afschriftregel aan een andere transactie koppelen",
+  "statement_links_reassign_help": "Getoond worden transacties op dezelfde rekening en valuta, voor precies dit bedrag, geboekt binnen {days} dagen van de afschriftdatum en niet aan een andere regel gekoppeld. De huidige koppeling blijft in de geschiedenis bewaard.",
+  "statement_links_reassign_empty": "Geen andere transactie komt overeen met deze afschriftregel.",
+  "statement_links_unlink_title": "Deze afschriftregel ontkoppelen",
+  "statement_links_unlink_help": "De transactie blijft zoals ze is. De regel wordt nog herkend als het afschrift opnieuw wordt geïmporteerd, en je kunt hem later aan een transactie koppelen. De koppeling blijft in de geschiedenis bewaard.",
+  "statement_links_reason_label": "Reden",
+  "statement_links_loading": "Overeenkomende transacties laden…",
+  "statement_links_cancel": "Annuleren",
+  "statement_links_confirm_reassign": "Koppeling verplaatsen",
+  "statement_links_confirm_unlink": "Regel ontkoppelen"
 }

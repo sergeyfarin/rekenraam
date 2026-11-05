@@ -245,6 +245,14 @@ paths:
     $ref: "./paths/import-row-split-candidates.yaml"
   /api/v1/imports/{batch_id}/rows/{row_id}/link-split:
     $ref: "./paths/import-row-link-split.yaml"
+  /api/v1/transactions/{id}/statement-links:
+    $ref: "./paths/transaction-statement-links.yaml"
+  /api/v1/import-identities/{identity_id}/link-candidates:
+    $ref: "./paths/import-identity-link-candidates.yaml"
+  /api/v1/import-identities/{identity_id}/unlink:
+    $ref: "./paths/import-identity-unlink.yaml"
+  /api/v1/import-identities/{identity_id}/reassign:
+    $ref: "./paths/import-identity-reassign.yaml"
   /api/v1/imports/{batch_id}/rows/{row_id}/short-candidates:
     $ref: "./paths/import-row-short-candidates.yaml"
   /api/v1/imports/{batch_id}/rows/{row_id}/link-short:
@@ -1290,6 +1298,14 @@ components:
       $ref: "./components/schemas/imports.yaml#/PreviewCommitResponse"
     ImportMatchChoice:
       $ref: "./components/schemas/imports.yaml#/ImportMatchChoice"
+    ImportStatementLink:
+      $ref: "./components/schemas/imports.yaml#/ImportStatementLink"
+    ListStatementLinksResponse:
+      $ref: "./components/schemas/imports.yaml#/ListStatementLinksResponse"
+    StatementLinkCandidatesResponse:
+      $ref: "./components/schemas/imports.yaml#/StatementLinkCandidatesResponse"
+    CorrectStatementLinkRequest:
+      $ref: "./components/schemas/imports.yaml#/CorrectStatementLinkRequest"
     ImportMatchCandidate:
       $ref: "./components/schemas/imports.yaml#/ImportMatchCandidate"
     ImportRowMatchReview:

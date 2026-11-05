@@ -82,7 +82,7 @@ func TestInvestmentGainsRunReproducesBeforeSaleReversal(t *testing.T) {
 	// The portable archive includes complete documents even with a ledger scope
 	// outside their period. Backup/restore also preserves their exact bytes.
 	bundle := downloadBundle(t, handler, f.sessionCookie, "?from=2026-04-01&to=2026-04-30")
-	assert.Equal(t, 18, bundle.manifest.SchemaVersion)
+	assert.Equal(t, 19, bundle.manifest.SchemaVersion)
 	table := bundle.table(t, "investment-gains-runs.csv")
 	require.Len(t, table.rows, 2)
 	for i, row := range table.rows {

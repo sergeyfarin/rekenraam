@@ -1,4 +1,5 @@
 import type { components } from '#lib/api/schema.js';
+import { m } from '#lib/paraglide/messages.js';
 
 export type ImportMatchChoice = components['schemas']['ImportMatchChoice'];
 export type ImportMatchCandidate = components['schemas']['ImportMatchCandidate'];
@@ -28,13 +29,14 @@ export function choiceKey(choice: ImportMatchChoice | null | undefined): string 
 }
 
 /**
- * The choice preview offers for a row: a decision the server still accepts,
- * otherwise the only candidate when there is one. With several candidates
- * the owner picks; nothing is preselected.
+ * The choice preview shows for a row: a decision the server still accepts.
+ * Nothing is preselected, not even a single candidate: an exact amount in
+ * the window does not establish that a row is that transaction (repeated
+ * equal payments are common), so the owner links each row explicitly
+ * (#485 review).
  */
 export function initialMatchChoice(review: ImportRowMatchReview): ImportMatchChoice | undefined {
   if (review.choice && !review.needs_decision) return review.choice;
-  if (review.candidates.length === 1) return linkChoice(review.candidates[0]);
   return undefined;
 }
 
@@ -57,4 +59,25 @@ export function undecidedMatchRows(reviews: readonly ImportRowMatchReview[], cho
  */
 export function matchDecisionsPending(reviews: readonly ImportRowMatchReview[]): boolean {
   return reviews.some((review) => review.needs_decision);
+}
+
+/**
+ * Why a candidate matched, given its exact amount already formatted: the
+ * same account and currency, that amount, and its posting day against the
+ * statement date.
+ */
+export function matchReasonText(candidate: ImportMatchCandidate, amount: string, locale: string): string {
+  const days = Math.abs(candidate.day_offset);
+  const n = new Intl.NumberFormat(locale).format(days);
+  if (candidate.day_offset > 0) return m.import_match_reason_after({ amount, count: days, n });
+  if (candidate.day_offset < 0) return m.import_match_reason_before({ amount, count: days, n });
+  return m.import_match_reason_same_day({ amount });
+}
+
+/** A candidate's radio label, given its transaction date already formatted. */
+export function matchCandidateLabel(candidate: ImportMatchCandidate, date: string): string {
+  return m.import_match_link_option({
+    description: candidate.description || candidate.payee_name || m.import_match_untitled(),
+    date
+  });
 }

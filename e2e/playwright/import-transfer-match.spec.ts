@@ -68,7 +68,8 @@ test('[acceptance] a hand-entered transfer and both imported statements stay one
   await expect(dialog).toHaveCount(0);
 
   // Checking statement: committing straight away stops at the match, which is
-  // shown with why it matched and the only candidate preselected.
+  // shown with why it matched. Nothing is preselected, not even the only
+  // candidate: the owner links the row explicitly (#485 review).
   const mapping = `Match bank ${suffix}`;
   const checkingFile = statement(today, 'Naar spaarrekening', '-75,00');
   await upload(page, 'checking.csv', checkingFile, mapping);
@@ -77,9 +78,13 @@ test('[acceptance] a hand-entered transfer and both imported statements stay one
   await expect(page.getByRole('alert').filter({ hasText: 'Decide the matches below, then import again.' })).toBeVisible();
   const checkingMatch = page.getByTestId('import-match-row');
   await expect(checkingMatch.getByText('Same account and currency, exactly', { exact: false })).toContainText('posted on the statement date');
-  await expect(checkingMatch.getByRole('radio', { name: new RegExp(`Link to ${description}`) })).toBeChecked();
+  await expect(checkingMatch.getByRole('radio', { name: new RegExp(`Link to ${description}`) })).not.toBeChecked();
   await expect(checkingMatch.getByRole('radio', { name: 'Keep as a new transaction' })).not.toBeChecked();
   await expectNoAccessibilityViolations(page, 'import match review');
+  // A second commit without a choice still links nothing.
+  await page.getByRole('button', { name: 'Commit to ledger' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Decide the matches below, then import again.' })).toBeVisible();
+  await checkingMatch.getByRole('radio', { name: new RegExp(`Link to ${description}`) }).check();
   await page.getByRole('button', { name: 'Commit to ledger' }).click();
   await expect(page.getByText('1 row linked to a transaction already in your ledger')).toBeVisible();
 
@@ -92,7 +97,7 @@ test('[acceptance] a hand-entered transfer and both imported statements stay one
   await page.getByRole('button', { name: 'Check for transactions already entered' }).click();
   const savingsMatch = page.getByTestId('import-match-row');
   await expect(savingsMatch.getByText('posted 1 day after the statement date', { exact: false })).toBeVisible();
-  await expect(savingsMatch.getByRole('radio', { name: new RegExp(`Link to ${description}`) })).toBeChecked();
+  await savingsMatch.getByRole('radio', { name: new RegExp(`Link to ${description}`) }).check();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expectNoAccessibilityViolations(page, 'import match review at 390 px');
   await page.getByRole('button', { name: 'Commit to ledger' }).click();
@@ -140,4 +145,70 @@ test('a matching statement row kept as new commits as its own transaction', asyn
   await expect(page.getByText('1 transactions committed')).toBeVisible();
   await expect(page.getByText(/linked to a transaction/)).toBeHidden();
   expect(await transactionIDs(page, checking.id)).toHaveLength(2);
+});
+
+// #485 review: a row linked to the wrong transfer is repaired from the
+// transaction's detail panel. The link moves with a reason, the old one is
+// kept as history, and re-importing the statement stays a no-op.
+test('a statement row linked to the wrong transfer is moved to the right one', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const suffix = Date.now();
+  const checking = await createCashAccount(page, csrfToken, `Repair checking ${suffix}`, currencyID);
+  const savings = await createCashAccount(page, csrfToken, `Repair savings ${suffix}`, currencyID);
+  const transfer = (description: string) => apiJSON<{ id: number }>(page, 'POST', '/api/v1/transactions', csrfToken, {
+    transaction_kind: 'transfer', transaction_date: todayISO(), description,
+    journal_entries: [{ entry_date: todayISO(), entry_kind: 'ordinary', postings: [
+      { account_id: checking.id, commodity_id: currencyID, quantity_value: '-10000', quantity_scale: 2 },
+      { account_id: savings.id, commodity_id: currencyID, quantity_value: '10000', quantity_scale: 2 }
+    ] }]
+  }, [201]);
+  const wrong = await transfer(`Rent share ${suffix}`);
+  const right = await transfer(`Savings top-up ${suffix}`);
+
+  const file = statement(todayISO(), 'Van betaalrekening', '100,00');
+  await upload(page, 'repair.csv', file, `Repair ${suffix}`);
+  await resolveTo(page, savings.id, currencyID);
+  await page.getByRole('button', { name: 'Check for transactions already entered' }).click();
+  const match = page.getByTestId('import-match-row');
+  await expect(match.getByRole('radio')).toHaveCount(3);
+  await match.getByRole('radio', { name: new RegExp(`Link to Rent share ${suffix}`) }).check();
+  await page.getByRole('button', { name: 'Commit to ledger' }).click();
+  await expect(page.getByText('1 row linked to a transaction already in your ledger')).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/app/ledger/transactions?transaction_id=${wrong.id}`);
+  const links = page.getByTestId('statement-links');
+  await expect(links.getByText('Linked', { exact: true })).toBeVisible();
+  await links.getByRole('button', { name: 'Link to another transaction' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Link this statement row to another transaction' });
+  await expect(dialog).toBeVisible();
+  const target = dialog.getByRole('radio', { name: new RegExp(`Link to Savings top-up ${suffix}`) });
+  await expect(target).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Move link' })).toBeDisabled();
+  await expectNoAccessibilityViolations(page, 'statement link reassignment at 390 px');
+  await target.check();
+  await dialog.getByLabel('Reason').fill('linked to the wrong transfer');
+  await dialog.getByRole('button', { name: 'Move link' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(links).toHaveCount(0);
+
+  await page.goto(`/app/ledger/transactions?transaction_id=${right.id}`);
+  await expect(page.getByTestId('statement-links').getByText('Linked', { exact: true })).toBeVisible();
+
+  // Unlink keeps the row listed where it was linked, with the reason.
+  await page.getByTestId('statement-links').getByRole('button', { name: 'Unlink' }).click();
+  const unlink = page.getByRole('dialog', { name: 'Unlink this statement row' });
+  await unlink.getByLabel('Reason').fill('checking the statement first');
+  await expectNoAccessibilityViolations(page, 'statement link unlink at 390 px');
+  await unlink.getByRole('button', { name: 'Unlink row' }).click();
+  await expect(unlink).toHaveCount(0);
+  await expect(page.getByTestId('statement-links').getByText('Unlinked', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('statement-links')).toContainText('checking the statement first');
+
+  // Re-importing the statement is still a no-op.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await upload(page, 'repair-again.csv', file);
+  await resolveTo(page, savings.id, currencyID);
+  await expect(page.getByText('Already imported', { exact: true })).toBeVisible();
+  expect(await transactionIDs(page, savings.id)).toHaveLength(2);
 });

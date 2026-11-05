@@ -2007,7 +2007,7 @@
     }
   ],
   "import_match_keep_new": "Keep as a new transaction",
-  "import_match_choose": "Several transactions match. Choose one, or keep the row as new.",
+  "import_match_choose": "Link this row to one of these transactions, or keep it as new.",
   "import_match_decide": "Decide the matches below, then import again.",
   "import_preview_dedupe_matched": "Matches existing",
   "import_result_linked": [
@@ -2041,5 +2041,24 @@
         "countPlural=*": "{n} rows match transactions already in your ledger and wait for your decision."
       }
     }
-  ]
+  ],
+  "api_error_import_link_stale": "This statement link, or the transaction it would move to, changed after you reviewed it. Review it again.",
+  "statement_links_title": "Statement rows",
+  "statement_links_row": "{date}, {amount}, {payee}",
+  "statement_links_source": "Imported from {filename}",
+  "statement_links_status_linked": "Linked",
+  "statement_links_status_unlinked": "Unlinked",
+  "statement_links_unlinked_reason": "Unlinked {date}: {reason}",
+  "statement_links_reassign": "Link to another transaction",
+  "statement_links_unlink": "Unlink",
+  "statement_links_reassign_title": "Link this statement row to another transaction",
+  "statement_links_reassign_help": "Listed are transactions on the same account and currency, for exactly this amount, posted within {days} days of the statement date and not linked to another row. The current link is kept in the history.",
+  "statement_links_reassign_empty": "No other transaction matches this statement row.",
+  "statement_links_unlink_title": "Unlink this statement row",
+  "statement_links_unlink_help": "The transaction stays as it is. The row is still recognised when the statement is imported again, and you can link it to a transaction later. The link is kept in the history.",
+  "statement_links_reason_label": "Reason",
+  "statement_links_loading": "Loading matching transactions…",
+  "statement_links_cancel": "Cancel",
+  "statement_links_confirm_reassign": "Move link",
+  "statement_links_confirm_unlink": "Unlink row"
 }

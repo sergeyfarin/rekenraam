@@ -1,0 +1,38 @@
+get:
+  summary: List the statement rows linked to a transaction
+  description: >
+    #485: the CSV and QIF statement rows whose latest link names a line of
+    this transaction — linked now, or last linked here and since unlinked (so
+    the owner can link them again). Each carries the row's date, amount, payee
+    and file, the line it links, and for an unlinked row when and why. A
+    transaction no row was linked to has an empty list.
+  parameters:
+    - in: path
+      name: id
+      required: true
+      schema: { type: integer, format: int64 }
+  responses:
+    "200":
+      description: Statement links (no mutation)
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ListStatementLinksResponse"
+    "400":
+      description: Invalid transaction id
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

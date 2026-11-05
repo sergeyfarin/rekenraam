@@ -404,3 +404,31 @@ export function importDividendReviewImpact(row: ImportDividendReview, request: R
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request)
   });
 }
+
+// #485 review: statement rows linked to existing postings, and their
+// audited corrections.
+export type ImportStatementLink = components['schemas']['ImportStatementLink'];
+export type StatementLinkCandidatesResponse = components['schemas']['StatementLinkCandidatesResponse'];
+export type CorrectStatementLinkRequest = components['schemas']['CorrectStatementLinkRequest'];
+export const statementLinksQueryKey = ['api', 'statement-links'] as const;
+
+export function getStatementLinks(transactionId: number): Promise<components['schemas']['ListStatementLinksResponse']> {
+  return apiFetch(`/api/v1/transactions/${transactionId}/statement-links`);
+}
+
+export function getStatementLinkCandidates(identityId: number): Promise<StatementLinkCandidatesResponse> {
+  return apiFetch(`/api/v1/import-identities/${identityId}/link-candidates`);
+}
+
+export async function correctStatementLink(
+  identityId: number,
+  action: 'unlink' | 'reassign',
+  request: CorrectStatementLinkRequest,
+  csrfToken: string
+): Promise<void> {
+  await apiFetch<null>(`/api/v1/import-identities/${identityId}/${action}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+    body: JSON.stringify(request)
+  });
+}
