@@ -70,7 +70,8 @@ keep the reasoning. The
 holds the options behind its navigation decisions (#435). Delivery is tracked in #441.
 The [shell look and task rail mockup](design/shell-look-mockup/README.md)
 shows the owner's 2026-11-01 revisions: olive two-tint header rows, a
-*Search Ctrl K* button and the right-hand task rail (#489–#492).
+*Search Ctrl K* button and a right-hand task rail; the rail was withdrawn on
+2026-11-05 in favour of one *New transaction* button (#489–#491).
 The [navigation prototype](design/navigation-prototype/README.md) adds
 browser-openable destinations and a bounded walkthrough for implementation
 preparation; the production overhaul remains undelivered.

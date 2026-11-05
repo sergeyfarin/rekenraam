@@ -649,6 +649,21 @@ has actual installations, its migration files are immutable.
   and keys), which `catalogs:check` rejects when stale and the language
   settings page reads for its *Partial* note. A partial locale's existing keys
   still need matching placeholders, plural inputs and nonempty text.
+  - **Reworded English:** when an English message changes meaning and the
+    partial translations are not updated in the same change, delete that key
+    from `es`, `fr` and `de`. The stale text then gives way to English and
+    appears in the missing list. The list sees absent keys only, never
+    outdated ones. Maintained locales are always updated together.
+  - **Maintained means catalog parity, not native approval:** native review
+    stays with #102.
+  - **Browser coverage is a separate decision from upkeep.**
+    - Translation journeys run in `en` and `ru`.
+    - The route sweep covers every locale at phone width.
+    - The subview sweep opens every dialog and sub-view in `de` and `ru`, at
+      desktop and phone. German, a partial locale, is read layered over
+      English.
+    - Russian alone does not stand in for every language's layout, so a new
+      dialog belongs in the subview sweep.
 - A message whose wording depends on a count is one Paraglide plural variant
   (`declarations` with `input count`, `input n` and
   `local countPlural = count: plural`; `match` keyed `countPlural=one`,

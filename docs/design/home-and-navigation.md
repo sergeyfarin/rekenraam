@@ -136,9 +136,9 @@ header on every page.
   current tab in view and fades at the edge when more tabs follow.
 - **No navigation sidebar:** the owner rejected an account list beside
   registers (2026-10-29): other accounts distract from the one in hand, and
-  Ledger overview is one click away. Settings keeps its own side list. Pages
-  with many commands or filters get a [task rail](#task-rail) on the right
-  instead; it holds that page's work, never navigation.
+  Ledger overview is one click away. Settings keeps its own side list. The
+  right column is kept for the current selection's details and running
+  summaries ([side panels](#side-panels)), never commands or navigation.
 - **Alignment:** the header, tab row and page content share one left edge
   at every width.
 - Every existing route stays reachable. The shell keeps the current
@@ -630,44 +630,72 @@ Register and category titles name the object, with the parent tab as the
 breadcrumb; the *Accounts › Brokerage* and category-tree trails and the
 switcher in the title slot remain #442.
 
-### Task rail
+### Side panels
 
-Owner decision 2026-11-01, after comparing the old sidebar and MS Money's
-task pane. A page with many commands or report filters shows them in a rail
-on the right, so they are visible, labelled and grouped instead of a wall of
-buttons or a menu. See the [mockup](shell-look-mockup/README.md).
+**Investments entry (owner, 2026-11-05).** Investments shows one *New
+transaction* button where the 17 *Record …* buttons were. It opens a **type
+chooser**: a full-size list grouped as Trades (Buy, Sell, Short sale, Short
+cover, Write-off), Income (Dividend, Reinvested dividend, Withholding tax,
+Payment in lieu, Return of capital), Move (Transfer in, Move between
+holdings, Transfer out) and Corporate actions (Split, Share exchange,
+Cash-and-stock merger, Spin-off), with type-ahead and arrow keys. A sheet on
+phones; never a small dropdown. Choosing a type opens that type's existing
+form with the page's prefill (holding, instrument, account). To change type
+the owner goes back to the chooser; if anything was entered, the form asks
+before discarding it. Fields are not carried between forms: carrying them
+needs per-pair preservation rules, the area that needed three repairs in
+#481. Carrying fields between near-identical forms (Buy and Sell, Dividend and
+Reinvested dividend) can be proposed later on its own. Investment account
+registers use the same button and chooser instead of their *Record* menu.
 
-- **Where:** only pages that need it. First: Investments overview and
-  investment account registers (transaction types), and the Spending,
-  Cashflow and Net worth reports (period, currency, filters, then Download
-  CSV and Print). Not Home, Settings, overviews or simple lists; a page
-  with three commands or fewer keeps them in the page header's action slot.
-- **Right, not left:** header, tabs and content keep one left edge, the data
-  is read first, and wide screens have spare width on the right.
-- **Look:** about 260px wide, its own panel in the pages-row tint with a
-  border and rounded corners, clearly distinct from page and cards; stays in
-  view while the page scrolls. Text 14.5–15px, rows about 34px: dense but
-  readable, unlike Money's small type.
-- **Content:** one main button on top, then groups with short headings.
-  Only this page's work: no views (tabs own them), no links elsewhere, no
-  help or promotion.
-- **Investments:** the main button is *New transaction*. It opens the
-  investment editor, where the transaction type is a field (as Money's
-  *Activity*), so one entry point covers every type. The rail also lists the
-  types, grouped (Trades: Buy, Sell, Short sale, Short cover, Write-off;
-  Income: Dividend, Reinvested dividend, Withholding tax, Payment in lieu,
-  Return of capital; Move: Transfer in, Move between holdings, Transfer out;
-  Corporate actions: Split, Share exchange, Cash-and-stock merger,
-  Spin-off), and each opens the editor with that type chosen. The rail
-  shows what is possible without opening anything. Later it may also offer
-  investment summaries and tables that are not reports; that is decided
-  separately.
-- **Narrower than about 1180px:** the rail folds away. The page header shows
-  the main button and one more (*Types…* or *Filters*), which opens the same
-  grouped list as a full-size panel, or a sheet on phones; never a small
-  dropdown.
-- Keyboard: the rail is a labelled `aside` landmark; its items are buttons
-  or links in reading order after the page content's main action.
+**The task rail is withdrawn (2026-11-05).** On 2026-11-01 a right-hand rail
+listing commands and report filters was chosen ([mockup](shell-look-mockup/README.md)).
+On review, the owner found one button enough for Investments, and a second
+review found the rail's benefit unproven:
+- It redistributed 17 types into a list that ran below the fold.
+- It hid them again behind *Types…* on narrower screens.
+- It would have taken the right column that Investments already uses for a
+  position's lots.
+
+No rail is built. What follows records where a right-hand panel does earn
+its place, for a later decision.
+
+**Where right-hand panels already work.** Three pages have one. Each holds
+what the owner needs *while* working the main list, tied to the current
+selection or to the work in progress:
+- the transaction detail and editor on Transactions and registers
+  (22–26rem, sticky)
+- the selected position's lots on Investments (24rem)
+- the reconciliation summary (statement balance, cleared, difference,
+  finish) on Reconcile
+
+On phones each opens as a full-screen modal.
+
+**Candidates, deferred** (each needs its own case):
+- **Import batch review:** the selected row's details, its link or match
+  candidates (#485) and pairing (#487), and the rule that matched. This is
+  the strongest candidate: the review table is wide, and row decisions need
+  context.
+- **Report filters** (#492): a wide-screen filter panel, against a compact
+  summary bar that expands in place. Decide with a task check on Spending,
+  Cashflow and Net worth.
+- **Budgets:** the month's totals (left to assign, overspent) kept in view
+  while editing categories.
+
+**Not for:**
+- commands, which belong in the page header's action slot, a chooser, or a
+  row's ⋯ menu
+- navigation (the account list was rejected 2026-10-29)
+- help or promotion
+
+**Rules if one is adopted:**
+- One right column per page, shared by selection detail and summary; never
+  two panels.
+- One width token in place of today's 22, 24 and 26rem.
+- Sticky.
+- A full-screen modal on phones.
+- Adoption needs a task check first: the page's common tasks with mouse,
+  keyboard and phone, and nothing important left below the fold.
 
 ### Objects
 
@@ -755,8 +783,8 @@ Sequencing belongs in the roadmap; acceptance in the issues.
 | Density: compact and comfortable rows | #451 |
 | Shell look: olive two-tint rows, joined section tab, green place markers, card contrast | #489 |
 | Search button with centred search dialog | #490 |
-| Task rail component; Investments *New transaction* with type field and type list | #491 |
-| Report filters in the task rail (Spending, Cashflow, Net worth) | #492 |
+| Investments *New transaction* with a type chooser, also on investment registers | #491 |
+| Report filters take less space above the figures (later: filter bar or side panel, after a task check) | #492 |
 | Two-key navigation shortcuts | #452 |
 
 ## Considered and dropped
@@ -770,9 +798,13 @@ Sequencing belongs in the roadmap; acceptance in the issues.
 - A header in the page colour (2026-10-29 to 2026-11-01): too flat.
 - A compact search field in the header: replaced by the *Search Ctrl K*
   button.
-- A wall of record buttons, and folding them into a dropdown; replaced by the
-  task rail. *Record buy* as the Investments main action: *New transaction*
-  with a type field instead.
+- A wall of record buttons, and folding them into a small dropdown. *Record
+  buy* as the Investments main action. Both replaced by *New transaction*
+  with a type chooser.
+- A task rail listing commands (chosen 2026-11-01, withdrawn 2026-11-05):
+  see [side panels](#side-panels).
+- A type field that switches forms in place inside the investment editor:
+  deferred; the chooser avoids preservation rules.
 - A fixed-order map with a separate shortlist: replaced by My Home plus More
   to explore.
 - Compact previews in More to explore: real-size widgets instead.

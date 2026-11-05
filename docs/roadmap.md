@@ -147,13 +147,15 @@ Deliver incrementally, tracked in #441, in this order:
    account-list state and Home widget (#482, configurable window, default 60
    days). Pinned accounts on the Accounts widget arrive with #442
    and entered values in the briefing with #454.
-3. **Shell look and task rail (owner, 2026-11-01), next:** olive two-tint
-   header rows with the current section as a joined tab (#489); a *Search
-   Ctrl K* button opening the centred search (#490); the right-hand
-   [task rail](design/home-and-navigation.md#task-rail) with *New transaction*
-   and a transaction-type field on Investments (#491), then report filters in
-   the rail (#492, after #491). #489 and #490 are independent of each other
-   and of the rail.
+3. **Shell look and investment entry (owner, 2026-11-01, revised
+   2026-11-05), next:** olive two-tint header rows with the current section
+   as a joined tab (#489); a *Search Ctrl K* button opening the centred
+   search (#490); one *New transaction* button with a type chooser on
+   Investments and investment registers (#491). All three are small and
+   independent. The task rail was withdrawn; where a right-hand panel earns
+   its place is recorded under
+   [side panels](design/home-and-navigation.md#side-panels), and report
+   filters (#492) moved to *Deliberately later*.
 4. **Pages in their new places**, in any order after #436: settings in five
    pages with Trash moved to Transactions › Deleted and export to Reports
    (#446) delivered 2026-10-31; Import views (#447); Ledger overview with
@@ -235,6 +237,11 @@ These are valuable, but they are not allowed to displace the current plan:
   decided ([ADR 0021](adrs/0021-entered-asset-values.md): dated values beside
   the ledger, never postings); ready in three slices. #437 and #453 do not
   wait for it.
+- Report filters taking less space above the figures
+  [#492](https://github.com/sergeyfarin/rekenraam/issues/492): a compact
+  filter bar or a right-hand panel, chosen after a task check. Other
+  side-panel candidates (import row review, budget totals) are listed under
+  [side panels](design/home-and-navigation.md#side-panels).
 - Original maintainability candidates 7–13 remain
   [explicitly deferred without issues](reviews/maintainability-audit-2026-10-24.md#explicitly-deferred-inventory-original-ranks-713).
   Revisit only on the recorded trigger and refreshed evidence; open a bounded

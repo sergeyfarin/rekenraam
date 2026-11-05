@@ -111,7 +111,9 @@ description: SvelteKit frontend rules for Rekenraam - static adapter constraints
   catalogs run `pnpm --dir frontend run catalogs:missing`;
   `pnpm --dir frontend run catalogs:check` rejects a stale
   `src/lib/i18n/missing.json` and gates dev/check/build and CI. Native
-  terminology review remains separate (#102).
+  terminology review remains separate (#102). If English wording changes
+  meaning and you do not update es/fr/de in the same change, delete those keys
+  there: stale text is worse than English, and only absent keys are listed.
 - Never concatenate translated fragments into sentences; use message parameters.
 - A count-dependent message is one plural variant with a `countPlural=*`
   catch-all, called as `m.key({ count, n })` (`n` locale-formatted); never pick

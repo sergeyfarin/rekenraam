@@ -42,9 +42,13 @@ type Locale = 'en' | 'de' | 'ru';
 /** Every catalog of a locale, merged; `t` answers an exact accessible-name pattern. */
 function catalog(locale: Locale) {
   const root = path.join(repoRoot, 'frontend/messages');
+  // German is a partial locale (#493): a message it lacks renders in English, so
+  // read English first and lay the locale's own messages over it, as the app does.
   const merged: Record<string, string> = {};
-  for (const domain of readdirSync(root)) {
-    Object.assign(merged, JSON.parse(readFileSync(path.join(root, domain, `${locale}.json`), 'utf8')));
+  for (const name of locale === 'en' ? ['en'] : ['en', locale]) {
+    for (const domain of readdirSync(root)) {
+      Object.assign(merged, JSON.parse(readFileSync(path.join(root, domain, `${name}.json`), 'utf8')));
+    }
   }
   // `prefix`: a control whose wrapping label also names its current value.
   return (key: string, prefix = false): RegExp => {

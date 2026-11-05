@@ -7,9 +7,12 @@ A static mockup of the owner's 2026-11-01 decisions in the
   its pages row and green marking only the current page, badges and
   selected chips
 - a rounded *Search Ctrl K* button in place of the header search field
-- the [task rail](../home-and-navigation.md#task-rail) on the right, in its own
-  tinted panel: *New transaction* plus grouped transaction types on
-  Investments, and period, currency, filters and Download CSV on Spending
+- the task rail on the right, in its own tinted panel: *New transaction*
+  plus grouped transaction types on Investments, and period, currency,
+  filters and Download CSV on Spending. **Withdrawn 2026-11-05**: the
+  mockup stays as a record. See
+  [side panels](../home-and-navigation.md#side-panels) for where a
+  right-hand panel does earn its place.
 
 Open `mockup.html` in a browser. Query parameters:
 - `?p=inv` or `?p=spend` picks the page
