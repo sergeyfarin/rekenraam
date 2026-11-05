@@ -5,6 +5,7 @@ import { readyForLedger, ensureCurrency } from './support/ledger';
 import { apiJSON } from './support/api';
 import { daysFromTodayISO, todayISO } from './support/dates';
 import { useDarkTheme } from './support/session';
+import { translationLocales } from './support/locales';
 
 test.use({ viewport: { width: 390, height: 844 } });
 const messages = (locale = 'en') => JSON.parse(readFileSync(new URL(`../../frontend/messages/pricing/${locale}.json`, import.meta.url), 'utf8'));
@@ -19,7 +20,7 @@ async function setup(page: Page, locale = 'en') {
   return { csrfToken, base, quote: currencyID };
 }
 
-for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of translationLocales) {
   test(`[acceptance] exact manual entry, correction and withdrawal at 390px in ${locale}`, async ({ page }) => {
     const s = await setup(page, locale);
     const editable = (value: string) => value.replace('.', locale === 'en' ? '.' : ',');

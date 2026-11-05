@@ -367,6 +367,26 @@
   "language_select_legend": "Язык интерфейса",
   "language_translation_progress_title": "Черновой перевод",
   "language_translation_progress_copy": "Эти переводы составлены по терминологическому глоссарию и ещё не проверены носителями языка. То, что пока не переведено, показывается на английском, а не остаётся пустым.",
+  "language_partial": "Неполный перевод",
+  "language_partial_missing": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} непереведённая строка",
+        "countPlural=few": "{n} непереведённые строки",
+        "countPlural=many": "{n} непереведённых строк",
+        "countPlural=*": "{n} непереведённой строки"
+      }
+    }
+  ],
+  "language_partial_option": "{language} · неполный перевод",
   "import_rules_title": "Правила импорта",
   "import_rules_copy": "При подготовке нового файла применяется первое совпавшее правило. Каждый результат можно проверить до проведения.",
   "import_rules_add": "Добавить правило",

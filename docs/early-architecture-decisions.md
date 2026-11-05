@@ -14,6 +14,11 @@ This document records active decisions for the current Go, SvelteKit, and SQLite
 
 Small-business accounting, tax filing, hosted service operations, bank sync, and plugin systems may influence naming and boundaries, but they are not first-release goals.
 
+The [2026-11-03 deployment and distribution review](reviews/deployment-and-distribution-choice-review-2026-11-03.md)
+revalidates self-hosted web as the canonical product, keeps desktop as a gated
+optional local-data host, and treats managed/multi-tenant hosting as a separate
+business decision. It does not change the current scope.
+
 ## Runtime Shape
 
 The public project website is an independent static build under `website/`,
@@ -34,9 +39,23 @@ Reasons:
 - One origin for frontend and API.
 - Fewer moving parts while the product model is still forming.
 
+The [2026-11-03 language choice review](reviews/language-choice-review-2026-11-03.md)
+and [CI/test performance profile](reviews/ci-test-performance-profile-2026-11-03.md)
+revalidated this choice. Current backend time is dominated by native SQLite,
+and current CI time by browser/accessibility work; neither is Go-language
+overhead. The [frontend framework review](reviews/frontend-framework-choice-review-2026-11-03.md)
+also revalidated SvelteKit for the same static, embedded UI shape. The reviews
+do not change this runtime shape.
+
 ## Database And Migrations
 
 Use SQLite as the primary database.
+
+The [2026-11-03 database choice review](reviews/database-choice-review-2026-11-03.md)
+revalidates SQLite against PostgreSQL, MySQL/MariaDB, DuckDB, libSQL/Turso,
+distributed SQL, document and embedded key-value options. It finds no current
+reason to migrate; hosted or multi-tenant requirements would be the trigger to
+reopen that decision.
 
 [ADR 0014](adrs/0014-native-sqlite-driver.md) selects migration from modernc to
 bundled native SQLite through CGO (#195), with one driver for runtime and

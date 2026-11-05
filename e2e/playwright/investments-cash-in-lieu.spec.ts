@@ -5,6 +5,7 @@ import { todayISO } from './support/dates';
 import { expectNoAccessibilityViolations } from './support/a11y';
 import { readFileSync } from 'node:fs';
 import { test as ownedBookTest } from './support/owned-book';
+import { translationLocales } from './support/locales';
 
 test.use({ viewport: { width: 390, height: 844 } });
 function ago(days:number) { const date=new Date();date.setDate(date.getDate()-days);return todayISO(date); }
@@ -149,7 +150,7 @@ test('a specific-lot cash-in-lieu correction changes currency without hidden old
 
 // The journey ends on the book-wide self-check sample, so it owns its book
 // (#398): no earlier spec's warnings can push the corrected payment out.
-for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of translationLocales) {
   ownedBookTest(`cash-in-lieu parent lineage, warning and correction remain usable in ${locale}`, async ({ page }) => {
     const p = await setup(page);
     const copy = JSON.parse(readFileSync(new URL(`../../frontend/messages/settings/${locale}.json`, import.meta.url), 'utf8')) as Record<string, string>;
@@ -208,7 +209,7 @@ for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
 
 // #394: use existing transaction/history discovery, then preview and commit
 // against the exact selected original action in every supported parent family.
-for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of translationLocales) {
   for (const kind of locale === 'en' ? ['split', 'share-exchange', 'spin-off', 'cash-and-stock-merger'] : ['split']) {
     for (const reversed of [false, true]) {
       test(`historical ${kind} ${reversed ? 'reversal' : 'replacement'} admits mobile cash entry in ${locale}`, async ({page}) => {

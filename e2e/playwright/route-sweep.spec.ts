@@ -5,6 +5,7 @@ import { seedReferenceBook } from './support/reference-book';
 import { accessibilityViolations, type AxeViolation } from './support/a11y';
 import { ensureBrowserSession } from './support/session';
 import { observePageRequests, waitForPageReady } from './support/page-readiness';
+import { allLocales } from './support/locales';
 
 // Worker scope preserves one seed per book while letting Playwright schedule
 // each parallel sweep test independently instead of bundling beforeAll groups.
@@ -221,7 +222,7 @@ test.describe('route sweep (#278)', () => {
     await page.setViewportSize(viewports.phone);
     const failures: string[] = [];
 
-    for (const locale of ['es', 'fr', 'nl', 'de', 'ru']) {
+    for (const locale of allLocales.filter(locale => locale !== 'en')) {
       await page.evaluate((name) => window.localStorage.setItem('PARAGLIDE_LOCALE', name), locale);
       for (const route of routes) {
         await test.step(`route: ${route.name} / ${locale}`, async () => {

@@ -5,6 +5,7 @@ import { apiJSON } from './support/api';
 import { readyForLedger } from './support/ledger';
 import { todayISO } from './support/dates';
 import { scopedDomTrace } from '../trace-options';
+import { translationLocales } from './support/locales';
 
 test.use({
   viewport: { width: 390, height: 844 },
@@ -17,7 +18,7 @@ test.use({
 });
 function ago(days: number) { const date = new Date(); date.setDate(date.getDate() - days); return todayISO(date); }
 
-for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of translationLocales) {
   const settings = JSON.parse(readFileSync(new URL(`../../frontend/messages/settings/${locale}.json`, import.meta.url), 'utf8'));
   test(`recorded capital-return excess, revisions and unknown results in ${locale} on mobile`, async ({ page }) => {
     const { csrfToken, currencyID } = await readyForLedger(page);

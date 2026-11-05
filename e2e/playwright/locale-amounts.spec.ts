@@ -2,15 +2,18 @@ import { readFileSync } from 'node:fs';
 import { expect, test } from './support/fixtures';
 import { todayISO } from './support/dates';
 import { createCashAccount, expectSavedTransaction, readyForLedger } from './support/ledger';
+import { allLocales } from './support/locales';
 
 const languages = { en: 'English', es: 'Español', fr: 'Français', nl: 'Nederlands', de: 'Deutsch', ru: 'Русский' };
 
-for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru'] as const) {
+for (const locale of allLocales) {
   test(`enters and rehydrates exact amounts in ${locale} on mobile`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     const { csrfToken, currencyID } = await readyForLedger(page);
     const account = await createCashAccount(page, csrfToken, `Locale ${locale} ${Date.now()}`, currencyID);
-    const messages = JSON.parse(readFileSync(new URL(`../../frontend/messages/settings/${locale}.json`, import.meta.url), 'utf8'));
+    // A partial locale (#493) may lack a message; the app shows English then, so the spec reads it the same way.
+    const catalog = (name: string) => JSON.parse(readFileSync(new URL(`../../frontend/messages/settings/${name}.json`, import.meta.url), 'utf8'));
+    const messages = { ...catalog('en'), ...catalog(locale) };
     const description = `Exact locale ${locale} ${Date.now()}`;
 
     await page.goto('/app/settings/preferences');

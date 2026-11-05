@@ -5,6 +5,7 @@ import { todayISO } from './support/dates';
 import { expectNoAccessibilityViolations } from './support/a11y';
 import { readFileSync } from 'node:fs';
 import { test as ownedBookTest } from './support/owned-book';
+import { translationLocales } from './support/locales';
 
 /**
  * #255: a short holder's payment in lieu of a dividend is recorded, corrected
@@ -166,7 +167,7 @@ test('unsupported short attribution leaves recorded cash effective with a warnin
 
 // #389's mixed-severity rendering uses explicit response fixtures. Real owner
 // entry/repair/clearing is exercised separately below under #388.
-for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of translationLocales) {
   test(`attribution warnings and unavailable coverage stay visible in ${locale}`, async ({ page }) => {
     const s = await setup(page);
     const payment = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/payment-in-lieu', s.csrfToken, {
@@ -218,7 +219,7 @@ for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
 // The journey ends on the book-wide self-check, so it owns its book (#398):
 // the cleared payment is the run's only unavailable record, and the run's
 // sample, count and link name it whatever other specs have written.
-for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of translationLocales) {
   ownedBookTest(`optional payment attribution is recorded, repaired and cleared in ${locale}`, async ({ page }) => {
     const s = await setup(page);
     const copy = JSON.parse(readFileSync(new URL(`../../frontend/messages/settings/${locale}.json`, import.meta.url), 'utf8')) as Record<string, string>;

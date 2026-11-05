@@ -635,6 +635,20 @@ has actual installations, its migration files are immutable.
   blank. Configured shipping catalogs must match the base locale in keys and
   placeholders, contain nonempty text, and have unique IDs across domains.
   `catalogs:check` enforces this before frontend dev/check/build and in CI.
+- **Maintained and partial locales (owner decision 2026-11-01, #493).** While
+  screens change quickly, `en`, `nl` and `ru` are *maintained*: every new or
+  changed message lands in all three in the same change. `es`, `fr` and `de`
+  are *partial*: a new or changed message may be missing there and falls back
+  to English, but an existing key keeps matching placeholders and plural shape.
+  A generated list tracks what partial locales lack; they are caught up in one
+  batch when a slice settles, and must be complete (or hidden) before the
+  v0.1.0 tag. The translation boundary, locale-aware formatting and per-message
+  fallback are never relaxed. The split lives in
+  `frontend/src/lib/i18n/locale-status.json`; `pnpm --dir frontend run
+  catalogs:missing` writes `frontend/src/lib/i18n/missing.json` (per-locale counts
+  and keys), which `catalogs:check` rejects when stale and the language
+  settings page reads for its *Partial* note. A partial locale's existing keys
+  still need matching placeholders, plural inputs and nonempty text.
 - A message whose wording depends on a count is one Paraglide plural variant
   (`declarations` with `input count`, `input n` and
   `local countPlural = count: plural`; `match` keyed `countPlural=one`,
@@ -778,6 +792,7 @@ has actual installations, its migration files are immutable.
   workflows do not create tags or publish releases; actual publication needs
   explicit owner instruction and installed-release migration safeguards.
 - The codebase is destined for public open-source release (AGPL-3.0, per `docs/product-requirements.md`). Treat the repository and its full git history as public: never commit secrets, real credentials, personal data, or real financial records — including in test fixtures, docs examples, and `.archive/`. Test values must be obviously fake.
+- No third-party runtime resources. The app, the public website and design mockups load fonts, icons, images, scripts and styles only from files in this repository or the npm lockfile, never from Google Fonts, CDNs or other hosts: a finance app must not tell a third party when it is opened. Icons are inline SVG. The app bundles its typefaces from pinned npm packages imported in `frontend/src/app.css` (Inter Variable via `@fontsource-variable/inter`, IBM Plex Mono 400/500/600 via `@fontsource/ibm-plex-mono`; Vite emits the `woff2` files into the build and the Go binary embeds them); their SIL OFL 1.1 notice ships as `frontend/static/licenses/fonts.txt`, so a new or changed bundled font updates that file too. The public website keeps its system font stack (`docs/design/public-website.md`). The app CSP keeps every loading directive same-origin (`'self'`, `data:` or `'none'`, guarded by `TestSecurityMiddlewareCSPLoadsOnlySameOriginResources`), and `website/build.test.mjs` rejects font CDN hosts. Outbound calls the user configures (market-data and online-import providers) run from the backend, not the browser.
 - Security must not depend on source secrecy. Any mechanism that would break if an attacker read the code is wrong by design.
 - Treat local-network deployment as safer than public deployment, but never as fully trusted.
 - Local authentication must exist before real data entry.

@@ -4,6 +4,7 @@ import { expect, test, type Page } from './support/fixtures';
 import { apiJSON, csrfTokenFor } from './support/api';
 import { todayISO } from './support/dates';
 import { createCashAccount, readyForLedger } from './support/ledger';
+import { translationLocales } from './support/locales';
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -113,7 +114,7 @@ test('a stale edit is refused, the editor reloads the newer version and its save
   expect(final.journal_entries[0].postings.find((p) => p.account_id === s.account.id)?.quantity_value).toBe('-900');
 });
 
-for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
+for (const locale of translationLocales) {
   test(`row actions use ${locale} labels and keyboard controls on all three screens at 390px`, async ({ page }) => {
     const s = await seed(page);
     const m = JSON.parse(readFileSync(new URL(`../../frontend/messages/settings/${locale}.json`, import.meta.url), 'utf8'));

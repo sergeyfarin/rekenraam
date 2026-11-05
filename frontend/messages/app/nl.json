@@ -367,6 +367,24 @@
   "language_select_legend": "Taal van de interface",
   "language_translation_progress_title": "Voorlopige vertaling",
   "language_translation_progress_copy": "Deze vertalingen zijn opgesteld aan de hand van een terminologielijst en zijn nog niet nagekeken door een moedertaalspreker. Wat nog niet vertaald is, wordt in het Engels getoond in plaats van leeg te blijven.",
+  "language_partial": "Gedeeltelijk",
+  "language_partial_missing": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} onvertaalde tekst",
+        "countPlural=*": "{n} onvertaalde teksten"
+      }
+    }
+  ],
+  "language_partial_option": "{language} · gedeeltelijk",
   "import_rules_title": "Importregels",
   "import_rules_copy": "Pas de eerste overeenkomende regel toe wanneer een nieuw bestand wordt klaargezet. Je kunt elk resultaat controleren vóór het boeken.",
   "import_rules_add": "Regel toevoegen",

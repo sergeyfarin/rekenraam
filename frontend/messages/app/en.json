@@ -403,6 +403,24 @@
   "language_select_legend": "Interface language",
   "language_translation_progress_title": "Draft translation",
   "language_translation_progress_copy": "These translations are drafted from a terminology glossary and have not yet been reviewed by a native speaker. Anything not yet translated is shown in English rather than left blank.",
+  "language_partial": "Partial",
+  "language_partial_missing": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} untranslated text",
+        "countPlural=*": "{n} untranslated texts"
+      }
+    }
+  ],
+  "language_partial_option": "{language} · partial",
   "import_rules_title": "Import rules",
   "import_rules_copy": "Apply the first matching rule when a new file is staged. You can review every result before committing.",
   "import_rules_add": "Add rule",

@@ -14,6 +14,16 @@ It is a **pre-release, single-user project** maintained by one person, with
 substantial use of AI to generate code and documentation. Features and data
 structures are still changing.
 
+**Why these choices.** [Go](docs/reviews/language-choice-review-2026-11-03.md)
+keeps the server a typed, small single binary with simple concurrency.
+[SvelteKit](docs/reviews/frontend-framework-choice-review-2026-11-03.md)
+compiles the UI to static assets that the same binary embeds and serves.
+[SQLite](docs/reviews/database-choice-review-2026-11-03.md) keeps the database
+a local file with no server to run, which also simplifies backup and the
+optional desktop host. [Self-hosting](docs/reviews/deployment-and-distribution-choice-review-2026-11-03.md)
+keeps your records, backups and exports on a host you control, with no required
+cloud account.
+
 *Rekenraam* is Dutch for abacus.
 
 ![Spending report in Rekenraam, showing categorized expenses and their share of spending in euros and US dollars](docs/images/reports-spending.png)

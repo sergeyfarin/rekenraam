@@ -1,10 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
+import { computeMissing, missingPath, render } from '../../../scripts/missing-messages.mjs';
 
 const project = JSON.parse(readFileSync(new URL('../../../project.inlang/settings.json', import.meta.url), 'utf8'));
 const patterns: string[] = project['plugin.inlang.messageFormat'].pathPattern;
 const locales: string[] = project.locales;
 const baseLocale: string = project.baseLocale;
+// #493: maintained locales carry every key; partial ones may lack new keys,
+// which render in English and are listed in missing.json beside this file.
+const status: { maintained: string[]; partial: string[] } = JSON.parse(readFileSync(new URL('./locale-status.json', import.meta.url), 'utf8'));
 
 // A message is a string, or one plural variant (`declarations`, `selectors`,
 // `match`) whose cases the locale chooses for its own plural rules.
@@ -32,11 +36,14 @@ for (const pattern of patterns) {
   describe(pattern, () => {
     for (const locale of locales) {
       const translated = catalog(pattern, locale);
-      test(`${locale} has exactly the base-locale message keys`, () => {
-        expect(keys(translated)).toEqual(keys(base));
+      const partial = status.partial.includes(locale);
+      test(partial ? `${locale} (partial) has only base-locale message keys` : `${locale} has exactly the base-locale message keys`, () => {
+        if (partial) expect(keys(translated).filter(key => !(key in base))).toEqual([]);
+        else expect(keys(translated)).toEqual(keys(base));
       });
       test(`${locale} preserves nonempty messages and parameter names`, () => {
         for (const key of keys(base)) {
+          if (partial && !(key in translated)) continue;
           const message = translated[key];
           expect(typeof message === 'string', key).toBe(typeof base[key] === 'string');
           for (const text of texts(message ?? '')) expect(text.trim(), key).not.toBe('');
@@ -65,3 +72,13 @@ for (const locale of locales) {
     }
   });
 }
+
+test('every configured locale is either maintained or partial, and English is maintained', () => {
+  expect([...status.maintained, ...status.partial].sort()).toEqual([...locales].sort());
+  expect(status.maintained).toContain(baseLocale);
+  expect(status.partial.filter(locale => status.maintained.includes(locale))).toEqual([]);
+});
+
+test('missing.json lists what each partial locale lacks (run `pnpm run catalogs:missing`)', () => {
+  expect(readFileSync(missingPath, 'utf8')).toBe(render(computeMissing()));
+});
