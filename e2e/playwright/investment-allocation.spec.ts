@@ -53,6 +53,18 @@ test('[acceptance] investment pool includes deposits, excludes college savings, 
   const table = page.getByTestId('allocation-table');
   await expect(table.getByRole('row').filter({ hasText: 'Pool equity ETF' })).toContainText('+10.00 pp');
   await expect(table.getByRole('row').filter({ hasText: 'Cash and deposits' })).toContainText('-10.00 pp');
+  await page.getByRole('combobox', { name: 'Inspect date', exact: true }).selectOption(daysFromTodayISO(-1));
+  await expect(table.getByRole('row').filter({ hasText: 'Pool equity ETF' })).toContainText('Unavailable');
+  await expect(table.getByRole('row').filter({ hasText: 'Cash and deposits' })).not.toContainText('100.00%');
+  await page.getByRole('combobox', { name: 'Inspect date', exact: true }).selectOption(end);
+  await page.getByRole('combobox', { name: 'Instrument', exact: true }).selectOption('0');
+  await expect(page.getByTestId('allocation-inspection')).toContainText('Actual: 40.00%');
+  await expect(page.getByTestId('allocation-inspection')).toContainText('Drift: -10.00 pp');
+  await page.getByRole('button', { name: 'Hide amounts', exact: true }).click();
+  await expect(page.getByTestId('allocation-total')).toContainText('••••');
+  await expect(table.getByRole('row').filter({ hasText: 'Pool equity ETF' })).toContainText('••••');
+  await page.getByRole('button', { name: 'Hide amounts', exact: true }).click();
+
   await page.getByText(/^3 included · [0-9]+ excluded accounts$/).click();
   await expect(page.getByText('College savings outside pool', { exact: true })).toBeVisible();
   await expect(page.getByText(/Total net worth can also include college savings/)).toBeVisible();

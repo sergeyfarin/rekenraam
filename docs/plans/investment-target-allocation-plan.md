@@ -1,7 +1,7 @@
 # Target allocation and drift (#411)
 
 Status: **contract accepted through the owner's choices and clarifications on
-2026-11-06; implementation in progress**. Governs [#411](https://github.com/sergeyfarin/rekenraam/issues/411).
+2026-11-06; implemented and locally validated, awaiting PR review**. Governs [#411](https://github.com/sergeyfarin/rekenraam/issues/411).
 The owner explicitly requested this independent feature in an isolated worktree
 and a pull request. The [roadmap](../roadmap.md) remains the source of overall
 work order; this authorization does not reorder the other agent's work.
@@ -331,6 +331,43 @@ Verify date/instrument selection on phone and keyboard, target-column labels,
 no chart overflow and no saved-run serialization change. The shared pool scope is tested across table/series reads, exclusions and
 unchanged full-net-worth treatment. Run the relevant
 shared backend/frontend gates and integrated build before the PR.
+
+## Delivery validation (2026-11-06)
+
+- `./scripts/test-backend.sh` passed after the integrated build, including the
+  schema inventory, race checks, existing allocation and saved-run integrity
+  tests. Eleven feature service cases and one API journey cover pool exclusions,
+  exact totals and drift, price gaps/recovery, signed cash, current-target
+  history, coherent input images, stale/concurrent saves, and native backup
+  reopening with immutable guards. The additional two-broker aggregation case
+  passed separately under `-race` after the full gate.
+- `./scripts/test-frontend.sh` passed after integration with main: zero Svelte
+  errors/warnings and 1,049 unit tests. Generated OpenAPI types and maintained
+  catalogs agree; partial catalogs retain explicit English fallback.
+- `pnpm build` passed, including embedded-asset serving. The owned-book
+  allocation journey and eleven existing investment-returns browser cases
+  passed on that binary. Allocation covers a 390 px editor, deposit inclusion,
+  college-savings exclusion, drift, saved changes, stale refusal after focus
+  refetch, Dutch decimal re-entry, light/dark accessibility and overflow.
+- A final sequential Playwright run passed all four selected checks: the
+  strengthened allocation journey (date/instrument inspection, a missing-price
+  date and monetary masking), route coverage, hidden-amount rendering and
+  accessible data-error states across the registered routes.
+- `./scripts/measure-large-book.sh` passed on its 250k-posting fixture: bundle
+  export 11.477 s / 20 MiB peak heap, self-check 11.369 s / 39 MiB,
+  attention 3.339 s / 4 MiB, home 4.691 s / 117 MiB. These are the existing
+  regression measurements, not allocation-specific performance certification;
+  investment performance follow-up remains #413.
+- The post-merge audit found no migration collision, client drift, duplicate
+  document paragraph or actual lost test. Its two findings were reviewed:
+  release candidate and release preflight intentionally share a check already
+  present in main; #506 renamed the page-action test from “Add transaction” to
+  “New transaction” while retaining its assertions.
+
+The current-target/current-membership comparison and sampling are the accepted
+limits. Geographic exposure #514, ETF look-through #513 and rebalancing advice
+#412 remain independent. Local validation does not claim hosted CI or a release
+candidate result.
 
 ## Acceptance record
 

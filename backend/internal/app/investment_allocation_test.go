@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/exact"
 )
 
 func allocationTestSave(t *testing.T, f *returnsFixture, expected int64, accounts []int64, targets []db.AllocationTarget) db.AllocationRevision {
@@ -251,4 +252,27 @@ func TestAllocationCashWeightChangesWithoutCashMovementAndScopeNeverExpandsParen
 	allocationTestSave(t, f, first.ID, []int64{parent}, first.Targets)
 	empty := allocationTestRead(t, f, "2026-02-01", "2026-02-02")
 	require.Equal(t, "0", empty.Points[1].Total.Value, "an included parent does not silently include an excluded child")
+}
+
+// One registered instrument is one target even when several brokers hold it.
+func TestAllocationAggregatesOneInstrumentAcrossHoldingAccounts(t *testing.T) {
+	t.Parallel()
+	f := newReturnsFixture(t)
+	f.classify(t)
+	other := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
+	_, err := f.investmentService.Buy(context.Background(), InvestmentTradeInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-02-01", CommodityID: f.stockCommodityID,
+		HoldingAccountID: other, CashAccountID: f.cashAccountID,
+		QuantityValue: exact.New(5), CashAmountValue: 50000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
+	})
+	require.NoError(t, err)
+	f.price(t, "2026-02-01", 10000)
+	allocationTestSave(t, f, 0, []int64{f.holdingAccountID, other, f.brokerCashID}, []db.AllocationTarget{{CommodityID: f.stockCommodityID, Units: 900000}, {Units: 100000}})
+	point := allocationTestRead(t, f, "2026-02-01", "2026-02-01").Points[0]
+	require.Len(t, point.Rows, 2, "two holding accounts share one instrument row plus cash")
+	require.Equal(t, "160000", point.Total.Value)
+	row := allocationTestRow(t, point, f.stockCommodityID, "long")
+	require.Equal(t, "150000", row.Amount.Value)
+	require.Equal(t, "0.937500", *row.Weight)
+	require.Equal(t, "0.037500", *row.Drift)
 }
