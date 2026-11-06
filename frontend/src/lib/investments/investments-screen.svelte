@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { publishPanelHeight } from '#lib/components/sticky-panel.ts';
   import ObservationStatus from '#lib/valuation/observation-status.svelte';
   import { page } from '$app/state';
   import { createQuery } from '@tanstack/svelte-query';
@@ -274,7 +275,7 @@
               onclick={closeDetail}
             ></div>
 
-            <div class="relative lg:sticky lg:top-4">
+            <div class="relative lg:side-panel-sticky" {@attach publishPanelHeight}>
               <Panel>
                 <div class="mb-4 flex items-center justify-between">
                   <h2 class="text-base font-semibold text-foreground">

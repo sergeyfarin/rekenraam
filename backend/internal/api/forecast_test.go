@@ -1,8 +1,10 @@
 package api
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -360,4 +362,26 @@ func forecastDomainCounts(t *testing.T, database *sql.DB) map[string]int {
 		counts[table] = count
 	}
 	return counts
+}
+
+// A refused detail request logs which basis part moved (#515), keeping the
+// 409 response itself unchanged.
+func TestForecastBasisChangeLogsTheMovedParts(t *testing.T) {
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logs, nil))
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/forecasts/balance-events", nil)
+	response := httptest.NewRecorder()
+	writeForecastServiceError(response, request, logger, &app.ForecastBasisChangedError{
+		Requested: strings.Repeat("a", 64), Current: strings.Repeat("b", 64), Known: true,
+		Changed: []app.ForecastBasisChange{{Part: "occurrences", RowsBefore: 0, RowsAfter: 1}, {Part: "account_versions", RowsBefore: 40, RowsAfter: 41}},
+	})
+	assert.Equal(t, http.StatusConflict, response.Code)
+	assert.Equal(t, "FORECAST_BASIS_CHANGED", apiErrorCode(t, response))
+	var line map[string]any
+	require.NoError(t, json.Unmarshal(logs.Bytes(), &line))
+	assert.Equal(t, "forecast basis changed", line["msg"])
+	assert.Equal(t, "aaaaaaaaaaaa", line["requested_basis"])
+	assert.Equal(t, "bbbbbbbbbbbb", line["current_basis"])
+	assert.Equal(t, true, line["requested_known"])
+	assert.Equal(t, "occurrences(rows 0->1),account_versions(rows 40->41)", line["changed_parts"])
 }

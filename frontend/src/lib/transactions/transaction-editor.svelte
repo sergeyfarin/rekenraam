@@ -43,6 +43,8 @@
     rebindSplitAccount,
     shapeForTab,
     splitDirection,
+    splitLegCommodities,
+    splitLineProblem,
     startingTab,
     type CashDirection,
     type CashShape,
@@ -464,8 +466,29 @@
   });
   const commodityCode = (id: number | undefined) => (id === undefined ? '' : currenciesByID.get(id)?.code ?? '');
 
+  // Each split line's currency: its own, its account's, or the one the
+  // split's account lines share; '' when the owner must choose it (#511).
+  const splitCommodities = $derived(splitLegCommodities(splitLegs, commodityForAccount, (id) => hasPostingDay(accountForLeg(id))));
+  const resolvedSplitLegs = $derived(splitLegs.map((leg, i) => ({ ...leg, commodityID: splitCommodities[i] ?? '' })));
+
   // For Tier 3 imbalance check — summed per commodity, scale-aware, in #lib/money.
-  const splitImbalance = $derived.by(() => commodityImbalance(splitLegs));
+  const splitImbalance = $derived.by(() => commodityImbalance(resolvedSplitLegs));
+  // The first filled line the save cannot take whole, with the owner's words for it.
+  const splitProblem = $derived(splitLineProblem(resolvedSplitLegs));
+  function splitProblemMessage(problem: NonNullable<typeof splitProblem>): string {
+    const line = problem.line;
+    const account = accountForLeg(splitLegs[line - 1]?.accountID ?? '');
+    switch (problem.missing) {
+      case 'account':
+        return m.transactions_split_line_needs_account({ line });
+      case 'amount':
+        return m.transactions_split_line_needs_amount({ line });
+      case 'number':
+        return m.transactions_split_line_needs_number({ line });
+      case 'currency':
+        return m.transactions_split_line_needs_currency({ line, account: account ? postingAccountLabel(account) : '' });
+    }
+  }
 
   const title = $derived(
     mode === 'template' ? m.recurring_entry_title() : mode === 'correct'
@@ -711,6 +734,11 @@
     }
     if (tier === 'simple' && simpleAmount() === 'negative') {
       entryMessage = m.transactions_entry_amount_positive();
+      return;
+    }
+    // A filled split line saves whole or the save stops on it (#511).
+    if (tier === 'split' && splitProblem) {
+      entryMessage = splitProblemMessage(splitProblem);
       return;
     }
     // A split's amounts are signed: under a cash tab they must move the
@@ -978,11 +1006,14 @@
     ];
   }
 
-  /** The filled split legs as postings, or null when one cannot be parsed. */
+  /**
+   * The filled split legs as postings, or null when one cannot be saved
+   * whole: a filled line is never silently dropped (#511) — `splitProblem`
+   * says which line and why. Blank lines are skipped.
+   */
   function splitPostings(): SplitPosting[] | null {
-    const legs = splitLegs.filter(
-      (leg) => leg.accountID !== '' && leg.commodityID !== '' && leg.amountStr.trim() !== ''
-    );
+    if (splitProblem) return null;
+    const legs = resolvedSplitLegs.filter((leg) => leg.accountID !== '' && leg.amountStr.trim() !== '');
 
     const postings: SplitPosting[] = [];
     for (const leg of legs) {
@@ -1276,7 +1307,7 @@
       splitLegs = [
         {
           accountID: String(accountID),
-          commodityID: inferredCommodityID ? String(inferredCommodityID) : '',
+          commodityID: effectiveCommodityID ? String(effectiveCommodityID) : '',
           amountStr: formatEditableAmount(assetLedger, scale),
           memo: '',
           // The same lines, so their reconciliation state stays theirs.
@@ -1285,7 +1316,9 @@
         },
         {
           accountID: categoryID ? String(categoryID) : '',
-          commodityID: inferredCommodityID ? String(inferredCommodityID) : '',
+          // The category follows the account line while the account has a
+          // currency of its own; a chosen one is copied (#511).
+          commodityID: inferredCommodityID === undefined && effectiveCommodityID ? String(effectiveCommodityID) : '',
           amountStr: formatEditableAmount(negateCoefficient(assetLedger), scale),
           memo: '',
           lineKey: simpleLineKeys.category,
@@ -2107,11 +2140,15 @@
               {/if}
             {/if}
 
-            {#if mode === 'template' || preservePostings}
+            <!-- A line on an account without a currency of its own shows the
+                 one it takes, and the owner can change it (#511). -->
+            {#if mode === 'template' || preservePostings || (leg.accountID !== '' && commodityForAccount(leg.accountID) === '')}
+              {@const lineCommodity = splitCommodities[i] ?? ''}
+              {@const missingCurrency = splitProblem?.line === i + 1 && splitProblem.missing === 'currency'}
               <label class="sm:col-span-3">
                 <span class={labelClass}>{m.transactions_field_posting_commodity()}</span>
-                <select class={inputClass} value={leg.commodityID} required onchange={(e) => { const legs=[...splitLegs]; legs[i]={...legs[i],commodityID:e.currentTarget.value}; splitLegs=legs; }}>
-                  <option value="">—</option>
+                <select class={inputClass} value={lineCommodity} aria-required="true" aria-invalid={missingCurrency && entryMessage !== '' ? 'true' : undefined} onchange={(e) => { const legs=[...splitLegs]; legs[i]={...legs[i],commodityID:e.currentTarget.value}; splitLegs=legs; }}>
+                  {#if lineCommodity === ''}<option value="">{m.transactions_split_no_commodity()}</option>{/if}
                   {#each allActiveCommodities as commodity (commodity.id)}<option value={String(commodity.id)}>{commodity.code}</option>{/each}
                 </select>
               </label>
@@ -2145,7 +2182,7 @@
         <!-- Balance indicator -->
         {#if splitImbalance}
           <span class="text-xs font-medium text-warning">
-            {m.transactions_split_balance_off({ amount: splitImbalance.amount, commodity: splitImbalance.commodityID })}
+            {m.transactions_split_balance_off({ amount: splitImbalance.amount, commodity: commodityCode(Number(splitImbalance.commodityID)) || splitImbalance.commodityID })}
           </span>
         {:else if splitLegs.some((l) => l.amountStr.trim())}
           <span class="text-xs font-medium text-positive">{m.transactions_split_balance_ok()}</span>
