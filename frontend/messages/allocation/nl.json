@@ -64,5 +64,6 @@
   "allocation_returns_scope": "Rendement gebruikt een eigen rekeningselectie. Allocatie gebruikt uw opgeslagen beleggingsvermogen; deze link neemt alleen de datums en rapportagevaluta over.",
   "allocation_negative_cash": "Negatieve kassaldi van rekeningen: {value}. Dit subtotaal is al verwerkt in het nettokassaldo en het totaal van het beleggingsvermogen.",
   "allocation_keep_editing": "Verder bewerken",
-  "allocation_discard_confirm": "Wijzigingen verwerpen"
+  "allocation_discard_confirm": "Wijzigingen verwerpen",
+  "allocation_grouping_help": "Geld en deposito’s worden over alle rekeningen en valuta’s gesaldeerd. Long- en shortposities in effecten blijven aparte regels."
 }

@@ -64,5 +64,6 @@
   "allocation_returns_scope": "Returns uses its own account selection. Allocation uses your saved Investment pool; this link carries only the dates and reporting currency.",
   "allocation_negative_cash": "Negative account cash balances: {value}. This subtotal is already included in net cash and the pool total.",
   "allocation_keep_editing": "Keep editing",
-  "allocation_discard_confirm": "Discard changes"
+  "allocation_discard_confirm": "Discard changes",
+  "allocation_grouping_help": "Cash and deposits are netted across accounts and currencies. Securities keep separate long and short rows."
 }

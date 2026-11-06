@@ -186,8 +186,9 @@
       {#if point.negative_cash === null || point.negative_cash.value !== '0'}<p class="mt-3 text-sm text-warning" data-testid="allocation-negative-cash">{m.allocation_negative_cash({ value: money(point.negative_cash) })}</p>{/if}
       {#if point.reason}<p role="status" class="mt-3 text-sm text-warning">{returnReasonText(point.reason, point.date, day)}</p>{/if}
       {#if point.chart_reason === 'signed_allocation'}<p role="status" class="mt-3 text-sm text-warning">{m.allocation_signed()}</p>{/if}
+      <p id="allocation-grouping-help" class="mt-3 text-sm text-muted">{m.allocation_grouping_help()}</p>
       <!-- svelte-ignore a11y_no_noninteractive_tabindex (this region permits keyboard scrolling of the exact allocation table) -->
-      <div class="mt-3 overflow-x-auto" role="region" tabindex="0" aria-label={m.allocation_table()}>
+      <div class="mt-3 overflow-x-auto" role="region" tabindex="0" aria-label={m.allocation_table()} aria-describedby="allocation-grouping-help">
         <table class="w-full text-left text-sm" data-testid="allocation-table">
           <caption class="py-2 text-left font-semibold text-foreground">{m.allocation_table()} · {day(point.date)}</caption>
           <thead><tr class="text-muted">{#each [m.allocation_instrument(), m.allocation_value(), m.allocation_actual(), m.allocation_target(), m.allocation_drift()] as heading}<th scope="col" class="px-2 py-2 font-medium">{heading}</th>{/each}</tr></thead>

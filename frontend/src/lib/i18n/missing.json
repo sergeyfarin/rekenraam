@@ -1,8 +1,8 @@
 {
   "counts": {
-    "es": 66,
-    "fr": 66,
-    "de": 66
+    "es": 67,
+    "fr": 67,
+    "de": 67
   },
   "keys": {
     "es": [
@@ -29,6 +29,7 @@
       "allocation_excluded",
       "allocation_from",
       "allocation_gaps",
+      "allocation_grouping_help",
       "allocation_history",
       "allocation_history_help",
       "allocation_included",
@@ -97,6 +98,7 @@
       "allocation_excluded",
       "allocation_from",
       "allocation_gaps",
+      "allocation_grouping_help",
       "allocation_history",
       "allocation_history_help",
       "allocation_included",
@@ -165,6 +167,7 @@
       "allocation_excluded",
       "allocation_from",
       "allocation_gaps",
+      "allocation_grouping_help",
       "allocation_history",
       "allocation_history_help",
       "allocation_included",
