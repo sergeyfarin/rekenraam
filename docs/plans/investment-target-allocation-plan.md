@@ -1,8 +1,8 @@
 # Target allocation and drift (#411)
 
 Status: **owner selected per-instrument targets and current-target history
-on 2026-11-06; the additional market-exposure scope is being clarified before
-runtime implementation**. Governs [#411](https://github.com/sergeyfarin/rekenraam/issues/411).
+on 2026-11-06; geography is a separate enhancement; changes to the remaining
+contract rules await owner clarification before runtime implementation**. Governs [#411](https://github.com/sergeyfarin/rekenraam/issues/411).
 The owner explicitly requested this independent feature in an isolated worktree
 and a pull request. The [roadmap](../roadmap.md) remains the source of overall
 work order; this authorization does not reorder the other agent's work.
@@ -36,8 +36,9 @@ continue to govern valuation, incomplete data and the read-only ledger boundary.
   their accepted meanings. They do not acquire independent target sets in
   this slice. Per-instrument comparison values come from the same exact
   account/commodity balances before grouping and rounding.
-- Owner additionally requested a market-exposure view, usable without targets.
-  Its geographic meaning and delivery boundary remain to be confirmed; see
+- Owner additionally requested a market-exposure view, usable without targets,
+  then explicitly chose a separate geographic-exposure enhancement (#514).
+  #411 keeps its instrument targets and the existing quote-currency view; see
   *Market and look-through follow-ups*. No listing/currency-based geographic
   inference is authorized by this request.
 
@@ -169,19 +170,21 @@ point drift is actual percentage minus target percentage.
 
 ## Market and look-through follow-ups
 
-The owner requested two independent exposure views during contract review:
+The owner requested two independent exposure views during contract review.
+Both are separate enhancements and do not block #411:
 
-- **Market/geography and quote currency**, available even with no target set.
-  Proposed interpretation: geographic investment allocation and quote currency
+- **Market/geography and quote currency**, separately tracked in
+  [#514](https://github.com/sergeyfarin/rekenraam/issues/514), available even
+  with no target set. Proposed interpretation: geographic investment allocation and quote currency
   are separate axes, optionally crossed in a table. Listing exchange, fund
   domicile, country classification, investment mandate and underlying-company
   geography are different facts. Neither a EUR quote nor an Irish fund domicile
   establishes European underlying exposure. EU, euro area and Europe also need
   explicit region definitions. Existing MIC/country fields alone cannot prove
   an ETF's geographic allocation. Missing or mixed allocations need visible
-  unknown/multi-region treatment or sourced weighted breakdowns. Owner choice
-  of meaning, initial data source and whether to include this in #411 or an
-  independent enhancement is pending.
+  unknown/multi-region treatment or sourced weighted breakdowns. The owner
+  accepted separate enhancement scope; #514 retains the detailed geography
+  meaning, source and classification contract for its own acceptance.
 - **Direct plus ETF look-through security exposure** is separately tracked in
   [#513](https://github.com/sergeyfarin/rekenraam/issues/513), created at the
   owner's request. It does not change per-instrument targets or the selected
@@ -218,8 +221,15 @@ Owner answers on 2026-11-06:
    underlying MSFT held through multiple ETFs. Created #513; the owner explicitly
    said this does not affect choices 1 or 2.
 
-The owner invited challenges and further guidance. Market/geographic semantics
-and its delivery boundary remain open. The remaining proposed numerical,
-coverage and storage rules above have not been separately confirmed. Resolve
-these concrete choices before marking the complete contract accepted and
-starting runtime code, as #411 requires.
+4. Market scope: "Finish #411 targets + existing currency view; create a separate
+   geographic-exposure enhancement (recommended)". Created #514.
+5. Remaining contract: "Change one or more rules before coding". The specific
+   requested changes are not yet supplied. A focused clarification lists cash,
+   target precision/total, shorts, missing-price drift, revision history,
+   backup/export and saved-run inclusion so the owner can name affected rules.
+
+The owner invited challenges and further guidance. The numerical, coverage and
+storage rules above remain proposals, not accepted decisions. Await the specific
+requested changes and discuss their trade-offs before updating the contract or
+starting runtime code, as #411 requires. The grouping/history and separate
+exposure-enhancement choices remain accepted.

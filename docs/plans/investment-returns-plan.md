@@ -78,9 +78,11 @@ separate from deterministic R13 acceptance. The roadmap retains all release gate
 
 The [target-allocation proposal](investment-target-allocation-plan.md) records
 the concrete #411 contract and independent examples prepared on 2026-11-06.
-The owner selected per-instrument targets and current-target history; the
-additional market-exposure meaning and scope await clarification before runtime
-implementation. This does not change delivered actual allocation or saved runs.
+The owner selected per-instrument targets and current-target history, with
+geographic exposure tracked separately in #514 and ETF look-through in #513.
+Requested changes to the remaining numerical, coverage or storage rules await
+clarification before runtime implementation. This does not change delivered
+actual allocation or saved runs.
 
 | Disposition | Owner / reason |
 |---|---|
