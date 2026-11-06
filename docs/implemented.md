@@ -1142,6 +1142,9 @@ reported as bounded diagnostics. Authenticated, strict-query
 `/api/v1/forecasts/balances` and `/api/v1/forecasts/balance-events` routes now
 expose those exact curves and stable cursor-paged explanations through the
 shared read-only pool; stale basis tokens return a dedicated conflict code.
+The token hashes named parts (request, date range, scope and each snapshot
+list), and a refused detail request logs which parts moved and their row
+counts, so a stale basis that no write explains can be traced (#515).
 Both recipes optionally accept a named constant-as-of FX recipe: direct stored
 currency observations are selected inside the same snapshot, and future,
 voided or older-than-seven-day rates cannot become a headline total. Incomplete

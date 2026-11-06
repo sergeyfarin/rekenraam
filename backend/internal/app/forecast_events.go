@@ -66,7 +66,7 @@ func (s *ForecastService) Events(ctx context.Context, input ForecastEventsInput)
 		return ForecastEventsResult{}, err
 	}
 	if result.BasisToken != input.BasisToken {
-		return ForecastEventsResult{}, ErrForecastBasisChanged
+		return ForecastEventsResult{}, s.basis.explain(input.BasisToken, result.BasisToken, result.basisParts)
 	}
 	if input.Date < result.FirstDate || input.Date > result.ThroughDate {
 		return ForecastEventsResult{}, ValidationError{Message: "forecast event date is outside the requested horizon"}
@@ -101,7 +101,7 @@ func (s *ForecastService) Events(ctx context.Context, input ForecastEventsInput)
 			return ForecastEventsResult{}, err
 		}
 		if cursor.BasisToken != result.BasisToken {
-			return ForecastEventsResult{}, ErrForecastBasisChanged
+			return ForecastEventsResult{}, s.basis.explain(cursor.BasisToken, result.BasisToken, result.basisParts)
 		}
 		if cursor.Date != input.Date || !sameOptionalInt64(cursor.DetailAccountID, input.DetailAccountID) || !sameOptionalInt64(cursor.DetailCommodityID, input.DetailCommodityID) {
 			return ForecastEventsResult{}, ValidationError{Message: "forecast cursor does not match the requested details"}

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"math/rand"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -210,6 +211,51 @@ func TestForecastConcurrentMaterializationKeepsOneBasis(t *testing.T) {
 	require.Len(t, after.Events, 1)
 	assert.Equal(t, "draft", after.Events[0].Source)
 	assert.NotEqual(t, before.BasisToken, after.BasisToken)
+}
+
+// A rejected detail request names the basis part that moved (#515): a CI run
+// once refused a detail with no write in its log, and one opaque hash could not
+// say what changed. Materializing the occurrence moves exactly the recurring
+// parts (the template row records its generation too); a token this process
+// never issued is reported as unknown.
+func TestForecastBasisChangeNamesTheMovedPart(t *testing.T) {
+	t.Parallel()
+	f, recurring, input := recurringFixture(t)
+	ctx := context.Background()
+	_, err := recurring.CreateTemplate(ctx, input)
+	require.NoError(t, err)
+	forecast := NewForecastService(db.NewForecastRepository(f.database))
+	forecast.SetNowForTest(func() time.Time { return time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC) })
+	recipe := ForecastInput{OwnerUserID: f.ownerUserID, HorizonDays: 5, AccountIDs: []int64{f.cashAccountID}}
+	before, err := forecast.Balances(ctx, recipe)
+	require.NoError(t, err)
+	again, err := forecast.Balances(ctx, recipe)
+	require.NoError(t, err)
+	require.Equal(t, before.BasisToken, again.BasisToken, "an unchanged book keeps its basis")
+
+	_, err = recurring.GenerateDue(ctx, GenerateRecurringInput{OwnerUserID: f.ownerUserID})
+	require.NoError(t, err)
+	_, err = forecast.Events(ctx, ForecastEventsInput{ForecastInput: recipe, Date: before.FirstDate, BasisToken: before.BasisToken})
+	require.ErrorIs(t, err, ErrForecastBasisChanged)
+	var changed *ForecastBasisChangedError
+	require.True(t, errors.As(err, &changed))
+	assert.True(t, changed.Known)
+	assert.Equal(t, before.BasisToken, changed.Requested)
+	assert.NotEqual(t, before.BasisToken, changed.Current)
+	moved := map[string]ForecastBasisChange{}
+	for _, change := range changed.Changed {
+		moved[change.Part] = change
+	}
+	assert.Equal(t, ForecastBasisChange{Part: "occurrences", RowsBefore: 0, RowsAfter: 1}, moved["occurrences"])
+	assert.Contains(t, moved, "draft_postings")
+	for _, untouched := range []string{"input", "bounds", "scope", "time_zone", "account_versions", "commodity_versions", "template_postings"} {
+		assert.NotContains(t, moved, untouched)
+	}
+
+	_, err = forecast.Events(ctx, ForecastEventsInput{ForecastInput: recipe, Date: before.FirstDate, BasisToken: strings.Repeat("0", 64)})
+	require.True(t, errors.As(err, &changed))
+	assert.False(t, changed.Known)
+	assert.Empty(t, changed.Changed)
 }
 
 func projectedQuantities(series ForecastSeries) []ForecastQuantity {

@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -507,6 +508,32 @@ func optionalForecastID(query url.Values, key string) (*int64, error) {
 	return &value, nil
 }
 
+// logForecastBasisChange records which forecast input moved, so a rejected
+// detail request that no write explains can be traced afterwards (#515). The
+// response stays the plain 409.
+func logForecastBasisChange(r *http.Request, logger *slog.Logger, err error) {
+	var changed *app.ForecastBasisChangedError
+	if logger == nil || !errors.As(err, &changed) {
+		return
+	}
+	parts := make([]string, 0, len(changed.Changed))
+	for _, change := range changed.Changed {
+		parts = append(parts, fmt.Sprintf("%s(rows %d->%d)", change.Part, change.RowsBefore, change.RowsAfter))
+	}
+	logger.WarnContext(r.Context(), "forecast basis changed",
+		slog.String("requested_basis", shortForecastToken(changed.Requested)),
+		slog.String("current_basis", shortForecastToken(changed.Current)),
+		slog.Bool("requested_known", changed.Known),
+		slog.String("changed_parts", strings.Join(parts, ",")))
+}
+
+func shortForecastToken(token string) string {
+	if len(token) > 12 {
+		return token[:12]
+	}
+	return token
+}
+
 func writeForecastServiceError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, err error) {
 	var validation app.ValidationError
 	var overflow app.LedgerOverflowError
@@ -518,6 +545,7 @@ func writeForecastServiceError(w http.ResponseWriter, r *http.Request, logger *s
 	case errors.As(err, &overflow):
 		writeAPIError(w, http.StatusUnprocessableEntity, "LEDGER_OVERFLOW", overflow.Error())
 	case errors.Is(err, app.ErrForecastBasisChanged):
+		logForecastBasisChange(r, logger, err)
 		writeAPIError(w, http.StatusConflict, "FORECAST_BASIS_CHANGED", "forecast inputs changed; refresh balances before loading details")
 	default:
 		writeServiceInternalError(w, r, logger, "read forecast", err)
