@@ -182,12 +182,23 @@ export type SplitLegCurrency = { accountID: string; commodityID: string };
  * category, a clearing account) follows the split's account lines when they
  * all share one currency, and has none ('') when they do not: then the owner
  * chooses it on the line (#511).
+ *
+ * The account lines are the legs `isAccountLine` names (the owner's asset and
+ * liability accounts, never a category), each counted by the currency it
+ * carries or its account's own — a currency chosen on a receivable's line
+ * counts like a checking account's default (#512 review). A line with neither
+ * yet counts for nothing; it follows like any other.
  */
-export function splitLegCommodities(legs: SplitLegCurrency[], ownCommodityOf: (accountID: string) => string): string[] {
+export function splitLegCommodities(
+  legs: SplitLegCurrency[],
+  ownCommodityOf: (accountID: string) => string,
+  isAccountLine: (accountID: string) => boolean
+): string[] {
   const shared = new Set<string>();
   for (const leg of legs) {
-    if (leg.accountID === '' || ownCommodityOf(leg.accountID) === '') continue;
-    shared.add(leg.commodityID || ownCommodityOf(leg.accountID));
+    if (leg.accountID === '' || !isAccountLine(leg.accountID)) continue;
+    const currency = leg.commodityID || ownCommodityOf(leg.accountID);
+    if (currency) shared.add(currency);
   }
   const follow = shared.size === 1 ? [...shared][0] : '';
   return legs.map((leg) => {

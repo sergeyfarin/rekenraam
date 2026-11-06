@@ -13,7 +13,7 @@ import {
   rebindSplitAccount,
   shapeForTab,
   splitDirection,
-  splitLegCommodities,
+  splitLegCommodities as splitLegCommoditiesOf,
   splitLineProblem,
   startingTab
 } from './entry-mode.ts';
@@ -197,9 +197,12 @@ describe('split entry under the cash tabs', () => {
 });
 
 describe('split line currencies (#511)', () => {
-  // 1 and 2 are EUR accounts, 3 a USD account; 10 is a category with none.
-  const own: Record<string, string> = { '1': 'eur', '2': 'eur', '3': 'usd', '10': '' };
+  // 1 and 2 are EUR accounts, 3 a USD account, 4 a receivable with no
+  // currency of its own; 10 is a category with none.
+  const own: Record<string, string> = { '1': 'eur', '2': 'eur', '3': 'usd', '4': '', '10': '' };
   const ownOf = (id: string) => own[id] ?? '';
+  const isAccountLine = (id: string) => id !== '10';
+  const splitLegCommodities = (legs: Array<{ accountID: string; commodityID: string }>, of: typeof ownOf) => splitLegCommoditiesOf(legs, of, isAccountLine);
   const leg = (accountID: string, commodityID = '') => ({ accountID, commodityID });
 
   it('gives a currency-less line the currency its account lines share', () => {
@@ -218,6 +221,20 @@ describe('split line currencies (#511)', () => {
 
   it('keeps a currency the line carries, the owner’s choice included', () => {
     expect(splitLegCommodities([leg('1', 'eur'), leg('10', 'usd')], ownOf)).toEqual(['eur', 'usd']);
+  });
+
+  // #512 review: a currency chosen on an account line counts like a default.
+  it('counts a currency chosen on a currency-less account line', () => {
+    expect(splitLegCommodities([leg('4', 'usd'), leg('10')], ownOf)).toEqual(['usd', 'usd']);
+    expect(splitLegCommodities([leg('1', 'eur'), leg('4', 'usd'), leg('10')], ownOf)).toEqual(['eur', 'usd', '']);
+  });
+
+  it('lets an account line without a currency yet follow, without counting it', () => {
+    expect(splitLegCommodities([leg('1', 'eur'), leg('4'), leg('10')], ownOf)).toEqual(['eur', 'eur', 'eur']);
+  });
+
+  it('never takes the shared currency from a category line', () => {
+    expect(splitLegCommodities([leg('10', 'usd'), leg('10')], ownOf)).toEqual(['usd', '']);
   });
 });
 

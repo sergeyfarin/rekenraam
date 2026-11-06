@@ -409,6 +409,64 @@ test('a split started before any account follows a new From account back to Char
   expect(saved.some(([account]) => account === s.checking.id)).toBe(false);
 });
 
+// #512 review: a currency chosen on an account line with none of its own (a
+// receivable) counts among the account lines' currencies like a default.
+async function startSplitOnReceivable(page: Page, s: Awaited<ReturnType<typeof setup>>, description: string) {
+  const receivable = await apiJSON<{ id: number; name: string }>(page, 'POST', '/api/v1/accounts', s.csrfToken, {
+    name: `Tabs receivable ${s.suffix}`, account_class: 'asset', account_kind: 'receivable', allows_postings: true
+  });
+  await page.goto('/app');
+  await page.getByRole('list', { name: 'Shortcuts', exact: true }).getByRole('button', { name: 'New transaction', exact: true }).click();
+  const entry = entryDialog(page);
+  await entry.getByLabel('Date', { exact: true }).fill(todayISO());
+  await entry.getByLabel('Description', { exact: true }).fill(description);
+  await entry.getByRole('button', { name: 'Use split entry', exact: true }).click();
+  return {
+    entry,
+    receivable,
+    legAccounts: entry.getByRole('combobox', { name: 'Account', exact: true }),
+    legAmounts: entry.getByRole('textbox', { name: 'Amount', exact: true }),
+    currencies: entry.getByRole('combobox', { name: 'Currency', exact: true })
+  };
+}
+
+test('a currency chosen on a receivable line is the one its category line follows', async ({ page }) => {
+  const s = await setup(page);
+  const { entry, receivable, legAccounts, legAmounts, currencies } = await startSplitOnReceivable(page, s, `Tabs split receivable ${s.suffix}`);
+  await legAccounts.nth(0).selectOption(String(receivable.id));
+  await legAmounts.nth(0).fill('-12.40');
+  await currencies.nth(0).selectOption(String(s.currencyID));
+  await legAccounts.nth(1).selectOption(String(s.category.id));
+  await legAmounts.nth(1).fill('12.40');
+  await expect(currencies.nth(1)).toHaveValue(String(s.currencyID));
+
+  const postings = savedPostings(page);
+  await entry.getByRole('button', { name: 'Save transaction', exact: true }).click();
+  expect(await postings()).toEqual(expect.arrayContaining([[receivable.id, '-1240'], [s.category.id, '1240']]));
+});
+
+test('a receivable line in another currency than checking leaves the category line to choose', async ({ page }) => {
+  const s = await setup(page);
+  const foreignCode = s.currencyID === (await ensureCurrency(page, s.csrfToken, 'USD', 'US Dollar')) ? 'EUR' : 'USD';
+  const foreign = await ensureCurrency(page, s.csrfToken, foreignCode, foreignCode);
+  const { entry, receivable, legAccounts, legAmounts, currencies } = await startSplitOnReceivable(page, s, `Tabs split receivable mixed ${s.suffix}`);
+  await legAccounts.nth(0).selectOption(String(s.checking.id));
+  await legAmounts.nth(0).fill('-12.40');
+  await legAccounts.nth(1).selectOption(String(receivable.id));
+  await legAmounts.nth(1).fill('12.40');
+  await currencies.nth(0).selectOption(String(foreign));
+  await entry.getByRole('button', { name: 'Add leg', exact: true }).click();
+  await legAccounts.nth(2).selectOption(String(s.category.id));
+  await legAmounts.nth(2).fill('1.00');
+  await expect(currencies.nth(1)).toHaveValue('');
+
+  let posted = 0;
+  page.on('request', request => { if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/transactions') posted += 1; });
+  await entry.getByRole('button', { name: 'Save transaction', exact: true }).click();
+  await expect(entry.getByRole('alert')).toContainText(`Choose a currency for line 3: ${s.category.name} has none of its own`);
+  expect(posted).toBe(0);
+});
+
 test('a confirmation shown before a tab change is gone after it; saving asks again', async ({ page }) => {
   const s = await setup(page);
   const newPayee = `Tabs unknown shop ${s.suffix}`;

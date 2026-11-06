@@ -468,7 +468,7 @@
 
   // Each split line's currency: its own, its account's, or the one the
   // split's account lines share; '' when the owner must choose it (#511).
-  const splitCommodities = $derived(splitLegCommodities(splitLegs, commodityForAccount));
+  const splitCommodities = $derived(splitLegCommodities(splitLegs, commodityForAccount, (id) => hasPostingDay(accountForLeg(id))));
   const resolvedSplitLegs = $derived(splitLegs.map((leg, i) => ({ ...leg, commodityID: splitCommodities[i] ?? '' })));
 
   // For Tier 3 imbalance check — summed per commodity, scale-aware, in #lib/money.
