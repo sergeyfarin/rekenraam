@@ -118,7 +118,7 @@ const definitions: readonly RouteDefinition[] = [
   { route: '/app/ledger/import/dividends', section: 'ledger', titleKey: 'import_dividend_title', icon: 'download', width: 'fluid', parent: '/app/ledger/import', ownHeader: true },
   { route: '/app/ledger/reconcile', section: 'ledger', titleKey: 'reconcile_title', icon: 'scan-line', width: 'fluid', tab: true },
 
-  { route: '/app/investments', attention: ['suggestions'], section: 'investments', titleKey: 'nav_overview', icon: 'chart-no-axes-combined', width: 'standard', tab: true },
+  { route: '/app/investments', attention: ['suggestions'], section: 'investments', titleKey: 'nav_overview', icon: 'chart-no-axes-combined', width: 'standard', tab: true, ownHeader: true },
   { route: '/app/investments/instruments', section: 'investments', titleKey: 'quotes_instruments', icon: 'shapes', width: 'standard', tab: true },
   { route: '/app/investments/instruments/[id]', section: 'investments', titleKey: 'quotes_instruments', icon: 'shapes', width: 'standard', parent: '/app/investments/instruments' },
   { route: '/app/investments/allocation', section: 'investments', titleKey: 'allocation_title', icon: 'chart-pie', width: 'standard', tab: true, ownHeader: true },

@@ -1,3 +1,4 @@
+import { openInvestmentActivity } from './support/investment-entry';
 import { expect, test, type Page } from './support/fixtures';
 import { apiExactText, apiJSON, csrfTokenFor, exactJSON } from './support/api';
 import { readyForLedger } from './support/ledger';
@@ -66,7 +67,7 @@ async function setup(page: Page) {
 
 async function openForm(page: Page, s: Awaited<ReturnType<typeof setup>>, percent: string) {
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Record cash-and-stock merger' }).click();
+  await openInvestmentActivity(page, 'Record cash-and-stock merger');
   await page.getByLabel('Effective date').fill(daysFromTodayISO(-10));
   await page.getByLabel('Cash payment date').fill(daysFromTodayISO(-8));
   await page.getByLabel('Holding to merge').selectOption({ label: `${s.target.holdingName} · ${s.target.name}` });
@@ -92,7 +93,7 @@ test('a cash-and-stock merger previews the realized and carried basis and the de
   await expect(preview).toContainText('Basis realized: 25.00');
   await expect(preview).toContainText('Basis carried: 75.00');
   await expect(preview).toContainText('5.00');
-  await page.getByRole('dialog').getByRole('button', { name: 'Record merger' }).click();
+  await page.getByRole('dialog').last().getByRole('button', { name: 'Record merger' }).click();
   await expect(page.getByRole('heading', { name: 'Record a cash-and-stock merger' })).toBeHidden();
 
   const listed = await apiJSON<{ lots: Array<{ source_transaction_id: number; remaining_quantity_value: string }> }>(

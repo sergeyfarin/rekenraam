@@ -6,6 +6,7 @@
   import TrendingUp from '@lucide/svelte/icons/trending-up';
   import X from '@lucide/svelte/icons/x';
   import Panel from '#lib/components/panel.svelte';
+  import PageHeader from '#lib/components/page-header.svelte';
   import { phoneModal } from '#lib/components/modal-focus.ts';
   import StatePanel from '#lib/components/state-panel.svelte';
   import { authSessionQueryOptions } from '#lib/api/auth.ts';
@@ -18,7 +19,7 @@
     type InvestmentPositionResponse
   } from '#lib/api/investments.ts';
   import SplitActivity from '#lib/investments/split-activity.svelte';
-  import InvestmentEntry from '#lib/investments/investment-entry.svelte';
+  import { addTransaction } from '#lib/transactions/add-transaction.svelte.ts';
   import PositionSideBadge from '#lib/investments/position-side-badge.svelte';
   import EventSuggestions from '#lib/investments/event-suggestions.svelte';
   import { parseISO } from 'date-fns';
@@ -143,6 +144,11 @@
 </script>
 
 <div>
+  <PageHeader title={m.nav_overview()}>
+    {#snippet actions()}
+      <button type="button" onclick={() => addTransaction({ tab: 'investment' })} class="min-h-11 rounded-(--radius-control) bg-foreground px-4 py-2 text-sm font-semibold text-background">{m.transactions_form_create_title()}</button>
+    {/snippet}
+  </PageHeader>
   <div>
     <p class="mb-3 text-sm text-muted"><a href="https://www.coingecko.com/en/api" target="_blank" rel="noreferrer" class="underline">{m.quotes_attribution()}</a></p>
     <!-- View navigation -->
@@ -171,9 +177,6 @@
 
     <!-- Portfolio tab action buttons -->
     {#if activeTab === 'portfolio'}
-    <div class="mb-4 flex flex-wrap gap-2">
-      <InvestmentEntry />
-    </div>
 
     {#if isLoading}
       <Panel>

@@ -53,6 +53,7 @@
     type EntryTabLabel
   } from './entry-mode';
   import EntryTabs from './entry-tabs.svelte';
+  import type { InvestmentSaveKind } from '#lib/transactions/add-transaction.svelte.ts';
   import InvestmentEntry from '#lib/investments/investment-entry.svelte';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { formatQuantity, formatRatio, joinCommodityAmount } from '#lib/money/format.ts';
@@ -155,7 +156,7 @@
     preservePostings?: boolean;
     onPendingChange?: (pending: boolean) => void;
     /** An investment form opened from the Investment tab saved (#506). */
-    onInvestmentSaved?: () => void;
+    onInvestmentSaved?: (kind?: InvestmentSaveKind) => void;
     onCancel: () => void;
   } = $props();
 
@@ -2274,15 +2275,13 @@
   </form>
 
   {#if tabbed && entryTab === 'investment'}
-    <!-- Until #507 the Investment tab opens the existing investment forms,
-         with the starting page's holding or instrument (#186). Outside the
-         form above: the write-off form renders inline. -->
+    <!-- Existing investment commands own their financial fields and reviews. -->
     <div class="space-y-3">
       {#if investmentMuted(contextAccount)}
         <p class="text-sm text-foreground">{m.transactions_entry_investment_holding_needed()}</p>
       {/if}
       <p class="text-sm text-muted">{m.transactions_entry_investment_intro()}</p>
-      <InvestmentEntry prefill={createDefaults?.investment} onSaved={onInvestmentSaved} />
+      <InvestmentEntry prefill={{ ...createDefaults?.investment, startingAccountID: accountID ?? createDefaults?.accountID, transactionDate, memo: description }} onSaved={onInvestmentSaved} {onCancel} />
     </div>
   {/if}
   </div>

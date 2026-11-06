@@ -1,0 +1,16 @@
+InvestmentEntryAccountResponse:
+  allOf:
+    - $ref: "../../openapi.yaml#/components/schemas/AccountResponse"
+    - type: object
+      required: [investment_holding, investment_settlement]
+      properties:
+        investment_holding: { type: boolean }
+        investment_settlement: { type: boolean }
+InvestmentEntryAccountsResponse:
+  type: object
+  required: [accounts]
+  properties:
+    accounts:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/InvestmentEntryAccountResponse"

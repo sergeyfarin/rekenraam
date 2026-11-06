@@ -395,7 +395,10 @@ against it (#108). It also measures the shell attention read (#458), asserting
 successful aggregate reads and empty transaction-review queues, with ceilings
 of 5 seconds and 64 MiB peak live heap, and the Home briefing read (#476),
 asserting both headlines name the missing EUR rate, with ceilings of
-10 seconds and 256 MiB. This does not certify complete FX
+10 seconds and 256 MiB. Investment entry account choices (#507) must return all
+3,020 accounts without the ordinary list cap, within 5 seconds and 64 MiB
+peak live heap; the same snapshot supplies hierarchy, dated roles and
+currency eligibility. This does not certify complete FX
 discovery from posted currencies (#464). It asserts the right answer at that size (every posting in
 `ledger.csv`, one trial-balance row per leaf and commodity, a passing check)
 and fails when wall time or peak live heap crosses a ceiling set several times
@@ -416,6 +419,11 @@ Home was measured 2026-10-31 on the same machine: 5.9 s, 513 MiB allocated and
 261 MiB and 112 MiB once both headlines total one ledger read and fold
 (`netWorthScopedSeriesTotals`). Its peak heap is the posting history the
 series reads whole.
+
+Investment entry accounts were measured 2026-11-06 in the development container:
+31 ms, 10 MiB allocated and 5 MiB peak live heap for the full 3,020-account
+snapshot, including role and currency eligibility. This measures account
+selection, not investment valuation or historical lot replay.
 
 Both are SQLite-bound (over 90% of CPU in cgo), and the peak heap shows the
 whole-book folds — the trial balance, account paths, the self-check

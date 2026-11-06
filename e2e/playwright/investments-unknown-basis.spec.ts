@@ -1,3 +1,4 @@
+import { openInvestmentActivity } from './support/investment-entry';
 import { expect, test, type Page } from './support/fixtures';
 import AxeBuilder from '@axe-core/playwright';
 import { apiJSON } from './support/api';
@@ -39,7 +40,7 @@ test('an unknown-basis transfer in leaves a later sale gain unresolved', async (
   });
 
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Transfer in investments' }).click();
+  await openInvestmentActivity(page, 'Transfer in investments');
   await page.getByLabel('Transfer date in this book').fill(daysFromTodayISO(-30));
   await page.getByLabel('Instrument').selectOption({ label: `${name} (${suffix.toUpperCase()})` });
   await page.getByLabel('Holding account').selectOption({ label: holdingName });
@@ -83,7 +84,7 @@ test('an unknown-basis holding transfers out without a cost basis entry', async 
   });
 
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Transfer out investments' }).click();
+  await openInvestmentActivity(page, 'Transfer out investments');
   const dialog = page.getByRole('dialog', { name: 'Transfer investments out' });
   await dialog.getByLabel('Transfer date in this book').fill(daysFromTodayISO(-10));
   await dialog.getByLabel('Source position').selectOption({ label: `${holdingName} · ${name} · ${currencyCode}` });

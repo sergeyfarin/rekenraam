@@ -1,3 +1,4 @@
+import { openInvestmentActivity } from './support/investment-entry';
 import { expect, test, type Page } from './support/fixtures';
 import { apiJSON } from './support/api';
 import { readyForLedger } from './support/ledger';
@@ -54,7 +55,7 @@ async function setup(page: Page) {
 test('an average-cost holding moves by quantity at the previewed pool rate on mobile', async ({ page }) => {
   const s = await setup(page);
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Move between holdings' }).click();
+  await openInvestmentActivity(page, 'Move between holdings');
   await page.getByLabel('Transfer date in this book').fill(daysFromTodayISO(-10));
   await page.getByLabel('Source position').selectOption({ label: s.sourceLabel });
   await page.getByLabel('Destination holding account').selectOption({ label: s.destinationLabel });

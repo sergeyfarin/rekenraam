@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { useSettlementCandidates } from '#lib/investments/settlement-candidates.svelte.ts';
+  import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
+  import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
   import { autofocus } from '#lib/components/autofocus.ts';
   import { untrack } from 'svelte';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
@@ -7,9 +10,8 @@
   import APIFormError from '#lib/components/api-form-error.svelte';
   import { m } from '#lib/paraglide/messages.js';
   import { useOwnerToday } from '#lib/dates/owner-date-context.ts';
-  import { accountsQueryOptions, type AccountResponse } from '#lib/api/accounts.ts';
+  import type { AccountResponse } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
-  import { isSubledgerManagedAccountKind } from '#lib/accounts/subledger-accounts.ts';
   import {
     investmentInstrumentsQueryOptions,
     paymentInLieuReconciliationImpact,
@@ -42,13 +44,14 @@
     prefill?: InvestmentPrefill;
     correction?: { transactionID: number; terms: InvestmentCorrectionPaymentInLieuTerms };
   } = $props();
+  const entryPrefill = untrack(() => correction ? undefined : prefill);
   const initialPrefill = untrack(() => prefill);
   const initial = untrack(() => correction);
   const terms = initial?.terms;
   const ownerToday = useOwnerToday();
 
   const queryClient = useQueryClient();
-  const accountsQuery = createQuery(() => accountsQueryOptions(true, false));
+
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
   const instrumentsQuery = createQuery(() => investmentInstrumentsQueryOptions());
 
@@ -57,7 +60,7 @@
   let commodityID = $state(terms ? (terms.commodity_id ? String(terms.commodity_id) : '')
     : initialPrefill?.commodityID !== undefined ? String(initialPrefill.commodityID) : '');
   let exDate = $state(terms?.ex_date ?? '');
-  let paymentDate = $state(terms?.event_date ?? ownerToday());
+  let paymentDate = $state(terms?.event_date ?? entryPrefill?.transactionDate ?? ownerToday());
   let cashAccountID = $state(terms ? String(terms.cash_account_id) : '');
   let expenseAccountID = $state(terms ? String(terms.expense_account_id) : '');
   let amountStr = $state(terms ? formatEditableAmount(terms.amount_value, terms.amount_scale) : '');
@@ -65,9 +68,10 @@
   let recoveryStr = $state(terms?.recovery_value !== undefined && terms.recovery_scale !== undefined
     ? formatEditableAmount(terms.recovery_value, terms.recovery_scale) : '');
   let recoveryAccountID = $state(terms?.recovery_account_id ? String(terms.recovery_account_id) : '');
-  let memo = $state(terms?.memo ?? '');
+  let memo = $state(terms?.memo ?? entryPrefill?.memo ?? '');
   let reason = $state('');
   let pending = $state(false);
+  const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(paymentDate || ownerToday()));
   let formError = $state<unknown>(undefined);
   let review = $state.raw<CommitReviewState<PaymentInLieuRequest> | null>(null);
 
@@ -75,7 +79,7 @@
   const accounts = $derived(accountsQuery.data?.accounts ?? []);
   const instruments = $derived(instrumentsQuery.data?.instruments ?? []);
   const holdingAccounts = $derived(accounts.filter((account: AccountResponse) =>
-    isSubledgerManagedAccountKind(account.account_kind)));
+    isInvestmentHoldingAccount(account)));
   const cashAccounts = $derived(accounts.filter((account: AccountResponse) =>
     isSettlementAccount(account, terms?.cash_account_id)));
   const expenseAccounts = $derived(accounts.filter((account: AccountResponse) =>
@@ -85,7 +89,7 @@
   // receivable or liability.
   const recoveryAccounts = $derived(accounts.filter((account: AccountResponse) =>
     ['asset', 'liability', 'expense', 'income'].includes(account.account_class) && account.allows_postings && !account.system_role &&
-    !isSubledgerManagedAccountKind(account.account_kind) && (account.status === 'active' || account.id === terms?.recovery_account_id)));
+    !isInvestmentHoldingAccount(account) && (account.status === 'active' || account.id === terms?.recovery_account_id)));
   const currenciesByID = $derived(new Map<number, CurrencyResponse>(
     (currenciesQuery.data?.currencies ?? []).map((currency: CurrencyResponse) => [currency.id, currency])));
   // The currency is the cash account's; a correction to an account without a
@@ -97,7 +101,7 @@
   const loading = $derived(accountsQuery.isPending || currenciesQuery.isPending || instrumentsQuery.isPending);
   const loadError = $derived(accountsQuery.isError || currenciesQuery.isError || instrumentsQuery.isError);
   const canSubmit = $derived(!loading && !loadError && !!paymentDate &&
-    cashAccountID !== '' && !!cashCommodityID && expenseAccountID !== '' && amountStr.trim() !== '' &&
+    cashAccounts.some((account) => String(account.id) === cashAccountID) && !!cashCommodityID && expenseAccountID !== '' && amountStr.trim() !== '' &&
     (!showRecovery || recoveryStr.trim() === '' || recoveryAccountID !== '') && (!initial || !!reason.trim()));
 
   function amountErrorMessage(error: AmountFieldError): string {
@@ -167,6 +171,8 @@
   });
 
   const inputClass = 'min-h-11 w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground';
+  const chooseSettlement = useSettlementCandidates(() => accountsQuery.data?.accounts,
+    () => Number(holdingAccountID) || undefined, () => cashAccountID, (id) => { cashAccountID = id; }, entryPrefill, untrack(() => !!correction));
 </script>
 
 {#if review}
@@ -193,7 +199,7 @@
       <label for="pil-holding" class="mb-1 block text-sm font-medium text-foreground">{m.investments_payment_in_lieu_holding()}</label>
       <select id="pil-holding" bind:value={holdingAccountID} class={inputClass}>
         <option value="">{m.investments_attribution_unassigned()}</option>
-        {#if holdingAccountID && !holdingAccounts.some(account => String(account.id) === holdingAccountID)}
+        {#if accountsQuery.data && holdingAccountID && !holdingAccounts.some(account => String(account.id) === holdingAccountID)}
           <option value={holdingAccountID}>#{holdingAccountID}</option>
         {/if}
         {#each holdingAccounts as account (account.id)}<option value={String(account.id)}>{account.name}</option>{/each}
@@ -230,10 +236,17 @@
   </div>
   <div>
     <label for="pil-cash" class="mb-1 block text-sm font-medium text-foreground">{m.investments_form_cash_account()}</label>
-    <select id="pil-cash" bind:value={cashAccountID} required class={inputClass}>
+    <select onchange={chooseSettlement} id="pil-cash" bind:value={cashAccountID} required class={inputClass}>
       <option value="">{m.investments_form_select_account()}</option>
+      {#if cashAccountID && !cashAccounts.some((account) => String(account.id) === cashAccountID)}
+        <option value={cashAccountID} disabled>{(accountsQuery.data?.accounts ?? []).find((account) => String(account.id) === cashAccountID)?.name ?? cashAccountID}</option>
+      {/if}
       {#each cashAccounts as account (account.id)}<option value={String(account.id)}>{account.name}</option>{/each}
     </select>
+    <p class="mt-1 text-xs text-muted">{cashAccountID ? m.investments_activity_settlement_hint() : m.investments_activity_settlement_choice()}</p>
+    {#if accountsQuery.data && cashAccountID && !cashAccounts.some((account) => String(account.id) === cashAccountID)}
+      <p role="alert" class="mt-1 text-sm text-danger">{m.investments_activity_settlement_invalid()}</p>
+    {/if}
   </div>
 
   <div>

@@ -1,10 +1,14 @@
 <script lang="ts">
+  import EntryAccountStatus from '#lib/investments/entry-account-status.svelte';
+  import { useSettlementCandidates } from '#lib/investments/settlement-candidates.svelte.ts';
+  import { isSettlementAccount } from '#lib/investments/settlement-accounts.ts';
+  import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
+  import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
   import { autofocus } from '#lib/components/autofocus.ts';
   import { useOwnerToday } from '#lib/dates/owner-date-context.ts';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import { untrack } from 'svelte';
   import APIFormError from '#lib/components/api-form-error.svelte';
-  import { accountsQueryOptions } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import {
     investmentInstrumentsQueryOptions, datedHoldingsQueryOptions, previewCashStockMerger, recordCashStockMerger,
@@ -49,6 +53,7 @@
     prefill?: InvestmentPrefill;
     correction?: { transactionID: number; terms: InvestmentCorrectionCashStockMergerTerms };
   } = $props();
+  const entryPrefill = untrack(() => correction ? undefined : prefill);
 
   // A correction carries its evidence edits beside the creation terms.
   type MergerPayload = CashStockMergerRequest & Pick<CashStockMergerReplacementRequest, 'source_evidence_edits'>;
@@ -59,7 +64,7 @@
     (holding) => holding.key, () => holdingKey, (key) => { holdingKey = key; });
 
   const queryClient = useQueryClient();
-  const accountsQuery = createQuery(() => accountsQueryOptions(false, false));
+
   const instrumentsQuery = createQuery(() => investmentInstrumentsQueryOptions());
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
 
@@ -67,7 +72,7 @@
   const initialTerms = untrack(() => correction?.terms);
   const initialPercent = initialTerms
     ? basisFractionPercent(initialTerms.plan.cash_basis_fraction_value, initialTerms.plan.cash_basis_fraction_scale) : null;
-  let effectiveOn = $state(initialTerms?.effective_on ?? '');
+  let effectiveOn = $state(initialTerms?.effective_on ?? entryPrefill?.transactionDate ?? '');
   let payableOn = $state(initialTerms?.payable_on ?? '');
   let holdingKey = $state(initialTerms ? `${initialTerms.holding_account_id}:${initialTerms.commodity_id}` : '');
   let newCommodityID = $state(initialTerms ? String(initialTerms.destination_commodity_id) : '');
@@ -87,8 +92,10 @@
   const initialEvidence = initialTerms?.source_evidence as Record<string, unknown> | undefined;
   let sourceReference = $state(evidenceText(initialEvidence, 'reference'));
   let reason = $state('');
-  let memo = $state('');
+  let memo = $state(entryPrefill?.memo ?? '');
   let pending = $state(false);
+  const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(effectiveOn || ownerToday()));
+  const cashAccountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(payableOn || effectiveOn || ownerToday()));
   let formError = $state<unknown>(undefined);
   // The reviewed preview. Editing any field discards it, so the user always
   // records exactly the plan they saw.
@@ -106,12 +113,9 @@
   const positionsQuery = createQuery(() => datedHoldingsQueryOptions(holdingsDate));
 
   const accounts = $derived((accountsQuery.data?.accounts ?? []).filter((account) =>
-    account.status === 'active' && account.allows_postings &&
-    (account.account_kind === 'security_holding' || account.account_kind === 'fund_holding')));
-  const cashAccounts = $derived((accountsQuery.data?.accounts ?? []).filter((account) =>
-    account.account_class === 'asset' && account.allows_postings &&
-    (account.status === 'active' || account.id === initialTerms?.cash_account_id) &&
-    account.account_kind !== 'security_holding' && account.account_kind !== 'fund_holding'));
+    isInvestmentHoldingAccount(account)));
+  const cashAccounts = $derived((cashAccountsQuery.data?.accounts ?? []).filter((account) =>
+    isSettlementAccount(account, initialTerms?.cash_account_id) && (!currencyID || account.default_commodity_id === Number(currencyID))));
   const instruments = $derived((instrumentsQuery.data?.instruments ?? []).filter((instrument) => instrument.status === 'active'));
   // Every long lot of the old instrument in one account is merged; the cash
   // is in the lots' cost currency, which the holding suggests.
@@ -157,8 +161,8 @@
     instrumentsQuery.isPending || currenciesQuery.isPending);
   const loadError = $derived(accountsQuery.isError || positionsQuery.isError ||
     instrumentsQuery.isError || currenciesQuery.isError);
-  const canPreview = $derived(!loading && !loadError && !!effectiveOn && !!payableOn && !!selectedHolding && newID > 0 &&
-    !!destination && !!newUnits.trim() && !!oldUnits.trim() && !!cashAccountID && !!currency && !!cashAmount.trim() &&
+  const canPreview = $derived(!cashAccountsQuery.isFetching && !cashAccountsQuery.isError && !loading && !loadError && !!effectiveOn && !!payableOn && !!selectedHolding && newID > 0 &&
+    !!destination && !!newUnits.trim() && !!oldUnits.trim() && cashAccounts.some((account) => String(account.id) === cashAccountID) && !!currency && !!cashAmount.trim() &&
     !!electionPercent.trim() && (!correction || !!reason.trim()));
   const modalGainRows = $derived(preview?.gainImpact
     ? gainImpactRows(preview.gainImpact.changes, gainImpactCurrency(currenciesByID), locale)
@@ -286,6 +290,8 @@
     setError: (error) => { formError = error; },
     setModal: (modal) => { reviewModal = modal; }
   });
+  const chooseSettlement = useSettlementCandidates(() => cashAccountsQuery.data?.accounts,
+    () => selectedHolding?.accountID, () => cashAccountID, (id) => { cashAccountID = id; }, entryPrefill, untrack(() => !!correction), () => Number(currencyID) || undefined);
 </script>
 
 {#if reviewModal && preview}
@@ -395,13 +401,22 @@
     <div class="grid gap-3 sm:grid-cols-2">
       <div>
         <label for="merger-cash-account" class="mb-1 block text-sm font-medium text-foreground">{m.investments_merger_cash_account()}</label>
-        <select id="merger-cash-account" bind:value={cashAccountID} required onchange={discardPreview}
+        <select id="merger-cash-account" bind:value={cashAccountID} required onchange={() => { chooseSettlement(); discardPreview(); }}
           class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
           <option value="">{m.investments_merger_select_cash_account()}</option>
+      {#if cashAccountID && !cashAccounts.some((account) => String(account.id) === cashAccountID)}
+        <option value={cashAccountID} disabled>{(accountsQuery.data?.accounts ?? []).find((account) => String(account.id) === cashAccountID)?.name ?? cashAccountID}</option>
+      {/if}
           {#each cashAccounts as account (account.id)}
             <option value={String(account.id)}>{account.name}</option>
           {/each}
         </select>
+    <EntryAccountStatus pending={cashAccountsQuery.isFetching} error={cashAccountsQuery.error}
+      onRetry={() => cashAccountsQuery.refetch()} />
+    <p class="mt-1 text-xs text-muted">{cashAccountID ? m.investments_activity_settlement_hint() : m.investments_activity_settlement_choice()}</p>
+    {#if cashAccountsQuery.data && cashAccountID && !cashAccounts.some((account) => String(account.id) === cashAccountID)}
+      <p role="alert" class="mt-1 text-sm text-danger">{m.investments_activity_settlement_invalid()}</p>
+    {/if}
       </div>
       <div>
         <label for="merger-currency" class="mb-1 block text-sm font-medium text-foreground">{m.investments_merger_currency()}</label>

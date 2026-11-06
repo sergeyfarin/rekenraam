@@ -1,3 +1,4 @@
+import { openInvestmentActivity } from './support/investment-entry';
 import { expect, test, type Page } from './support/fixtures';
 import AxeBuilder from '@axe-core/playwright';
 import { readFileSync } from 'node:fs';
@@ -50,7 +51,7 @@ async function open(page: Page, s: Fixture, days = 0, locale = 'en') {
   const m = messages(locale);
   await page.evaluate(value => localStorage.setItem('PARAGLIDE_LOCALE', value), locale);
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: m.investments_record_write_off, exact: true }).click();
+  await openInvestmentActivity(page, 'write-off');
   const dialog = page.getByRole('dialog', { name: m.investments_write_off_title });
   await dialog.locator('#write-off-date').fill(ago(days));
   await dialog.locator('#write-off-holding').selectOption(s.key);
@@ -66,12 +67,11 @@ for (const locale of translationLocales) {
     await page.evaluate(value => localStorage.setItem('PARAGLIDE_LOCALE', value), locale);
     await page.goto('/app/investments');
     if (locale === 'en') await useDarkTheme(page);
-    const action = page.getByRole('button', { name: m.investments_record_write_off, exact: true });
-    await action.focus();
-    await page.keyboard.press('Enter');
+    const action = page.getByRole('button', { name: m.transactions_form_create_title, exact: true });
+    await openInvestmentActivity(page, 'write-off');
     const dialog = page.getByRole('dialog', { name: m.investments_write_off_title });
     await expect(dialog.locator('#write-off-date')).toBeFocused();
-    await expect(dialog).toContainText(m.investments_write_off_choose_date);
+    await expect(dialog.locator('#write-off-date')).toHaveValue(todayISO());
     // Before any position exists, the date remains editable for recovery. The
     // worker's book is shared with other specs (the #266 reference book holds
     // positions from 2020), so the empty date precedes every seeded holding.

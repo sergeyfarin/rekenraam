@@ -1,3 +1,4 @@
+import { openInvestmentActivity } from './support/investment-entry';
 import { expect, test, type Page } from './support/fixtures';
 import { apiJSON } from './support/api';
 import { readyForLedger } from './support/ledger';
@@ -206,13 +207,13 @@ async function recordBuy(
   options: { instrument: string; holdingID: number; cashID: number; date: string; quantity: string; cost: string }
 ) {
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Record buy' }).click();
-  await page.getByLabel('Date').fill(options.date);
+  await openInvestmentActivity(page, 'Record buy');
+  await page.getByRole('dialog').last().getByLabel('Date', { exact: true }).fill(options.date);
   await page.getByLabel('Instrument').fill(options.instrument);
   await page.getByRole('option').filter({ hasText: options.instrument }).click();
   await page.getByLabel('Holding account').selectOption(String(options.holdingID));
   await page.getByLabel('Quantity').fill(options.quantity);
-  await page.getByLabel('Cash account').selectOption(String(options.cashID));
+  await page.getByLabel('Pay from').selectOption(String(options.cashID));
   await page.getByLabel('Total cost').fill(options.cost);
   await page.getByRole('button', { name: 'Record buy' }).last().click();
 }

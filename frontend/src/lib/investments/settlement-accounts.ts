@@ -12,8 +12,14 @@ import { isSubledgerManagedAccountKind } from '#lib/accounts/subledger-accounts.
  * was archived, so its picker never silently falls back to another account.
  * The caller must fetch archived accounts for that to work.
  */
-export function isSettlementAccount(account: AccountResponse, retainedID?: number): boolean {
+export function isSettlementAccount(account: AccountResponse & { investment_settlement?: boolean }, retainedID?: number): boolean {
   if (retainedID !== undefined && account.id === retainedID) return true;
+  if (account.investment_settlement !== undefined) return account.investment_settlement;
   return ['asset', 'liability'].includes(account.account_class) && account.allows_postings &&
     !account.system_role && !isSubledgerManagedAccountKind(account.account_kind) && account.status === 'active';
+}
+
+export function isInvestmentHoldingAccount(account: AccountResponse & { investment_holding?: boolean }): boolean {
+  return account.investment_holding ?? (account.status === 'active' && account.allows_postings &&
+    !account.system_role && isSubledgerManagedAccountKind(account.account_kind));
 }

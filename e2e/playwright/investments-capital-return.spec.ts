@@ -1,3 +1,4 @@
+import { openInvestmentActivity } from './support/investment-entry';
 import { expect, test } from './support/fixtures';
 import { apiExactText, apiJSON, csrfTokenFor, exactJSON } from './support/api';
 import { readyForLedger } from './support/ledger';
@@ -42,7 +43,7 @@ test('a return of capital beyond the basis previews its excess, then is reversed
   });
 
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Return of capital', exact: true }).click();
+  await openInvestmentActivity(page, 'Return of capital');
   const dialog = page.getByRole('dialog', { name: 'Record a return of capital' });
   await dialog.getByLabel('Position').selectOption({ label: `ROC holding ${suffix} · ${name} · ${currencyCode}` });
   await dialog.getByLabel('Received into').selectOption({ label: `ROC cash ${suffix}` });

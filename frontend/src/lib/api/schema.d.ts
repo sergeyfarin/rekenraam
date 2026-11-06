@@ -15177,6 +15177,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/investments/entry-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read investment entry account roles at the posting date
+         * @description A complete dated account snapshot. Eligibility shares investment command rules; settlement requires an active default currency. Hierarchy metadata supports manual-entry suggestions, never import mappings. Writes revalidate their own role dependencies. No personal access token grant is added.
+         */
+        get: {
+            parameters: {
+                query: {
+                    as_of: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Dated accounts and role eligibility */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InvestmentEntryAccountsResponse"];
+                    };
+                };
+                /** @description Invalid date */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/investments/instruments": {
         parameters: {
             query?: never;
@@ -29212,6 +29271,13 @@ export interface components {
         AccountStatus: "active" | "closed" | "archived";
         /** @enum {string} */
         SystemAccountRole: "opening_balance" | "import_imbalance" | "retained_earnings" | "unassigned_income" | "unassigned_expense" | "transfer_clearing" | "commodity_trading" | "external_investment_transfer_equity";
+        InvestmentEntryAccountResponse: components["schemas"]["AccountResponse"] & {
+            investment_holding: boolean;
+            investment_settlement: boolean;
+        };
+        InvestmentEntryAccountsResponse: {
+            accounts: components["schemas"]["InvestmentEntryAccountResponse"][];
+        };
         AccountResponse: {
             /** Format: int64 */
             id: number;

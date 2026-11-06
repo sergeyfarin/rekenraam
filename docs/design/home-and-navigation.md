@@ -615,12 +615,17 @@ Guardrails:
 - **Concurrency:** state is rechecked atomically at commit.
 - **Type:** a move never changes the operation's financial type.
 
+### Investment-entry hierarchy verification (#507)
+
+The account model permits a holding outside a brokerage container and does not enforce brokerage membership. Manual-entry suggestions therefore use only a holding’s direct brokerage parent (or the starting brokerage container) and that container’s direct `brokerage_cash` children, plus the starting cash account. Nested arbitrary account groups and matching institution names do not establish settlement relationships. Missing hierarchy requires a choice, not a stored default. The dated entry-account read shares investment-command role validation; trade-date holdings and settlement-date cash choices may use different snapshots. Reinvestment selects its cost currency directly because it has no cash leg. See the [implementation contract](../plans/transaction-entry-investment-plan.md); #508 owns full activity working-copy preservation.
+
+
 ### Entry delivery
 
 | Slice | Issue |
 |---|---|
 | Entry shell and routing: one *New transaction*, four stable tabs with labels and accents, shared entry context with basic preservation and preview invalidation, editable account | #506, delivered 2026-11-05 |
-| Investment mode: brokerage and holding contexts, Activity selector, settlement candidates | #507 |
+| Investment mode: brokerage and holding contexts, Activity selector, settlement candidates | #507, delivered 2026-11-06 |
 | Activity-specific restoration across activities and accounts, full acceptance coverage | #508 |
 | Move to account for posted transactions | #509 |
 

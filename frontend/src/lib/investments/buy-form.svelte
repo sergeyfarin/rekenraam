@@ -1,4 +1,9 @@
 <script lang="ts">
+  import EntryAccountStatus from '#lib/investments/entry-account-status.svelte';
+  import { useSettlementCandidates } from '#lib/investments/settlement-candidates.svelte.ts';
+  import { isSettlementAccount } from '#lib/investments/settlement-accounts.ts';
+  import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
+  import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
   import { autofocus } from '#lib/components/autofocus.ts';
   import { useOwnerToday } from '#lib/dates/owner-date-context.ts';
   import { formatEditableAmount } from '#lib/money/amount.ts';
@@ -13,7 +18,7 @@
   import { parseTradeAmounts, type AmountFieldError } from '#lib/investments/form-amounts.ts';
   import TradeEconomicsFields from '#lib/investments/trade-economics-fields.svelte';
   import { correctionTradeDraft, exactTradeFields, type TradeChargeDraft } from '#lib/investments/trade-economics.ts';
-  import { accountsQueryOptions, type AccountResponse } from '#lib/api/accounts.ts';
+  import type { AccountResponse } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import {
     investmentInstrumentsQueryKey,
@@ -46,6 +51,7 @@
     correction?: InvestmentTradeCorrectionContextResponse;
     prefill?: InvestmentPrefill;
   } = $props();
+  const entryPrefill = untrack(() => correction ? undefined : prefill);
 
   const initialCorrection = untrack(() => correction);
   // A correction pre-fills from the recorded trade, never from the screen.
@@ -53,7 +59,7 @@
   const correctionDraft = initialCorrection ? correctionTradeDraft(initialCorrection) : null;
 
   const queryClient = useQueryClient();
-  const accountsQuery = createQuery(() => accountsQueryOptions(false, false));
+
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
 
   // Instrument autocomplete
@@ -93,7 +99,7 @@
   usePrefilledInstrument(initialPrefill, selectInstrument);
 
   // Form fields
-  let transactionDate = $state(initialCorrection?.event_date ?? ownerToday());
+  let transactionDate = $state(initialCorrection?.event_date ?? entryPrefill?.transactionDate ?? ownerToday());
   let holdingAccountID = $state(String(initialCorrection?.holding_account_id ?? initialPrefill?.holdingAccountID ?? ''));
   let cashAccountID = $state(String(initialCorrection?.cash_account_id ?? ''));
   let quantityStr = $state(correctionDraft?.quantity ?? '');
@@ -102,9 +108,11 @@
   let grossAmountStr = $state(correctionDraft?.gross ?? '');
   let settlementDate = $state(correctionDraft?.settlementDate ?? '');
   let charges = $state<TradeChargeDraft[]>(correctionDraft?.charges ?? []);
-  let memo = $state(initialCorrection?.memo ?? '');
+  let memo = $state(initialCorrection?.memo ?? entryPrefill?.memo ?? '');
   let reason = $state('');
   let pending = $state(false);
+  const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(transactionDate || ownerToday()));
+  const cashAccountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(settlementDate || transactionDate || ownerToday()));
   let formError = $state<unknown>(undefined);
 
 
@@ -122,20 +130,15 @@
   const holdingAccounts = $derived(
     (accountsQuery.data?.accounts ?? []).filter(
       (a: AccountResponse) =>
-        (a.account_kind === 'security_holding' || a.account_kind === 'fund_holding') &&
-        a.status === 'active'
+        isInvestmentHoldingAccount(a)
     )
   );
 
   // Cash accounts: asset accounts that allow postings (except holding accounts)
   const cashAccounts = $derived(
-    (accountsQuery.data?.accounts ?? []).filter(
+    (cashAccountsQuery.data?.accounts ?? []).filter(
       (a: AccountResponse) =>
-        a.account_class === 'asset' &&
-        a.status === 'active' &&
-        a.allows_postings &&
-        a.account_kind !== 'security_holding' &&
-        a.account_kind !== 'fund_holding'
+        isSettlementAccount(a)
     )
   );
 
@@ -172,10 +175,10 @@
     }
   }
 
-  const canSubmit = $derived(
+  const canSubmit = $derived(!accountsQuery.isFetching && !accountsQuery.isError && !cashAccountsQuery.isFetching && !cashAccountsQuery.isError &&
     !!commodityID &&
-    holdingAccountID !== '' &&
-    cashAccountID !== '' &&
+    holdingAccounts.some((account) => String(account.id) === holdingAccountID) &&
+    cashAccounts.some((account) => String(account.id) === cashAccountID) &&
     !!cashCommodityID &&
     quantityStr.trim() !== '' &&
     cashAmountStr.trim() !== ''
@@ -266,6 +269,8 @@
     await invalidateInvestmentReads(queryClient);
     onSaved();
   }
+  const chooseSettlement = useSettlementCandidates(() => cashAccountsQuery.data?.accounts,
+    () => Number(holdingAccountID) || undefined, () => cashAccountID, (id) => { cashAccountID = id; }, entryPrefill, untrack(() => !!correction));
 </script>
 
 {#if reconciliationModal}
@@ -280,9 +285,12 @@
 {/if}
 
 <form onsubmit={handleSubmit} aria-busy={pending} class="space-y-4">
-  <h2 class="text-base font-semibold text-foreground">
+  <h2 id="buy-title" class="text-base font-semibold text-foreground">
     {correction ? m.transactions_investment_replace_buy_title() : m.investments_buy_title()}
   </h2>
+  <EntryAccountStatus pending={accountsQuery.isFetching || cashAccountsQuery.isFetching}
+    error={accountsQuery.error ?? cashAccountsQuery.error}
+    onRetry={() => queryClient.invalidateQueries({ queryKey: ['api', 'accounts', 'investment-entry'] })} />
   {#if correction}
     <p class="text-sm text-muted">{m.transactions_investment_replace_buy_copy()}</p>
   {/if}
@@ -355,10 +363,16 @@
       required
     >
       <option value="">{m.investments_form_select_account()}</option>
+      {#if holdingAccountID && !holdingAccounts.some((account) => String(account.id) === holdingAccountID)}
+        <option value={holdingAccountID} disabled>{(accountsQuery.data?.accounts ?? []).find((account) => String(account.id) === holdingAccountID)?.name ?? holdingAccountID}</option>
+      {/if}
       {#each holdingAccounts as acc (acc.id)}
         <option value={String(acc.id)}>{acc.name}</option>
       {/each}
     </select>
+    {#if accountsQuery.data && holdingAccountID && !holdingAccounts.some((account) => String(account.id) === holdingAccountID)}
+      <p role="alert" class="mt-1 text-sm text-danger">{m.investments_activity_holding_invalid()}</p>
+    {/if}
   </div>
 
   {#if correction}
@@ -390,19 +404,26 @@
   <!-- Cash account -->
   <div>
     <label for="buy-cash-account" class="mb-1 block text-sm font-medium text-foreground">
-      {m.investments_form_cash_account()}
+      {m.investments_activity_pay_from()}
     </label>
-    <select
+    <select onchange={chooseSettlement}
       id="buy-cash-account"
       bind:value={cashAccountID}
       class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"
       required
     >
       <option value="">{m.investments_form_select_account()}</option>
+      {#if cashAccountID && !cashAccounts.some((account) => String(account.id) === cashAccountID)}
+        <option value={cashAccountID} disabled>{(accountsQuery.data?.accounts ?? []).find((account) => String(account.id) === cashAccountID)?.name ?? cashAccountID}</option>
+      {/if}
       {#each cashAccounts as acc (acc.id)}
         <option value={String(acc.id)}>{acc.name}</option>
       {/each}
     </select>
+    <p class="mt-1 text-xs text-muted">{cashAccountID ? m.investments_activity_settlement_hint() : m.investments_activity_settlement_choice()}</p>
+    {#if cashAccountsQuery.data && cashAccountID && !cashAccounts.some((account) => String(account.id) === cashAccountID)}
+      <p role="alert" class="mt-1 text-sm text-danger">{m.investments_activity_settlement_invalid()}</p>
+    {/if}
   </div>
 
   <!-- Total cost -->

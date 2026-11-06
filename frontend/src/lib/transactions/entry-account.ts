@@ -24,10 +24,13 @@ export function isOrdinaryEntryAccount(account: EntryAccount): boolean {
 /**
  * How an account's own screen offers a new transaction: the generic editor
  * with the account pre-selected, investment entry for a holding account (its
- * activity goes through investment commands, #186), or nothing for an account
- * that takes no manual postings.
+ * activity goes through investment commands, #186), brokerage context that
+ * asks for posting accounts (#507), or nothing for other summary accounts.
  */
 export function accountEntryKind(account: EntryAccount): 'editor' | 'investments' | 'none' {
+  // A brokerage is context, not a posting target. Its cash modes still ask
+  // for a posting account; Investment can suggest its explicit cash children.
+  if (account.account_kind === 'brokerage' && account.status === 'active' && !account.is_system) return 'editor';
   if (isOrdinaryEntryAccount(account)) return 'editor';
   if (account.status === 'active' && isSubledgerManagedAccountKind(account.account_kind)) return 'investments';
   return 'none';

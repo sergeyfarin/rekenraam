@@ -11,6 +11,14 @@ describe('accountEntryKind (#185)', () => {
     expect(accountEntryKind(account({ account_class: 'liability', account_kind: 'credit_card' }))).toBe('editor');
   });
 
+  it('offers all entry modes for an active brokerage container without allowing it to receive cash postings', () => {
+    const broker = account({ account_kind: 'brokerage', allows_postings: false });
+    expect(accountEntryKind(broker)).toBe('editor');
+    expect(isOrdinaryEntryAccount(broker)).toBe(false);
+    expect(accountEntryKind({ ...broker, status: 'archived' })).toBe('none');
+    expect(accountEntryKind({ ...broker, is_system: true })).toBe('none');
+  });
+
   it('sends a holding account to investment entry, never the generic editor', () => {
     for (const kind of ['security_holding', 'fund_holding']) {
       expect(isOrdinaryEntryAccount(account({ account_kind: kind }))).toBe(false);

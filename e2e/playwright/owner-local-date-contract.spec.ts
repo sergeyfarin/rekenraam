@@ -1,3 +1,4 @@
+import { openInvestmentActivity } from './support/investment-entry';
 import { expect, test } from './support/fixtures';
 import { readyForLedger, ensureCurrency } from './support/ledger';
 import { apiJSON } from './support/api';
@@ -24,7 +25,7 @@ test('[acceptance] server year controls investment entry, gains and unchosen dis
     ['Record short sale', 'Date']
   ] as const) {
     await page.goto('/app/investments');
-    await page.getByRole('button', { name, exact: true }).click();
+    await openInvestmentActivity(page, name);
     const form = page.locator('form').filter({ has: page.getByRole('heading', { name, exact: true }) });
     await expect(form.getByLabel(dateLabel, { exact: true })).toHaveValue('2027-01-01');
   }
@@ -35,9 +36,9 @@ test('[acceptance] server year controls investment entry, gains and unchosen dis
   await expect(page.getByLabel('To', { exact: true })).toHaveValue('2027-12-31');
   await page.goto('/app/investments');
   const discovery = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/investments/dated-holdings');
-  await page.getByRole('button', { name: 'Record split', exact: true }).click();
+  await openInvestmentActivity(page, 'Record split');
   expect(new URL((await discovery).url()).searchParams.get('as_of')).toBe('2027-01-01');
-  await expect(page.getByLabel('Split effective date')).toHaveValue('');
+  await expect(page.getByLabel('Split effective date')).toHaveValue('2027-01-01');
   const dated = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/investments/dated-holdings' && new URL(response.url()).searchParams.get('as_of') === '2020-02-29');
   await page.getByLabel('Split effective date').fill('2020-02-29');
   expect((await dated).status()).toBe(200);
@@ -81,7 +82,7 @@ test('[acceptance] pricing captures its editable date while refreshed server tod
   expect((await refreshedWorkspace).status()).toBe(200);
   await expect(date).toHaveValue('2020-02-29');
   await expect(page.locator('#price-amount')).toHaveValue('1.25');
-  await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('dialog').last().getByRole('button', { name: 'Cancel', exact: true }).click();
   await add.click();
   await expect(date).toHaveValue(ownerDate);
 });

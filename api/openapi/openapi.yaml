@@ -319,6 +319,8 @@ paths:
     $ref: "./paths/pricing-background-work-retry.yaml"
   /api/v1/investments/search:
     $ref: "./paths/investments-search.yaml"
+  /api/v1/investments/entry-accounts:
+    $ref: "./paths/investments-entry-accounts.yaml"
   /api/v1/investments/instruments:
     $ref: "./paths/investments-instruments.yaml"
   /api/v1/investments/instruments/{instrument_id}:
@@ -920,6 +922,10 @@ components:
       $ref: "./components/schemas/accounts.yaml#/AccountStatus"
     SystemAccountRole:
       $ref: "./components/schemas/accounts.yaml#/SystemAccountRole"
+    InvestmentEntryAccountResponse:
+      $ref: "./components/schemas/investment-entry.yaml#/InvestmentEntryAccountResponse"
+    InvestmentEntryAccountsResponse:
+      $ref: "./components/schemas/investment-entry.yaml#/InvestmentEntryAccountsResponse"
     AccountResponse:
       $ref: "./components/schemas/accounts.yaml#/AccountResponse"
     AttentionResponse:
