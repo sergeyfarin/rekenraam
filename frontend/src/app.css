@@ -342,8 +342,11 @@
 }
 
 @layer base {
+  /* The sticky shell bar publishes its height (app-header.svelte), so focus
+     moves and in-page jumps stop below it instead of beneath it. */
   html {
     @apply bg-background text-foreground antialiased;
+    scroll-padding-top: var(--shell-bar-height, 0px);
   }
 
   body {
@@ -385,6 +388,19 @@
     outline: 2px solid color-mix(in oklab, var(--color-accent) 72%, white);
     outline-offset: 3px;
   }
+}
+
+/*
+ * A desktop side panel beside a long list sticks below the shell bar when it
+ * fits the window. A taller one sticks at its own bottom instead, so the page
+ * scrolls it up until its last control is on screen: one page scroll, no
+ * nested scroller. A fixed top let a tall panel keep Save below the screen
+ * until the list ended, and infinite scroll moved that end away (#515 CI).
+ * `--panel-height` comes from `publishPanelHeight` (sticky-panel.ts).
+ */
+@utility side-panel-sticky {
+  position: sticky;
+  top: min(calc(var(--shell-bar-height, 0px) + 1rem), calc(100dvh - var(--panel-height, 0px) - 1rem));
 }
 
 @layer components {

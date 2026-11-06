@@ -2,11 +2,7 @@ package app
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"time"
 
 	"rekenraam/backend/internal/db"
@@ -161,6 +157,7 @@ type ForecastResult struct {
 	ComputedAt          string
 	HorizonDays         int
 	BasisToken          string
+	basisParts          []forecastBasisPart
 	PolicyVersion       string
 	ScopeMode           string
 	RequestedAccountIDs []int64
@@ -222,10 +219,12 @@ type ForecastService struct {
 	// fitter serialises learned-spending fitting to one operation per process,
 	// so it is shared by every request this service handles.
 	fitter *ForecastLearningFitter
+	// basis remembers recent tokens' parts to explain a rejected detail request.
+	basis *forecastBasisMemory
 }
 
 func NewForecastService(repository *db.ForecastRepository) *ForecastService {
-	return &ForecastService{repository: repository, now: time.Now, fitter: NewForecastLearningFitter()}
+	return &ForecastService{repository: repository, now: time.Now, fitter: NewForecastLearningFitter(), basis: newForecastBasisMemory()}
 }
 
 func (s *ForecastService) SetNowForTest(now func() time.Time) { s.now = now }
@@ -296,19 +295,14 @@ func (s *ForecastService) Balances(ctx context.Context, input ForecastInput) (Fo
 	}
 	// The basis token covers the model options, the training history and the
 	// selection outcome, so a stale detail request is rejected exactly as the
-	// core contract requires.
-	digestInput := struct {
-		Input    forecastNormalizedInput
-		Bounds   forecastBounds
-		Scope    []int64
-		Snapshot db.ForecastSnapshot
-		Learned  *ForecastLearnedSpending
-	}{normalized, bounds, scope.AccountIDs, snapshot, result.LearnedSpending}
-	encoded, err := json.Marshal(digestInput)
+	// core contract requires. It is built from named parts so a rejection can
+	// say which one moved (forecast_basis.go).
+	parts, err := forecastBasisParts(normalized, bounds, scope.AccountIDs, snapshot, result.LearnedSpending)
 	if err != nil {
-		return ForecastResult{}, fmt.Errorf("encode forecast basis: %w", err)
+		return ForecastResult{}, err
 	}
-	hash := sha256.Sum256(encoded)
-	result.BasisToken = hex.EncodeToString(hash[:])
+	result.BasisToken = forecastBasisToken(parts)
+	result.basisParts = parts
+	s.basis.remember(result.BasisToken, parts)
 	return result, nil
 }

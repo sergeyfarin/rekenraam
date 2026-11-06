@@ -929,6 +929,10 @@ selection or to the work in progress:
 - the reconciliation summary (statement balance, cleared, difference,
   finish) on Reconcile
 
+On desktop each sticks below the shell bar, or at its own bottom when it is
+taller than the window, so its last control stays reachable with one page
+scroll (`side-panel-sticky`, #515).
+
 The first two open as a full-screen modal on phones. Reconcile places its
 summary below the list instead, which suits a summary you read after
 ticking rows. Both are valid; each page chooses.

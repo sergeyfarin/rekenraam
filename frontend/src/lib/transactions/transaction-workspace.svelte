@@ -27,6 +27,7 @@
 </script>
 
 <script lang="ts">
+  import { publishPanelHeight } from '#lib/components/sticky-panel.ts';
   import { page } from '$app/state';
   import { replaceState } from '$app/navigation';
   import type { Snippet } from 'svelte';
@@ -280,7 +281,7 @@
     >
       <div class="fixed inset-0 bg-background/50 lg:hidden" role="presentation" onclick={() => (panel = { type: 'none' })}></div>
 
-      <div class="relative lg:sticky lg:top-4">
+      <div class="relative lg:side-panel-sticky" {@attach publishPanelHeight}>
         <Panel>
           {#if panel.type === 'detail'}
             {#key panel}
