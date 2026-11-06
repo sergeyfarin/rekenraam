@@ -3,7 +3,7 @@ import { expect, test } from './support/fixtures';
 import { apiJSON } from './support/api';
 import { todayISO } from './support/dates';
 import { expectNoAccessibilityViolations, focusIsInside } from './support/a11y';
-import { createCashAccount, createLiabilityAccount, readyForLedger } from './support/ledger';
+import { createCashAccount, createLiabilityAccount, ensureCurrency, readyForLedger } from './support/ledger';
 
 // #506: one New transaction with four stable tabs (#491 journeys 1, 3, 6 and
 // 17). Labels follow the account, switching keeps entered work, an account
@@ -308,9 +308,8 @@ test('a split follows the account chosen on Transfer back to the cash tabs', asy
 
 // A split started before any account is chosen: its first account leg
 // becomes the entry's account, so both rules above still hold (#510 review).
-// The second leg is savings: a split leg on a category needs a currency the
-// split editor cannot yet choose, a separate gap older than #506.
-async function startSplitFirst(page: Page, s: Awaited<ReturnType<typeof setup>>, description: string) {
+// A second leg on a category takes the account leg's currency (#511).
+async function startSplitFirst(page: Page, s: Awaited<ReturnType<typeof setup>>, description: string, second: { id: number } = s.savings) {
   await page.goto('/app');
   await page.getByRole('list', { name: 'Shortcuts', exact: true }).getByRole('button', { name: 'New transaction', exact: true }).click();
   const entry = entryDialog(page);
@@ -321,19 +320,77 @@ async function startSplitFirst(page: Page, s: Awaited<ReturnType<typeof setup>>,
   const legAmounts = entry.getByRole('textbox', { name: 'Amount', exact: true });
   await legAccounts.nth(0).selectOption(String(s.checking.id));
   await legAmounts.nth(0).fill('-12.40');
-  await legAccounts.nth(1).selectOption(String(s.savings.id));
+  await legAccounts.nth(1).selectOption(String(second.id));
   await legAmounts.nth(1).fill('12.40');
   return { entry, legAccounts, legAmounts };
 }
 
 test('a split started before any account follows Deposit', async ({ page }) => {
   const s = await setup(page);
-  const { entry, legAmounts } = await startSplitFirst(page, s, `Tabs split first deposit ${s.suffix}`);
+  const { entry, legAmounts } = await startSplitFirst(page, s, `Tabs split first deposit ${s.suffix}`, s.category);
+  // The category line shows the currency it takes from checking (#511).
+  await expect(entry.getByRole('combobox', { name: 'Currency', exact: true })).toHaveValue(String(s.currencyID));
   await entry.getByRole('tab', { name: 'Deposit', exact: true }).click();
   await expect(legAmounts.nth(0)).toHaveValue('12.40');
   const postings = savedPostings(page);
   await entry.getByRole('button', { name: 'Save transaction', exact: true }).click();
-  expect(await postings()).toEqual(expect.arrayContaining([[s.checking.id, '1240'], [s.savings.id, '-1240']]));
+  expect(await postings()).toEqual(expect.arrayContaining([[s.checking.id, '1240'], [s.category.id, '-1240']]));
+});
+
+// #511: a split line on an account with no currency of its own (every
+// category) takes the currency the account lines share, or the owner picks
+// it; a filled line is never dropped from the save.
+test('a split line on a category takes the account lines’ currency, and a filled line is never dropped', async ({ page }) => {
+  const s = await setup(page);
+  const foreignCode = s.currencyID === (await ensureCurrency(page, s.csrfToken, 'USD', 'US Dollar')) ? 'EUR' : 'USD';
+  const foreign = await ensureCurrency(page, s.csrfToken, foreignCode, foreignCode);
+  const abroad = await createCashAccount(page, s.csrfToken, `Tabs abroad ${s.suffix}`, foreign);
+
+  await page.goto('/app');
+  await page.getByRole('list', { name: 'Shortcuts', exact: true }).getByRole('button', { name: 'New transaction', exact: true }).click();
+  const entry = entryDialog(page);
+  await entry.getByLabel('Date', { exact: true }).fill(todayISO());
+  await entry.getByLabel('Description', { exact: true }).fill(`Tabs split category ${s.suffix}`);
+  await entry.getByRole('button', { name: 'Use split entry', exact: true }).click();
+  const legAccounts = entry.getByRole('combobox', { name: 'Account', exact: true });
+  const legAmounts = entry.getByRole('textbox', { name: 'Amount', exact: true });
+  const currency = entry.getByRole('combobox', { name: 'Currency', exact: true });
+
+  // The category comes first; it follows checking once checking is chosen.
+  await legAccounts.nth(0).selectOption(String(s.category.id));
+  await legAmounts.nth(0).fill('12.40');
+  await expect(currency).toHaveValue('');
+  await legAccounts.nth(1).selectOption(String(s.checking.id));
+  await legAmounts.nth(1).fill('-12.40');
+  await expect(currency).toHaveValue(String(s.currencyID));
+
+  let posted = 0;
+  page.on('request', request => { if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/transactions') posted += 1; });
+  const save = entry.getByRole('button', { name: 'Save transaction', exact: true });
+  const removeLeg = entry.getByRole('button', { name: 'Remove leg', exact: true });
+
+  // Account lines in two currencies share none: the category's line asks.
+  await entry.getByRole('button', { name: 'Add leg', exact: true }).click();
+  await legAccounts.nth(2).selectOption(String(abroad.id));
+  await legAmounts.nth(2).fill('5.00');
+  await expect(currency).toHaveValue('');
+  await save.click();
+  await expect(entry.getByRole('alert')).toContainText(`Choose a currency for line 1: ${s.category.name} has none of its own`);
+  expect(posted).toBe(0);
+  await removeLeg.nth(2).click();
+  await expect(currency).toHaveValue(String(s.currencyID));
+
+  // An amount without an account is refused, not left out.
+  await entry.getByRole('button', { name: 'Add leg', exact: true }).click();
+  await legAmounts.nth(2).fill('1.00');
+  await save.click();
+  await expect(entry.getByRole('alert')).toContainText('Line 3 has an amount but no account');
+  expect(posted).toBe(0);
+  await removeLeg.nth(2).click();
+
+  const postings = savedPostings(page);
+  await save.click();
+  expect(await postings()).toEqual(expect.arrayContaining([[s.checking.id, '-1240'], [s.category.id, '1240']]));
 });
 
 test('a split started before any account follows a new From account back to Charge', async ({ page }) => {

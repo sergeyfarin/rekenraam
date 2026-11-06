@@ -1,6 +1,6 @@
 import { isSubledgerManagedAccountKind } from '#lib/accounts/subledger-accounts.ts';
 import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
-import { addScaledAmounts, coefficientSign, type ScaledAmount } from '#lib/money/amount.ts';
+import { addScaledAmounts, coefficientSign, parseDecimalAmount, type ScaledAmount } from '#lib/money/amount.ts';
 import { isOrdinaryEntryAccount } from './entry-account.ts';
 
 /**
@@ -171,4 +171,52 @@ export function rebindSplitAccount<L extends { accountID: string; commodityID: s
     const accountID = leg.accountID === a ? b : a;
     return { ...leg, accountID, commodityID: commodityOf(accountID) || leg.commodityID };
   });
+}
+
+/** A split line as the currency rule reads it: its account and stored currency ('' when unset). */
+export type SplitLegCurrency = { accountID: string; commodityID: string };
+
+/**
+ * Each split line's currency. A line keeps the currency it carries; otherwise
+ * it takes its account's own. A line on an account with none of its own (a
+ * category, a clearing account) follows the split's account lines when they
+ * all share one currency, and has none ('') when they do not: then the owner
+ * chooses it on the line (#511).
+ */
+export function splitLegCommodities(legs: SplitLegCurrency[], ownCommodityOf: (accountID: string) => string): string[] {
+  const shared = new Set<string>();
+  for (const leg of legs) {
+    if (leg.accountID === '' || ownCommodityOf(leg.accountID) === '') continue;
+    shared.add(leg.commodityID || ownCommodityOf(leg.accountID));
+  }
+  const follow = shared.size === 1 ? [...shared][0] : '';
+  return legs.map((leg) => {
+    if (leg.commodityID) return leg.commodityID;
+    if (leg.accountID === '') return '';
+    return ownCommodityOf(leg.accountID) || follow;
+  });
+}
+
+/** A split line with its currency resolved and its amount as typed. */
+export type SplitLineInput = { accountID: string; commodityID: string; amountStr: string };
+
+/** Why a filled split line cannot be saved; `line` counts from 1. */
+export type SplitLineProblem = { line: number; missing: 'account' | 'amount' | 'currency' | 'number' };
+
+/**
+ * The first split line the save would otherwise have to drop or guess at. A
+ * line is filled once it names an account or an amount, and a filled line
+ * saves whole or the save stops; blank lines are ignored (#511).
+ */
+export function splitLineProblem(legs: SplitLineInput[]): SplitLineProblem | null {
+  for (const [i, leg] of legs.entries()) {
+    const amount = leg.amountStr.trim();
+    if (leg.accountID === '' && amount === '') continue;
+    const line = i + 1;
+    if (leg.accountID === '') return { line, missing: 'account' };
+    if (amount === '') return { line, missing: 'amount' };
+    if (parseDecimalAmount(amount) === null) return { line, missing: 'number' };
+    if (leg.commodityID === '') return { line, missing: 'currency' };
+  }
+  return null;
 }

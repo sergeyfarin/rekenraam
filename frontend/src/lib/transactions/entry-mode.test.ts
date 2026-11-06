@@ -13,6 +13,8 @@ import {
   rebindSplitAccount,
   shapeForTab,
   splitDirection,
+  splitLegCommodities,
+  splitLineProblem,
   startingTab
 } from './entry-mode.ts';
 
@@ -191,5 +193,45 @@ describe('split entry under the cash tabs', () => {
     ];
     const moved = rebindSplitAccount(legs, 1, 2, () => '10');
     expect(moved.map((l) => [l.accountID, l.amountStr])).toEqual([['2', '-100'], ['1', '100']]);
+  });
+});
+
+describe('split line currencies (#511)', () => {
+  // 1 and 2 are EUR accounts, 3 a USD account; 10 is a category with none.
+  const own: Record<string, string> = { '1': 'eur', '2': 'eur', '3': 'usd', '10': '' };
+  const ownOf = (id: string) => own[id] ?? '';
+  const leg = (accountID: string, commodityID = '') => ({ accountID, commodityID });
+
+  it('gives a currency-less line the currency its account lines share', () => {
+    expect(splitLegCommodities([leg('1', 'eur'), leg('10')], ownOf)).toEqual(['eur', 'eur']);
+    expect(splitLegCommodities([leg('1', 'eur'), leg('2', 'eur'), leg('10')], ownOf)).toEqual(['eur', 'eur', 'eur']);
+  });
+
+  it('follows an account line chosen after the category line', () => {
+    expect(splitLegCommodities([leg('10'), leg('1')], ownOf)).toEqual(['eur', 'eur']);
+  });
+
+  it('leaves it unset when the account lines use two currencies, or there are none', () => {
+    expect(splitLegCommodities([leg('1', 'eur'), leg('3', 'usd'), leg('10')], ownOf)).toEqual(['eur', 'usd', '']);
+    expect(splitLegCommodities([leg('10'), leg('')], ownOf)).toEqual(['', '']);
+  });
+
+  it('keeps a currency the line carries, the owner’s choice included', () => {
+    expect(splitLegCommodities([leg('1', 'eur'), leg('10', 'usd')], ownOf)).toEqual(['eur', 'usd']);
+  });
+});
+
+describe('split line problems (#511)', () => {
+  const line = (accountID: string, commodityID: string, amountStr: string) => ({ accountID, commodityID, amountStr });
+
+  it('ignores blank lines', () => {
+    expect(splitLineProblem([line('1', 'eur', '-12.40'), line('10', 'eur', '12.40'), line('', '', ' ')])).toBeNull();
+  });
+
+  it('names the first filled line the save would otherwise drop', () => {
+    expect(splitLineProblem([line('1', 'eur', '-12.40'), line('10', '', '12.40')])).toEqual({ line: 2, missing: 'currency' });
+    expect(splitLineProblem([line('1', 'eur', '-12.40'), line('', '', '12.40')])).toEqual({ line: 2, missing: 'account' });
+    expect(splitLineProblem([line('1', 'eur', ''), line('10', 'eur', '12.40')])).toEqual({ line: 1, missing: 'amount' });
+    expect(splitLineProblem([line('1', 'eur', 'abc'), line('10', '', '12.40')])).toEqual({ line: 1, missing: 'number' });
   });
 });
