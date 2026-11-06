@@ -1,10 +1,7 @@
 # Target allocation and drift (#411)
 
-Status: **contract accepted through the owner's choices and clarifications on
-2026-11-06; implemented and locally validated, awaiting PR review**. Governs [#411](https://github.com/sergeyfarin/rekenraam/issues/411).
-The owner explicitly requested this independent feature in an isolated worktree
-and a pull request. The [roadmap](../roadmap.md) remains the source of overall
-work order; this authorization does not reorder the other agent's work.
+Status: **owner-accepted contract, including the net-cash amendment of
+2026-11-06**. Governs [#411](https://github.com/sergeyfarin/rekenraam/issues/411).
 
 This extends the [accepted actual-allocation contract](investment-returns-plan.md#allocation-at-the-closing-day-slice-4).
 ADRs [0012](../adrs/0012-investment-ledger-subledger-and-reporting-boundaries.md)
@@ -15,8 +12,8 @@ continue to govern valuation, incomplete data and the read-only ledger boundary.
 
 ### Portfolio and grouping
 
-- Owner choice A (2026-11-06): one current target set per book and portfolio
-  selection, with targets per directly owned instrument plus one cash bucket.
+- Owner choice A (2026-11-06): one current target set per book’s Investment
+  pool, with targets per directly owned instrument plus one cash bucket.
   The same instrument held in several selected accounts is aggregated. ETFs
   and funds each retain their own target; constituents do not enter this view.
 - Instrument identity is its existing stable commodity ID, not its ticker,
@@ -33,7 +30,7 @@ continue to govern valuation, incomplete data and the read-only ledger boundary.
   loans, a car, and a reserved emergency fund to remain recorded while outside
   allocation. Default suggestions are visible and require deliberate review;
   a cash-like account kind alone never overrides a saved exclusion.
-- Scope identity is the shared investment pool, independent of reporting
+- Scope identity is the investment pool, independent of reporting
   currency/date or account names. Changing membership appends a revision with
   the complete selection and targets. Existing revisions retain their scope.
   Historical actuals are labelled as using the current pool and current targets;
@@ -68,7 +65,7 @@ The owner explicitly distinguished college savings: they remain part of net
 worth but outside investment allocation. Preserve the existing total-net-worth
 scope and existing cashflow/forecast available-cash definitions. There is no
 new global liquidity boolean that silently changes those defaults. Investment
-pool membership is stored once and resolved by one shared application owner;
+pool membership is stored once and resolved by one application owner;
 future consumers must reuse it rather than inventing another inclusion rule.
 
 **Visible scope is required.** Label the total Investment pool, display its
@@ -95,13 +92,21 @@ concern about unexplained differing totals across pages.
   denominator as securities. The actual quote-currency view retains its own
   currency splits. No implicit cash exclusion, residual target, or automatic
   normalization is performed.
-- Keep actual long and short rows separate, including negative cash. Targets
-  apply only to the long row; short rows have an explicit zero target. Actual
-  long weights may exceed 100% and actual short weights are negative. This
-  version cannot express a desired leveraged or short target portfolio.
+- Owner amendment B (2026-11-06): net currency balances within the combined
+  Cash and deposits bucket after exact reporting-currency conversion. A positive
+  net cash bucket remains a conventional stack even when one account is negative.
+  Disclose the negative-account/currency-balance subtotal separately, including
+  its unavailable state if a required FX rate is missing. That subtotal is already
+  included in net cash and must never be added to the portfolio total again.
+- Securities retain separate long and short rows by account balance before
+  instrument grouping. A negative net cash bucket also uses a separate short
+  row. Targets apply only to long rows; short targets are zero. Signed rows
+  may exceed 100% or be negative, and use the signed-table chart fallback.
+  This version cannot express a desired leveraged or short target portfolio.
 - A classified actual group omitted from the target set has an explicit zero
-  target. A targeted group with no actual balance is a known zero only when
-  the complete portfolio is valued. Such rows remain visible.
+  target. A group with no ledger balance has a known zero amount even when another
+  group is unpriced, whether it is targeted or first appears on another date.
+  Comparison shares/drift still require the complete portfolio. Such rows stay visible.
 - Missing instrument-type or geographic metadata does not remove a known
   commodity identity from per-instrument actuals or turn its value into zero.
   Display its available name/code or stable ID. An unregistered countable
@@ -152,8 +157,9 @@ concern about unexplained differing totals across pages.
   or closed accounts and inactive instruments retain their references; they
   are not silently removed or redistributed. A previously saved group that
   no longer resolves stays visible with its ID and an explanation. New targets
-  validate against eligible current group identities, including retained
-  historical accounts/currencies supported by the existing returns selection.
+  validate against registered instrument commodity IDs or the cash bucket.
+  Membership validates existing non-system asset/liability accounts, including
+  retained closed accounts; inactive instruments remain eligible.
 - Editing pool membership and targets saves one complete audited revision
   atomically. Warn before discarding an unsaved form. Switching an actual-only
   breakdown never converts instrument targets into account, market, type or
@@ -219,8 +225,8 @@ ETF look-through.
   without per-date or per-instrument browser fan-out. Reuse exact balances/rate
   selection before grouping and rounding. Do not recompute the entire period's
   returns separately for each chart date.
-- Proposed sampling: reuse the existing returns daily/weekly/month-end grid,
-  echo the interval, and retain both period boundaries. Make sampling visible;
+- Sampling reuses the existing returns daily/weekly/month-end grid;
+  echo the interval and retain both period boundaries. Make sampling visible;
   do not claim an unsampled date is measured. Sampling details/resource bounds
   are implementation choices to document and validate, not a new daily-price
   guarantee.
@@ -232,9 +238,10 @@ ETF look-through.
   in the table. Split chart segments at gaps; never fill unknown shares with
   zero, bridge a missing sample, or normalize only the priced subset to 100%.
 - A conventional 100% area stack is only shown for fully valued, nonnegative
-  components and a strictly positive total. Named shorts, negative cash and
+  components and a strictly positive total. Security shorts, negative net cash and
   zero/negative totals retain the signed allocation table and an explanation
-  instead of being clamped, netted into positive bands or hidden. A sampled
+  instead of being clamped or hidden. Positive and negative cash accounts
+  follow the separately disclosed net-cash rule above. A sampled
   date with such a condition breaks the conventional area segment.
 - Classification as a chart gap is per sampled date. An earlier chart-only
   missing price must not make a later fully valued allocation unavailable;
@@ -285,6 +292,8 @@ point drift is actual percentage minus target percentage.
 | T15 saved changes, current comparison | Historical actual A/cash 65%/35%; saved revision 1 60%/40%, later revision 2 70%/30% | All selected historical-date comparisons use current revision 2, drift -5/+5 pp; marker/list shows previous 60%/40% and new 70%/30% with save time and scope, without changing the comparison |
 | T16 signed chart fallback | A 1,100/cash -100 at one sample, positive-only holdings at adjacent samples | The signed date has no conventional 100% area stack and breaks the segment; table retains +110%/-10% and their signed drifts; no clipping to 100%/0% |
 | T17 deposits and exclusions | ETF A 6,000; included Raisin deposit 3,000 and bank CD 1,000; excluded college savings 5,000 and reserved emergency savings 2,000 | Investment pool 10,000: A 60%, Cash and deposits 40%; excluded accounts named, never lost from full net-worth scope; 7,000 excluded savings do not dilute allocation |
+| T18 net cash with overdraft | Securities 10,000; deposits 10,000; broker cash -500; targets securities/cash 50%/50% | Total 19,500; net cash 9,500, actual 48.7179%, drift -1.2821 pp; negative cash subtotal -500 is disclosed, not added again; no signed chart gap |
+| T19 offset native cash, missing FX | Securities EUR 1,000, EUR cash 100, USD cash +100 and -100; no USD/EUR rate | Total EUR 1,100 and net cash EUR 100 are valued without an FX rate for zero USD; the negative-account subtotal is unavailable and disclosed separately |
 
 ## Market and look-through follow-ups
 
@@ -316,10 +325,10 @@ publishes holdings CSV and lists the same US-company fund in EUR/GBP/USD;
 publishes market/holdings data with an explicit incomplete-total warning.
 These are feasibility examples, not verified app adapter contracts.
 
-## Planned validation
+## Validation requirements
 
-Named service/API tests own the literal cases above, validation of duplicate
-keys and stale writes, no read-side writes, and targets/actuals captured from
+Service/API tests cover the worked-case behaviors with independently calculated
+expected values, plus duplicate keys and stale writes, no read-side writes, and targets/actuals captured from
 one input image. Existing allocation and saved-run compatibility/integrity
 regressions must remain green. Exercise target backup/restore and the explicit
 export omission. A phone browser journey creates, changes and reopens targets,
@@ -328,97 +337,38 @@ stale edit preservation, keyboard/accessibility and both themes. Add literal
 series cases T13-T16, no-target actuals, stable stacking order, gap recovery,
 zero/negative totals, saved-marker detail and accessible revision inspection.
 Verify date/instrument selection on phone and keyboard, target-column labels,
-no chart overflow and no saved-run serialization change. The shared pool scope is tested across table/series reads, exclusions and
-unchanged full-net-worth treatment. Run the relevant
+no chart overflow and no saved-run serialization change. Pool scope is tested
+across table/series reads, exclusions and unchanged full-net-worth treatment. Run the relevant
 shared backend/frontend gates and integrated build before the PR.
 
-## Delivery validation (2026-11-06)
 
-- `./scripts/test-backend.sh` passed after the integrated build, including the
-  schema inventory, race checks, existing allocation and saved-run integrity
-  tests. Eleven feature service cases and one API journey cover pool exclusions,
-  exact totals and drift, price gaps/recovery, signed cash, current-target
-  history, coherent input images, stale/concurrent saves, and native backup
-  reopening with immutable guards. The additional two-broker aggregation case
-  passed separately under `-race` after the full gate.
-- `./scripts/test-frontend.sh` passed after integration with main: zero Svelte
-  errors/warnings and 1,049 unit tests. Generated OpenAPI types and maintained
-  catalogs agree; partial catalogs retain explicit English fallback.
-- `pnpm build` passed, including embedded-asset serving. The owned-book
-  allocation journey and eleven existing investment-returns browser cases
-  passed on that binary. Allocation covers a 390 px editor, deposit inclusion,
-  college-savings exclusion, drift, saved changes, stale refusal after focus
-  refetch, Dutch decimal re-entry, light/dark accessibility and overflow.
-- A final sequential Playwright run passed all four selected checks: the
-  strengthened allocation journey (date/instrument inspection, a missing-price
-  date and monetary masking), route coverage, hidden-amount rendering and
-  accessible data-error states across the registered routes.
-- `./scripts/measure-large-book.sh` passed on its 250k-posting fixture: bundle
-  export 11.477 s / 20 MiB peak heap, self-check 11.369 s / 39 MiB,
-  attention 3.339 s / 4 MiB, home 4.691 s / 117 MiB. These are the existing
-  regression measurements, not allocation-specific performance certification;
-  investment performance follow-up remains #413.
-- The post-merge audit found no migration collision, client drift, duplicate
-  document paragraph or actual lost test. Its two findings were reviewed:
-  release candidate and release preflight intentionally share a check already
-  present in main; #506 renamed the page-action test from “Add transaction” to
-  “New transaction” while retaining its assertions.
+## Scope and history boundaries
 
-The current-target/current-membership comparison and sampling are the accepted
-limits. Geographic exposure #514, ETF look-through #513 and rebalancing advice
-#412 remain independent. Local validation does not claim hosted CI or a release
-candidate result.
+The Investment pool currently serves this allocation table, series and target
+history. Returns keeps its existing independently selected accounts and default
+investment scope, including its descendant expansion. A link from Returns to
+Allocation carries only dates and reporting currency and must disclose that
+the saved pool supplies account membership. Neither page claims their totals
+match. Future consumers choosing the pool must use its common resolver.
 
-## Acceptance record
+Saved timestamps retain evidence needed for a possible future “targets saved by
+this date” view. They do not define an effective-date schedule: historical pool
+membership, timezone/day boundaries, target edits and any backdating policy
+still need an explicit contract before such a view can be introduced.
 
-Owner answers on 2026-11-06:
+Gross security exposures still require prices even when opposite account
+balances net to zero; a net-zero closing value does not establish the values
+of separate long and short rows. Cash is netted per currency before conversion;
+a zero native-currency total needs no FX to value that cash component. Missing
+FX can still make the disclosed negative-cash subtotal unavailable.
 
-1. Grouping: "A - most conventional and straightforward" (per instrument plus
-   cash), additionally requesting market/currency exposure even without targets.
-2. History: "A" (compare historical actuals against current targets, retaining
-   prior revisions for audit).
-3. Create a separate enhancement for direct MSFT exposure across brokers plus
-   underlying MSFT held through multiple ETFs. Created #513; the owner explicitly
-   said this does not affect choices 1 or 2.
+## Revision storage limit
 
-4. Market scope: "Finish #411 targets + existing currency view; create a separate
-   geographic-exposure enhancement (recommended)". Created #514.
-5. Remaining contract: "Change one or more rules before coding". The owner
-   subsequently identified cash inclusion (rule 1), supplied the chart/history
-   requirements and settled the investment-pool boundary below.
-
-These initial answers and the subsequent cash/chart clarifications below form
-the accepted contract. Runtime implementation began after the deposit and
-net-worth-scope questions were resolved.
-
-### Owner amendments after the remaining-rules question (2026-11-06)
-
-- The owner specified rule 1 as the change: a common definition of liquid
-  accounts is needed to exclude some, also relevant to net worth. Subsequent
-  account examples resolved this as Investment pool membership, independent of
-  total net worth and day-to-day available cash; see the scope contract above.
-- The owner added allocation over time, a labelled stacked target column,
-  date/instrument inspection, optional saved-revision markers with before/after
-  details and accessible history. The supplied chart honesty rules are recorded
-  above, including explicit gaps and signed-allocation fallback.
-- The owner explicitly retained current-target historical comparisons and
-  saved-change timestamps rather than an effective-date target schedule.
-- No further amendments to rules 2-7 were specified. The subsequent
-  deposit/ownership clarification below settles the cash scope.
-
-### Final cash and transparency clarification (2026-11-06)
-
-- Owner confirmed Raisin deposits and CDs (certificates of deposit), including
-  substantial deposit balances in both net worth and allocation cash.
-- Outside allocation: family-support loans with limited control, tracked money
-  given to children, car value, a specially reserved emergency fund, and
-  separately stored college savings. Membership must be explicitly adjustable;
-  names/kinds cannot establish a person's financial intent.
-- Owner explicitly agreed that college savings can remain in net worth while
-  outside investment allocation, and required clarity explaining different
-  totals across pages. The named shared Investment pool and visible account
-  scope implement that distinction without a global liquidity side effect.
-- No additional numerical/coverage/storage amendments were requested after the
-  owner identified rule 1 and added the chart/history requirements. The chosen
-  scope, current-target history, chart rules and recorded exactness, revision,
-  backup/export and saved-run policies now form the implementation contract.
+Revisions preserve exact account/target JSON arrays and validate references in
+the same write transaction. Database delete guards preserve account and target
+commodity identities referenced by any saved revision, including older scopes;
+unused-record cleanup cannot delete them or let their IDs be reused. An unresolved historical account from pre-existing data is displayed by
+stable ID and can be removed explicitly from current membership; no historical
+revision is rewritten. The current read retains all revisions. Bounded history
+pagination and measured large-history behavior are tracked in #517; adding a
+silent limit is not an acceptable substitute for complete audit access.

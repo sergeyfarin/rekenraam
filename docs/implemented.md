@@ -671,23 +671,28 @@ report guarantee is added.
 ### Investment pool, target allocation and allocation history — #411 (2026-11-06)
 
 `/app/investments/allocation` compares exact per-instrument and Cash and deposits
-weights against current targets. A shared Investment pool selection includes
+weights against current targets. Cash nets across included accounts/currencies,
+with the negative-account subtotal disclosed separately. Securities retain
+separate long/short rows. An Investment pool selection includes
 Raisin deposits/CDs and can exclude college savings, reserved emergency funds,
 family-support loans and other accounts. The page names its scope, lists
 included/excluded accounts and links to total net worth; changing pool membership
 does not remove assets from net worth or change cashflow/forecast defaults.
+Returns keeps its own scope; the link to Allocation explicitly carries only
+dates/currency and switches to the saved pool.
 
 One composed read captures scope, targets, revisions, price/FX coverage and sampled
 actuals from one disposable input image, reusing returns' recognition and exact
 valuation. A 100% stacked area chart has a current-target column and labelled
-legend; date/instrument controls and a signed table supply exact percentages and
+legend with patterns when the five theme colours repeat; date/instrument controls and a signed table supply exact percentages and
 drift. Missing prices/FX create gaps, zero/negative totals have no shares, and
 signed positions use the table. Known-only values never become full-portfolio
 weights. Historical actuals use current pool membership and targets explicitly.
 
 Manual scope/target edits atomically append an immutable revision and audit event,
 with exact millionth shares (four decimal percentage places, exact 100% total)
-and stale-revision refusal. Optional saved-change markers and an accessible
+and stale-revision refusal. References in every saved revision prevent deletion
+of otherwise unused accounts and target commodities. Optional saved-change markers and an accessible
 history list show before/after targets, save time and affected scope, without
 introducing effective-dated targets. Native backup retains every revision;
 portable ledger exports explicitly omit these settings in their manifest.
@@ -695,7 +700,8 @@ Existing returns calculations and saved-run documents retain their bytes and
 meaning. English/Dutch/Russian copy is maintained, with explicit English fallback
 for partial Spanish/French/German catalogs. The [contract](plans/investment-target-allocation-plan.md)
 owns examples and policy. Geographic exposure #514 and ETF look-through #513 are
-independent; advisory rebalancing remains #412.
+independent; advisory rebalancing remains #412. Revision-history pagination
+is tracked in #517.
 
 ### Existing investment commands and reporting
 

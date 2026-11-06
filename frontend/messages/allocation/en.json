@@ -59,5 +59,10 @@
   "allocation_cancel": "Cancel",
   "allocation_save": "Save pool and targets",
   "allocation_saving": "Saving…",
-  "allocation_valuation_window": "Each sample uses recorded prices and exchange rates on or before its date, no more than {days} days old."
+  "allocation_valuation_window": "Each sample uses recorded prices and exchange rates on or before its date, no more than {days} days old.",
+  "allocation_open_pool": "View investment pool and targets",
+  "allocation_returns_scope": "Returns uses its own account selection. Allocation uses your saved Investment pool; this link carries only the dates and reporting currency.",
+  "allocation_negative_cash": "Negative account cash balances: {value}. This subtotal is already included in net cash and the pool total.",
+  "allocation_keep_editing": "Keep editing",
+  "allocation_discard_confirm": "Discard changes"
 }

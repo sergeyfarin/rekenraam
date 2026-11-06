@@ -42,7 +42,7 @@ func TestAllocationAPIReopensTargetsAndRefusesStaleAndUnauthorisedWrites(t *test
 	request["expected_revision"] = revision.ID
 	request["targets"] = []db.AllocationTarget{{CommodityID: instrument.CommodityID, Units: 999999}}
 	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPut, "/api/v1/investments/allocation", request, http.StatusBadRequest)
-	for _, badPath := range []string{"/api/v1/investments/allocation?to=a", "/api/v1/investments/allocation?to=2026-02-30"} {
+	for _, badPath := range []string{"/api/v1/investments/allocation?to=a", "/api/v1/investments/allocation?to=2026-02-30", "/api/v1/investments/allocation?reporting_currency_id=NaN", "/api/v1/investments/allocation?reporting_currency_id=-1"} {
 		doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, badPath, nil, http.StatusBadRequest)
 	}
 
@@ -53,6 +53,8 @@ func TestAllocationAPIReopensTargetsAndRefusesStaleAndUnauthorisedWrites(t *test
 	} {
 		doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPut, "/api/v1/investments/allocation", malformed, http.StatusBadRequest)
 	}
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPut, "/api/v1/investments/allocation", map[string]any{"expected_revision": revision.ID, "account_ids": []int64{999999}, "targets": []db.AllocationTarget{{Units: 1000000}}}, http.StatusBadRequest)
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPut, "/api/v1/investments/allocation", map[string]any{"expected_revision": revision.ID, "account_ids": revision.AccountIDs, "targets": []db.AllocationTarget{}}, http.StatusBadRequest)
 	unauthenticated := httptest.NewRecorder()
 	handler.ServeHTTP(unauthenticated, httptest.NewRequest(http.MethodGet, path, nil))
 	require.Equal(t, http.StatusUnauthorized, unauthenticated.Code)

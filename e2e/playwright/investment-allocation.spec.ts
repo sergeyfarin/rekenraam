@@ -93,8 +93,14 @@ test('[acceptance] investment pool includes deposits, excludes college savings, 
   expect((await refused).status()).toBe(409);
   await expect(dialog.getByRole('alert')).toBeVisible();
   await expect(dialog.getByLabel('Pool equity ETF · Target', { exact: true })).toHaveValue('55');
-  page.once('dialog', d => d.accept());
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  const discard = page.getByRole('alertdialog', { name: 'Discard unsaved allocation changes?' });
+  await expect(discard.getByRole('button', { name: 'Keep editing' })).toBeFocused();
+  await expectNoAccessibilityViolations(page, 'Allocation discard confirmation');
+  await discard.getByRole('button', { name: 'Keep editing' }).click();
+  await expect(dialog.getByLabel('Pool equity ETF · Target', { exact: true })).toHaveValue('55');
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await discard.getByRole('button', { name: 'Discard changes', exact: true }).click();
 
   await page.evaluate(() => localStorage.setItem('rekenraam-theme', 'dark'));
   await page.reload();
@@ -118,4 +124,53 @@ test('[acceptance] investment pool includes deposits, excludes college savings, 
   expect(final.current.targets.find(t => t.commodity_id === instrument.commodity_id)?.units).toBe(600001);
   expect(final.current.account_ids).toContain(deposit.id);
   expect(final.current.account_ids).not.toContain(college.id);
+});
+
+
+test('[acceptance] net cash discloses borrowing and the Returns link explains its separate scope', async ({ page }) => {
+  test.slow();
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const opened = daysFromTodayISO(-1);
+  const income = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/categories', csrfToken, { name: 'Net cash funding', category_type: 'income' });
+  async function create(name: string, cents: string) {
+    const a = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/accounts', csrfToken, { name, account_class: 'asset', account_kind: 'checking', default_commodity_id: currencyID, allows_postings: true, opened_on: opened, effective_from: opened });
+    await apiJSON(page, 'POST', '/api/v1/transactions', csrfToken, { transaction_date: opened, journal_entries: [{ entry_date: opened, postings: [
+      { account_id: a.id, commodity_id: currencyID, quantity_value: cents, quantity_scale: 2 },
+      { account_id: income.id, commodity_id: currencyID, quantity_value: String(-BigInt(cents)), quantity_scale: 2 }
+    ] }] });
+    return a;
+  }
+  const deposit = await create('Included deposit', '1000000');
+  const debt = await create('Included broker overdraft', '-50000');
+  const outside = await create('Returns-only college account', '200000');
+  await apiJSON(page, 'PUT', '/api/v1/investments/allocation', csrfToken, { expected_revision: 0, account_ids: [deposit.id, debt.id], targets: [{ commodity_id: 0, units: 1000000 }] });
+  await page.goto(`/app/investments/returns?from=${opened}&to=${todayISO()}&reporting_currency_id=${currencyID}&account_id=${outside.id}`);
+  await expect(page.getByText('Returns uses its own account selection.', { exact: false })).toBeVisible();
+  await page.getByRole('link', { name: 'View investment pool and targets', exact: true }).click();
+  await expect(page).toHaveURL(u => u.pathname === '/app/investments/allocation' && !u.searchParams.has('account_id') && u.searchParams.get('from') === opened);
+  await expect(page.getByTestId('allocation-total')).toContainText('9,500.00');
+  await expect(page.getByTestId('allocation-negative-cash')).toContainText('-500.00');
+  await expect(page.getByTestId('allocation-negative-cash')).toContainText('already included');
+  await expect(page.getByTestId('allocation-table').getByRole('row').filter({ hasText: 'Cash and deposits' })).toContainText('100.00%');
+  const read = await apiJSON<AllocationResponse>(page, 'GET', `/api/v1/investments/allocation?from=${opened}&to=${todayISO()}&reporting_currency_id=${currencyID}`);
+  expect(read.points.at(-1)?.chart_reason).toBe('');
+  await expectNoAccessibilityViolations(page, 'Net cash and negative balance disclosure');
+  // More than five components keep the theme palette and gain distinct patterns.
+  const holdings: number[] = [];
+  const targets = [{ commodity_id: 0, units: 400000 }];
+  for (let i = 0; i < 6; i++) {
+    const instrument = await apiJSON<{ id: number; commodity_id: number }>(page, 'POST', '/api/v1/investments/instruments', csrfToken, { commodity_code: `BAND${i}`, instrument_type: 'etf', display_name: `Allocation band ${i}`, quote_commodity_id: currencyID, trading_commodity_id: currencyID, quantity_scale: 0, price_scale: 2, effective_from: opened });
+    const holding = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/holding-accounts', csrfToken, { instrument_id: instrument.id, name: `Band holding ${i}`, opened_on: opened, effective_from: opened });
+    await apiJSON(page, 'POST', '/api/v1/investments/buy', csrfToken, { transaction_date: opened, commodity_id: instrument.commodity_id, holding_account_id: holding.id, cash_account_id: deposit.id, quantity_value: '1', quantity_scale: 0, cash_amount_value: '10000', cash_amount_scale: 2, cash_commodity_id: currencyID, cost_basis_method: 'fifo' });
+    holdings.push(holding.id);
+    targets.push({ commodity_id: instrument.commodity_id, units: 100000 });
+  }
+  await apiJSON(page, 'PUT', '/api/v1/investments/allocation', csrfToken, { expected_revision: read.current.id, account_ids: [deposit.id, debt.id, ...holdings], targets });
+  await page.reload();
+  const chart = page.getByTestId('allocation-chart');
+  await expect(chart.getByRole('list', { name: 'Current targets' }).getByRole('listitem')).toHaveCount(7);
+  await expect(chart.locator('pattern')).toHaveCount(2);
+  await expect(chart.locator('polygon[fill="url(#allocation-pattern-5)"]')).toHaveCount(1);
+  await page.screenshot({ path: '/tmp/516-patterned-allocation.png', fullPage: true });
+
 });

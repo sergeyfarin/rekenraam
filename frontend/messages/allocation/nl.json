@@ -59,5 +59,10 @@
   "allocation_cancel": "Annuleren",
   "allocation_save": "Vermogen en doelen opslaan",
   "allocation_saving": "Opslaan…",
-  "allocation_valuation_window": "Elk meetpunt gebruikt vastgelegde prijzen en wisselkoersen op of vóór zijn datum, maximaal {days} dagen oud."
+  "allocation_valuation_window": "Elk meetpunt gebruikt vastgelegde prijzen en wisselkoersen op of vóór zijn datum, maximaal {days} dagen oud.",
+  "allocation_open_pool": "Beleggingsvermogen en doelen bekijken",
+  "allocation_returns_scope": "Rendement gebruikt een eigen rekeningselectie. Allocatie gebruikt uw opgeslagen beleggingsvermogen; deze link neemt alleen de datums en rapportagevaluta over.",
+  "allocation_negative_cash": "Negatieve kassaldi van rekeningen: {value}. Dit subtotaal is al verwerkt in het nettokassaldo en het totaal van het beleggingsvermogen.",
+  "allocation_keep_editing": "Verder bewerken",
+  "allocation_discard_confirm": "Wijzigingen verwerpen"
 }

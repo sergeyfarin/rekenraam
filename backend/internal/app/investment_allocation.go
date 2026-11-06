@@ -53,12 +53,13 @@ type AllocationUnknown struct {
 	Scale       int    `json:"scale"`
 }
 type AllocationPoint struct {
-	Date        string              `json:"date"`
-	Total       *AllocationMoney    `json:"total"`
-	Reason      string              `json:"reason"`
-	ChartReason string              `json:"chart_reason"`
-	Rows        []AllocationRow     `json:"rows"`
-	Unknown     []AllocationUnknown `json:"unknown"`
+	Date         string              `json:"date"`
+	Total        *AllocationMoney    `json:"total"`
+	Reason       string              `json:"reason"`
+	ChartReason  string              `json:"chart_reason"`
+	Rows         []AllocationRow     `json:"rows"`
+	Unknown      []AllocationUnknown `json:"unknown"`
+	NegativeCash *AllocationMoney    `json:"negative_cash"`
 }
 type AllocationRead struct {
 	Policy              string                   `json:"policy"`
@@ -121,20 +122,6 @@ func (s *InvestmentService) SaveAllocation(ctx context.Context, input SaveAlloca
 	return s.repository.SaveAllocationRevision(ctx, input.ExpectedRevision, db.AllocationRevision{SavedAt: now, AccountIDs: input.AccountIDs, Targets: input.Targets}, db.AuditEventParams{BookID: BookID, ActorUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID, OccurredAt: now, RequestID: input.RequestID, OriginType: "browser_api", Operation: "investment.allocation.save", Reason: "save investment pool and targets"})
 }
 
-// DefaultInvestmentPool is shared scope selection, not an available-cash or
-// net-worth policy. Saved membership always wins, including an empty pool.
-func DefaultInvestmentPool(accounts []db.LedgerAccountRecord, baseKinds map[string]string) []int64 {
-	ids := []int64{}
-	for _, a := range accounts {
-		base := baseKinds[a.AccountKind]
-		if !a.SystemRole.Valid && a.AccountClass == "asset" && (returnsDefaultBaseKinds[base] || base == "cash" || base == "bank_account" || a.AccountKind == "term_deposit") {
-			ids = append(ids, a.ID)
-		}
-	}
-	slices.Sort(ids)
-	return ids
-}
-
 func (s *InvestmentService) ReadAllocation(ctx context.Context, input ReturnsInput) (AllocationRead, error) {
 	snapshot, cleanup, err := s.repository.LiveGainsSnapshot(ctx)
 	if err != nil {
@@ -190,23 +177,12 @@ func readAllocationOn(ctx context.Context, snapshot *sql.DB, now time.Time, inpu
 	if err != nil {
 		return out, err
 	}
-	out.Revisions, err = db.AllocationRevisions(ctx, snapshot, BookID)
+	pool, err := resolveInvestmentPool(ctx, snapshot, accounts, bases)
 	if err != nil {
 		return out, err
 	}
-	out.Current = db.AllocationRevision{AccountIDs: DefaultInvestmentPool(accounts, bases), Targets: []db.AllocationTarget{}}
-	if len(out.Revisions) > 0 {
-		out.Current = out.Revisions[0]
-	}
-	members := map[int64]bool{}
-	for _, id := range out.Current.AccountIDs {
-		members[id] = true
-	}
-	for _, a := range accounts {
-		if !a.SystemRole.Valid && (a.AccountClass == "asset" || a.AccountClass == "liability") {
-			out.Accounts = append(out.Accounts, AllocationAccount{ID: a.ID, Name: a.Name.String, Code: a.Code.String, Kind: a.AccountKind, Status: a.Status, Included: members[a.ID]})
-		}
-	}
+	out.Current, out.Revisions, out.Accounts = pool.Current, pool.Revisions, pool.Accounts
+	members := pool.Members
 	out.Commodities, err = db.AllocationCommodities(ctx, snapshot, BookID)
 	if err != nil {
 		return out, err
@@ -263,7 +239,7 @@ func readAllocationOn(ctx context.Context, snapshot *sql.DB, now time.Time, inpu
 	}
 	// A selector can inspect an instrument before it was bought or after it
 	// was sold, even when it has no explicit target. Supply a known zero only
-	// on a complete valuation; never infer it from a priced-only subtotal.
+	// from the ledger; comparison weights still require a complete valuation.
 	universe := map[int64]bool{}
 	for _, point := range out.Points {
 		for _, row := range point.Rows {
@@ -292,9 +268,6 @@ func readAllocationOn(ctx context.Context, snapshot *sql.DB, now time.Time, inpu
 					drift := "0.000000"
 					row.Drift = &drift
 				}
-			}
-			if point.Reason == ReturnReasonValuationUnavailable || point.Reason == ReturnReasonUnclassifiedShort {
-				row.Amount = nil
 			}
 			point.Rows = append(point.Rows, row)
 		}
@@ -337,6 +310,9 @@ func (r *returnsReader) allocationPoint(date string, running map[int64]map[int64
 	values := map[instrumentAllocationKey]*big.Rat{}
 	unknownKeys := map[instrumentAllocationKey]bool{}
 	total := new(big.Rat)
+	cashTotals := map[int64]*exact.ScaledInt{}
+	negativeCash := new(big.Rat)
+	negativeCashUnknown := false
 	for _, account := range sortedKeys(running) {
 		for _, commodity := range sortedKeys(running[account]) {
 			balance := running[account][commodity]
@@ -347,37 +323,82 @@ func (r *returnsReader) allocationPoint(date string, running map[int64]map[int64
 			if !ok {
 				continue
 			}
-			value, ok := r.rates.ConvertExact(coefficient, scale, commodity, date)
-			if !ok {
-				key := instrumentAllocationKey{commodity: commodity, side: AllocationSideLong}
-				if r.kinds[commodity] == "currency" {
-					key.commodity = 0
+			if r.kinds[commodity] == "currency" {
+				if cashTotals[commodity] == nil {
+					cashTotals[commodity] = exact.NewScaledInt()
 				}
+				cashTotals[commodity].AddScaled(balance)
 				if balance.Sign() < 0 {
-					key.side = AllocationSideShort
+					if value, ok := r.rates.ConvertExact(coefficient, scale, commodity, date); ok {
+						negativeCash.Add(negativeCash, value)
+					} else {
+						negativeCashUnknown = true
+					}
 				}
-				unknownKeys[key] = true
-				if values[key] == nil {
-					values[key] = new(big.Rat)
-				}
-				point.Unknown = append(point.Unknown, AllocationUnknown{AccountID: account, CommodityID: commodity, Value: coefficient.String(), Scale: scale})
 				continue
 			}
 			key := instrumentAllocationKey{commodity: commodity, side: AllocationSideLong}
-			if r.kinds[commodity] == "currency" {
-				key.commodity = 0
-			}
-			if value.Sign() < 0 {
+			if balance.Sign() < 0 {
 				key.side = AllocationSideShort
-				point.ChartReason = "signed_allocation"
 			}
 			if values[key] == nil {
 				values[key] = new(big.Rat)
+			}
+			value, ok := r.rates.ConvertExact(coefficient, scale, commodity, date)
+			if !ok {
+				unknownKeys[key] = true
+				point.Unknown = append(point.Unknown, AllocationUnknown{AccountID: account, CommodityID: commodity, Value: coefficient.String(), Scale: scale})
+				continue
+			}
+			if value.Sign() < 0 {
+				point.ChartReason = "signed_allocation"
 			}
 			values[key].Add(values[key], value)
 			total.Add(total, value)
 		}
 	}
+	// Cash has one net target group. Net each native currency first, then use
+	// the shared exact FX table; offsetting native balances need no FX for zero.
+	cashKey := instrumentAllocationKey{commodity: 0, side: AllocationSideLong}
+	for _, commodity := range sortedKeys(cashTotals) {
+		balance := cashTotals[commodity]
+		if balance.Sign() == 0 {
+			continue
+		}
+		if values[cashKey] == nil {
+			values[cashKey] = new(big.Rat)
+		}
+		coefficient, scale, ok := r.fit(balance.BigInt(), balance.Scale(), commodity)
+		if !ok {
+			continue
+		}
+		value, ok := r.rates.ConvertExact(coefficient, scale, commodity, date)
+		if !ok {
+			unknownKeys[cashKey] = true
+			for _, account := range sortedKeys(running) {
+				amount := running[account][commodity]
+				if amount == nil || amount.Sign() == 0 {
+					continue
+				}
+				coefficient, scale, ok := r.fit(amount.BigInt(), amount.Scale(), commodity)
+				if ok {
+					point.Unknown = append(point.Unknown, AllocationUnknown{AccountID: account, CommodityID: commodity, Value: coefficient.String(), Scale: scale})
+				}
+			}
+			continue
+		}
+		values[cashKey].Add(values[cashKey], value)
+		total.Add(total, value)
+	}
+	if cash := values[cashKey]; cash != nil && cash.Sign() < 0 && !unknownKeys[cashKey] {
+		values[instrumentAllocationKey{commodity: 0, side: AllocationSideShort}] = cash
+		delete(values, cashKey)
+		point.ChartReason = "signed_allocation"
+	}
+	if !negativeCashUnknown {
+		point.NegativeCash = allocationMoney(r.quantity(negativeCash))
+	}
+
 	targetMap := map[int64]int{}
 	for _, t := range targets {
 		targetMap[t.CommodityID] = t.Units
@@ -417,7 +438,7 @@ func (r *returnsReader) allocationPoint(date string, running map[int64]map[int64
 	})
 	for _, key := range keys {
 		row := AllocationRow{CommodityID: key.commodity, Side: key.side, Amount: allocationMoney(r.quantity(values[key]))}
-		if unknownKeys[key] || valuation.reason == ReturnReasonUnclassifiedShort {
+		if unknownKeys[key] || (valuation.reason == ReturnReasonUnclassifiedShort && values[key].Sign() != 0) {
 			row.Amount = nil
 		}
 		if len(targets) > 0 {

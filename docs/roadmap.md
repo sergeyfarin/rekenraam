@@ -233,7 +233,8 @@ These are valuable, but they are not allowed to displace the current plan:
   remain independent P3 extensions requiring accepted contracts. #411 delivers
   direct instrument targets and the named Investment pool independently, at
   the owner's request on 2026-11-06. Rebalancing depends on its target model;
-  no trade execution is implied.
+  no trade execution is implied. Bounded allocation revision-history reads
+  remain a P3 follow-up in [#517](https://github.com/sergeyfarin/rekenraam/issues/517).
 - Large-investment-book returns measurement
   [#413](https://github.com/sergeyfarin/rekenraam/issues/413), P3: measure the
   live read (including `instruments=true`) and saved runs against the #405

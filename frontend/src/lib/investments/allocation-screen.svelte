@@ -41,6 +41,7 @@
   // Fields, choices and concurrency token are captured together only on an
   // explicit open/reload. Query refetches cannot accept a newer token for old fields.
   let editing = $state(false);
+  let discardAction = $state<(() => void) | null>(null);
   let editSnapshot = $state.raw<AllocationResponse | null>(null);
   const editAccountIDs = $derived(editSnapshot ? [...new Set([...editSnapshot.accounts.map(a => a.id), ...editSnapshot.current.account_ids])] : []);
   let accountDraft = $state<number[]>([]);
@@ -74,8 +75,9 @@
     return `${formatQuantity(amount.value, amount.scale, locale)} ${data?.commodities.find(c => c.id === amount.commodity_id)?.code ?? `#${amount.commodity_id}`}`;
   }
   function openEditor() {
-    if (!data || pending || (dirty && !window.confirm(m.allocation_discard()))) return;
-    loadEditor(data);
+    if (!data || pending) return;
+    const source = data;
+    guardDiscard(() => loadEditor(source));
   }
   function loadEditor(source: AllocationResponse) {
     editLocale = locale;
@@ -84,8 +86,18 @@
     targetDraft = source.current.targets.map(t => ({ commodityID: t.commodity_id, text: formatEditableAmount(String(t.units), 4, locale) }));
     addID = ''; dirty = false; saveError = undefined; editing = true;
   }
+  function guardDiscard(action: () => void) {
+    if (pending) return;
+    if (dirty) discardAction = action;
+    else action();
+  }
   function closeEditor() {
-    if (!pending && (!dirty || window.confirm(m.allocation_discard()))) { editing = false; dirty = false; }
+    guardDiscard(() => { editing = false; dirty = false; });
+  }
+  function discard() {
+    const action = discardAction;
+    discardAction = null; dirty = false;
+    action?.();
   }
   function toggleAccount(id: number, checked: boolean) {
     accountDraft = checked ? [...accountDraft, id] : accountDraft.filter(a => a !== id); dirty = true;
@@ -111,7 +123,18 @@
     for (const key of ['from', 'to', 'reporting_currency_id']) { const value = String(form.get(key) ?? ''); if (value) params.set(key, value); }
     await goto(`${page.url.pathname}?${params}`, { reset: false });
   }
-  beforeNavigate(({ cancel }) => { if (pending || (dirty && !window.confirm(m.allocation_discard()))) cancel(); });
+  beforeNavigate((navigation) => {
+    if (pending) { navigation.cancel(); return; }
+    // Leaving the document uses the browser's beforeunload protection.
+    if (!dirty || navigation.willUnload) return;
+    navigation.cancel();
+    const destination = navigation.to?.url;
+    if (destination) guardDiscard(() => {
+      editing = false;
+      if (navigation.type === 'popstate' && navigation.delta) history.go(navigation.delta);
+      else void goto(destination.href);
+    });
+  });
   function beforeUnload(event: BeforeUnloadEvent) { if (dirty || pending) { event.preventDefault(); event.returnValue = ''; } }
   function previousRevision(index: number): AllocationRevision | undefined { return data?.revisions[index + 1]; }
 </script>
@@ -160,6 +183,7 @@
       <div role="status" class="mt-3 space-y-1 text-sm text-foreground" data-testid="allocation-inspection">
         {#each picked as row (`${row.commodity_id}-${row.side}`)}<p class="wrap-anywhere">{instrumentName(row.commodity_id)} · {m.allocation_actual()}: {row.weight === null ? m.allocation_unavailable() : formatWeight(row.weight, locale)} · {m.allocation_target()}: {row.target_units === null ? m.allocation_no_target() : percent(row.target_units)} · {m.allocation_drift()}: {row.drift === null ? m.allocation_unavailable() : drift(row.drift)}{#if row.side === 'short'} · {m.returns_allocation_short()}{/if}</p>{/each}
       </div>
+      {#if point.negative_cash === null || point.negative_cash.value !== '0'}<p class="mt-3 text-sm text-warning" data-testid="allocation-negative-cash">{m.allocation_negative_cash({ value: money(point.negative_cash) })}</p>{/if}
       {#if point.reason}<p role="status" class="mt-3 text-sm text-warning">{returnReasonText(point.reason, point.date, day)}</p>{/if}
       {#if point.chart_reason === 'signed_allocation'}<p role="status" class="mt-3 text-sm text-warning">{m.allocation_signed()}</p>{/if}
       <!-- svelte-ignore a11y_no_noninteractive_tabindex (this region permits keyboard scrolling of the exact allocation table) -->
@@ -200,7 +224,7 @@
       <h2 class="text-lg font-semibold">{m.allocation_edit()}</h2>
       <p class="text-sm text-muted">{m.allocation_edit_help()}</p>
       <APIFormError error={saveError} />
-      {#if saveError}<button class={buttonClass} type="button" disabled={pending || allocation.isFetching} onclick={async () => { const fresh = await allocation.refetch(); if (fresh.data && (!dirty || window.confirm(m.allocation_discard()))) loadEditor(fresh.data); }}>{m.allocation_reload()}</button>{/if}
+      {#if saveError}<button class={buttonClass} type="button" disabled={pending || allocation.isFetching} onclick={async () => { const fresh = await allocation.refetch(); if (fresh.data) { const source = fresh.data; guardDiscard(() => loadEditor(source)); } }}>{m.allocation_reload()}</button>{/if}
       <fieldset disabled={pending} class="space-y-2"><legend class="text-sm font-semibold">{m.allocation_included()}</legend>
         <div class="max-h-64 space-y-1 overflow-y-auto rounded-(--radius-control) border border-border p-3">
           {#each editAccountIDs as id (id)}<label class="flex min-h-11 items-start gap-2 py-2 text-sm"><input class="mt-1" type="checkbox" checked={accountDraft.includes(id)} onchange={(e) => toggleAccount(id, e.currentTarget.checked)} /><span class="wrap-anywhere">{accountName(id, editSnapshot)}</span></label>{/each}
@@ -214,5 +238,15 @@
       </fieldset>
       <div class="flex flex-wrap justify-end gap-2"><button class={buttonClass} type="button" disabled={pending} onclick={closeEditor}>{m.allocation_cancel()}</button><button class={primaryButtonClass} type="submit" disabled={pending || invalid || !session.data?.csrf_token}>{pending ? m.allocation_saving() : m.allocation_save()}</button></div>
     </form>
+  </ModalDialog>
+{/if}
+
+{#if discardAction}
+  <ModalDialog role="alertdialog" label={m.allocation_discard()} onCancel={() => { discardAction = null; }} class="max-w-md p-5">
+    <h2 class="text-lg font-semibold text-foreground">{m.allocation_discard()}</h2>
+    <div class="mt-4 flex flex-wrap justify-end gap-2">
+      <button class={buttonClass} type="button" data-initial-focus onclick={() => { discardAction = null; }}>{m.allocation_keep_editing()}</button>
+      <button class={primaryButtonClass} type="button" onclick={discard}>{m.allocation_discard_confirm()}</button>
+    </div>
   </ModalDialog>
 {/if}

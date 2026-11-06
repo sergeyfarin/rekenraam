@@ -35547,6 +35547,8 @@ export interface components {
             reason: string;
             chart_reason: string;
             rows: components["schemas"]["AllocationRow"][];
+            /** @description Negative account/currency cash balances in reporting currency, already included in net cash. Zero when none; null if required FX is missing. Never add again to total. */
+            negative_cash: components["schemas"]["AllocationMoney"] | null;
             unknown: components["schemas"]["AllocationUnknown"][];
         };
         AllocationResponse: {

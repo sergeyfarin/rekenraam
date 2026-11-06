@@ -16,7 +16,7 @@ describe('exact target entry', () => {
 });
 
 const point = (date: string, weights: [number, string][], chart_reason = ''): AllocationPoint => ({
-  date, chart_reason, reason: chart_reason, total: null, unknown: [],
+  date, chart_reason, reason: chart_reason, total: null, unknown: [], negative_cash: null,
   rows: weights.map(([commodity_id, weight]) => ({ commodity_id, side: 'long', weight, amount: null, target_units: null, drift: null }))
 });
 describe('allocation chart geometry', () => {

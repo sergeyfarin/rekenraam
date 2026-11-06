@@ -15,6 +15,9 @@
   const ids = $derived(allocationIDs(data.points, data.current.targets));
   const areas = $derived(allocationAreas(data.points, ids));
   const markers = $derived(data.revisions.map(r => ({ ...r, day: savedCalendarDay(r.saved_at, data.time_zone) })).filter(r => r.day >= data.from && r.day <= data.to));
+  const fill = (index: number) => index < 5 ? allocationColor(index) : `url(#allocation-pattern-${index})`;
+  const patternAngle = (index: number) => 45 + Math.floor(index / 5) % 4 * 45;
+  const legendPattern = (index: number) => index < 5 ? 'none' : `repeating-linear-gradient(${patternAngle(index) + 90}deg, transparent 0 3px, color-mix(in srgb, var(--color-foreground) 30%, transparent) 3px 4px)`;
   const path = (run: ReturnType<typeof allocationAreas>[number]['segments'][number]) => [
     ...run.map(p => `${p.x * 100},${(1 - p.upper) * 40}`),
     ...run.toReversed().map(p => `${p.x * 100},${(1 - p.lower) * 40}`)
@@ -29,12 +32,20 @@
       <div class="mb-1 flex min-h-8 items-end justify-between text-xs text-muted" aria-hidden="true"><span>{m.allocation_actual()}</span><span>{percent(1000000)}</span></div>
       <svg viewBox="0 0 100 40" preserveAspectRatio="none" class="block h-56 w-full overflow-hidden rounded-(--radius-control) border border-border bg-surface-strong" role="img" aria-label={m.allocation_over_time()}>
         <title>{m.allocation_chart_accessible()}</title>
+        <defs>
+          {#each areas as area, index (area.id)}
+            {#if index >= 5}<pattern id={`allocation-pattern-${index}`} width="4" height="4" patternUnits="userSpaceOnUse" patternTransform={`rotate(${patternAngle(index)})`}>
+              <rect width="4" height="4" fill={allocationColor(index)} />
+              <line x1="0" x2="0" y1="0" y2="4" stroke="var(--color-foreground)" stroke-opacity="0.3" stroke-width="1" />
+            </pattern>{/if}
+          {/each}
+        </defs>
         {#each areas as area, index (area.id)}
           {#each area.segments as run, segment (segment)}
             {#if run.length === 1}
-              <rect x={Math.min(99, Math.max(0, run[0].x * 100 - 0.5))} y={(1 - run[0].upper) * 40} width="1" height={(run[0].upper - run[0].lower) * 40} fill={allocationColor(index)} />
+              <rect x={Math.min(99, Math.max(0, run[0].x * 100 - 0.5))} y={(1 - run[0].upper) * 40} width="1" height={(run[0].upper - run[0].lower) * 40} fill={fill(index)} />
             {:else}
-              <polygon points={path(run)} fill={allocationColor(index)} stroke="var(--color-surface)" stroke-width="0.15" />
+              <polygon points={path(run)} fill={fill(index)} stroke="var(--color-surface)" stroke-width="0.15" />
             {/if}
           {/each}
         {/each}
@@ -54,7 +65,7 @@
           {#each ids as id, index (id)}
             {@const target = data.current.targets.find(t => t.commodity_id === id)?.units ?? 0}
             {@const before = ids.slice(0, index).reduce((sum, key) => sum + (data.current.targets.find(t => t.commodity_id === key)?.units ?? 0), 0)}
-            <rect x="0" y={(1 - (before + target) / 1000000) * 40} width="10" height={target / 1000000 * 40} fill={allocationColor(index)}><title>{label(id)}: {percent(target)}</title></rect>
+            <rect x="0" y={(1 - (before + target) / 1000000) * 40} width="10" height={target / 1000000 * 40} fill={fill(index)}><title>{label(id)}: {percent(target)}</title></rect>
           {/each}
         </svg>
       </div>
@@ -62,7 +73,7 @@
   </div>
   <ul class="grid gap-2 text-sm sm:grid-cols-2" aria-label={m.allocation_current_target()}>
     {#each ids as id, index (id)}
-      <li class="flex min-w-0 items-start gap-2"><span class="mt-1 size-3 shrink-0 rounded-sm" style:background={allocationColor(index)} aria-hidden="true"></span><span class="wrap-anywhere text-foreground">{label(id)}{#if data.current.targets.length}: {percent(data.current.targets.find(t => t.commodity_id === id)?.units ?? 0)}{/if}</span></li>
+      <li class="flex min-w-0 items-start gap-2"><span class="mt-1 size-3 shrink-0 rounded-sm" style:background-color={allocationColor(index)} style:background-image={legendPattern(index)} aria-hidden="true"></span><span class="wrap-anywhere text-foreground">{label(id)}{#if data.current.targets.length}: {percent(data.current.targets.find(t => t.commodity_id === id)?.units ?? 0)}{/if}</span></li>
     {/each}
   </ul>
   {#if data.points.some(p => p.chart_reason)}<p role="status" class="text-sm text-warning">{m.allocation_gaps()}</p>{/if}

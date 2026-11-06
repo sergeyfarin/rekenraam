@@ -1519,6 +1519,7 @@ func scanAccountRecords(rows *sql.Rows) ([]AccountRecord, error) {
 func mapAccountDeleteError(err error) error {
 	message := err.Error()
 	if strings.Contains(message, "account_versions rows are append-only") ||
+		strings.Contains(message, "account is referenced by allocation history") ||
 		isSQLiteForeignKeyConstraint(err) {
 		return fmt.Errorf("%w: %v", ErrAccountDeleteNotPermitted, err)
 	}

@@ -200,6 +200,7 @@ AllocationPoint:
   - chart_reason
   - rows
   - unknown
+  - negative_cash
   properties:
     date:
       type: string
@@ -216,6 +217,11 @@ AllocationPoint:
       type: array
       items:
         $ref: ../../openapi.yaml#/components/schemas/AllocationRow
+    negative_cash:
+      description: Negative account/currency cash balances in reporting currency, already included in net cash. Zero when none; null if required FX is missing. Never add again to total.
+      anyOf:
+      - $ref: ../../openapi.yaml#/components/schemas/AllocationMoney
+      - type: 'null'
     unknown:
       type: array
       items:

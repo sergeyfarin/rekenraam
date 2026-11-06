@@ -597,7 +597,13 @@ Goal: add power-user workflows after the core ledger is stable.
   per-instrument/current targets, allocation-over-time charts, saved-change
   inspection and coverage. Label scope and exclusions so college/reserved
   savings can remain in net worth without diluting investment allocation.
-  Geography #514 and constituent look-through #513 remain independent features.
+  Saved revision references preserve account/instrument identities even if
+  they would otherwise be eligible for unused-record deletion.
+  Cash balances net within that bucket, with the negative-account subtotal
+  disclosed separately; security long/short rows stay separate. Returns keeps
+  its own account selection and must disclose that a link to Allocation
+  switches to the saved investment pool. Geography #514 and constituent
+  look-through #513 remain independent features.
 
 ### Later
 
