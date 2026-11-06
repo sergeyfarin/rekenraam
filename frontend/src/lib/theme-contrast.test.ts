@@ -169,7 +169,9 @@ describe('entry mode accents', () => {
 
   it('gives each mode its own tokens, apart from danger, positive and gain/loss', () => {
     for (const layer of [':root', ":root[data-theme='dark']"]) {
-      const body = new RegExp(`${layer.replace(/[[\]()]/g, '\\$&')}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? '';
+      // Every regex metacharacter escaped, the backslash included (CodeQL js/incomplete-sanitization).
+      const selector = layer.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
+      const body = new RegExp(`${selector}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? '';
       const value = (name: string) => new RegExp(`--color-${name}:\\s*([^;]+);`).exec(body)?.[1];
       const values = entryModes.map((mode) => value(`entry-${mode}`));
       expect(values.every(Boolean), layer).toBe(true);
