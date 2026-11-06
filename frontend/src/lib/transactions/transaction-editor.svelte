@@ -40,7 +40,9 @@
     entryTabs,
     investmentMuted,
     isCreditCard,
+    rebindSplitAccount,
     shapeForTab,
+    splitDirection,
     startingTab,
     type CashDirection,
     type CashShape,
@@ -711,6 +713,16 @@
       entryMessage = m.transactions_entry_amount_positive();
       return;
     }
+    // A split's amounts are signed: under a cash tab they must move the
+    // entry's account the way the tab says, or the tab would misname what
+    // is saved (#506 review).
+    if (tabbed && tier === 'split' && (entryTab === 'out' || entryTab === 'in')) {
+      const moves = currentSplitDirection();
+      if (moves && moves !== entryTab && contextAccount) {
+        entryMessage = m.transactions_entry_split_direction({ account: accountDisplayName(contextAccount), tab: directionLabel(moves) });
+        return;
+      }
+    }
     if (tier === 'transfer') {
       const problem = currentTransferProblem();
       if (problem) {
@@ -1014,6 +1026,28 @@
     return parsed.value.startsWith('-') ? 'negative' : parsed;
   }
 
+  /** Which way the split moves the entry's account, when it says (#506 review). */
+  function currentSplitDirection(): CashDirection | undefined {
+    return splitDirection(
+      splitLegs.map((leg) => ({ accountID: leg.accountID, amount: leg.amountStr.trim() ? parseDecimalAmount(leg.amountStr) : null })),
+      accountID
+    );
+  }
+
+  /**
+   * The split's mirror: every leg's sign flips, so a Withdrawal's split
+   * becomes the same Deposit and still balances. A carried transfer side
+   * stays with its account, which now sends instead of receives.
+   */
+  function mirrorSplit() {
+    splitLegs = splitLegs.map((leg) => {
+      const parsed = leg.amountStr.trim() ? parseDecimalAmount(leg.amountStr) : null;
+      return parsed ? { ...leg, amountStr: formatEditableAmount(negateCoefficient(parsed.value), parsed.scale) } : leg;
+    });
+    const other = (side?: TransferSideName) => (side === 'sending' ? 'receiving' : side === 'receiving' ? 'sending' : undefined);
+    splitCarry = { ...splitCarry, conversionSide: other(splitCarry.conversionSide), feePaidBy: other(splitCarry.feePaidBy) };
+  }
+
   /** Clears Transfer's own fields; From is the entry's account and stays. */
   function resetTransfer() {
     transferToID = undefined;
@@ -1122,6 +1156,7 @@
     // New transaction: split entry belongs to the cash tabs (#506).
     if (tabbed) {
       cashShape = 'split';
+      direction = currentSplitDirection() ?? direction;
       entryTab = direction;
     }
   }
@@ -1151,6 +1186,12 @@
     direction = directionForTab(next) ?? direction;
     const shape = shapeForTab(next, cashShape);
     if (shape !== 'investment') tier = shape;
+    // A kept split under the other cash tab is the same entry the other way:
+    // its legs flip with the direction, so Deposit never saves a withdrawal.
+    if (shape === 'split' && (next === 'out' || next === 'in')) {
+      const moves = currentSplitDirection();
+      if (moves && moves !== next) mirrorSplit();
+    }
     entryMessage = '';
     transferMessage = '';
   }
@@ -1168,6 +1209,22 @@
       transferMessage = '';
       if (payeeConfirm.open) payeeConfirm = { open: false, resolution: null };
       if (reconciliationModal.open) reconciliationModal = { open: false, impacts: [], pendingPayload: {} as TransactionRequest };
+    });
+  });
+
+  // The split keeps the account it was entered with while another tab
+  // changes the entry's account (Transfer's From, the simple form): its legs
+  // follow, so the cash tab's label and the saved postings name the same
+  // account (#506 review). Inside the split editor the legs lead instead.
+  let splitBoundAccountID: number | undefined;
+  $effect(() => {
+    const next = accountID;
+    untrack(() => {
+      const previous = splitBoundAccountID;
+      if (next !== undefined) splitBoundAccountID = next;
+      if (!tabbed || tier === 'split' || cashShape !== 'split') return;
+      if (previous === undefined || next === undefined || previous === next) return;
+      splitLegs = rebindSplitAccount(splitLegs, previous, next, commodityForAccount);
     });
   });
 
@@ -1235,6 +1292,7 @@
       ];
     }
     tier = 'split';
+    if (tabbed) cashShape = 'split';
   }
 
   // The split as the simple form would show it, or null when it would drop
@@ -1267,6 +1325,7 @@
       return;
     }
     tier = 'simple';
+    if (tabbed) cashShape = 'simple';
   }
 
   // Currency choices include currencies used by clearing accounts with no default.
@@ -1306,8 +1365,15 @@
   function onSplitAccountChange(i: number, e: Event) {
     const val = (e.target as HTMLSelectElement).value;
     const newLegs = [...splitLegs];
+    const was = newLegs[i].accountID;
     newLegs[i] = { ...newLegs[i], accountID: val, commodityID: commodityForAccount(val) };
     splitLegs = newLegs;
+    // The leg on the entry's account moved to another account: that account
+    // is now the entry's, for the tab labels and every other tab (#506 review).
+    if (tabbed && accountID !== undefined && was === String(accountID)) {
+      const moved = assetLiabilityAccounts.find((a: AccountResponse) => a.id === Number(val));
+      if (moved && !newLegs.some((leg) => leg.accountID === was)) accountID = moved.id;
+    }
   }
 </script>
 
@@ -1942,6 +2008,12 @@
   {:else}
     <!-- ── Tier 3: split posting editor ────────────────────────────── -->
     <div class="space-y-3">
+      {#if entryMessage}
+        <p role="alert" class="flex items-start gap-2 rounded-[var(--radius-control)] border border-danger/40 bg-danger-soft px-3 py-2.5 text-sm text-foreground">
+          <AlertTriangle size={15} class="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
+          <span>{entryMessage}</span>
+        </p>
+      {/if}
       <div class="flex items-center justify-between">
         <span class={labelClass}>{m.transactions_split_title()}</span>
         {#if splitIsEmpty || simpleFit}

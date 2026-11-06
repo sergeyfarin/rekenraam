@@ -1696,6 +1696,7 @@
   "transactions_entry_account_holding": "{account} es una cuenta de valores y solo registra operaciones de inversión. Elige una cuenta de efectivo o usa la pestaña Inversión.",
   "transactions_entry_account_unavailable": "{account} no admite este apunte. Elige otra cuenta.",
   "transactions_entry_amount_positive": "Introduce el importe sin signo. El tipo de transacción fija su dirección.",
+  "transactions_entry_split_direction": "Estos importes van en el otro sentido para {account}: elige «{tab}» o cambia los importes.",
   "transactions_entry_review_stale": "La transacción cambió después de esta revisión. Guarda de nuevo para revisarla tal como está ahora.",
   "transactions_entry_search_keywords": "añadir nueva transacción retirada ingreso cargo abono pago"
 }

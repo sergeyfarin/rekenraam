@@ -10,7 +10,9 @@ import {
   entryTabLabel,
   entryTabs,
   investmentMuted,
+  rebindSplitAccount,
   shapeForTab,
+  splitDirection,
   startingTab
 } from './entry-mode.ts';
 
@@ -145,5 +147,49 @@ describe('preview invalidation', () => {
 
   it('is never valid without a review', () => {
     expect(approvalStillValid(undefined, request)).toBe(false);
+  });
+});
+
+describe('split entry under the cash tabs', () => {
+  const leg = (accountID: number, value: string | null, scale = 2) => ({
+    accountID: String(accountID),
+    amount: value === null ? null : { value, scale }
+  });
+
+  it('reads the direction from the net of the entry account legs', () => {
+    expect(splitDirection([leg(1, '-1240'), leg(9, '1240')], 1)).toBe('out');
+    expect(splitDirection([leg(1, '1240'), leg(9, '-1240')], 1)).toBe('in');
+    // Two legs on the account, at different scales: the net decides.
+    expect(splitDirection([leg(1, '-1000'), leg(1, '5', 0), leg(9, '-4000')], 1)).toBe('out');
+    expect(splitDirection([leg(1, '-1000'), leg(1, '20', 0), leg(9, '-1000')], 1)).toBe('in');
+  });
+
+  it('contradicts no tab when it cannot tell', () => {
+    expect(splitDirection([leg(9, '-1240'), leg(8, '1240')], 1)).toBeUndefined();
+    expect(splitDirection([leg(1, null), leg(9, '1240')], 1)).toBeUndefined();
+    expect(splitDirection([leg(1, '-500'), leg(1, '500')], 1)).toBeUndefined();
+    expect(splitDirection([leg(1, '-500')], undefined)).toBeUndefined();
+  });
+
+  it('moves the entry account legs to the new account in its currency', () => {
+    const legs = [
+      { accountID: '1', commodityID: '10', amountStr: '-12.40' },
+      { accountID: '9', commodityID: '10', amountStr: '12.40' }
+    ];
+    const currency: Record<string, string> = { '1': '10', '2': '20', '9': '' };
+    const moved = rebindSplitAccount(legs, 1, 2, (id) => currency[id] ?? '');
+    expect(moved).toEqual([
+      { accountID: '2', commodityID: '20', amountStr: '-12.40' },
+      { accountID: '9', commodityID: '10', amountStr: '12.40' }
+    ]);
+  });
+
+  it('swaps the two accounts when the split already posts to the new one', () => {
+    const legs = [
+      { accountID: '1', commodityID: '10', amountStr: '-100' },
+      { accountID: '2', commodityID: '10', amountStr: '100' }
+    ];
+    const moved = rebindSplitAccount(legs, 1, 2, () => '10');
+    expect(moved.map((l) => [l.accountID, l.amountStr])).toEqual([['2', '-100'], ['1', '100']]);
   });
 });

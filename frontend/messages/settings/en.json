@@ -1696,6 +1696,7 @@
   "transactions_entry_account_holding": "{account} is a holding account and records investment activity only. Choose a cash account, or use the Investment tab.",
   "transactions_entry_account_unavailable": "{account} cannot take this entry. Choose another account.",
   "transactions_entry_amount_positive": "Enter the amount without a sign. The transaction type sets its direction.",
+  "transactions_entry_split_direction": "These amounts move money the other way for {account}: choose “{tab}”, or change the amounts.",
   "transactions_entry_review_stale": "The transaction changed after this review. Save again to review it as it is now.",
   "transactions_entry_search_keywords": "add new transaction withdrawal deposit charge credit payment"
 }

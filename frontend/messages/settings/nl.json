@@ -1696,6 +1696,7 @@
   "transactions_entry_account_holding": "{account} is een beleggingsrekening en legt alleen beleggingsactiviteit vast. Kies een geldrekening, of gebruik het tabblad Belegging.",
   "transactions_entry_account_unavailable": "{account} kan deze boeking niet ontvangen. Kies een andere rekening.",
   "transactions_entry_amount_positive": "Vul het bedrag in zonder teken. De soort transactie bepaalt de richting.",
+  "transactions_entry_split_direction": "Deze bedragen boeken voor {account} de andere kant op: kies “{tab}” of pas de bedragen aan.",
   "transactions_entry_review_stale": "De transactie is na deze controle gewijzigd. Sla opnieuw op om haar te controleren zoals ze nu is.",
   "transactions_entry_search_keywords": "toevoegen nieuwe transactie opname storting afschrijving creditering betaling"
 }

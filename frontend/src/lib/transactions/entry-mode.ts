@@ -1,5 +1,6 @@
 import { isSubledgerManagedAccountKind } from '#lib/accounts/subledger-accounts.ts';
 import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
+import { addScaledAmounts, coefficientSign, type ScaledAmount } from '#lib/money/amount.ts';
 import { isOrdinaryEntryAccount } from './entry-account.ts';
 
 /**
@@ -128,4 +129,46 @@ export function approvalKey(request: unknown): string {
 
 export function approvalStillValid(reviewedKey: string | undefined, current: unknown): boolean {
   return reviewedKey !== undefined && reviewedKey === approvalKey(current);
+}
+
+/** A split leg as the entry-mode rules read it: its account and parsed amount. */
+export type SplitLegAmount = { accountID: string; amount: ScaledAmount | null };
+
+/**
+ * Which way a split moves the entry's account: the net of its legs on that
+ * account. Undefined when the split has no leg on it, one of them does not
+ * parse, or they net to zero; then no tab is contradicted (#506 review).
+ */
+export function splitDirection(legs: SplitLegAmount[], accountID: number | undefined): CashDirection | undefined {
+  if (accountID === undefined) return undefined;
+  let net: ScaledAmount = { value: '0', scale: 0 };
+  let found = false;
+  for (const leg of legs) {
+    if (leg.accountID !== String(accountID)) continue;
+    if (!leg.amount) return undefined;
+    net = addScaledAmounts(net, leg.amount);
+    found = true;
+  }
+  const sign = found ? coefficientSign(net.value) : 0;
+  return sign === 0 ? undefined : sign < 0 ? 'out' : 'in';
+}
+
+/**
+ * The split after the entry's account changed from `from` to `to` on another
+ * tab: legs on `from` post to `to`, and legs already on `to` post to `from`,
+ * so a split between the two accounts keeps its shape (#506 review). A moved
+ * leg takes its new account's currency when that account has one.
+ */
+export function rebindSplitAccount<L extends { accountID: string; commodityID: string }>(
+  legs: L[],
+  from: number,
+  to: number,
+  commodityOf: (accountID: string) => string
+): L[] {
+  const [a, b] = [String(from), String(to)];
+  return legs.map((leg) => {
+    if (leg.accountID !== a && leg.accountID !== b) return leg;
+    const accountID = leg.accountID === a ? b : a;
+    return { ...leg, accountID, commodityID: commodityOf(accountID) || leg.commodityID };
+  });
 }

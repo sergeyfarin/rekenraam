@@ -1696,6 +1696,7 @@
   "transactions_entry_account_holding": "{account} est un compte-titres et n’enregistre que des opérations d’investissement. Choisissez un compte de trésorerie, ou utilisez l’onglet Investissement.",
   "transactions_entry_account_unavailable": "{account} ne peut pas recevoir cette écriture. Choisissez un autre compte.",
   "transactions_entry_amount_positive": "Saisissez le montant sans signe. Le type de transaction fixe son sens.",
+  "transactions_entry_split_direction": "Ces montants vont dans l’autre sens pour {account} : choisissez « {tab} » ou modifiez les montants.",
   "transactions_entry_review_stale": "La transaction a changé après cette vérification. Enregistrez de nouveau pour la vérifier telle qu’elle est maintenant.",
   "transactions_entry_search_keywords": "ajouter nouvelle transaction retrait dépôt débit crédit paiement"
 }

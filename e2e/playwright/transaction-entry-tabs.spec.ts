@@ -219,6 +219,93 @@ test('journey 6: a holding cannot take a withdrawal; the entry says so, keeps th
   expect(listed.transactions.map(item => item.description)).toContain(description);
 });
 
+// The split editor's amounts are signed; under a cash tab they follow the
+// tab, and the tab never names the other direction (#510 review).
+async function startSplitWithdrawal(page: Page, s: Awaited<ReturnType<typeof setup>>, description: string) {
+  await page.goto('/app');
+  await page.getByRole('list', { name: 'Shortcuts', exact: true }).getByRole('button', { name: 'New transaction', exact: true }).click();
+  const entry = entryDialog(page);
+  await entry.getByLabel('Date', { exact: true }).fill(todayISO());
+  await entry.getByLabel('Description', { exact: true }).fill(description);
+  await entry.getByRole('combobox', { name: 'Account', exact: true }).selectOption({ label: s.checking.name });
+  await entry.getByLabel('Amount', { exact: true }).fill('12.40');
+  await chooseCategory(entry, s.category.name);
+  await entry.getByRole('button', { name: 'Use split entry', exact: true }).click();
+  const legAccounts = entry.getByRole('combobox', { name: 'Account', exact: true });
+  const legAmounts = entry.getByRole('textbox', { name: 'Amount', exact: true });
+  await expect(legAccounts.nth(0)).toHaveValue(String(s.checking.id));
+  await expect(legAmounts.nth(0)).toHaveValue('-12.40');
+  await expect(legAmounts.nth(1)).toHaveValue('12.40');
+  return { entry, legAccounts, legAmounts };
+}
+
+function savedPostings(page: Page) {
+  const created = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/transactions');
+  return async () => {
+    const response = await created;
+    expect(response.status()).toBe(201);
+    const saved = await response.json() as Saved;
+    return saved.journal_entries.flatMap(entry => entry.postings).map(p => [p.account_id, p.quantity_value]);
+  };
+}
+
+test('a split kept under Deposit is the same entry the other way, and a contradicting split is refused', async ({ page }) => {
+  const s = await setup(page);
+  const { entry, legAmounts } = await startSplitWithdrawal(page, s, `Tabs split deposit ${s.suffix}`);
+
+  // Deposit mirrors the split: money into checking, the category balancing it.
+  await entry.getByRole('tab', { name: 'Deposit', exact: true }).click();
+  await expect(legAmounts.nth(0)).toHaveValue('12.40');
+  await expect(legAmounts.nth(1)).toHaveValue('-12.40');
+
+  // Amounts typed the other way under Deposit are refused, naming the tab
+  // that fits; nothing is sent.
+  await legAmounts.nth(0).fill('-12.40');
+  await legAmounts.nth(1).fill('12.40');
+  let posted = 0;
+  page.on('request', request => { if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/transactions') posted += 1; });
+  await entry.getByRole('button', { name: 'Save transaction', exact: true }).click();
+  await expect(entry.getByRole('alert')).toContainText(`These amounts move money the other way for ${s.checking.name}: choose “Withdrawal”`);
+  expect(posted).toBe(0);
+
+  // Withdrawal agrees with those amounts and leaves them; Deposit flips them again.
+  await entry.getByRole('tab', { name: 'Withdrawal', exact: true }).click();
+  await expect(legAmounts.nth(0)).toHaveValue('-12.40');
+  await entry.getByRole('tab', { name: 'Deposit', exact: true }).click();
+  await expect(legAmounts.nth(0)).toHaveValue('12.40');
+  await expect(entry.getByRole('alert')).toHaveCount(0);
+
+  const postings = savedPostings(page);
+  await entry.getByRole('button', { name: 'Save transaction', exact: true }).click();
+  expect(await postings()).toEqual(expect.arrayContaining([[s.checking.id, '1240'], [s.category.id, '-1240']]));
+});
+
+test('a split follows the account chosen on Transfer back to the cash tabs', async ({ page }) => {
+  const s = await setup(page);
+  const { entry, legAccounts, legAmounts } = await startSplitWithdrawal(page, s, `Tabs split card ${s.suffix}`);
+
+  await entry.getByRole('tab', { name: 'Transfer', exact: true }).click();
+  await entry.getByRole('combobox', { name: 'From account', exact: true }).selectOption({ label: s.card.name });
+  await expect.poll(() => tabNames(entry)).toEqual(['Charge', 'Credit', 'Transfer', 'Investment']);
+
+  // Back on Charge the split posts to the card, as the label says.
+  await entry.getByRole('tab', { name: 'Charge', exact: true }).click();
+  await expect(legAccounts.nth(0)).toHaveValue(String(s.card.id));
+  await expect(legAmounts.nth(0)).toHaveValue('-12.40');
+
+  // Inside the split the entry's leg leads: moving it to checking relabels the tabs.
+  await legAccounts.nth(0).selectOption({ label: s.checking.name });
+  await expect.poll(() => tabNames(entry)).toEqual(['Withdrawal', 'Deposit', 'Transfer', 'Investment']);
+  await legAccounts.nth(0).selectOption({ label: s.card.name });
+  await expect(selectedTab(entry)).toHaveText('Charge');
+
+  const postings = savedPostings(page);
+  await entry.getByRole('button', { name: 'Save transaction', exact: true }).click();
+  const saved = await postings();
+  expect(saved).toEqual(expect.arrayContaining([[s.card.id, '-1240'], [s.category.id, '1240']]));
+  expect(saved.some(([account]) => account === s.checking.id)).toBe(false);
+});
+
 test('a confirmation shown before a tab change is gone after it; saving asks again', async ({ page }) => {
   const s = await setup(page);
   const newPayee = `Tabs unknown shop ${s.suffix}`;
