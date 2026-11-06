@@ -78,8 +78,9 @@ separate from deterministic R13 acceptance. The roadmap retains all release gate
 
 The [target-allocation proposal](investment-target-allocation-plan.md) records
 the concrete #411 contract and independent examples prepared on 2026-11-06.
-It awaits owner acceptance before runtime implementation and does not change
-the delivered actual-allocation or saved-run contracts.
+The owner selected per-instrument targets and current-target history; the
+additional market-exposure meaning and scope await clarification before runtime
+implementation. This does not change delivered actual allocation or saved runs.
 
 | Disposition | Owner / reason |
 |---|---|

@@ -1,7 +1,8 @@
 # Target allocation and drift (#411)
 
-Status: **proposed, awaiting owner acceptance; runtime implementation has not
-started** (2026-11-06). Governs [#411](https://github.com/sergeyfarin/rekenraam/issues/411).
+Status: **owner selected per-instrument targets and current-target history
+on 2026-11-06; the additional market-exposure scope is being clarified before
+runtime implementation**. Governs [#411](https://github.com/sergeyfarin/rekenraam/issues/411).
 The owner explicitly requested this independent feature in an isolated worktree
 and a pull request. The [roadmap](../roadmap.md) remains the source of overall
 work order; this authorization does not reorder the other agent's work.
@@ -11,16 +12,18 @@ ADRs [0012](../adrs/0012-investment-ledger-subledger-and-reporting-boundaries.md
 and [0017](../adrs/0017-provider-independent-features-and-incomplete-data.md)
 continue to govern valuation, incomplete data and the read-only ledger boundary.
 
-## Proposed owner decisions
+## Contract and owner decisions
 
 ### Portfolio and grouping
 
-- One current target set per book, portfolio selection and grouping dimension.
-  Choose one of the existing dimensions: account, instrument type, or quote
-  currency. These are independent complete targets; they are never combined.
-- Instrument type means the existing stable types (stock, ETF, fund, bond,
-  option, future, other, crypto), plus cash. It does not look through ETFs or
-  funds, infer geography/sectors, or provide custom asset-class buckets.
+- Owner choice A (2026-11-06): one current target set per book and portfolio
+  selection, with targets per directly owned instrument plus one cash bucket.
+  The same instrument held in several selected accounts is aggregated. ETFs
+  and funds each retain their own target; constituents do not enter this view.
+- Instrument identity is its existing stable commodity ID, not its ticker,
+  display name, brokerage or issuer. Holdings of that ID aggregate across
+  brokers. Distinct commodity records are not automatically joined by ticker,
+  and different funds/share classes are not silently merged.
 - Portfolio selection follows returns: either the default investment scope or
   explicit selected account subtrees. Sort and deduplicate explicit roots and
   remove a root already covered by another root. Parent and child selections
@@ -29,10 +32,14 @@ continue to govern valuation, incomplete data and the read-only ledger boundary.
   reporting currency, valuation date, display name or current descendant list.
   A new eligible account joins the default scope; a new descendant joins an
   explicitly selected subtree. This does not silently create a new target set.
-- Actual account groups remain the outermost in-scope ancestor. Instrument
-  classification and quote currency are those effective on the closing day,
-  exactly as in the existing allocation. Group keys are stable account IDs,
-  type codes or currency commodity IDs, never translated names.
+- Existing actual-only account, instrument-type and quote-currency views keep
+  their accepted meanings. They do not acquire independent target sets in
+  this slice. Per-instrument comparison values come from the same exact
+  account/commodity balances before grouping and rounding.
+- Owner additionally requested a market-exposure view, usable without targets.
+  Its geographic meaning and delivery boundary remain to be confirmed; see
+  *Market and look-through follow-ups*. No listing/currency-based geographic
+  inference is authorized by this request.
 
 ### Exact targets, cash and shorts
 
@@ -44,9 +51,11 @@ continue to govern valuation, incomplete data and the read-only ledger boundary.
 - Forms parse and prefill percentages in the active locale with the shared
   exact decimal helpers. API values are integers within this small exact
   range; no monetary coefficient crosses JSON as a number.
-- Cash is included in the same denominator as securities. In the type view it
-  is cash; in the currency view it is its own currency. No implicit cash
-  exclusion, residual target, or automatic normalization is performed.
+- Cash across the selected accounts/currencies is one explicit target bucket,
+  valued in the requested reporting currency and included in the same
+  denominator as securities. The actual quote-currency view retains its own
+  currency splits. No implicit cash exclusion, residual target, or automatic
+  normalization is performed.
 - Keep actual long and short rows separate, including negative cash. Targets
   apply only to the long row; short rows have an explicit zero target. Actual
   long weights may exceed 100% and actual short weights are negative. This
@@ -54,10 +63,12 @@ continue to govern valuation, incomplete data and the read-only ledger boundary.
 - A classified actual group omitted from the target set has an explicit zero
   target. A targeted group with no actual balance is a known zero only when
   the complete portfolio is valued. Such rows remain visible.
-- Unclassified instrument types and absent quote currencies remain separate
-  unknown groups. They cannot be target keys. Their known market values stay
-  visible; their drift is unavailable with an unknown-group explanation.
-  Other classified groups may still show drift when the denominator is complete.
+- Missing instrument-type or geographic metadata does not remove a known
+  commodity identity from per-instrument actuals or turn its value into zero.
+  Display its available name/code or stable ID. An unregistered countable
+  commodity remains visible but is not silently matched to a different target.
+  Missing quote currency follows the shared valuation policy: a usable direct
+  reporting-currency price is sufficient; a required missing rate is not.
 
 ### Comparison and unavailable figures
 
@@ -92,7 +103,8 @@ continue to govern valuation, incomplete data and the read-only ledger boundary.
   audited command; use an expected revision to refuse stale concurrent edits
   atomically. Refetch never silently replaces unsaved form fields or their
   revision token. An empty working copy does not erase saved targets.
-- Editing creates a new complete revision. This first version has one current
+- Owner choice A (2026-11-06): editing creates a new complete revision. This
+  first version has one current
   revision and retains previous revisions for audit; it has no effective-date
   schedule or historical target selection. A historical actual date is explicitly
   compared against today's current targets, never called the targets in force
@@ -103,9 +115,9 @@ continue to govern valuation, incomplete data and the read-only ledger boundary.
   no longer resolves stays visible with its ID and an explanation. New targets
   validate against eligible current group identities, including retained
   historical accounts/currencies supported by the existing returns selection.
-- A grouping change opens that grouping's independent saved set or a new form;
-  it never converts or overwrites another dimension. A changed portfolio
-  selection opens its own set. Warn before discarding an unsaved form.
+- A changed portfolio selection opens its own target set. Warn before
+  discarding an unsaved form. Switching an actual-only breakdown never converts
+  instrument targets into account, market, type or currency targets.
 - Native SQLite backup/restore preserves all target revisions and audit rows.
   Under the existing portable-ledger export policy (ADR 0011), target settings
   are omitted from ledger CSV/QIF/bundle; add that omission explicitly to the
@@ -142,18 +154,46 @@ point drift is actual percentage minus target percentage.
 
 | Case | Facts and targets | Expected comparison |
 |---|---|---|
-| T1 complete/cash | Stocks 600, bonds 300, cash 100; targets 50%, 40%, 10% | Total 1,000; actual 60%, 30%, 10%; drift +10, -10, 0 pp |
-| T2 missing group | Stocks 900, cash 100, no bonds; targets 60%, 30%, 10% | Bonds appear as actual 0%, drift -30 pp; stocks +30 pp; cash 0 pp |
+| T1 complete/cash | Equity ETF A 600, bond ETF B 300, cash 100; instrument targets 50%, 40%, 10% | Total 1,000; actual 60%, 30%, 10%; drift +10, -10, 0 pp |
+| T2 missing instrument | ETF A 900, cash 100, no ETF B held; targets A 60%, B 30%, cash 10% | B appears as actual 0%, drift -30 pp; A +30 pp; cash 0 pp |
 | T3 missing price | Known cash 100, 10 unpriced stock units; targets stock 90%, cash 10% | Existing allocation says cash 100% of known-only 100; comparison actual shares/drifts all unavailable, targets 90%/10% stay visible |
 | T4 short cash | Stocks +1,100, cash -100; targets stock-long 90%, cash-long 10% | Total 1,000; stock-long actual 110%, drift +20 pp; cash-long actual 0%, drift -10 pp; cash-short actual -10%, target 0%, drift -10 pp |
 | T5 non-positive | Stocks +100, cash -100 (then cash -150) | Total 0 (then -50); values and targets stay, comparison shares/drifts unavailable |
-| T6 unknown class | Classified stock 600, priced unclassified security 400; stock target 100% | Total 1,000; stock actual 60%, drift -40 pp; unclassified value 400/actual 40% visible, its target/drift unavailable; nothing assigned to stock |
+| T6 missing metadata | Instrument A 600 and priced instrument B 400, B has no type/region effective on the date; target A 100% | Total 1,000; A actual 60%, drift -40 pp; B actual 40%, implicit target 0%, drift +40 pp; stable identity is sufficient, geographic/type classification remains unknown |
 | T7 exact input | 33.3333%, 33.3333%, 33.3334% | Units 333333 + 333333 + 333334 = 1000000 accepted; three 33.3333% values rejected (99.9999%); 33.33333% rejected for precision |
 | T8 rounding | Group A 1, B 1,999,999; targets 0.0001% and 99.9999% | Total 2,000,000; A exact actual ratio 0.0000005 rounds to 0.000001; exact drift 0.0000005 - 0.000001 = -0.0000005 rounds to -0.000001 (-0.0001 pp), not zero from subtracting rounded shares |
 | T9 portfolio identity | Selected parent P and descendant H, then P alone | One canonical root P and one target set; all actual balances counted once |
-| T10 currency | USD stock 100 at EUR 0.9/USD, EUR cash 10; targets USD 80%, EUR 20% | Total EUR 100; USD actual 90%, drift +10 pp; EUR actual 10%, drift -10 pp; missing USD/EUR makes drift unavailable |
-| T11 lifecycle | Account renamed, then closed with nonzero historical exposure | Same target ID/percentage retained; name/status updates; historical dated actual rules unchanged; no redistribution |
+| T10 currency | Instrument A worth USD 100 at EUR 0.9/USD, EUR cash 10; targets A 80%, cash 20% | Total EUR 100; A actual 90%, drift +10 pp; cash actual 10%, drift -10 pp; missing required USD/EUR makes drift unavailable |
+| T11 lifecycle | Instrument renamed, then retired with nonzero historical exposure; its holding account is closed | Same commodity target ID/percentage retained; name/status updates; historical dated actual rules unchanged; no redistribution |
 | T12 current vs historical | Revision 1 stock 60%/cash 40%, then revision 2 70%/30%; historical actual 65%/35% | Comparison labels current revision 2, drift -5/+5 pp; revision 1 retained; existing saved returns bytes unchanged |
+
+## Market and look-through follow-ups
+
+The owner requested two independent exposure views during contract review:
+
+- **Market/geography and quote currency**, available even with no target set.
+  Proposed interpretation: geographic investment allocation and quote currency
+  are separate axes, optionally crossed in a table. Listing exchange, fund
+  domicile, country classification, investment mandate and underlying-company
+  geography are different facts. Neither a EUR quote nor an Irish fund domicile
+  establishes European underlying exposure. EU, euro area and Europe also need
+  explicit region definitions. Existing MIC/country fields alone cannot prove
+  an ETF's geographic allocation. Missing or mixed allocations need visible
+  unknown/multi-region treatment or sourced weighted breakdowns. Owner choice
+  of meaning, initial data source and whether to include this in #411 or an
+  independent enhancement is pending.
+- **Direct plus ETF look-through security exposure** is separately tracked in
+  [#513](https://github.com/sergeyfarin/rekenraam/issues/513), created at the
+  owner's request. It does not change per-instrument targets or the selected
+  current-target history policy. Dated holdings, stable security identities,
+  partial coverage, direct/indirect breakdown and double-count prevention need
+  their own accepted contract. No dependency on #411 delivery is asserted.
+
+Concrete issuer evidence: [iShares IUSA](https://www.ishares.com/uk/professionals/en/products/251900/iusa?siteEntryPassthrough=true&switchLocale=y)
+publishes holdings CSV and lists the same US-company fund in EUR/GBP/USD;
+[Vanguard VUKG](https://www.vanguard.co.uk/professional/product/etf/equity/9580/vanguard-ftse-100-ucits-etf-gbp-accumulating)
+publishes market/holdings data with an explicit incomplete-total warning.
+These are feasibility examples, not verified app adapter contracts.
 
 ## Planned validation
 
@@ -168,6 +208,18 @@ relevant shared backend/frontend gates and integrated build before the PR.
 
 ## Acceptance record
 
-Pending. Record the owner's answer and any amended choices here before runtime
-coding. Issue #411 explicitly requires owner acceptance of this contract and
-its independent examples before implementation.
+Owner answers on 2026-11-06:
+
+1. Grouping: "A - most conventional and straightforward" (per instrument plus
+   cash), additionally requesting market/currency exposure even without targets.
+2. History: "A" (compare historical actuals against current targets, retaining
+   prior revisions for audit).
+3. Create a separate enhancement for direct MSFT exposure across brokers plus
+   underlying MSFT held through multiple ETFs. Created #513; the owner explicitly
+   said this does not affect choices 1 or 2.
+
+The owner invited challenges and further guidance. Market/geographic semantics
+and its delivery boundary remain open. The remaining proposed numerical,
+coverage and storage rules above have not been separately confirmed. Resolve
+these concrete choices before marking the complete contract accepted and
+starting runtime code, as #411 requires.
