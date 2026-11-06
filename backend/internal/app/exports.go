@@ -95,6 +95,7 @@ const ExportSelectionUnit = "journal_entry"
 // list is served with every preview so nobody has to infer it: this is an
 // export of the ledger, not a copy of the installation.
 var ExportExcludedData = []string{
+	"investment pool membership, allocation targets and their saved revision history",
 	"credentials and secrets",
 	"authentication sessions and multi-factor enrolment",
 	"audit events and authentication events",

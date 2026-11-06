@@ -1239,7 +1239,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 
 	version, err := EmbeddedMigrationVersion()
 	require.NoError(t, err)
-	assert.Equal(t, int64(6), version, "the unused v0.1 baseline, #417's category-version delete guard, #481's transfer sides and #485's posting links, their history and evidence")
+	assert.Equal(t, int64(7), version, "the unused v0.1 baseline, #417 category guard, #481 transfer sides, #485 posting links/history/evidence and #411 allocation revisions")
 
 	ctx := context.Background()
 	database, err := Open(ctx, SQLiteFileURL(filepath.Join(t.TempDir(), "schema.sqlite")))
@@ -1268,11 +1268,14 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 		objectCounts[kind]++
 	}
 	assert.Equal(t, map[string]int{
-		"index":   108,
-		"table":   118,
-		"trigger": 172,
+		"index":   109,
+		"table":   119,
+		"trigger": 174,
 		"view":    17,
 	}, objectCounts, "the migrated head must retain every schema object")
+	assert.Equal(t, "table", objects["investment_allocation_revisions"])
+	assert.Equal(t, "trigger", objects["investment_allocation_revisions_no_update"])
+	assert.Equal(t, "trigger", objects["investment_allocation_revisions_no_delete"])
 	assert.Equal(t, "view", objects["valid_investment_dividend_facts"])
 	assert.Equal(t, "view", objects["investment_cash_payment_identity"])
 	assert.Equal(t, "trigger", objects["investment_event_payment_identity_insert"])

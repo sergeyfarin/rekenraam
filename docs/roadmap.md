@@ -227,10 +227,13 @@ These are valuable, but they are not allowed to displace the current plan:
 - General report snapshots beyond R18’s saved operational investment
   gains/statement documents, multi-user, and household features. Core
   reporting-currency conversion remains part of the existing report surface.
-- Target allocation/drift [#411](https://github.com/sergeyfarin/rekenraam/issues/411)
+- Geographic allocation [#514](https://github.com/sergeyfarin/rekenraam/issues/514),
+  constituent look-through [#513](https://github.com/sergeyfarin/rekenraam/issues/513)
   and advisory rebalancing [#412](https://github.com/sergeyfarin/rekenraam/issues/412)
-  are deferred P3 extensions. Each needs an accepted contract; rebalancing
-  depends on the target model. No trade execution is implied.
+  remain independent P3 extensions requiring accepted contracts. #411 delivers
+  direct instrument targets and the named Investment pool independently, at
+  the owner's request on 2026-11-06. Rebalancing depends on its target model;
+  no trade execution is implied.
 - Large-investment-book returns measurement
   [#413](https://github.com/sergeyfarin/rekenraam/issues/413), P3: measure the
   live read (including `instruments=true`) and saved runs against the #405
@@ -274,8 +277,10 @@ each roadmap initiative complete, update the comparison's implication section
 and record either the parity gained or the deliberate gap retained.
 
 The [comparison's 2026-10-26 local status update](competitor-comparison.md)
-records accepted delivery boundaries. Targets/drift (#411), advisory
-rebalancing (#412), R6 import depth and R7a convenience remain deliberate gaps.
+records the delivery boundaries at that review date. #411 now adds direct
+instrument targets independently; geographic exposure (#514), constituent
+look-through (#513), advisory rebalancing (#412), R6 import depth and R7a
+convenience remain deliberate gaps.
 The planned UI overhaul addresses Home discovery and navigation; those
 presentation gaps remain until it ships, without changing financial metric or
 tax parity claims.

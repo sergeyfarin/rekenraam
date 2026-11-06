@@ -60,6 +60,7 @@ const routes: Route[] = [
   { name: 'instruments', route: '/app/investments/instruments', path: () => '/app/investments/instruments', data: true },
   { name: 'instrument', route: '/app/investments/instruments/[id]', path: (ids) => `/app/investments/instruments/${ids.get('REF')}`, data: true },
   { name: 'income coverage', route: '/app/investments/income', path: () => '/app/investments/income', data: true },
+  { name: 'allocation', route: '/app/investments/allocation', path: () => '/app/investments/allocation', data: true },
   { name: 'returns', route: '/app/investments/returns', path: () => '/app/investments/returns', data: true },
   { name: 'gains', route: '/app/investments/gains', path: () => '/app/investments/gains', data: true },
   { name: 'prices', route: '/app/investments/prices', path: () => '/app/investments/prices', data: true },

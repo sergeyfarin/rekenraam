@@ -27318,6 +27318,153 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/investments/allocation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Investment pool allocation, current targets and saved change history
+         * @description One consistent input image and the shared returns valuation/recognition policy. Explicit pool membership includes deposits and is independent of net worth. Every historical point compares against current targets. Unknown values break the conventional stack and disable drift; signed allocations retain table values. Read-only. Revisions are saved changes, not effective-date targets. Existing saved returns runs are unchanged.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Inclusive first day; defaults to year-to-date. */
+                    from?: string;
+                    /** @description Inclusive last day; defaults to owner-local today. */
+                    to?: string;
+                    /** @description Defaults to the book reporting currency. */
+                    reporting_currency_id?: number;
+                    max_staleness_days?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AllocationResponse"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description LEDGER_OVERFLOW: an amount exceeds the supported exact coefficient range. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        /**
+         * Save the complete investment pool and allocation targets
+         * @description Session and CSRF required. Atomically append an immutable revision and audit event if expected_revision matches the latest ID (zero before first save). Targets are exact, nonnegative and total 100%. A stale edit writes nothing. No ledger or investment subledger changes.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AllocationSaveRequest"];
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AllocationRevision"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description CSRF or Origin validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description CONFLICT: stale revision */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                413: components["responses"]["JSONBodyTooLarge"];
+                /** @description LEDGER_OVERFLOW: an amount exceeds the supported exact coefficient range. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/investments/returns": {
         parameters: {
             query?: never;
@@ -35327,6 +35474,101 @@ export interface components {
                 ratio_denominator: string;
             }[];
             valuation: components["schemas"]["Valuation"];
+        };
+        AllocationTarget: {
+            /**
+             * Format: int64
+             * @description Zero is the combined Cash and deposits bucket; otherwise a registered instrument commodity ID.
+             */
+            commodity_id: number;
+            /** @description Exact target share in millionths. 1000000 = 100%; 1 = 0.0001 percentage points. */
+            units: number;
+        };
+        AllocationSaveRequest: {
+            /** Format: int64 */
+            expected_revision: number;
+            /** @description Exact selected accounts; no implicit descendant expansion. An empty array deliberately selects no accounts. */
+            account_ids: number[];
+            /** @description Unique commodity IDs and an exact 1000000-unit total. Empty only before any target set has been saved. */
+            targets: components["schemas"]["AllocationTarget"][];
+        };
+        AllocationRevision: {
+            /** Format: int64 */
+            id: number;
+            saved_at: string;
+            account_ids: number[];
+            targets: components["schemas"]["AllocationTarget"][];
+        };
+        AllocationCommodity: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            kind: string;
+            targetable: boolean;
+        };
+        AllocationAccount: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            code: string;
+            kind: string;
+            status: string;
+            included: boolean;
+        };
+        AllocationMoney: {
+            value: string;
+            scale: number;
+            /** Format: int64 */
+            commodity_id: number;
+        };
+        AllocationUnknown: {
+            /** Format: int64 */
+            account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            value: string;
+            scale: number;
+        };
+        AllocationRow: {
+            /** Format: int64 */
+            commodity_id: number;
+            /** @enum {string} */
+            side: "long" | "short";
+            amount: components["schemas"]["AllocationMoney"] | null;
+            weight: string | null;
+            target_units: number | null;
+            drift: string | null;
+        };
+        AllocationPoint: {
+            /** Format: date */
+            date: string;
+            total: components["schemas"]["AllocationMoney"] | null;
+            reason: string;
+            chart_reason: string;
+            rows: components["schemas"]["AllocationRow"][];
+            unknown: components["schemas"]["AllocationUnknown"][];
+        };
+        AllocationResponse: {
+            /** @enum {string} */
+            policy: "allocation_targets_v1";
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            /** Format: int64 */
+            reporting_currency_id: number;
+            knowledge_cutoff: string;
+            time_zone: string;
+            /** @enum {string} */
+            interval: "day" | "week" | "month";
+            current: components["schemas"]["AllocationRevision"];
+            accounts: components["schemas"]["AllocationAccount"][];
+            commodities: components["schemas"]["AllocationCommodity"][];
+            revisions: components["schemas"]["AllocationRevision"][];
+            points: components["schemas"]["AllocationPoint"][];
+            valuation: components["schemas"]["Valuation"];
+            currency_allocation: components["schemas"]["ReturnsAllocation"];
         };
         InvestmentReturnsResponse: {
             /** @enum {string} */

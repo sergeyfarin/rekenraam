@@ -1,9 +1,7 @@
 # Target allocation and drift (#411)
 
-Status: **owner selected per-instrument targets and current-target history
-on 2026-11-06; geography is a separate enhancement; allocation-over-time
-chart and saved-revision inspection added by the owner; shared liquidity/cash
-scope remains to be settled before runtime implementation**. Governs [#411](https://github.com/sergeyfarin/rekenraam/issues/411).
+Status: **contract accepted through the owner's choices and clarifications on
+2026-11-06; implementation in progress**. Governs [#411](https://github.com/sergeyfarin/rekenraam/issues/411).
 The owner explicitly requested this independent feature in an isolated worktree
 and a pull request. The [roadmap](../roadmap.md) remains the source of overall
 work order; this authorization does not reorder the other agent's work.
@@ -25,14 +23,21 @@ continue to govern valuation, incomplete data and the read-only ledger boundary.
   display name, brokerage or issuer. Holdings of that ID aggregate across
   brokers. Distinct commodity records are not automatically joined by ticker,
   and different funds/share classes are not silently merged.
-- Portfolio selection follows returns: either the default investment scope or
-  explicit selected account subtrees. Sort and deduplicate explicit roots and
-  remove a root already covered by another root. Parent and child selections
-  cannot double-count an exposure. Default and explicit scopes remain distinct.
-- Identity uses the selection mode and canonical root account IDs, not the
-  reporting currency, valuation date, display name or current descendant list.
-  A new eligible account joins the default scope; a new descendant joins an
-  explicitly selected subtree. This does not silently create a new target set.
+- One shared, explicitly named **Investment pool** per book defines the
+  investment-allocation scope. Its account inclusion is persisted alongside
+  targets, with immutable saved revisions. Initial suggested membership includes
+  cash/bank/deposit and investment account kinds; the owner can include/exclude
+  individual non-system asset/liability accounts. A saved selection is exact
+  account IDs, not a hidden tree expansion. Parents do not duplicate children.
+- Explicit exclusions allow college savings, children's accounts, family-support
+  loans, a car, and a reserved emergency fund to remain recorded while outside
+  allocation. Default suggestions are visible and require deliberate review;
+  a cash-like account kind alone never overrides a saved exclusion.
+- Scope identity is the shared investment pool, independent of reporting
+  currency/date or account names. Changing membership appends a revision with
+  the complete selection and targets. Existing revisions retain their scope.
+  Historical actuals are labelled as using the current pool and current targets;
+  neither current account choices nor current targets claim historical effect.
 - Existing actual-only account, instrument-type and quote-currency views keep
   their accepted meanings. They do not acquire independent target sets in
   this slice. Per-instrument comparison values come from the same exact
@@ -43,50 +48,37 @@ continue to govern valuation, incomplete data and the read-only ledger boundary.
   *Market and look-through follow-ups*. No listing/currency-based geographic
   inference is authorized by this request.
 
-### Shared liquidity and portfolio cash (open decision)
+### Cash, deposits and the shared investment-pool scope
 
-Owner request (2026-11-06): "Cash includes - need to have one common definition
-of liquid accounts to exclude some also important for net worth calculation".
-The unconditional combined-cash rule below is therefore a proposal pending this
-clarification, not acceptance of every selected currency balance as available
-investment cash.
+The owner's examples settle the intended boundary: this is an investment pool,
+not a day-to-day liquid-cash measure or total net worth. The owner confirmed
+Raisin deposits and **CDs (certificates of deposit)**, not CFDs. Deposits and CDs
+are in Cash and deposits when their accounts are included, including deposits
+locked until maturity. Do not apply an immediate-withdrawal test or classify a
+CD as a derivative. Security-form deposits retain their recorded instrument
+identity; ordinary currency-denominated deposit accounts join the cash bucket.
 
-Current app evidence:
+The shared pool resolver owns exact account membership for the table, series,
+weights, drift, scope counts and exclusion list. No independent cash-kind filter
+may drop selected deposit balances from just one consumer. Currency balances
+under included accounts use the same recognition/valuation as returns, including
+unsettled trade cash and recognised income receivables.
 
-- `app/cashflow.go` owns `defaultCashAccountKinds`/`defaultCashAccountIDs`:
-  active, non-system cash/checking/savings/brokerage-cash accounts. Forecasting
-  reuses this cash-scope owner. There is no persisted per-account liquidity
-  classification or override.
-- The [cashflow contract](reports-plan.md#cashflow) names those kinds and allows
-  explicit account scope. [Account kinds](../design/account-hierarchy.md#kinds)
-  distinguish savings from term deposits, but do not say whether a particular
-  savings/brokerage account is restricted or reserved.
-- [Net worth](reports-plan.md#net-worth-over-time) includes assets and
-  liabilities under its explicit scope. Liquidity is not a current net-worth
-  admission rule; [ADR 0021](../adrs/0021-entered-asset-values.md) explicitly
-  includes entered values for illiquid property/vehicles/pensions.
+The owner explicitly distinguished college savings: they remain part of net
+worth but outside investment allocation. Preserve the existing total-net-worth
+scope and existing cashflow/forecast available-cash definitions. There is no
+new global liquidity boolean that silently changes those defaults. Investment
+pool membership is stored once and resolved by one shared application owner;
+future consumers must reuse it rather than inventing another inclusion rule.
 
-Recommended distinction, awaiting owner confirmation:
-
-- Share one explicit cash/liquidity classification and resolver across consumers
-  that actually ask that question; do not create an allocation-only hard-coded
-  account-kind list. Define account overrides, defaults, historical application
-  and audit/backup/export behavior before adding storage.
-- Portfolio membership is independent. An accessible emergency reserve may be
-  liquid but outside the investment portfolio; a restricted pension can still
-  be an owned investment in the portfolio. Explicit account inclusion/exclusion
-  must be visible and apply consistently to the portfolio values, allocation
-  table, series and denominator. Never omit cash from just one side of the
-  comparison or silently make a partial portfolio add to 100%.
-- Preserve total net worth as all included assets less liabilities. A separate
-  liquid-cash/liquid-assets subtotal or filter needs its own precise label and
-  definition. Cash available without a sale and marketable securities are also
-  different concepts; a single unexplained boolean must not equate them.
-
-Clarify which real account examples the owner wants excluded, whether the shared
-rule concerns available cash or broader liquid assets, how it should affect
-existing cashflow/forecast defaults, and whether net worth needs a labelled
-liquid subtotal/filter or a change to total inclusion. No choice is inferred.
+**Visible scope is required.** Label the total Investment pool, display its
+included account count and inspectable included/excluded account lists, and
+explain that total net worth covers a different set. Link to net worth with
+matching date/currency where its API supports that selection. A scope selection
+that fails to load is an error, never an implicit zero/all-accounts default.
+Do not claim an exact numerical reconciliation with another report whose
+valuation settings or coverage differ. This directly addresses the owner's
+concern about unexplained differing totals across pages.
 
 ### Exact targets, cash and shorts
 
@@ -98,7 +90,7 @@ liquid subtotal/filter or a change to total inclusion. No choice is inferred.
 - Forms parse and prefill percentages in the active locale with the shared
   exact decimal helpers. API values are integers within this small exact
   range; no monetary coefficient crosses JSON as a number.
-- Cash across the selected accounts/currencies is one explicit target bucket,
+- Cash and deposits across the included pool accounts/currencies is one explicit target bucket,
   valued in the requested reporting currency and included in the same
   denominator as securities. The actual quote-currency view retains its own
   currency splits. No implicit cash exclusion, residual target, or automatic
@@ -162,9 +154,10 @@ liquid subtotal/filter or a change to total inclusion. No choice is inferred.
   no longer resolves stays visible with its ID and an explanation. New targets
   validate against eligible current group identities, including retained
   historical accounts/currencies supported by the existing returns selection.
-- A changed portfolio selection opens its own target set. Warn before
-  discarding an unsaved form. Switching an actual-only breakdown never converts
-  instrument targets into account, market, type or currency targets.
+- Editing pool membership and targets saves one complete audited revision
+  atomically. Warn before discarding an unsaved form. Switching an actual-only
+  breakdown never converts instrument targets into account, market, type or
+  currency targets.
 - Native SQLite backup/restore preserves all target revisions and audit rows.
   Under the existing portable-ledger export policy (ADR 0011), target settings
   are omitted from ledger CSV/QIF/bundle; add that omission explicitly to the
@@ -173,9 +166,11 @@ liquid subtotal/filter or a change to total inclusion. No choice is inferred.
 
 ### UI and immutable runs
 
-- Add manual target create/edit/reopen and actual/target/signed-drift rows to
-  the live returns allocation workflow, with the grouping and scope explicit.
-  Show exact total and remaining/excess percentage while editing, validate on
+- Add an Allocation view under Investments, reachable from the returns
+  allocation workflow. Provide manual pool/target create/edit/reopen and
+  actual/target/signed-drift rows, with the scope explicit. The dedicated live
+  view keeps its shared Investment pool distinct from existing returns filters.
+  Show the exact total against the required 100% while editing, validate on
   both client and server, and preserve input after validation/network failures.
 - Use one backend-composed read for the shareable comparison component, with
   no request per row. The comparison obtains targets and actuals from one
@@ -281,7 +276,7 @@ point drift is actual percentage minus target percentage.
 | T6 missing metadata | Instrument A 600 and priced instrument B 400, B has no type/region effective on the date; target A 100% | Total 1,000; A actual 60%, drift -40 pp; B actual 40%, implicit target 0%, drift +40 pp; stable identity is sufficient, geographic/type classification remains unknown |
 | T7 exact input | 33.3333%, 33.3333%, 33.3334% | Units 333333 + 333333 + 333334 = 1000000 accepted; three 33.3333% values rejected (99.9999%); 33.33333% rejected for precision |
 | T8 rounding | Group A 1, B 1,999,999; targets 0.0001% and 99.9999% | Total 2,000,000; A exact actual ratio 0.0000005 rounds to 0.000001; exact drift 0.0000005 - 0.000001 = -0.0000005 rounds to -0.000001 (-0.0001 pp), not zero from subtracting rounded shares |
-| T9 portfolio identity | Selected parent P and descendant H, then P alone | One canonical root P and one target set; all actual balances counted once |
+| T9 portfolio membership | Pool includes brokerage parent P and posting child H | H postings count once; a saved exclusion of H excludes it even while P remains selected; no hidden descendant re-expansion |
 | T10 currency | Instrument A worth USD 100 at EUR 0.9/USD, EUR cash 10; targets A 80%, cash 20% | Total EUR 100; A actual 90%, drift +10 pp; cash actual 10%, drift -10 pp; missing required USD/EUR makes drift unavailable |
 | T11 lifecycle | Instrument renamed, then retired with nonzero historical exposure; its holding account is closed | Same commodity target ID/percentage retained; name/status updates; historical dated actual rules unchanged; no redistribution |
 | T12 current vs historical | Revision 1 stock 60%/cash 40%, then revision 2 70%/30%; historical actual 65%/35% | Comparison labels current revision 2, drift -5/+5 pp; revision 1 retained; existing saved returns bytes unchanged |
@@ -289,6 +284,7 @@ point drift is actual percentage minus target percentage.
 | T14 actual gap and recovery | T13 with missing A price at an intermediate sample and usable prices at both endpoints | Two separate available chart segments; missing sample is a gap with unknown A units; recovered closing actual stays 95%/5%, never cash-only 100% |
 | T15 saved changes, current comparison | Historical actual A/cash 65%/35%; saved revision 1 60%/40%, later revision 2 70%/30% | All selected historical-date comparisons use current revision 2, drift -5/+5 pp; marker/list shows previous 60%/40% and new 70%/30% with save time and scope, without changing the comparison |
 | T16 signed chart fallback | A 1,100/cash -100 at one sample, positive-only holdings at adjacent samples | The signed date has no conventional 100% area stack and breaks the segment; table retains +110%/-10% and their signed drifts; no clipping to 100%/0% |
+| T17 deposits and exclusions | ETF A 6,000; included Raisin deposit 3,000 and bank CD 1,000; excluded college savings 5,000 and reserved emergency savings 2,000 | Investment pool 10,000: A 60%, Cash and deposits 40%; excluded accounts named, never lost from full net-worth scope; 7,000 excluded savings do not dilute allocation |
 
 ## Market and look-through follow-ups
 
@@ -332,8 +328,8 @@ stale edit preservation, keyboard/accessibility and both themes. Add literal
 series cases T13-T16, no-target actuals, stable stacking order, gap recovery,
 zero/negative totals, saved-marker detail and accessible revision inspection.
 Verify date/instrument selection on phone and keyboard, target-column labels,
-no chart overflow and no saved-run serialization change. Shared liquidity/cash
-scope needs cross-consumer tests after its contract is settled. Run the relevant
+no chart overflow and no saved-run serialization change. The shared pool scope is tested across table/series reads, exclusions and
+unchanged full-net-worth treatment. Run the relevant
 shared backend/frontend gates and integrated build before the PR.
 
 ## Acceptance record
@@ -350,29 +346,42 @@ Owner answers on 2026-11-06:
 
 4. Market scope: "Finish #411 targets + existing currency view; create a separate
    geographic-exposure enhancement (recommended)". Created #514.
-5. Remaining contract: "Change one or more rules before coding". The specific
-   requested changes are not yet supplied. A focused clarification lists cash,
-   target precision/total, shorts, missing-price drift, revision history,
-   backup/export and saved-run inclusion so the owner can name affected rules.
+5. Remaining contract: "Change one or more rules before coding". The owner
+   subsequently identified cash inclusion (rule 1), supplied the chart/history
+   requirements and settled the investment-pool boundary below.
 
-The owner invited challenges and further guidance. The numerical, coverage and
-storage rules above remain proposals, not accepted decisions. Await the specific
-requested changes and discuss their trade-offs before updating the contract or
-starting runtime code, as #411 requires. The grouping/history and separate
-exposure-enhancement choices remain accepted.
+These initial answers and the subsequent cash/chart clarifications below form
+the accepted contract. Runtime implementation began after the deposit and
+net-worth-scope questions were resolved.
 
 ### Owner amendments after the remaining-rules question (2026-11-06)
 
 - The owner specified rule 1 as the change: a common definition of liquid
-  accounts is needed to exclude some, also relevant to net worth. Account
-  examples and the distinction between liquidity, portfolio membership and
-  total/liquid net worth require clarification; see the open decision above.
+  accounts is needed to exclude some, also relevant to net worth. Subsequent
+  account examples resolved this as Investment pool membership, independent of
+  total net worth and day-to-day available cash; see the scope contract above.
 - The owner added allocation over time, a labelled stacked target column,
   date/instrument inspection, optional saved-revision markers with before/after
   details and accessible history. The supplied chart honesty rules are recorded
   above, including explicit gaps and signed-allocation fallback.
 - The owner explicitly retained current-target historical comparisons and
   saved-change timestamps rather than an effective-date target schedule.
-- No further amendments to rules 2-7 were specified. Their proposed behavior
-  remains as recorded; no new rejection or acceptance beyond the supplied
-  answers is inferred. Runtime implementation awaits the settled cash scope.
+- No further amendments to rules 2-7 were specified. The subsequent
+  deposit/ownership clarification below settles the cash scope.
+
+### Final cash and transparency clarification (2026-11-06)
+
+- Owner confirmed Raisin deposits and CDs (certificates of deposit), including
+  substantial deposit balances in both net worth and allocation cash.
+- Outside allocation: family-support loans with limited control, tracked money
+  given to children, car value, a specially reserved emergency fund, and
+  separately stored college savings. Membership must be explicitly adjustable;
+  names/kinds cannot establish a person's financial intent.
+- Owner explicitly agreed that college savings can remain in net worth while
+  outside investment allocation, and required clarity explaining different
+  totals across pages. The named shared Investment pool and visible account
+  scope implement that distinction without a global liquidity side effect.
+- No additional numerical/coverage/storage amendments were requested after the
+  owner identified rule 1 and added the chart/history requirements. The chosen
+  scope, current-target history, chart rules and recorded exactness, revision,
+  backup/export and saved-run policies now form the implementation contract.

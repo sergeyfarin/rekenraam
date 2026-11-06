@@ -1,0 +1,117 @@
+get:
+  summary: Investment pool allocation, current targets and saved change history
+  description: One consistent input image and the shared returns valuation/recognition
+    policy. Explicit pool membership includes deposits and is independent of net worth.
+    Every historical point compares against current targets. Unknown values break
+    the conventional stack and disable drift; signed allocations retain table values.
+    Read-only. Revisions are saved changes, not effective-date targets. Existing saved
+    returns runs are unchanged.
+  parameters:
+  - name: from
+    in: query
+    required: false
+    schema:
+      type: string
+      format: date
+    description: Inclusive first day; defaults to year-to-date.
+  - name: to
+    in: query
+    required: false
+    schema:
+      type: string
+      format: date
+    description: Inclusive last day; defaults to owner-local today.
+  - name: reporting_currency_id
+    in: query
+    required: false
+    schema:
+      type: integer
+      format: int64
+      minimum: 1
+    description: Defaults to the book reporting currency.
+  - name: max_staleness_days
+    in: query
+    required: false
+    schema:
+      type: integer
+      minimum: 1
+      maximum: 31
+      default: 7
+  responses:
+    '200':
+      description: Success
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/AllocationResponse
+    '400':
+      description: VALIDATION_FAILED
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/ErrorResponse
+    '401':
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/ErrorResponse
+    '422':
+      description: 'LEDGER_OVERFLOW: an amount exceeds the supported exact coefficient
+        range.'
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/ErrorResponse
+put:
+  summary: Save the complete investment pool and allocation targets
+  description: Session and CSRF required. Atomically append an immutable revision
+    and audit event if expected_revision matches the latest ID (zero before first
+    save). Targets are exact, nonnegative and total 100%. A stale edit writes nothing.
+    No ledger or investment subledger changes.
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: ../openapi.yaml#/components/schemas/AllocationSaveRequest
+  responses:
+    '200':
+      description: Success
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/AllocationRevision
+    '400':
+      description: VALIDATION_FAILED
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/ErrorResponse
+    '401':
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/ErrorResponse
+    '409':
+      description: 'CONFLICT: stale revision'
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/ErrorResponse
+    '422':
+      description: 'LEDGER_OVERFLOW: an amount exceeds the supported exact coefficient
+        range.'
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/ErrorResponse
+    '413':
+      $ref: ../openapi.yaml#/components/responses/JSONBodyTooLarge
+    '403':
+      description: CSRF or Origin validation failed
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/ErrorResponse

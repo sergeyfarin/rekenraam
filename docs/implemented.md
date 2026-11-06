@@ -665,7 +665,38 @@ report guarantee is added.
 | Review actions and posting-impact preview | ✅ | Authenticated skip with reason and blocked retry; atomic occurrence/audit updates guarded by template revision and prior attempt audit ID. Archived blocked items remain skippable; retry requires enabled/unarchived. `GET /transactions/{id}/post/reconciliation-impact` validates the saved draft as posted and previews stored-position checkpoint impact. Posting still rechecks. Existing DELETE now discards edited drafts newest-version first (T-81), preserving the skipped identity and audits. OpenAPI, typed client and six-locale conflict message ship. |
 | Recurring screens | ✅ | `/app/recurring`: templates and paginated due inbox, all states, six locales, draft-count nav badge and mobile/keyboard review dialogs. Shared editor saves templates without transactions and edits drafts without posting, preserving exact amounts, tags and clearing legs. Pause/resume/archive, skip/retry, explicit post/discard and bulk post with per-draft reconciliation checks. Partial bulk failures keep completed posts and leave only remaining drafts for review. Acceptance closed T-82/T-83/T-84; see `docs/reviews/r9-acceptance-review-2026-08-31.md`. |
 
-## Investments (Phase 6) — ✅ Bounded R13/R16/R17/R18 workflows shipped; target allocation and adapter extensions remain
+## Investments (Phase 6) — ✅ Bounded R13/R16/R17/R18 and target allocation shipped; exposure/advisory and adapter extensions remain
+
+### Investment pool, target allocation and allocation history — #411 (2026-11-06)
+
+`/app/investments/allocation` compares exact per-instrument and Cash and deposits
+weights against current targets. A shared Investment pool selection includes
+Raisin deposits/CDs and can exclude college savings, reserved emergency funds,
+family-support loans and other accounts. The page names its scope, lists
+included/excluded accounts and links to total net worth; changing pool membership
+does not remove assets from net worth or change cashflow/forecast defaults.
+
+One composed read captures scope, targets, revisions, price/FX coverage and sampled
+actuals from one disposable input image, reusing returns' recognition and exact
+valuation. A 100% stacked area chart has a current-target column and labelled
+legend; date/instrument controls and a signed table supply exact percentages and
+drift. Missing prices/FX create gaps, zero/negative totals have no shares, and
+signed positions use the table. Known-only values never become full-portfolio
+weights. Historical actuals use current pool membership and targets explicitly.
+
+Manual scope/target edits atomically append an immutable revision and audit event,
+with exact millionth shares (four decimal percentage places, exact 100% total)
+and stale-revision refusal. Optional saved-change markers and an accessible
+history list show before/after targets, save time and affected scope, without
+introducing effective-dated targets. Native backup retains every revision;
+portable ledger exports explicitly omit these settings in their manifest.
+Existing returns calculations and saved-run documents retain their bytes and
+meaning. English/Dutch/Russian copy is maintained, with explicit English fallback
+for partial Spanish/French/German catalogs. The [contract](plans/investment-target-allocation-plan.md)
+owns examples and policy. Geographic exposure #514 and ETF look-through #513 are
+independent; advisory rebalancing remains #412.
+
+### Existing investment commands and reporting
 
 The bounded #114 transfer/basis-action family is complete as of the
 [2026-10-09 closure audit](reviews/in-kind-basis-actions-audit-2026-10-09.md).
@@ -782,9 +813,9 @@ TWR/IRR and jurisdiction tax rules remain outside the delivered contract.
 owner accepted the bounded delivery for closure on 2026-10-26; the
 [plan's acceptance record](plans/investment-returns-plan.md#accepted-delivery-and-follow-up-disposition-2026-10-26)
 links commit/test evidence, successful hosted CI and retained limits. Actual
-allocation ships; target allocation/drift [#411](https://github.com/sergeyfarin/rekenraam/issues/411)
-and advisory rebalancing [#412](https://github.com/sergeyfarin/rekenraam/issues/412)
-remain deferred independent features, with their own contracts still required.
+allocation ships. Target allocation/drift #411 is delivered separately above;
+advisory rebalancing [#412](https://github.com/sergeyfarin/rekenraam/issues/412)
+remains deferred and requires its own accepted contract.
 
 `GET /api/v1/investments/returns`
 is a read-only live returns read under the accepted
@@ -1241,7 +1272,7 @@ hand-derived budget, recurring, forecast and learned-spending evidence.
 
 XLSX/OFX/QFX import adapters, per-split import mapping and batch rollback,
 a second online bank/broker import connection, loan/liability helpers,
-target allocation/drift and advisory rebalancing, and general report snapshots
+geographic/constituent exposure and advisory rebalancing, and general report snapshots
 beyond saved R13 returns and R18 operational gains/statement documents.
 Multiple quote adapters and the Twelve Data reviewed dividend producer already
 ship.

@@ -587,6 +587,8 @@ paths:
     $ref: "./paths/investments-gains-run.yaml"
   /api/v1/investments/gains/statement:
     $ref: "./paths/investments-gains-statement.yaml"
+  /api/v1/investments/allocation:
+    $ref: "./paths/investments-allocation.yaml"
   /api/v1/investments/returns:
     $ref: "./paths/investments-returns.yaml"
   /api/v1/investments/returns/runs:
@@ -1736,6 +1738,26 @@ components:
       $ref: "./components/schemas/investment-returns.yaml#/ReturnsAllocation"
     ReturnsBenchmark:
       $ref: "./components/schemas/investment-returns.yaml#/ReturnsBenchmark"
+    AllocationTarget:
+      $ref: "./components/schemas/investment-allocation.yaml#/AllocationTarget"
+    AllocationSaveRequest:
+      $ref: "./components/schemas/investment-allocation.yaml#/AllocationSaveRequest"
+    AllocationRevision:
+      $ref: "./components/schemas/investment-allocation.yaml#/AllocationRevision"
+    AllocationCommodity:
+      $ref: "./components/schemas/investment-allocation.yaml#/AllocationCommodity"
+    AllocationAccount:
+      $ref: "./components/schemas/investment-allocation.yaml#/AllocationAccount"
+    AllocationMoney:
+      $ref: "./components/schemas/investment-allocation.yaml#/AllocationMoney"
+    AllocationUnknown:
+      $ref: "./components/schemas/investment-allocation.yaml#/AllocationUnknown"
+    AllocationRow:
+      $ref: "./components/schemas/investment-allocation.yaml#/AllocationRow"
+    AllocationPoint:
+      $ref: "./components/schemas/investment-allocation.yaml#/AllocationPoint"
+    AllocationResponse:
+      $ref: "./components/schemas/investment-allocation.yaml#/AllocationResponse"
     InvestmentReturnsResponse:
       $ref: "./components/schemas/investment-returns.yaml#/InvestmentReturnsResponse"
     InstrumentReturns:
