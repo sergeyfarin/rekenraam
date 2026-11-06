@@ -13,6 +13,7 @@
   import SectionTabs from './section-tabs.svelte';
   import SearchField from '#lib/search/search-field.svelte';
   import SettingsMenu from './settings-menu.svelte';
+  import type { Attachment } from 'svelte/attachments';
 
   let {
     entry,
@@ -38,6 +39,18 @@
   // The link's name is its visible text (label and badge) so it matches what
   // voice control users say; the status sentence rides along as a description.
   const reviewStatusID = $props.id();
+
+  // Sticky side panels and scroll padding sit below the bar, whose height
+  // changes with the section tabs and wrapping (app.css side-panel-sticky).
+  const publishHeight: Attachment<HTMLElement> = (bar) => {
+    const root = document.documentElement;
+    const observer = new ResizeObserver(() => root.style.setProperty('--shell-bar-height', `${bar.offsetHeight}px`));
+    observer.observe(bar);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty('--shell-bar-height');
+    };
+  };
 
   let menuOpen = $state(false);
   let menuButton = $state<HTMLButtonElement>();
@@ -69,7 +82,7 @@
   {m.nav_skip_to_content()}
 </a>
 
-<div data-print-hide class="shell-bar sticky top-0 z-30 border-b border-border/70">
+<div data-print-hide class="shell-bar sticky top-0 z-30 border-b border-border/70" {@attach publishHeight}>
   <div class="mx-auto max-w-[100rem] px-4 sm:px-6 lg:px-8">
     <header class="flex h-14 items-center gap-2">
       <!-- Desktop: Home, then the sections as plain links to their overviews. -->

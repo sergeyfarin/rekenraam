@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { publishPanelHeight } from '#lib/components/sticky-panel.ts';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
@@ -196,7 +197,7 @@
 
     <!-- Summary + actions -->
     <aside class="mt-6 lg:mt-0">
-      <div class="lg:sticky lg:top-4">
+      <div class="lg:side-panel-sticky" {@attach publishPanelHeight}>
         <Panel>
           <div class="space-y-3">
             <div class="flex items-center justify-between">
