@@ -29,6 +29,29 @@
     type TransferProblem,
     type TransferSideName
   } from './transfer';
+  import {
+    accountLedgerValue,
+    approvalKey,
+    approvalStillValid,
+    cashAccountProblem,
+    directionForTab,
+    directionOf,
+    entryTabLabel,
+    entryTabs,
+    investmentMuted,
+    isCreditCard,
+    rebindSplitAccount,
+    shapeForTab,
+    splitDirection,
+    startingTab,
+    type CashDirection,
+    type CashShape,
+    type EntryDefaults,
+    type EntryTab,
+    type EntryTabLabel
+  } from './entry-mode';
+  import EntryTabs from './entry-tabs.svelte';
+  import InvestmentEntry from '#lib/investments/investment-entry.svelte';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { formatQuantity, formatRatio, joinCommodityAmount } from '#lib/money/format.ts';
   import { m } from '#lib/paraglide/messages.js';
@@ -72,7 +95,6 @@
   import {
     commodityImbalance,
     formatEditableAmount,
-    inflowPositiveAmount,
     negateCoefficient,
     parseDecimalAmount
   } from '#lib/money/amount.ts';
@@ -114,6 +136,7 @@
     templateFields,
     saveTemplate,
     onPendingChange,
+    onInvestmentSaved,
     preservePostings = false
   }: {
     mode: EditorMode;
@@ -121,14 +144,16 @@
     csrfToken?: string;
     onSaved?: (saved: TransactionResponse) => Promise<void> | void;
     initialValues?: TransactionRequest;
-    /** Pre-selects the account or category a new transaction starts from,
-     *  when it is entered from that account's or category's screen (#185);
-     *  `transfer` opens Transfer mode, the account as From (#481). */
-    createDefaults?: { accountID?: number; categoryID?: number; transfer?: boolean };
+    /** What a new transaction starts from: the account or category of the
+     *  screen it is entered from (#185), the tab it opens on (Transfer puts
+     *  the account on From, #481) and the Investment tab's prefill (#506). */
+    createDefaults?: EntryDefaults;
     templateFields?: Snippet;
     saveTemplate?: (payload: TransactionRequest) => Promise<void>;
     preservePostings?: boolean;
     onPendingChange?: (pending: boolean) => void;
+    /** An investment form opened from the Investment tab saved (#506). */
+    onInvestmentSaved?: () => void;
     onCancel: () => void;
   } = $props();
 
@@ -231,6 +256,19 @@
   // ── Field state ───────────────────────────────────────────────────
   let tier = $state<Tier>('simple');
 
+  // New transaction's tabs (#506). The editor stays mounted on every tab, so
+  // its fields are the entry's shared context and working copies: the date,
+  // payee, memo, account and currency are one value each, Transfer keeps its
+  // own fields, and the cash tabs share one amount and their shape.
+  const tabbed = $derived(mode === 'create');
+  let entryTab = $state<EntryTab>('out');
+  /** The cash tabs' shape, kept while Transfer or Investment is shown. */
+  let cashShape = $state<CashShape>('simple');
+  /** Money out of or into the account; the amount is always positive. */
+  let direction = $state<CashDirection>('out');
+  // Why the simple form cannot be saved yet, translated; '' when it can.
+  let entryMessage = $state('');
+
   // Tier 1 / shared fields
   let transactionDate = $state(ownerToday());
   let payeeID = $state<number | undefined>(undefined);
@@ -239,14 +277,17 @@
   // Tier 1: simple two-posting form
   let categoryID = $state<number | undefined>(undefined);
   let categoryLabel = $state('');
-  let amountStr = $state(''); // user-entered amount string, e.g. "25.00"
+  // The positive amount; `direction` says which way it moves (#506).
+  let amountStr = $state('');
+  // The entry's account: the simple form's account and a transfer's From.
   let accountID = $state<number | undefined>(undefined);
   // The day the account posting posts on, '' when it follows the date (#187).
   let accountPostedOn = $state('');
   let showAccountPostedOn = $state(false);
   // Split legs whose posted-on field the user opened (by leg index).
   let splitPostedOnOpen = $state<Record<number, boolean>>({});
-  // Manually chosen commodity when the selected account has no default_commodity_id.
+  // Manually chosen commodity when the selected account has no
+  // default_commodity_id; a transfer's From currency too.
   let simpleCommodityID = $state<number | undefined>(undefined);
 
   // Tier 2 fields (under Advanced)
@@ -268,10 +309,9 @@
   // Transfer between two of the owner's accounts (#481). In one currency the
   // amount transferred; in two, what left From and what reached To as their
   // statements show them. A fee on top, on Bank fees, posts with its payer.
-  let transferFromID = $state<number | undefined>(undefined);
+  // From is the entry's account (`accountID`, `simpleCommodityID`).
   let transferToID = $state<number | undefined>(undefined);
-  // Chosen currency for a side whose account has no default commodity.
-  let transferFromCommodityID = $state<number | undefined>(undefined);
+  // Chosen currency for a To account that has no default commodity.
   let transferToCommodityID = $state<number | undefined>(undefined);
   let sentStr = $state('');
   let receivedStr = $state('');
@@ -303,10 +343,13 @@
   let formError = $state<unknown>(undefined);
 
   // Reconciliation override modal
+  // The override authorizes only the request it reviewed (`reviewedKey`):
+  // a later change to the entry makes it stale (#506).
   let reconciliationModal = $state<{
     open: boolean;
     impacts: ReconciliationImpactResponse['affected_checkpoints'];
     pendingPayload: TransactionRequest;
+    reviewedKey?: string;
   }>({ open: false, impacts: [], pendingPayload: {} as TransactionRequest });
 
   // ── Derived ───────────────────────────────────────────────────────
@@ -353,15 +396,48 @@
   // Effective commodity for the simple form: inferred from account, or manually chosen.
   const effectiveCommodityID = $derived(inferredCommodityID ?? simpleCommodityID);
 
+  // The entry's account as the book has it, a holding included. A starting
+  // account the cash tabs and Transfer cannot post to stays selected and
+  // explained until the owner chooses another; nothing is substituted (#506).
+  const contextAccount = $derived(
+    accountID === undefined ? undefined : (accountsQuery.data?.accounts ?? []).find((a: AccountResponse) => a.id === accountID)
+  );
+  const accountProblem = $derived(selectedAccount ? undefined : cashAccountProblem(contextAccount));
+  const accountProblemText = $derived(
+    !accountProblem || !contextAccount
+      ? ''
+      : accountProblem === 'holding'
+        ? m.transactions_entry_account_holding({ account: accountDisplayName(contextAccount) })
+        : m.transactions_entry_account_unavailable({ account: accountDisplayName(contextAccount) })
+  );
+
+  const tabLabelText: Record<EntryTabLabel, () => string> = {
+    withdrawal: m.transactions_entry_tab_withdrawal,
+    deposit: m.transactions_entry_tab_deposit,
+    charge: m.transactions_entry_tab_charge,
+    credit: m.transactions_entry_tab_credit,
+    transfer: m.transactions_entry_tab_transfer,
+    investment: m.transactions_entry_tab_investment
+  };
+  // Labels follow the account; positions never move.
+  const entryTabList = $derived(
+    entryTabs.map((tab) => ({
+      id: tab,
+      label: tabLabelText[entryTabLabel(tab, contextAccount)](),
+      muted: tab === 'investment' && investmentMuted(contextAccount)
+    }))
+  );
+  const directionLabel = (value: CashDirection) => tabLabelText[entryTabLabel(value, contextAccount)]();
+
   const currenciesByID = $derived(
     new Map<number, CurrencyResponse>(
       (currenciesQuery.data?.currencies ?? []).map((c: CurrencyResponse) => [c.id, c])
     )
   );
 
-  const transferFromAccount = $derived(assetLiabilityAccounts.find((a: AccountResponse) => a.id === transferFromID));
+  const transferFromAccount = $derived(selectedAccount);
   const transferToAccount = $derived(assetLiabilityAccounts.find((a: AccountResponse) => a.id === transferToID));
-  const transferFromCommodity = $derived(transferFromAccount?.default_commodity_id ?? transferFromCommodityID);
+  const transferFromCommodity = $derived(effectiveCommodityID);
   const transferToCommodity = $derived(transferToAccount?.default_commodity_id ?? transferToCommodityID);
   const transferIsExchange = $derived(
     transferFromCommodity !== undefined && transferToCommodity !== undefined && transferFromCommodity !== transferToCommodity
@@ -396,9 +472,7 @@
       ? m.transactions_form_correction_title()
       : mode === 'edit'
         ? m.transactions_form_edit_title()
-        : tier === 'transfer'
-          ? m.transactions_transfer_title()
-          : m.transactions_form_create_title()
+        : m.transactions_form_create_title()
   );
 
   const submitLabel = $derived(
@@ -443,6 +517,7 @@
       noteMarkdown = initialValues.note_markdown ?? '';
       const postings = initialValues.journal_entries?.flatMap((e: NonNullable<TransactionRequest['journal_entries']>[number]) => e.postings ?? []) ?? [];
       tier = postings.length ? 'split' : 'simple';
+      direction = 'out';
       if (postings.length) splitLegs = postings.map((p: JournalEntryPostingRequest) => ({
         accountID: String(p.account_id), commodityID: String(p.commodity_id),
         amountStr: formatEditableAmount(p.quantity_value ?? '0', p.quantity_scale ?? 0),
@@ -462,6 +537,7 @@
       categoryLabel = '';
       amountStr = '';
       accountID = untrack(() => createDefaults?.accountID);
+      entryMessage = '';
       accountPostedOn = '';
       showAccountPostedOn = false;
       simpleCommodityID = undefined;
@@ -469,14 +545,17 @@
       noteMarkdown = '';
       externalRefHint = '';
       resetTransfer();
-      // Local, not read back from `tier`: the effect must not track the tier,
-      // or switching it would reset the form.
-      const startsAsTransfer = untrack(() => createDefaults?.transfer) === true;
-      tier = startsAsTransfer ? 'transfer' : 'simple';
-      if (startsAsTransfer) {
-        transferFromID = untrack(() => createDefaults?.accountID);
-        accountID = undefined;
-      }
+      // Locals, not read back from `tier` or `entryTab`: the effect must not
+      // track them, or switching tabs would reset the form. The starting
+      // account is the transfer's From as well (#481, #506).
+      const start = startingTab({
+        tab: untrack(() => createDefaults?.tab),
+        account: untrack(() => accountsQuery.data?.accounts.find((a: AccountResponse) => a.id === createDefaults?.accountID))
+      });
+      entryTab = start;
+      direction = directionForTab(start) ?? 'out';
+      cashShape = 'simple';
+      tier = start === 'transfer' ? 'transfer' : 'simple';
       splitLegs = [
         { accountID: '', commodityID: '', amountStr: '', memo: '', postedOn: '' },
         { accountID: '', commodityID: '', amountStr: '', memo: '', postedOn: '' }
@@ -494,6 +573,8 @@
     noteMarkdown = transaction.note_markdown ?? '';
     externalRefHint = transaction.external_ref_hint ?? '';
     formError = undefined;
+    entryMessage = '';
+    direction = 'out';
 
     // Determine tier based on journal entry complexity. A journal posted on
     // several days loses its transfer_clearing bridge here; the server
@@ -512,9 +593,9 @@
     resetTransfer();
     if (transfer) {
       tier = 'transfer';
-      transferFromID = transfer.from.accountID;
+      accountID = transfer.from.accountID;
       transferToID = transfer.to.accountID;
-      transferFromCommodityID = transfer.from.commodityID;
+      simpleCommodityID = transfer.from.commodityID;
       transferToCommodityID = transfer.to.commodityID;
       const twoCurrencies = transfer.from.commodityID !== transfer.to.commodityID;
       const amount = twoCurrencies ? transfer.sent : sameCurrencyAmount(transfer);
@@ -555,8 +636,10 @@
       if (assetLeg) {
         accountID = assetLeg.posting.account_id;
         simpleCommodityID = assetLeg.posting.commodity_id;
-        // Format the amount with correct sign: positive = inflow to account.
-        amountStr = inflowPositiveAmount(assetLeg.posting);
+        // A positive amount and the way it moves the account (#506).
+        const shown = directionOf(assetLeg.posting.quantity_value);
+        direction = shown.direction;
+        amountStr = formatEditableAmount(shown.magnitude, assetLeg.posting.quantity_scale);
         accountPostedOn = assetLeg.postedOn;
         showAccountPostedOn = assetLeg.postedOn !== '';
       }
@@ -618,6 +701,28 @@
     }
 
     transferMessage = '';
+    entryMessage = '';
+    // An account that cannot take this posting stays selected, explained
+    // beside its picker; the save waits for another choice (#506).
+    if ((tier === 'simple' || tier === 'transfer') && accountProblem) {
+      if (tier === 'transfer') transferMessage = accountProblemText;
+      else entryMessage = accountProblemText;
+      return;
+    }
+    if (tier === 'simple' && simpleAmount() === 'negative') {
+      entryMessage = m.transactions_entry_amount_positive();
+      return;
+    }
+    // A split's amounts are signed: under a cash tab they must move the
+    // entry's account the way the tab says, or the tab would misname what
+    // is saved (#506 review).
+    if (tabbed && tier === 'split' && (entryTab === 'out' || entryTab === 'in')) {
+      const moves = currentSplitDirection();
+      if (moves && moves !== entryTab && contextAccount) {
+        entryMessage = m.transactions_entry_split_direction({ account: accountDisplayName(contextAccount), tab: directionLabel(moves) });
+        return;
+      }
+    }
     if (tier === 'transfer') {
       const problem = currentTransferProblem();
       if (problem) {
@@ -655,7 +760,7 @@
         try {
           const payload = buildPayload();
           const impact = await fetchImpact(payload);
-          reconciliationModal = { open: true, impacts: impact.affected_checkpoints, pendingPayload: payload };
+          reconciliationModal = { open: true, impacts: impact.affected_checkpoints, pendingPayload: payload, reviewedKey: approvalKey(payload) };
         } catch (impactErr) {
           if (isTransactionVersionStale(impactErr)) await reloadNewerVersion();
           else formError = impactErr;
@@ -710,6 +815,14 @@
 
   async function confirmReconciliationOverride() {
     if (!csrfToken) return;
+    // The override acknowledges the request it reviewed and nothing else: an
+    // entry changed since (tab, account, direction, amount) needs a new save
+    // and a new review (#506).
+    if (!approvalStillValid(reconciliationModal.reviewedKey, buildPayload())) {
+      reconciliationModal = { open: false, impacts: [], pendingPayload: {} as TransactionRequest };
+      formError = new Error(m.transactions_entry_review_stale());
+      return;
+    }
     reconciliationModal = { ...reconciliationModal, open: false };
     pending = true;
     formError = undefined;
@@ -829,15 +942,13 @@
     const account = assetLiabilityAccounts.find((a: AccountResponse) => a.id === accountID);
     if (!account) return [];
 
-    // Convert user-entered display amount to ledger coefficient.
-    // User enters inflow-positive relative to the asset/liability account.
-    const parsed = parseDecimalAmount(amountStr);
-    if (parsed === null) return [];
+    // The owner enters a positive amount; the tab (or, editing, the
+    // direction) decides the sign: money out is a credit, money in a debit,
+    // for assets and liabilities alike (#506).
+    const parsed = simpleAmount();
+    if (parsed === null || parsed === 'negative') return [];
     const { value: assetValue, scale } = parsed;
-
-    // Ledger sign: for asset → positive value = debit = inflow; credit = outflow.
-    // For liability → positive debit = outflow; so we flip.
-    const assetLedgerValue = account.account_class === 'liability' ? negateCoefficient(assetValue) : assetValue;
+    const assetLedgerValue = accountLedgerValue(direction, assetValue);
     // Category posting is the balancing leg — opposite sign.
     const catLedgerValue = negateCoefficient(assetLedgerValue);
 
@@ -908,10 +1019,38 @@
     return [splitEntryRequest(postings, splitCarry, transactionDate, hasSystemAccount)];
   }
 
+  /** The simple form's positive amount, null when it does not parse. */
+  function simpleAmount(): { value: string; scale: number } | null | 'negative' {
+    const parsed = parseDecimalAmount(amountStr);
+    if (parsed === null) return null;
+    return parsed.value.startsWith('-') ? 'negative' : parsed;
+  }
+
+  /** Which way the split moves the entry's account, when it says (#506 review). */
+  function currentSplitDirection(): CashDirection | undefined {
+    return splitDirection(
+      splitLegs.map((leg) => ({ accountID: leg.accountID, amount: leg.amountStr.trim() ? parseDecimalAmount(leg.amountStr) : null })),
+      accountID
+    );
+  }
+
+  /**
+   * The split's mirror: every leg's sign flips, so a Withdrawal's split
+   * becomes the same Deposit and still balances. A carried transfer side
+   * stays with its account, which now sends instead of receives.
+   */
+  function mirrorSplit() {
+    splitLegs = splitLegs.map((leg) => {
+      const parsed = leg.amountStr.trim() ? parseDecimalAmount(leg.amountStr) : null;
+      return parsed ? { ...leg, amountStr: formatEditableAmount(negateCoefficient(parsed.value), parsed.scale) } : leg;
+    });
+    const other = (side?: TransferSideName) => (side === 'sending' ? 'receiving' : side === 'receiving' ? 'sending' : undefined);
+    splitCarry = { ...splitCarry, conversionSide: other(splitCarry.conversionSide), feePaidBy: other(splitCarry.feePaidBy) };
+  }
+
+  /** Clears Transfer's own fields; From is the entry's account and stays. */
   function resetTransfer() {
-    transferFromID = undefined;
     transferToID = undefined;
-    transferFromCommodityID = undefined;
     transferToCommodityID = undefined;
     sentStr = '';
     receivedStr = '';
@@ -938,7 +1077,7 @@
     if (fee && fee.value !== '0' && feeAccountID === undefined && bankFeesCategoryID === undefined) return 'no_fee_category';
     if (sentStr.trim() && parseDecimalAmount(sentStr) === null) return 'missing_amount';
     return transferProblem({
-      fromAccountID: transferFromID && transferFromCommodity !== undefined ? transferFromID : undefined,
+      fromAccountID: accountID && transferFromCommodity !== undefined ? accountID : undefined,
       toAccountID: transferToID && transferToCommodity !== undefined ? transferToID : undefined,
       sent: parseDecimalAmount(sentStr),
       received: parseDecimalAmount(receivedStr),
@@ -964,7 +1103,7 @@
 
   function buildTransferJournalEntries(): TransactionRequest['journal_entries'] {
     const amount = parseDecimalAmount(sentStr);
-    if (!transferFromID || !transferToID || transferFromCommodity === undefined || transferToCommodity === undefined || !amount) return [];
+    if (!accountID || !transferToID || transferFromCommodity === undefined || transferToCommodity === undefined || !amount) return [];
     const parsed = parsedFee();
     const feeCategory = feeAccountID ?? bankFeesCategoryID;
     const fee = parsed && parsed.value !== '0' && feeCategory ? { amount: parsed, paidBy: feePaidBy } : undefined;
@@ -975,7 +1114,7 @@
       statements = { sent: amount, received };
     }
     const entry = transferEntry({
-      from: { accountID: transferFromID, commodityID: transferFromCommodity, postedOn: mode === 'template' ? '' : leavesOn, lineKey: transferLineKeys.from, memo: transferMemos.from },
+      from: { accountID, commodityID: transferFromCommodity, postedOn: mode === 'template' ? '' : leavesOn, lineKey: transferLineKeys.from, memo: transferMemos.from },
       to: { accountID: transferToID, commodityID: transferToCommodity, postedOn: mode === 'template' ? '' : arrivesOn, lineKey: transferLineKeys.to, memo: transferMemos.to },
       sent: statements.sent,
       received: statements.received,
@@ -1014,17 +1153,84 @@
       };
     }
     tier = 'split';
+    // New transaction: split entry belongs to the cash tabs (#506).
+    if (tabbed) {
+      cashShape = 'split';
+      direction = currentSplitDirection() ?? direction;
+      entryTab = direction;
+    }
   }
 
+  /** Editing: the simple form becomes a transfer from its account (#481). */
   function switchToTransfer() {
     resetTransfer();
-    transferFromID = accountID;
     tier = 'transfer';
   }
 
+  /**
+   * New transaction's tab switch (#506). Nothing is reset: each tab's fields
+   * stay as entered, Withdrawal ↔ Deposit keep the amount and only change its
+   * direction, and the cash tabs come back in the shape they were left in.
+   */
+  function selectTab(next: EntryTab) {
+    if (busy || next === entryTab) return;
+    if (entryTab === 'out' || entryTab === 'in') cashShape = tier === 'split' ? 'split' : 'simple';
+    // A payment started as a Withdrawal that is really a transfer: an empty
+    // Transfer amount starts from the amount leaving the same account. One
+    // that was entered is never replaced.
+    if (next === 'transfer' && !sentStr.trim() && cashShape === 'simple' && direction === 'out') {
+      const amount = simpleAmount();
+      if (amount && amount !== 'negative') sentStr = amountStr;
+    }
+    entryTab = next;
+    direction = directionForTab(next) ?? direction;
+    const shape = shapeForTab(next, cashShape);
+    if (shape !== 'investment') tier = shape;
+    // A kept split under the other cash tab is the same entry the other way:
+    // its legs flip with the direction, so Deposit never saves a withdrawal.
+    if (shape === 'split' && (next === 'out' || next === 'in')) {
+      const moves = currentSplitDirection();
+      if (moves && moves !== next) mirrorSplit();
+    }
+    entryMessage = '';
+    transferMessage = '';
+  }
+
+  // A shown approval belongs to the entry as it was. A change of tab,
+  // account, direction or shape closes it, and a closed review is never
+  // reused: saving asks again (#506). The reconciliation override also
+  // checks its reviewed request at confirmation.
+  const entryMeaning = $derived(`${entryTab}|${tier}|${direction}|${accountID ?? ''}|${transferToID ?? ''}`);
+  $effect(() => {
+    void entryMeaning;
+    untrack(() => {
+      // A refusal about the entry as it was no longer describes it.
+      entryMessage = '';
+      transferMessage = '';
+      if (payeeConfirm.open) payeeConfirm = { open: false, resolution: null };
+      if (reconciliationModal.open) reconciliationModal = { open: false, impacts: [], pendingPayload: {} as TransactionRequest };
+    });
+  });
+
+  // The split keeps the account it was entered with while another tab
+  // changes the entry's account (Transfer's From, the simple form): its legs
+  // follow, so the cash tab's label and the saved postings name the same
+  // account (#506 review). Inside the split editor the legs lead instead.
+  let splitBoundAccountID: number | undefined;
+  $effect(() => {
+    const next = accountID;
+    untrack(() => {
+      const previous = splitBoundAccountID;
+      if (next !== undefined) splitBoundAccountID = next;
+      if (!tabbed || tier === 'split' || cashShape !== 'split') return;
+      if (previous === undefined || next === undefined || previous === next) return;
+      splitLegs = rebindSplitAccount(splitLegs, previous, next, commodityForAccount);
+    });
+  });
+
   function swapTransferSides() {
-    [transferFromID, transferToID] = [transferToID, transferFromID];
-    [transferFromCommodityID, transferToCommodityID] = [transferToCommodityID, transferFromCommodityID];
+    [accountID, transferToID] = [transferToID, accountID];
+    [simpleCommodityID, transferToCommodityID] = [transferToCommodityID, simpleCommodityID];
     [leavesOn, arrivesOn] = [arrivesOn, leavesOn];
     if (transferIsExchange) [sentStr, receivedStr] = [receivedStr, sentStr];
     [transferLineKeys, transferMemos] = [
@@ -1056,16 +1262,17 @@
   }
 
   function removeSplitLeg(i: number) {
+    const was = splitLegs[i]?.accountID ?? '';
     splitLegs = splitLegs.filter((_, idx) => idx !== i);
+    if (tabbed) adoptSplitEntryAccount(splitLegs, undefined, was);
   }
 
   function switchToSplit() {
     // Copy existing simple fields into split legs.
-    const parsed = accountID && amountStr ? parseDecimalAmount(amountStr) : null;
-    if (parsed !== null) {
+    const parsed = accountID && amountStr ? simpleAmount() : null;
+    if (parsed !== null && parsed !== 'negative') {
       const { value, scale } = parsed;
-      const account = assetLiabilityAccounts.find((a: AccountResponse) => a.id === accountID);
-      const assetLedger = account?.account_class === 'liability' ? negateCoefficient(value) : value;
+      const assetLedger = accountLedgerValue(direction, value);
       splitLegs = [
         {
           accountID: String(accountID),
@@ -1087,6 +1294,7 @@
       ];
     }
     tier = 'split';
+    if (tabbed) cashShape = 'split';
   }
 
   // The split as the simple form would show it, or null when it would drop
@@ -1103,10 +1311,12 @@
   function switchToSimple() {
     const fit = simpleFit;
     if (fit) {
-      const account = assetLiabilityAccounts.find((a: AccountResponse) => a.id === fit.account.accountID);
       accountID = fit.account.accountID;
       simpleCommodityID = fit.account.commodityID;
-      amountStr = inflowPositiveAmount({ quantity_value: fit.account.value, quantity_scale: fit.account.scale, account_class: account?.account_class ?? 'asset' });
+      const shown = directionOf(fit.account.value);
+      direction = shown.direction;
+      if (tabbed) entryTab = shown.direction;
+      amountStr = formatEditableAmount(shown.magnitude, fit.account.scale);
       accountPostedOn = fit.account.postedOn;
       showAccountPostedOn = fit.account.postedOn !== '';
       categoryID = fit.category.accountID;
@@ -1117,6 +1327,7 @@
       return;
     }
     tier = 'simple';
+    if (tabbed) cashShape = 'simple';
   }
 
   // Currency choices include currencies used by clearing accounts with no default.
@@ -1156,8 +1367,25 @@
   function onSplitAccountChange(i: number, e: Event) {
     const val = (e.target as HTMLSelectElement).value;
     const newLegs = [...splitLegs];
+    const was = newLegs[i].accountID;
     newLegs[i] = { ...newLegs[i], accountID: val, commodityID: commodityForAccount(val) };
     splitLegs = newLegs;
+    if (tabbed) adoptSplitEntryAccount(newLegs, i, was);
+  }
+
+  /**
+   * Inside the split editor the legs lead the entry's account, for the tab
+   * labels, the direction and every other tab (#506 review). While a leg is
+   * on the entry's account it stays; when none is — no account was chosen
+   * yet (a split started first) or its leg moved away — the leg just changed
+   * takes it if it is an account, else the first account leg in order.
+   */
+  function adoptSplitEntryAccount(legs: SplitLeg[], changed: number | undefined, was: string) {
+    if (accountID !== undefined && legs.some((leg) => leg.accountID === String(accountID))) return;
+    const asAccount = (leg: SplitLeg) => assetLiabilityAccounts.find((a: AccountResponse) => String(a.id) === leg.accountID);
+    const next = (changed === undefined ? undefined : asAccount(legs[changed])) ?? legs.map(asAccount).find((account) => account !== undefined);
+    if (next) accountID = next.id;
+    else if (accountID !== undefined && was === String(accountID)) accountID = undefined;
   }
 </script>
 
@@ -1208,11 +1436,13 @@
   </ModalDialog>
 {/if}
 
-<form class="space-y-4" onsubmit={handleSubmit} aria-busy={busy}>
+<!-- A region named by its heading: the entry's header and tabs sit outside
+     its form, which the Investment tab hides (#506). -->
+<section class="space-y-4" aria-labelledby={`${uid}-title`}>
   <!-- Header -->
   <div class="flex items-start justify-between gap-3">
     <div class="min-w-0">
-      <h2 class="text-base font-semibold text-foreground">{title}</h2>
+      <h2 id={`${uid}-title`} class="text-base font-semibold text-foreground">{title}</h2>
       {#if mode === 'edit' && transaction}
         <p class="mt-1 truncate text-sm text-muted">
           {transactionTitle(transaction, systemLabelText, String(transaction.id))}
@@ -1231,6 +1461,22 @@
     </button>
   </div>
 
+  {#if tabbed}
+    <EntryTabs
+      tabs={entryTabList}
+      active={entryTab}
+      onSelect={selectTab}
+      panelID={`${uid}-entry-panel`}
+      idPrefix={uid}
+      label={m.transactions_entry_tabs_label()}
+      disabled={busy}
+    />
+  {/if}
+
+  <div id={`${uid}-entry-panel`} role={tabbed ? 'tabpanel' : undefined} aria-labelledby={tabbed ? `${uid}-tab-${entryTab}` : undefined}>
+  <!-- Hidden, not unmounted, on the Investment tab: its fields are the
+       entry's shared context and working copies (#506). -->
+  <form class="space-y-4" onsubmit={handleSubmit} aria-busy={busy} hidden={tabbed && entryTab === 'investment'}>
   <fieldset disabled={busy} class="space-y-4">
   {#if templateFields}{@render templateFields()}{/if}
 
@@ -1430,13 +1676,18 @@
         <label>
           <span class={labelClass}>{m.transactions_transfer_from()}</span>
           <select
-            value={transferFromID ?? ''}
-            onchange={(e) => { transferFromID = Number(e.currentTarget.value) || undefined; transferFromCommodityID = undefined; }}
+            value={accountID ?? ''}
+            onchange={(e) => { accountID = Number(e.currentTarget.value) || undefined; }}
             class={inputClass}
             required
+            aria-invalid={accountProblem ? true : undefined}
+            aria-describedby={accountProblem ? `${uid}-account-problem` : undefined}
             disabled={isVoided && mode === 'edit'}
           >
             <option value="">—</option>
+            {#if accountProblem && contextAccount}
+              <option value={contextAccount.id} disabled>{accountDisplayName(contextAccount)}</option>
+            {/if}
             {#each assetLiabilityAccounts as a (a.id)}
               <option value={a.id}>{postingAccountLabel(a)}</option>
             {/each}
@@ -1469,12 +1720,16 @@
         </label>
       </div>
 
-      {#if (transferFromID !== undefined && transferFromAccount?.default_commodity_id == null) || (transferToID !== undefined && transferToAccount?.default_commodity_id == null)}
+      {#if accountProblem}
+        <p id={`${uid}-account-problem`} class="text-sm text-foreground">{accountProblemText}</p>
+      {/if}
+
+      {#if (transferFromAccount && transferFromAccount.default_commodity_id == null) || (transferToID !== undefined && transferToAccount?.default_commodity_id == null)}
         <div class="grid gap-3 sm:grid-cols-2">
-          {#if transferFromID !== undefined && transferFromAccount?.default_commodity_id == null}
+          {#if transferFromAccount && transferFromAccount.default_commodity_id == null}
             <label>
               <span class={labelClass}>{m.transactions_transfer_from_currency()}</span>
-              <select value={transferFromCommodityID ?? ''} onchange={(e) => { transferFromCommodityID = Number(e.currentTarget.value) || undefined; }} class={inputClass} required>
+              <select value={simpleCommodityID ?? ''} onchange={(e) => { simpleCommodityID = Number(e.currentTarget.value) || undefined; }} class={inputClass} required>
                 <option value="">—</option>
                 {#each allActiveCommodities as c (c.id)}<option value={c.id}>{c.code}</option>{/each}
               </select>
@@ -1588,27 +1843,51 @@
     </div>
   {:else if tier === 'simple'}
     <!-- ── Tier 1: simple two-posting form ─────────────────────────── -->
+    {#if entryMessage}
+      <p role="alert" class="flex items-start gap-2 rounded-[var(--radius-control)] border border-danger/40 bg-danger-soft px-3 py-2.5 text-sm text-foreground">
+        <AlertTriangle size={15} class="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
+        <span>{entryMessage}</span>
+      </p>
+    {/if}
+    {#if !tabbed}
+      <!-- Editing: the direction the positive amount moves the account (#506). -->
+      <fieldset class="flex flex-wrap gap-x-4 gap-y-1">
+        <legend class={labelClass}>{m.transactions_entry_direction()}</legend>
+        {#each ['out', 'in'] as const as value (value)}
+          <label class="flex min-h-10 items-center gap-2 text-sm text-foreground">
+            <input type="radio" name={`${uid}-direction`} {value} bind:group={direction} disabled={isVoided && mode === 'edit'} />
+            {directionLabel(value)}
+          </label>
+        {/each}
+      </fieldset>
+    {:else if entryTab === 'in' && isCreditCard(selectedAccount)}
+      <p class="text-sm text-muted">{m.transactions_entry_card_credit_note()}</p>
+    {/if}
     <div class="grid gap-3 sm:grid-cols-2">
-      <!-- Account (asset/liability leg) -->
+      <!-- Account (asset/liability leg). Changing it keeps every other field (#506). -->
       <label>
         <span class={labelClass}>{m.transactions_field_account()}</span>
         <select
           value={accountID ?? ''}
           onchange={(e) => {
             accountID = Number((e.target as HTMLSelectElement).value) || undefined;
-            simpleCommodityID = undefined;
           }}
           class={inputClass}
+          aria-invalid={accountProblem ? true : undefined}
+          aria-describedby={accountProblem ? `${uid}-account-problem` : undefined}
           disabled={isVoided && mode === 'edit'}
         >
           <option value="">—</option>
+          {#if accountProblem && contextAccount}
+            <option value={contextAccount.id} disabled>{accountDisplayName(contextAccount)}</option>
+          {/if}
           {#each assetLiabilityAccounts as a (a.id)}
             <option value={a.id}>{postingAccountLabel(a)}</option>
           {/each}
         </select>
       </label>
 
-      <!-- Amount (inflow positive relative to selected account) -->
+      <!-- Amount: positive; the tab or direction decides its sign (#506). -->
       <label>
         <span class={labelClass}>{m.transactions_field_amount()}</span>
         <input
@@ -1622,8 +1901,12 @@
         />
       </label>
 
+      {#if accountProblem}
+        <p id={`${uid}-account-problem`} class="text-sm text-foreground sm:col-span-2">{accountProblemText}</p>
+      {/if}
+
       <!-- Commodity selector — only shown when the selected account has no default commodity -->
-      {#if accountID !== undefined && inferredCommodityID === undefined}
+      {#if selectedAccount && inferredCommodityID === undefined}
         <label class="sm:col-span-2">
           <span class={labelClass}>{m.transactions_field_posting_commodity()}</span>
           <select
@@ -1715,9 +1998,9 @@
       </label>
     </div>
 
-    <!-- Switch to transfer or split -->
+    <!-- Switch to transfer or split; New transaction has its Transfer tab -->
     <div class="flex flex-wrap justify-end gap-x-4">
-      {#if mode !== 'template'}
+      {#if mode !== 'template' && !tabbed}
         <button
           type="button"
           class="min-h-10 text-xs font-medium text-accent underline-offset-2 hover:underline"
@@ -1737,6 +2020,12 @@
   {:else}
     <!-- ── Tier 3: split posting editor ────────────────────────────── -->
     <div class="space-y-3">
+      {#if entryMessage}
+        <p role="alert" class="flex items-start gap-2 rounded-[var(--radius-control)] border border-danger/40 bg-danger-soft px-3 py-2.5 text-sm text-foreground">
+          <AlertTriangle size={15} class="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
+          <span>{entryMessage}</span>
+        </p>
+      {/if}
       <div class="flex items-center justify-between">
         <span class={labelClass}>{m.transactions_split_title()}</span>
         {#if splitIsEmpty || simpleFit}
@@ -1945,4 +2234,19 @@
     {/if}
   </div>
   </fieldset>
-</form>
+  </form>
+
+  {#if tabbed && entryTab === 'investment'}
+    <!-- Until #507 the Investment tab opens the existing investment forms,
+         with the starting page's holding or instrument (#186). Outside the
+         form above: the write-off form renders inline. -->
+    <div class="space-y-3">
+      {#if investmentMuted(contextAccount)}
+        <p class="text-sm text-foreground">{m.transactions_entry_investment_holding_needed()}</p>
+      {/if}
+      <p class="text-sm text-muted">{m.transactions_entry_investment_intro()}</p>
+      <InvestmentEntry prefill={createDefaults?.investment} onSaved={onInvestmentSaved} />
+    </div>
+  {/if}
+  </div>
+</section>

@@ -12,7 +12,7 @@ async function templateForm(page:Page,name:string,account:string){
  await dialog.getByLabel('Create drafts days ahead').fill('0');
  await dialog.getByLabel('Description',{exact:true}).fill(name);
  await dialog.getByRole('combobox',{name:'Account',exact:true}).selectOption({label:account});
- await dialog.getByLabel('Amount',{exact:true}).fill('-12.34');
+ await dialog.getByLabel('Amount',{exact:true}).fill('12.34');
  await dialog.getByPlaceholder('Search categories').click();
  await dialog.locator('ul[role="listbox"] button[role="option"]').first().click();
  await expect(dialog.getByRole('region',{name:'Next five scheduled dates'}).locator('time')).toHaveCount(5);

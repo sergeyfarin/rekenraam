@@ -1,19 +1,25 @@
 import type { TransactionResponse } from '#lib/api/transactions.ts';
+import type { EntryDefaults } from './entry-mode.ts';
 
-// Add transaction from anywhere (#459, #477). A page that shows *Add
-// transaction* in its header (Transactions, an account register, a category)
-// provides its own opener, so the N shortcut and search's Add command open the
-// same editor, prefilled for that page. Elsewhere, Home's tile included, they
-// open the shared entry dialog the shell mounts once.
-let pageAdd = $state<(() => void) | undefined>();
+export type { EntryDefaults } from './entry-mode.ts';
 
-export type EntryDefaults = { accountID?: number; categoryID?: number; transfer?: boolean };
+// New transaction from anywhere (#459, #477, #506). A page that shows *New
+// transaction* in its header (Transactions, an account register, a category,
+// an instrument) provides its own opener, so the N shortcut, search's
+// commands and Home's Transfer open the same entry in its side panel,
+// prefilled for that page. Elsewhere, Home's tile included, they open the
+// shared entry dialog the shell mounts once.
+let pageAdd = $state<((defaults?: EntryDefaults) => void) | undefined>();
 
 /** The shared entry dialog: open with its prefill, and the last transaction it saved. */
 export const transactionEntry = $state<{ open: boolean; defaults?: EntryDefaults; saved?: TransactionResponse }>({ open: false });
 
-/** Provide the current page's opener; the returned function withdraws it. */
-export function providePageAdd(open: () => void): () => void {
+/**
+ * Provide the current page's opener; the returned function withdraws it. The
+ * opener receives the caller's tab, if any, to apply over the page's own
+ * prefill.
+ */
+export function providePageAdd(open: (defaults?: EntryDefaults) => void): () => void {
   pageAdd = open;
   return () => {
     if (pageAdd === open) pageAdd = undefined;
@@ -22,7 +28,7 @@ export function providePageAdd(open: () => void): () => void {
 
 export function addTransaction(defaults?: EntryDefaults): void {
   if (pageAdd) {
-    pageAdd();
+    pageAdd(defaults);
     return;
   }
   // Never replace an open working copy and its unsaved input.
@@ -32,16 +38,9 @@ export function addTransaction(defaults?: EntryDefaults): void {
   transactionEntry.saved = undefined;
 }
 
-/**
- * Transfer between accounts (#481): the shared dialog in Transfer mode, the
- * account as From when given. It opens the shared dialog even on a page with
- * its own editor, which has no transfer opener of its own.
- */
+/** New transaction on its Transfer tab (#481), the account as From when given. */
 export function addTransfer(accountID?: number): void {
-  if (transactionEntry.open) return;
-  transactionEntry.open = true;
-  transactionEntry.defaults = { accountID, transfer: true };
-  transactionEntry.saved = undefined;
+  addTransaction({ accountID, tab: 'transfer' });
 }
 
 /** Cancel discards the working copy; saving closes it with the saved transaction. */

@@ -72,7 +72,7 @@ test('Simple to Split and back keeps a reconciled posting without a checkpoint o
   const panel = await openEditor(page, created.id);
   await panel.getByRole('button', { name: 'Use split entry', exact: true }).click();
   await panel.getByRole('button', { name: 'Use simple entry', exact: true }).click();
-  await expect(panel.getByLabel('Amount', { exact: true })).toHaveValue('-100.00');
+  await expect(panel.getByLabel('Amount', { exact: true })).toHaveValue('100.00');
   await panel.getByLabel('Description', { exact: true }).fill('Simple checkpoint edited');
   expect((await save(page, panel, created.id)).status()).toBe(200);
   const after = await apiJSON<Saved>(page, 'GET', `/api/v1/transactions/${created.id}`);

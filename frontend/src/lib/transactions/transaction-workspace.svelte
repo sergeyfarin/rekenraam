@@ -1,7 +1,7 @@
 <script lang="ts" module>
   import type { TransactionResponse } from '#lib/api/transactions.ts';
   import type { TransactionRowActionHandler } from './row-action.ts';
-  import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
+  import type { EntryDefaults } from './entry-mode.ts';
 
   /** What a screen's list may ask the shared side panel to do. */
   export type TransactionWorkspaceActions = {
@@ -16,15 +16,13 @@
   };
 
   /**
-   * How a screen offers a new transaction. `editor` opens the generic editor
-   * with the screen's defaults; `investment` offers the investment record
-   * forms pre-filled with the screen's holding or instrument (#186), since the
-   * generic editor never writes an investment-linked posting; `none` offers
-   * nothing.
+   * How a screen offers a new transaction. `entry` opens New transaction in
+   * the side panel with the screen's defaults: its account or category, the
+   * tab to start on and, for a holding or an instrument, the Investment tab's
+   * prefill (#186, #506). `none` offers nothing.
    */
   export type TransactionWorkspaceCreate =
-    | { kind: 'editor'; defaults?: { accountID?: number; categoryID?: number } }
-    | { kind: 'investment'; prefill: InvestmentPrefill }
+    | { kind: 'entry'; defaults?: EntryDefaults }
     | { kind: 'none' };
 </script>
 
@@ -34,7 +32,6 @@
   import type { Snippet } from 'svelte';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import Plus from '@lucide/svelte/icons/plus';
-  import ArrowLeftRight from '@lucide/svelte/icons/arrow-left-right';
   import { m } from '#lib/paraglide/messages.js';
   import Panel from '#lib/components/panel.svelte';
   import PageHeader from '#lib/components/page-header.svelte';
@@ -47,8 +44,7 @@
   import type { TransactionRowAction } from './row-action.ts';
   import TransactionDetailPanel from './transaction-detail-panel.svelte';
   import TransactionEditor from './transaction-editor.svelte';
-  import InvestmentEntry from '#lib/investments/investment-entry.svelte';
-  import { addTransfer, providePageAdd } from './add-transaction.svelte.ts';
+  import { providePageAdd } from './add-transaction.svelte.ts';
 
   // The transaction workspace (#185): one list screen plus the shared side
   // panel for detail, edit, correction, creation and undo of a deletion. The
@@ -62,7 +58,7 @@
     breadcrumbs = [],
     header,
     list,
-    create = { kind: 'editor' },
+    create = { kind: 'entry' },
     linkedTransactionID = 0
   }: {
     title?: string;
@@ -80,7 +76,7 @@
     | { type: 'detail'; transaction: TransactionResponse; initialAction?: 'unvoid' }
     | { type: 'edit'; transaction: TransactionResponse }
     | { type: 'correct'; transaction: TransactionResponse }
-    | { type: 'create' }
+    | { type: 'create'; chosen: Partial<EntryDefaults> }
     | { type: 'just-deleted'; transaction: TransactionResponse };
 
   let panel = $state<PanelState>({ type: 'none' });
@@ -130,20 +126,29 @@
   // Consume the trigger so refresh/Back does not reopen a dismissed working copy.
   $effect(() => {
     const currentURL = page.shallow?.url ?? page.url;
-    if (currentURL.searchParams.get('create') === 'transaction' && create.kind === 'editor') {
-      panel = { type: 'create' };
+    if (currentURL.searchParams.get('create') === 'transaction' && create.kind === 'entry') {
+      openCreate();
       const url = new URL(currentURL.href);
       url.searchParams.delete('create');
       void replaceState(url, page.state);
     }
   });
 
-  // N and search's Add command open this editor in place. They never replace
-  // an editor that is already open, which may hold unsaved input.
+  // The page's defaults, with what the caller chose on top: search's
+  // Transfer opens the Transfer tab from this page's account (#506).
+  // The editor reads them once on open; the Investment tab's prefill follows
+  // the page as its queries load.
+  function openCreate(chosen?: EntryDefaults) {
+    panel = { type: 'create', chosen: Object.fromEntries(Object.entries(chosen ?? {}).filter(([, value]) => value !== undefined)) };
+  }
+  const pageDefaults = $derived(create.kind === 'entry' ? create.defaults : undefined);
+
+  // N and search's commands open this entry in place. They never replace an
+  // editor that is already open, which may hold unsaved input.
   $effect(() => {
-    if (create.kind !== 'editor') return;
-    return providePageAdd(() => {
-      if (panel.type !== 'create' && panel.type !== 'edit' && panel.type !== 'correct') panel = { type: 'create' };
+    if (create.kind !== 'entry') return;
+    return providePageAdd((chosen) => {
+      if (panel.type !== 'create' && panel.type !== 'edit' && panel.type !== 'correct') openCreate(chosen);
     });
   });
 
@@ -230,32 +235,16 @@
 </script>
 
 {#snippet createAction()}
-  {#if create.kind === 'editor'}
-    <div class="flex max-w-full flex-wrap items-center justify-end gap-2">
+  {#if create.kind === 'entry'}
+    <!-- One New transaction: its tabs cover transfers and investments (#506). -->
     <button
       type="button"
       class="inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90"
-      onclick={() => (panel = { type: 'create' })}
+      onclick={() => openCreate()}
     >
       <Plus size={16} aria-hidden="true" />
       {m.transactions_form_create_title()}
     </button>
-    {#if create.defaults?.accountID !== undefined}
-      <!-- From this account's register, the account is the transfer's From (#481). -->
-      <button
-        type="button"
-        class="inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-control-hover"
-        onclick={() => addTransfer(create.defaults?.accountID)}
-      >
-        <ArrowLeftRight size={16} aria-hidden="true" />
-        {m.home_shortcut_transfer()}
-      </button>
-    {/if}
-    </div>
-  {:else if create.kind === 'investment'}
-    <div class="flex max-w-full flex-wrap items-center justify-end gap-2">
-      <InvestmentEntry layout="menu" prefill={create.prefill} />
-    </div>
   {/if}
 {/snippet}
 
@@ -314,8 +303,9 @@
             <TransactionEditor
               mode="create"
               {csrfToken}
-              createDefaults={create.kind === 'editor' ? create.defaults : undefined}
+              createDefaults={{ ...pageDefaults, ...panel.chosen }}
               onSaved={handleSaved}
+              onInvestmentSaved={() => (panel = { type: 'none' })}
               onCancel={() => (panel = { type: 'none' })}
             />
           {:else if panel.type === 'just-deleted'}

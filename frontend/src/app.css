@@ -60,6 +60,18 @@
   --color-chart-3: oklch(0.5 0.1 132);
   --color-chart-4: oklch(0.72 0.12 92);
   --color-chart-5: oklch(0.58 0.16 28);
+  /* Entry mode accents (#506): direction of a New transaction tab, never
+     good, bad, gain or loss, and never the error colour. Drawn only as the
+     selected tab's underline, soft fill and icon; pinned by
+     theme-contrast.test.ts. */
+  --color-entry-out: oklch(0.56 0.15 20);
+  --color-entry-out-soft: oklch(0.95 0.022 20);
+  --color-entry-in: oklch(0.53 0.11 150);
+  --color-entry-in-soft: oklch(0.95 0.028 150);
+  --color-entry-transfer: oklch(0.53 0.13 250);
+  --color-entry-transfer-soft: oklch(0.95 0.022 250);
+  --color-entry-investment: oklch(0.53 0.14 305);
+  --color-entry-investment-soft: oklch(0.95 0.025 305);
   --radius-panel: 10px;
   --radius-control: 8px;
   --shadow-panel: 0 10px 28px -22px rgb(30 36 20 / 0.42);
@@ -98,6 +110,14 @@
   --color-chart-3: oklch(0.64 0.1 132);
   --color-chart-4: oklch(0.78 0.12 92);
   --color-chart-5: oklch(0.72 0.16 28);
+  --color-entry-out: oklch(0.72 0.13 20);
+  --color-entry-out-soft: oklch(0.31 0.05 20);
+  --color-entry-in: oklch(0.72 0.11 150);
+  --color-entry-in-soft: oklch(0.31 0.045 150);
+  --color-entry-transfer: oklch(0.72 0.11 250);
+  --color-entry-transfer-soft: oklch(0.31 0.05 250);
+  --color-entry-investment: oklch(0.72 0.12 305);
+  --color-entry-investment-soft: oklch(0.31 0.05 305);
   --shadow-panel: 0 16px 36px -26px rgb(0 0 0 / 0.78);
 }
 
@@ -131,6 +151,14 @@
     --color-chart-3: oklch(0.64 0.1 132);
     --color-chart-4: oklch(0.78 0.12 92);
     --color-chart-5: oklch(0.72 0.16 28);
+    --color-entry-out: oklch(0.72 0.13 20);
+    --color-entry-out-soft: oklch(0.31 0.05 20);
+    --color-entry-in: oklch(0.72 0.11 150);
+    --color-entry-in-soft: oklch(0.31 0.045 150);
+    --color-entry-transfer: oklch(0.72 0.11 250);
+    --color-entry-transfer-soft: oklch(0.31 0.05 250);
+    --color-entry-investment: oklch(0.72 0.12 305);
+    --color-entry-investment-soft: oklch(0.31 0.05 305);
     --shadow-panel: 0 16px 36px -26px rgb(0 0 0 / 0.78);
   }
 }
@@ -303,6 +331,14 @@
   --color-chart-3: var(--color-chart-3);
   --color-chart-4: var(--color-chart-4);
   --color-chart-5: var(--color-chart-5);
+  --color-entry-out: var(--color-entry-out);
+  --color-entry-out-soft: var(--color-entry-out-soft);
+  --color-entry-in: var(--color-entry-in);
+  --color-entry-in-soft: var(--color-entry-in-soft);
+  --color-entry-transfer: var(--color-entry-transfer);
+  --color-entry-transfer-soft: var(--color-entry-transfer-soft);
+  --color-entry-investment: var(--color-entry-investment);
+  --color-entry-investment-soft: var(--color-entry-investment-soft);
 }
 
 @layer base {

@@ -10,14 +10,14 @@ test('hide amounts persists across reloads and tabs while editable inputs stay e
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
   await page.reload();
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: 'Add transaction', exact: true }).click();
-  const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction', exact: true }) });
-  await form.getByLabel('Amount', { exact: true }).fill('-1234.56');
+  await page.getByRole('button', { name: 'New transaction', exact: true }).click();
+  const form = page.getByRole('region', { name: 'New transaction', exact: true });
+  await form.getByLabel('Amount', { exact: true }).fill('1234.56');
   const other = await context.newPage();
   await other.goto(page.url());
   await other.getByRole('button', { name: 'Hide amounts', exact: true }).click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-  await expect(form.getByLabel('Amount', { exact: true })).toHaveValue('-1234.56');
+  await expect(form.getByLabel('Amount', { exact: true })).toHaveValue('1234.56');
   await other.close();
   await form.getByRole('button', { name: 'Cancel', exact: true }).last().click();
   await toggle.click();

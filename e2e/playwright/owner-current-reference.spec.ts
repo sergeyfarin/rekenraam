@@ -20,8 +20,8 @@ for (const control of [
       const listed = await apiJSON<{ accounts: Array<{ id: number }> }>(page, 'GET', '/api/v1/accounts?q=Owner%20today%20reference');
       expect(listed.accounts.map(item => item.id)).toContain(account.id);
       await page.goto('/app/ledger/transactions');
-      await page.getByRole('button', { name: 'Add transaction', exact: true }).click();
-      const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction', exact: true }) });
+      await page.getByRole('button', { name: 'New transaction', exact: true }).click();
+      const form = page.getByRole('region', { name: 'New transaction', exact: true });
       await expect(form.getByLabel('Date', { exact: true })).toHaveValue(control.today);
       const picker = form.getByRole('combobox', { name: 'Account', exact: true });
       await picker.selectOption({ label: account.name });

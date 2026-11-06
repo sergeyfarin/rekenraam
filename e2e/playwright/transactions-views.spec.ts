@@ -108,18 +108,18 @@ test('[acceptance] Transactions separates All, Drafts and Deleted and restores f
     // without remounting the page.
     const createdDescription = `Views created ${suffix}`;
     await page.keyboard.press('n');
-    const dialog = page.getByRole('dialog', { name: 'Add transaction', exact: true });
+    const dialog = page.getByRole('dialog', { name: 'New transaction', exact: true });
     await expect(dialog).toBeVisible();
     await dialog.getByLabel('Date', { exact: true }).fill(today);
     await dialog.getByLabel('Description', { exact: true }).fill(createdDescription);
     await dialog.getByRole('combobox', { name: 'Account', exact: true }).selectOption({ label: account.name });
-    await dialog.getByLabel('Amount', { exact: true }).fill('-10.00');
+    await dialog.getByLabel('Amount', { exact: true }).fill('10.00');
     await dialog.getByPlaceholder('Search categories').click();
     await dialog.locator('ul[role="listbox"] button[role="option"]').first().click();
     const created = page.waitForResponse(
       (response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/transactions'
     );
-    await dialog.getByRole('button', { name: 'Add transaction', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Save transaction', exact: true }).click();
     expect((await created).status()).toBe(201);
     await page.getByRole('link', { name: 'View transaction', exact: true }).click();
     await expect(page).toHaveURL(/\/app\/ledger\/transactions\?transaction_id=\d+$/);

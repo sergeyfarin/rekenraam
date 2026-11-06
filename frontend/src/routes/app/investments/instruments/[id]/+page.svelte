@@ -21,9 +21,10 @@
   const accountsQuery = createQuery(() => accountsQueryOptions(false, false));
   const instrument = $derived(instrumentsQuery.data?.instruments.find((item) => item.commodity_id === commodityID));
 
+  // New transaction opens on its Investment tab with this instrument (#506).
   const create = $derived<TransactionWorkspaceCreate>({
-    kind: 'investment',
-    prefill: instrumentPrefill(commodityID, accountsQuery.data?.accounts ?? [])
+    kind: 'entry',
+    defaults: { tab: 'investment', investment: instrumentPrefill(commodityID, accountsQuery.data?.accounts ?? []) }
   });
 </script>
 

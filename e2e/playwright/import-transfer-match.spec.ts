@@ -53,7 +53,7 @@ test('[acceptance] a hand-entered transfer and both imported statements stay one
   // Enter the transfer by hand: it leaves today and arrives two days later.
   await page.goto('/app');
   await page.getByRole('list', { name: 'Shortcuts', exact: true }).getByRole('button', { name: 'Transfer', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Transfer between accounts', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'New transaction', exact: true });
   await dialog.getByLabel('Date', { exact: true }).fill(today);
   await dialog.getByLabel('Description', { exact: true }).fill(description);
   await dialog.getByRole('combobox', { name: 'From account', exact: true }).selectOption({ label: checking.name });
@@ -62,7 +62,7 @@ test('[acceptance] a hand-entered transfer and both imported statements stay one
   await dialog.getByRole('button', { name: 'Posts on different days', exact: true }).click();
   await dialog.getByLabel('Arrives on', { exact: true }).fill(arrival);
   const created = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/transactions');
-  await dialog.getByRole('button', { name: 'Add transaction', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Save transaction', exact: true }).click();
   expect((await created).status()).toBe(201);
   const { id: transferID } = await (await created).json() as { id: number };
   await expect(dialog).toHaveCount(0);

@@ -338,7 +338,7 @@ acceptance; this foundation does not claim their behavior.
 - Tiles with an icon and a label of up to two lines, Firefox New Tab style.
 - **New transaction** is the first tile by default, in the accent colour
   (named *Add transaction* until #506; see [Transaction entry](#transaction-entry)).
-  The Transfer tile opens the same entry in its Transfer mode.
+  The Transfer tile opens the same entry on its Transfer tab.
   It can be moved but not removed. On other pages it is reachable through
   search (“add”), the keyboard shortcut N and the Transactions page.
 - Other tiles are actions (Transfer, Import file, Reconcile an account) or
@@ -362,8 +362,9 @@ third (Add included, once #438 allows moving) stays reachable.
 
 ### Shared entry dialog (#477)
 
-This dialog becomes the host of the one [transaction entry](#transaction-entry)
-workflow (#506); the record below is what #477 delivered.
+This dialog hosts the one [transaction entry](#transaction-entry) workflow
+on pages without their own editor (#506, delivered 2026-11-05); the record
+below is what #477 delivered, under its old name *Add transaction*.
 
 *Add transaction* on Home, `N` and search's *Add transaction* command on a
 page without its own editor open one shared dialog: the existing transaction
@@ -618,12 +619,45 @@ Guardrails:
 
 | Slice | Issue |
 |---|---|
-| Entry shell and routing: one *New transaction*, four stable tabs with labels and accents, shared entry context with basic preservation and preview invalidation, editable account | #506 |
+| Entry shell and routing: one *New transaction*, four stable tabs with labels and accents, shared entry context with basic preservation and preview invalidation, editable account | #506, delivered 2026-11-05 |
 | Investment mode: brokerage and holding contexts, Activity selector, settlement candidates | #507 |
 | Activity-specific restoration across activities and accounts, full acceptance coverage | #508 |
 | Move to account for posted transactions | #509 |
 
 #491 tracks the first three slices. Move to account is its own issue.
+
+**Delivered in #506 (2026-11-05).** Home's tile, `N`, search's *New
+transaction* and *Transfer* commands, Transactions, account registers,
+category pages and instrument pages open the one entry; a page with a side
+panel hosts it there (search's Transfer included, with the page's account as
+From), elsewhere the shared dialog does. Registers lost their separate
+Transfer button. A holding register and an instrument page start on
+Investment; a category page starts on Deposit for an income category,
+Withdrawal otherwise. The tabs are a keyboard tab list (arrows, Home, End;
+selection follows focus, which is safe because switching loses nothing),
+four equal columns that fit a 390 px sheet, and the editor stays mounted
+behind every tab, so its fields are the shared context and working copies.
+Withdrawal ↔ Deposit keep the amount; Transfer keeps the date, payee, memo
+and the account as From, starts an empty amount from a Withdrawal's, and
+keeps its own To, fee and days; the cash tabs come back in the shape they
+were left in (simple or split). Mode accents are their own tokens
+(`--color-entry-{out,in,transfer,investment}` and `-soft`, pinned at 3:1 for
+the indicator and AA for the label in every theme × palette); forced colours
+keep a Highlight underline on the selected tab and a dashed one on a muted
+tab. Interim choices until the later slices:
+- The Investment tab opens the existing record forms with the page's
+  holding or instrument (#186). Its "Choose a holding account to record an
+  investment" note sits at the top of that panel, since the holding picker
+  arrives with #507's Activity selector. The Investments page keeps its
+  record buttons until #507 replaces them.
+- Editing and correcting show no tabs (a posted transaction's type stays
+  with its correction workflows). The simple form shows the same positive
+  amount with a Withdrawal/Deposit (or Charge/Credit) choice, and keeps its
+  Transfer and Split links.
+- The approvals this slice has are the payee confirmation and the
+  reconciliation override; a tab, account, direction or shape change closes
+  either, and the override also rechecks the exact request it reviewed.
+  #508 extends the same rule to investment previews.
 
 ## Widgets
 
@@ -859,8 +893,9 @@ keyboard help.
 Delivered in #459 (2026-10-30): the page column narrows from the shell's
 left edge instead of re-centring, because header, tab row and page share one
 left edge at every width (#436); Home may still centre its own top block
-inside that column. *N* and search's *Add transaction* open the current
-page's editor in place, prefilled, when the page has one, never replace an
+inside that column. *N* and search's *Add transaction* (now *New
+transaction*, #506) open the current page's editor in place, prefilled, when
+the page has one, never replace an
 editor that is already open, and otherwise open the
 [shared entry dialog](#shared-entry-dialog-477) (#477; until then the
 Transactions editor).
@@ -1019,7 +1054,7 @@ Sequencing belongs in the roadmap; acceptance in the issues.
 | Density: compact and comfortable rows | #451 |
 | Shell look: olive two-tint rows, joined section tab, green place markers, card contrast | #489 |
 | Search button with centred search dialog | #490 |
-| One transaction entry: shell and ordinary modes (#506), Investment mode (#507), preservation (#508) | #491 |
+| One transaction entry: shell and ordinary modes (#506, delivered), Investment mode (#507), preservation (#508) | #491 |
 | Move to account for posted transactions | #509 |
 | Report filters take less space above the figures (later: filter bar or side panel, after a task check) | #492 |
 | Two-key navigation shortcuts | #452 |

@@ -136,3 +136,47 @@ describe('theme contrast', () => {
     });
   }
 });
+
+/**
+ * New transaction's mode accents (#506). The accent is never text: it draws
+ * the selected tab's underline and icon (non-text contrast, 3:1) on the tab's
+ * soft fill and on the surface around it, and the tab's label stays in the
+ * foreground colour on that fill (AA). Each mode has its own tokens, apart
+ * from the error colour and from gain and loss.
+ */
+const NON_TEXT = 3;
+const entryModes = ['out', 'in', 'transfer', 'investment'];
+
+describe('entry mode accents', () => {
+  for (const { theme, base, accent } of combinations) {
+    it(`${theme} / ${base} / ${accent} keeps tab indicators at 3:1 and labels at AA`, () => {
+      const p = palette(theme, base, accent);
+      const failing: string[] = [];
+      for (const mode of entryModes) {
+        const [mark, soft] = [p[`entry-${mode}`], p[`entry-${mode}-soft`]];
+        expect(mark, mode).toBeDefined();
+        const pairs: [string, number, number][] = [
+          [`${mode} indicator on its soft fill`, contrast(mark, soft), NON_TEXT],
+          [`label on ${mode} soft fill`, contrast(p['foreground'], soft), AA],
+          ...['surface', 'background', 'control'].map((surface): [string, number, number] =>
+            [`${mode} indicator on ${surface}`, contrast(mark, p[surface]), NON_TEXT])
+        ];
+        for (const [name, ratio, floor] of pairs) if (ratio < floor) failing.push(`${name} ${ratio.toFixed(2)}:1`);
+      }
+      expect(failing).toEqual([]);
+    });
+  }
+
+  it('gives each mode its own tokens, apart from danger, positive and gain/loss', () => {
+    for (const layer of [':root', ":root[data-theme='dark']"]) {
+      // Every regex metacharacter escaped, the backslash included (CodeQL js/incomplete-sanitization).
+      const selector = layer.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
+      const body = new RegExp(`${selector}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? '';
+      const value = (name: string) => new RegExp(`--color-${name}:\\s*([^;]+);`).exec(body)?.[1];
+      const values = entryModes.map((mode) => value(`entry-${mode}`));
+      expect(values.every(Boolean), layer).toBe(true);
+      expect(new Set(values).size, layer).toBe(entryModes.length);
+      for (const other of ['danger', 'positive', 'accent']) expect(values, `${layer} ${other}`).not.toContain(value(other));
+    }
+  });
+});

@@ -6,14 +6,14 @@ import { expectFocusTrapped, expectNoAccessibilityViolations, focusIsInside } fr
 import { createCashAccount, readyForLedger } from './support/ledger';
 import { observePageRequests, waitForPageReady } from './support/page-readiness';
 
-// Home's command bar, shortcut tiles and the shared Add transaction dialog
+// Home's command bar, shortcut tiles and the shared New transaction dialog
 // (#477): the existing editor in a dialog on desktop and a full-screen sheet on
 // phones, discarded by Cancel or Escape, returning focus to its opener, and
 // holding unsaved input across a background refresh of Home (#433).
 
-const entryDialog = (page: Page) => page.getByRole('dialog', { name: 'Add transaction', exact: true });
+const entryDialog = (page: Page) => page.getByRole('dialog', { name: 'New transaction', exact: true });
 const shortcuts = (page: Page) => page.getByRole('list', { name: 'Shortcuts', exact: true });
-const addTile = (page: Page) => shortcuts(page).getByRole('button', { name: 'Add transaction', exact: true });
+const addTile = (page: Page) => shortcuts(page).getByRole('button', { name: 'New transaction', exact: true });
 
 async function setTheme(page: Page, theme: 'light' | 'dark') {
   await page.evaluate(value => localStorage.setItem('rekenraam-theme', value), theme);
@@ -39,11 +39,11 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(page.getByRole('listbox', { name: 'Search results', exact: true })).toBeVisible();
     await page.keyboard.press('Escape');
 
-    // Add transaction leads, in the accent colour, then Transfer (#481);
+    // New transaction leads, in the accent colour, then Transfer (#481);
     // every tile shows on desktop.
     const tiles = shortcuts(page).getByRole('listitem');
     await expect(tiles).toHaveCount(5);
-    await expect(tiles.first()).toHaveText('Add transaction');
+    await expect(tiles.first()).toHaveText('New transaction');
     await expect(shortcuts(page).getByRole('button', { name: 'Transfer', exact: true })).toBeVisible();
     for (const name of ['Import file', 'Transactions', 'Spending by category']) {
       await expect(shortcuts(page).getByRole('link', { name, exact: true })).toBeVisible();
@@ -69,14 +69,14 @@ for (const theme of ['light', 'dark'] as const) {
 
     // Unsaved input survives Home refetching behind the dialog.
     await dialog.getByLabel('Description', { exact: true }).fill(description);
-    await dialog.getByLabel('Amount', { exact: true }).fill('-12.34');
+    await dialog.getByLabel('Amount', { exact: true }).fill('12.34');
     await page.clock.fastForward('00:45');
     const refetched = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/home' && response.ok());
     await page.context().setOffline(true);
     await page.context().setOffline(false);
     await refetched;
     await expect(dialog.getByLabel('Description', { exact: true })).toHaveValue(description);
-    await expect(dialog.getByLabel('Amount', { exact: true })).toHaveValue('-12.34');
+    await expect(dialog.getByLabel('Amount', { exact: true })).toHaveValue('12.34');
 
     // Escape discards the working copy, posts nothing and returns focus.
     const posts: string[] = [];
@@ -94,7 +94,7 @@ for (const theme of ['light', 'dark'] as const) {
     await dialog.getByLabel('Date', { exact: true }).fill(todayISO());
     await dialog.getByLabel('Description', { exact: true }).fill(description);
     await dialog.getByRole('combobox', { name: 'Account', exact: true }).selectOption({ label: account.name });
-    await dialog.getByLabel('Amount', { exact: true }).fill('-12.34');
+    await dialog.getByLabel('Amount', { exact: true }).fill('12.34');
     // The category by keyboard: type, arrow to the match, Enter.
     await categoryField.focus();
     await page.keyboard.type(category.name);
@@ -104,7 +104,7 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(dialog.getByText(category.name, { exact: true })).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Clear selection', exact: true })).toBeFocused();
     const created = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/transactions');
-    await dialog.getByRole('button', { name: 'Add transaction', exact: true }).press('Enter');
+    await dialog.getByRole('button', { name: 'Save transaction', exact: true }).press('Enter');
     expect((await created).status()).toBe(201);
     const transaction = await (await created).json() as { id: number };
     await expect(dialog).toHaveCount(0);
@@ -166,7 +166,7 @@ test.describe('on a touch phone', () => {
   }
 });
 
-async function fillExpense(page: Page, accountName: string, categoryName: string, description: string, amount = '-23.45') {
+async function fillExpense(page: Page, accountName: string, categoryName: string, description: string, amount = '23.45') {
   const dialog = entryDialog(page);
   await dialog.getByLabel('Date', { exact: true }).fill(todayISO());
   await dialog.getByLabel('Description', { exact: true }).fill(description);
@@ -187,7 +187,7 @@ test('Escape cannot discard an entry while the payee it confirmed is still being
   const dialog = entryDialog(page);
   await fillExpense(page, account.name, category.name, `Payee chain ${suffix}`);
   await dialog.getByLabel('Payee', { exact: true }).fill(payee);
-  await dialog.getByRole('button', { name: 'Add transaction', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Save transaction', exact: true }).click();
 
   // Hold the payee creation, the first write of the save chain.
   let release!: () => void;
@@ -228,9 +228,9 @@ test('saving over a report refreshes it in place', async ({ page }) => {
 
   await page.locator('#main-content').focus();
   await page.keyboard.press('n');
-  await fillExpense(page, account.name, category.name, `Report entry ${suffix}`, '-31.17');
+  await fillExpense(page, account.name, category.name, `Report entry ${suffix}`, '31.17');
   const refreshed = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/v1/reports/spending' && response.ok());
-  await entryDialog(page).getByRole('button', { name: 'Add transaction', exact: true }).click();
+  await entryDialog(page).getByRole('button', { name: 'Save transaction', exact: true }).click();
   await refreshed;
   await expect(entryDialog(page)).toHaveCount(0);
   await expect(spent.first()).toBeVisible();
@@ -249,14 +249,14 @@ test('a failed session refresh keeps the unsaved entry, and focus has somewhere 
   await addTile(page).click();
   const dialog = entryDialog(page);
   await dialog.getByLabel('Description', { exact: true }).fill(description);
-  await dialog.getByLabel('Amount', { exact: true }).fill('-7.50');
+  await dialog.getByLabel('Amount', { exact: true }).fill('7.50');
 
   await sessionFails();
   await refocus(500);
   await expect(page.getByText('The app shell could not load')).toBeAttached();
   await expect(dialog).toBeVisible();
   await expect(dialog.getByLabel('Description', { exact: true })).toHaveValue(description);
-  await expect(dialog.getByLabel('Amount', { exact: true })).toHaveValue('-7.50');
+  await expect(dialog.getByLabel('Amount', { exact: true })).toHaveValue('7.50');
 
   // Cancelled over the shell error, focus goes to its Retry, not <body>.
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).last().click();

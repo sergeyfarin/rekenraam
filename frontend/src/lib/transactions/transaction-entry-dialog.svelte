@@ -11,7 +11,8 @@
   import { invalidateTransactionReads } from './invalidate.ts';
   import TransactionEditor from './transaction-editor.svelte';
 
-  // The shared Add transaction dialog (#477): the existing editor, its locale
+  // The shared New transaction dialog (#477, #506): the entry workflow and
+  // its four tabs on pages without their own editor. The existing editor, its locale
   // parsing, guards and error recovery, in a dialog on desktop and a
   // full-screen sheet on phones. The shell mounts it once, outside every page,
   // and outside the shell's error state, so a background refresh of Home, any
@@ -45,7 +46,7 @@
 
 {#if transactionEntry.open}
   <ModalDialog
-    label={transactionEntry.defaults?.transfer ? m.transactions_transfer_title() : m.transactions_form_create_title()}
+    label={m.transactions_form_create_title()}
     onCancel={() => closeTransactionEntry()}
     {fallbackFocus}
     class="max-w-2xl p-4 sm:p-6 max-md:m-0! max-md:h-dvh max-md:max-h-dvh! max-md:w-full! max-md:max-w-none! max-md:rounded-none! max-md:border-0"
@@ -55,6 +56,7 @@
       csrfToken={sessionQuery.data?.csrf_token}
       createDefaults={transactionEntry.defaults}
       onSaved={saved}
+      onInvestmentSaved={() => closeTransactionEntry()}
       onCancel={() => closeTransactionEntry()}
     />
   </ModalDialog>

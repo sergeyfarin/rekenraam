@@ -12,21 +12,21 @@ test('creates a simple transaction through the browser form', async ({ page }) =
   await createCashAccount(page, csrfToken, accountName, currencyID);
 
   await page.goto('/app/ledger/transactions');
-  await page.getByRole('button', { name: 'Add transaction' }).click();
+  await page.getByRole('button', { name: 'New transaction' }).click();
 
-  await expect(page.getByRole('heading', { name: 'Add transaction' })).toBeVisible();
-  const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction' }) });
+  await expect(page.getByRole('heading', { name: 'New transaction' })).toBeVisible();
+  const form = page.getByRole('region', { name: 'New transaction', exact: true });
   await form.getByLabel('Date').fill(todayISO());
   await form.getByLabel('Description').fill(description);
   await form.getByLabel('Account').selectOption({ label: accountName });
-  await form.getByLabel('Amount').fill('-4.50');
+  await form.getByLabel('Amount').fill('4.50');
   await form.getByPlaceholder('Search categories').click();
   await form.locator('ul[role="listbox"] button[role="option"]').first().click();
   // The payee goes last: its suggestion list is also a `listbox`, so filling it
   // earlier would leave two open at once and the category pick could land in
   // the wrong one.
   await form.getByRole('combobox', { name: 'Payee' }).fill(payeeName);
-  await form.getByRole('button', { name: 'Add transaction' }).click();
+  await form.getByRole('button', { name: 'Save transaction' }).click();
 
   // A payee nobody has recorded is not saved as free text: creating the record
   // is confirmed first, so the transaction can group in the spending report.
@@ -65,19 +65,19 @@ test('offers an existing payee before creating a near-duplicate', async ({ page 
   );
 
   await page.goto('/app/ledger/transactions');
-  await page.getByRole('button', { name: 'Add transaction' }).click();
-  const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction' }) });
+  await page.getByRole('button', { name: 'New transaction' }).click();
+  const form = page.getByRole('region', { name: 'New transaction', exact: true });
 
   await form.getByLabel('Date').fill(todayISO());
   await form.getByLabel('Description').fill(description);
   await form.getByLabel('Account').selectOption({ label: accountName });
-  await form.getByLabel('Amount').fill('-9.99');
+  await form.getByLabel('Amount').fill('9.99');
   await form.getByPlaceholder('Search categories').click();
   await form.locator('ul[role="listbox"] button[role="option"]').first().click();
   // A typo, which is the case this exists for: a substring search would find
   // nothing here and the user would create a second, near-duplicate payee.
   await form.getByRole('combobox', { name: 'Payee' }).fill(`Markt Hall ${suffix}`);
-  await form.getByRole('button', { name: 'Add transaction' }).click();
+  await form.getByRole('button', { name: 'Save transaction' }).click();
 
   await expect(form.getByText('Did you mean one of these?')).toBeVisible();
   await form.getByRole('button', { name: payeeName, exact: true }).click();

@@ -15,10 +15,13 @@
   const categoryName = $derived(category ? categoryDisplayName(category) : m.categories_title());
 
   // A new transaction starts in this category (#185) when it can take
-  // postings; a summary or archived category still allows unassigned entry.
+  // postings, on Deposit for income and Withdrawal otherwise (#506); a
+  // summary or archived category still allows unassigned entry.
   const create = $derived<TransactionWorkspaceCreate>({
-    kind: 'editor',
-    defaults: category?.status === 'active' && category.allows_postings ? { categoryID: category.id } : undefined
+    kind: 'entry',
+    defaults: category?.status === 'active' && category.allows_postings
+      ? { categoryID: category.id, tab: category.category_type === 'income' ? 'in' : 'out' }
+      : undefined
   });
 </script>
 
