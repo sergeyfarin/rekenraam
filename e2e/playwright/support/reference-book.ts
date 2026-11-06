@@ -102,12 +102,14 @@ async function call<T>(page: Page, method: string, path: string, body: unknown, 
 
 /**
  * Seeds the reference book into the signed-in browser's book. EUR and USD are
- * added when missing; system accounts come from the ledger setup.
+ * added when missing; system accounts come from the ledger setup. The shared
+ * e2e database needs a per-run suffix; a disposable capture book can pass `''`
+ * so its screenshots show the fixture's own names.
  */
-export async function seedReferenceBook(page: Page): Promise<SeededReferenceBook> {
+export async function seedReferenceBook(page: Page, runSuffix?: string): Promise<SeededReferenceBook> {
   const book = await loadReferenceBook();
   const { csrfToken } = await readyForLedger(page);
-  const suffix = `X${Date.now().toString(36).toUpperCase()}`;
+  const suffix = runSuffix ?? `X${Date.now().toString(36).toUpperCase()}`;
   const ids = new Map<string, number>();
   const transactions: SeededReferenceBook['transactions'] = { ordinary: [], investment: [] };
   ids.set('EUR', await ensureCurrency(page, csrfToken, 'EUR', 'Euro'));

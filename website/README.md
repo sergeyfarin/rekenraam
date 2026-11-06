@@ -46,12 +46,14 @@ review/publish workflow are documented in
 ## Screenshot sources
 
 - The spending report is copied from `docs/images/reports-spending.png` during
-  build. It is the same fictional screenshot used by the repository README.
+  build. The same capture generator writes that file, so it is the same
+  fictional screenshot used by the repository README.
 - `assets/transactions.png` and `assets/investments.png` are captured from an
   app instance with a new disposable database, replaying
   `fixtures/reference-book.json` through public APIs. The capture uses no real
-  owner database, credentials or providers. Source revision and viewport are
-  recorded in `assets/capture.json`, which is not published.
+  owner database, credentials or providers. Source revision and viewport for
+  all three images are recorded in `assets/capture.json`, which is not
+  published.
 
 Refresh deliberately after building the current app binary:
 

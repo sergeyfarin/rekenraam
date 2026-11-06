@@ -118,8 +118,8 @@ the other languages. Catalogs and all user-facing metadata live under
 `frontend/project.inlang/settings.json`; native-language review remains #102.
 All images/CSS/scripts are local. There are no analytics or external fonts.
 
-The README's spending screenshot is reused during the build. Refresh the
-other screenshots from the synthetic reference book with:
+Refresh the README and website screenshots from the synthetic reference book
+with:
 
 ```sh
 pnpm build
@@ -128,11 +128,11 @@ pnpm --dir e2e exec playwright test --config=website.config.ts
 
 This generator creates and removes a disposable database, refuses
 `E2E_BASE_URL`, redirects optional provider traffic to the test-only stub
-address, and captures the transaction register and investment lot details.
-It does not start a provider or read an existing installation. Images and
-capture provenance belong in `website/assets/`; only presentation assets go
-into the public build. Screenshots remain English with localized captions and
-alternative text.
+address, and captures the spending report, transaction register and investment
+lot details. The spending report is written to `docs/images/` and reused by the
+README and the website build; the other images and capture provenance belong in
+`website/assets/`. Only presentation assets go into the public build.
+Screenshots remain English with localized captions and alternative text.
 
 For a temporary project-path build instead of a custom domain:
 
