@@ -1262,7 +1262,9 @@
   }
 
   function removeSplitLeg(i: number) {
+    const was = splitLegs[i]?.accountID ?? '';
     splitLegs = splitLegs.filter((_, idx) => idx !== i);
+    if (tabbed) adoptSplitEntryAccount(splitLegs, undefined, was);
   }
 
   function switchToSplit() {
@@ -1368,12 +1370,22 @@
     const was = newLegs[i].accountID;
     newLegs[i] = { ...newLegs[i], accountID: val, commodityID: commodityForAccount(val) };
     splitLegs = newLegs;
-    // The leg on the entry's account moved to another account: that account
-    // is now the entry's, for the tab labels and every other tab (#506 review).
-    if (tabbed && accountID !== undefined && was === String(accountID)) {
-      const moved = assetLiabilityAccounts.find((a: AccountResponse) => a.id === Number(val));
-      if (moved && !newLegs.some((leg) => leg.accountID === was)) accountID = moved.id;
-    }
+    if (tabbed) adoptSplitEntryAccount(newLegs, i, was);
+  }
+
+  /**
+   * Inside the split editor the legs lead the entry's account, for the tab
+   * labels, the direction and every other tab (#506 review). While a leg is
+   * on the entry's account it stays; when none is — no account was chosen
+   * yet (a split started first) or its leg moved away — the leg just changed
+   * takes it if it is an account, else the first account leg in order.
+   */
+  function adoptSplitEntryAccount(legs: SplitLeg[], changed: number | undefined, was: string) {
+    if (accountID !== undefined && legs.some((leg) => leg.accountID === String(accountID))) return;
+    const asAccount = (leg: SplitLeg) => assetLiabilityAccounts.find((a: AccountResponse) => String(a.id) === leg.accountID);
+    const next = (changed === undefined ? undefined : asAccount(legs[changed])) ?? legs.map(asAccount).find((account) => account !== undefined);
+    if (next) accountID = next.id;
+    else if (accountID !== undefined && was === String(accountID)) accountID = undefined;
   }
 </script>
 

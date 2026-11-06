@@ -306,6 +306,52 @@ test('a split follows the account chosen on Transfer back to the cash tabs', asy
   expect(saved.some(([account]) => account === s.checking.id)).toBe(false);
 });
 
+// A split started before any account is chosen: its first account leg
+// becomes the entry's account, so both rules above still hold (#510 review).
+// The second leg is savings: a split leg on a category needs a currency the
+// split editor cannot yet choose, a separate gap older than #506.
+async function startSplitFirst(page: Page, s: Awaited<ReturnType<typeof setup>>, description: string) {
+  await page.goto('/app');
+  await page.getByRole('list', { name: 'Shortcuts', exact: true }).getByRole('button', { name: 'New transaction', exact: true }).click();
+  const entry = entryDialog(page);
+  await entry.getByLabel('Date', { exact: true }).fill(todayISO());
+  await entry.getByLabel('Description', { exact: true }).fill(description);
+  await entry.getByRole('button', { name: 'Use split entry', exact: true }).click();
+  const legAccounts = entry.getByRole('combobox', { name: 'Account', exact: true });
+  const legAmounts = entry.getByRole('textbox', { name: 'Amount', exact: true });
+  await legAccounts.nth(0).selectOption(String(s.checking.id));
+  await legAmounts.nth(0).fill('-12.40');
+  await legAccounts.nth(1).selectOption(String(s.savings.id));
+  await legAmounts.nth(1).fill('12.40');
+  return { entry, legAccounts, legAmounts };
+}
+
+test('a split started before any account follows Deposit', async ({ page }) => {
+  const s = await setup(page);
+  const { entry, legAmounts } = await startSplitFirst(page, s, `Tabs split first deposit ${s.suffix}`);
+  await entry.getByRole('tab', { name: 'Deposit', exact: true }).click();
+  await expect(legAmounts.nth(0)).toHaveValue('12.40');
+  const postings = savedPostings(page);
+  await entry.getByRole('button', { name: 'Save transaction', exact: true }).click();
+  expect(await postings()).toEqual(expect.arrayContaining([[s.checking.id, '1240'], [s.savings.id, '-1240']]));
+});
+
+test('a split started before any account follows a new From account back to Charge', async ({ page }) => {
+  const s = await setup(page);
+  const { entry, legAccounts } = await startSplitFirst(page, s, `Tabs split first card ${s.suffix}`);
+  await entry.getByRole('tab', { name: 'Transfer', exact: true }).click();
+  const from = entry.getByRole('combobox', { name: 'From account', exact: true });
+  await expect(from).toHaveValue(String(s.checking.id));
+  await from.selectOption(String(s.card.id));
+  await entry.getByRole('tab', { name: 'Charge', exact: true }).click();
+  await expect(legAccounts.nth(0)).toHaveValue(String(s.card.id));
+  const postings = savedPostings(page);
+  await entry.getByRole('button', { name: 'Save transaction', exact: true }).click();
+  const saved = await postings();
+  expect(saved).toEqual(expect.arrayContaining([[s.card.id, '-1240'], [s.savings.id, '1240']]));
+  expect(saved.some(([account]) => account === s.checking.id)).toBe(false);
+});
+
 test('a confirmation shown before a tab change is gone after it; saving asks again', async ({ page }) => {
   const s = await setup(page);
   const newPayee = `Tabs unknown shop ${s.suffix}`;
