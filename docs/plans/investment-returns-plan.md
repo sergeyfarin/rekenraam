@@ -76,9 +76,19 @@ separate from deterministic R13 acceptance. The roadmap retains all release gate
 
 ### Retained work and accepted limits
 
+The [target-allocation proposal](investment-target-allocation-plan.md) records
+the concrete #411 contract and independent examples prepared on 2026-11-06.
+The owner selected per-instrument targets and current-target history, with
+geographic exposure tracked separately in #514 and ETF look-through in #513.
+The owner added an allocation-over-time chart and saved-target-change inspection.
+The owner settled the shared Investment pool scope, including deposits/CDs and
+explicit exclusions independent of total net worth. #411 delivers that separate
+live view without adding targets to immutable returns runs. This does not change delivered actual allocation
+or saved runs.
+
 | Disposition | Owner / reason |
 |---|---|
-| **Deferred: target allocation and drift** | [#411](https://github.com/sergeyfarin/rekenraam/issues/411). Actual allocation ships; target grouping, exact weights, cash/short denominator, history and incomplete-value policy need their own accepted contract. |
+| **Delivered separately: target allocation and drift** | [#411](https://github.com/sergeyfarin/rekenraam/issues/411), 2026-11-06, under its [accepted contract](investment-target-allocation-plan.md): Investment pool, direct instrument/cash targets, actual series and saved-change history. The R13 saved-run contract remains unchanged. |
 | **Deferred: advisory rebalancing** | [#412](https://github.com/sergeyfarin/rekenraam/issues/412). Requires the target model from #411 and an accepted funding/rounding/coverage policy. No broker execution or automatic postings are implied. |
 | **Retain: honest unavailable figures** | Ambiguous income, unclassified exchanges, missing required prices/FX, non-positive capital and unproven IRR roots stay unavailable under the named rules. Do not invent attribution or pick a numerical root to make a percentage appear. |
 | **Retain: bounded short detection / no short-sleeve return** | D5 is accepted. Named short operations and end-of-day balances are detected; arbitrary plain intraday exposure is not reconstructed. Short sleeves retain supported values/gain but no percentage return. A different method requires a new accepted contract. |
@@ -1250,7 +1260,8 @@ written.
      a labelled, focusable region, with an accessibility check at that width.
 
 Slices 8–9 complete the accepted instrument contract. Targets and rebalancing
-stay deferred in #411 and #412; see the acceptance disposition above.
+are separate from the instrument-return contract: #411 is delivered in its
+own live view; #412 stays deferred. See the acceptance disposition above.
 
 ## Slices
 
@@ -1302,7 +1313,8 @@ stay deferred in #411 and #412; see the acceptance disposition above.
    `0.000000` and the price-return benchmark stays unavailable; the corrected
    88 → 110 reads `0.250000`), browser case in `pricing-management.spec.ts`.
 
-Targets and rebalancing are **deferred** to [#411](https://github.com/sergeyfarin/rekenraam/issues/411)
-and [#412](https://github.com/sergeyfarin/rekenraam/issues/412); no trade
-execution is implied. Security-level returns (`instrument_returns_v1`,
+Targets are delivered separately in [#411](https://github.com/sergeyfarin/rekenraam/issues/411)
+under the [target contract](investment-target-allocation-plan.md); rebalancing
+remains deferred in [#412](https://github.com/sergeyfarin/rekenraam/issues/412).
+No trade execution is implied. Security-level returns (`instrument_returns_v1`,
 slices 8–9) are delivered, as recorded above.

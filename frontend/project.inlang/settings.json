@@ -19,7 +19,8 @@
       "./messages/settings/{locale}.json",
       "./messages/budgets/{locale}.json",
       "./messages/pricing/{locale}.json",
-      "./messages/valuation/{locale}.json"
+      "./messages/valuation/{locale}.json",
+      "./messages/allocation/{locale}.json"
     ]
   }
 }

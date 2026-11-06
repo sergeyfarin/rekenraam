@@ -585,10 +585,25 @@ Goal: add power-user workflows after the core ledger is stable.
   reporting-currency valuation, coverage, actual allocation, declared benchmark
   basis and immutable saved output. The [R13 plan](plans/investment-returns-plan.md#accepted-delivery-and-follow-up-disposition-2026-10-26)
   records acceptance of this bounded delivery on 2026-10-26. Target allocation
-  and drift [#411](https://github.com/sergeyfarin/rekenraam/issues/411), and
-  advisory rebalancing [#412](https://github.com/sergeyfarin/rekenraam/issues/412),
-  are separate deferred extensions requiring their own accepted contracts;
-  neither automatic trade execution nor tax optimization is implied.
+  and drift [#411](https://github.com/sergeyfarin/rekenraam/issues/411) have their
+  own accepted contract below. Advisory rebalancing
+  [#412](https://github.com/sergeyfarin/rekenraam/issues/412) remains a separate
+  deferred extension requiring its own accepted contract; neither automatic
+  trade execution nor tax optimization is implied.
+- Target allocation #411 uses an explicit shared Investment pool, including
+  selected cash/deposit accounts (Raisin deposits and CDs included), with
+  owner-controlled account exclusions independent of total net worth. Its
+  accepted [contract](plans/investment-target-allocation-plan.md) defines exact
+  per-instrument/current targets, allocation-over-time charts, saved-change
+  inspection and coverage. Label scope and exclusions so college/reserved
+  savings can remain in net worth without diluting investment allocation.
+  Saved revision references preserve account/instrument identities even if
+  they would otherwise be eligible for unused-record deletion.
+  Cash balances net within that bucket, with the negative-account subtotal
+  disclosed separately; security long/short rows stay separate. Returns keeps
+  its own account selection and must disclose that a link to Allocation
+  switches to the saved investment pool. Geography #514 and constituent
+  look-through #513 remain independent features.
 
 ### Later
 
