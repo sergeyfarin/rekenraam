@@ -76,6 +76,11 @@ separate from deterministic R13 acceptance. The roadmap retains all release gate
 
 ### Retained work and accepted limits
 
+The [target-allocation proposal](investment-target-allocation-plan.md) records
+the concrete #411 contract and independent examples prepared on 2026-11-06.
+It awaits owner acceptance before runtime implementation and does not change
+the delivered actual-allocation or saved-run contracts.
+
 | Disposition | Owner / reason |
 |---|---|
 | **Deferred: target allocation and drift** | [#411](https://github.com/sergeyfarin/rekenraam/issues/411). Actual allocation ships; target grouping, exact weights, cash/short denominator, history and incomplete-value policy need their own accepted contract. |
