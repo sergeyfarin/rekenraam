@@ -1,8 +1,9 @@
 # Target allocation and drift (#411)
 
 Status: **owner selected per-instrument targets and current-target history
-on 2026-11-06; geography is a separate enhancement; changes to the remaining
-contract rules await owner clarification before runtime implementation**. Governs [#411](https://github.com/sergeyfarin/rekenraam/issues/411).
+on 2026-11-06; geography is a separate enhancement; allocation-over-time
+chart and saved-revision inspection added by the owner; shared liquidity/cash
+scope remains to be settled before runtime implementation**. Governs [#411](https://github.com/sergeyfarin/rekenraam/issues/411).
 The owner explicitly requested this independent feature in an isolated worktree
 and a pull request. The [roadmap](../roadmap.md) remains the source of overall
 work order; this authorization does not reorder the other agent's work.
@@ -41,6 +42,51 @@ continue to govern valuation, incomplete data and the read-only ledger boundary.
   #411 keeps its instrument targets and the existing quote-currency view; see
   *Market and look-through follow-ups*. No listing/currency-based geographic
   inference is authorized by this request.
+
+### Shared liquidity and portfolio cash (open decision)
+
+Owner request (2026-11-06): "Cash includes - need to have one common definition
+of liquid accounts to exclude some also important for net worth calculation".
+The unconditional combined-cash rule below is therefore a proposal pending this
+clarification, not acceptance of every selected currency balance as available
+investment cash.
+
+Current app evidence:
+
+- `app/cashflow.go` owns `defaultCashAccountKinds`/`defaultCashAccountIDs`:
+  active, non-system cash/checking/savings/brokerage-cash accounts. Forecasting
+  reuses this cash-scope owner. There is no persisted per-account liquidity
+  classification or override.
+- The [cashflow contract](reports-plan.md#cashflow) names those kinds and allows
+  explicit account scope. [Account kinds](../design/account-hierarchy.md#kinds)
+  distinguish savings from term deposits, but do not say whether a particular
+  savings/brokerage account is restricted or reserved.
+- [Net worth](reports-plan.md#net-worth-over-time) includes assets and
+  liabilities under its explicit scope. Liquidity is not a current net-worth
+  admission rule; [ADR 0021](../adrs/0021-entered-asset-values.md) explicitly
+  includes entered values for illiquid property/vehicles/pensions.
+
+Recommended distinction, awaiting owner confirmation:
+
+- Share one explicit cash/liquidity classification and resolver across consumers
+  that actually ask that question; do not create an allocation-only hard-coded
+  account-kind list. Define account overrides, defaults, historical application
+  and audit/backup/export behavior before adding storage.
+- Portfolio membership is independent. An accessible emergency reserve may be
+  liquid but outside the investment portfolio; a restricted pension can still
+  be an owned investment in the portfolio. Explicit account inclusion/exclusion
+  must be visible and apply consistently to the portfolio values, allocation
+  table, series and denominator. Never omit cash from just one side of the
+  comparison or silently make a partial portfolio add to 100%.
+- Preserve total net worth as all included assets less liabilities. A separate
+  liquid-cash/liquid-assets subtotal or filter needs its own precise label and
+  definition. Cash available without a sale and marketable securities are also
+  different concepts; a single unexplained boolean must not equate them.
+
+Clarify which real account examples the owner wants excluded, whether the shared
+rule concerns available cash or broader liquid assets, how it should affect
+existing cashflow/forecast defaults, and whether net worth needs a labelled
+liquid subtotal/filter or a change to total inclusion. No choice is inferred.
 
 ### Exact targets, cash and shorts
 
@@ -148,6 +194,78 @@ continue to govern valuation, incomplete data and the read-only ledger boundary.
 - No rebalancing advice, trade recommendations, orders, ledger postings,
   cost-basis changes or tax optimization. Advisory rebalancing stays in #412.
 
+## Allocation over time and saved target changes (owner request)
+
+The owner explicitly added the following to #411 on 2026-11-06. This extends
+actual allocation presentation; it does not introduce effective-dated targets or
+ETF look-through.
+
+### Actual series and target column
+
+- Show a 100% stacked area chart of actual per-instrument/cash weights over the
+  selected period. Use the allocation table's exact portfolio membership,
+  reporting currency, trade-date/income recognition, price/FX policy and input
+  image. Price changes, FX, purchases, sales and cash flows can change weights;
+  cash weight can change while its nominal balance remains constant.
+- Put a stacked **current target** column beside the chart's right edge, with
+  each target percentage labelled and a consistent component order. Individual
+  target ticks are unsuitable: area boundaries are cumulative, while targets
+  describe component shares. A missing target set shows the actual series with
+  a no-target state, never fabricated target zeroes totalling 100%.
+- Selecting an instrument and sampled date exposes exact server-rounded actual
+  share, current target and signed drift for that date. Provide labelled date
+  and instrument controls or an equivalent keyboard/touch path; hovering is
+  optional, never the only means to inspect a point.
+- Use stable identities/order/colours across actual stacks and targets, including
+  instruments appearing/disappearing during the period and targets with no
+  current holding. Legend/readout/table retain full names and percentages;
+  colour alone is insufficient to identify a component.
+- Compose targets, revisions, dated actuals and coverage in one backend read,
+  without per-date or per-instrument browser fan-out. Reuse exact balances/rate
+  selection before grouping and rounding. Do not recompute the entire period's
+  returns separately for each chart date.
+- Proposed sampling: reuse the existing returns daily/weekly/month-end grid,
+  echo the interval, and retain both period boundaries. Make sampling visible;
+  do not claim an unsampled date is measured. Sampling details/resource bounds
+  are implementation choices to document and validate, not a new daily-price
+  guarantee.
+
+### Honest gaps and signed allocations
+
+- Missing required prices/FX at a sampled date make that date's full actual
+  stack and dependent drift unavailable. Preserve known values/unknown units
+  in the table. Split chart segments at gaps; never fill unknown shares with
+  zero, bridge a missing sample, or normalize only the priced subset to 100%.
+- A conventional 100% area stack is only shown for fully valued, nonnegative
+  components and a strictly positive total. Named shorts, negative cash and
+  zero/negative totals retain the signed allocation table and an explanation
+  instead of being clamped, netted into positive bands or hidden. A sampled
+  date with such a condition breaks the conventional area segment.
+- Classification as a chart gap is per sampled date. An earlier chart-only
+  missing price must not make a later fully valued allocation unavailable;
+  cumulative TTWROR's dependency/reason policy is not reused for this purpose.
+- ETF value appears once as the directly owned instrument. Underlying-company
+  exposure belongs in #513 and never enters this stack alongside its ETF.
+
+### Saved-change markers and accessible history
+
+- Offer optional vertical markers for target revisions **saved** during the
+  displayed period, scoped to this exact portfolio target set. The timestamp is
+  a UTC system fact; any chart-day placement must be derived from the explicit
+  owner/report timezone and remain labelled as save time, not an effective date.
+- Selecting a marker shows the previous and new target percentages, saved
+  timestamp and affected scope. The first revision says no previous target
+  set, rather than inventing a previous 0% target portfolio.
+- Provide an accessible revision list with the same detail, usable by keyboard,
+  screen reader and touch without chart hover. Revisions outside the plotted
+  period remain inspectable in history but do not acquire an in-period marker.
+- At every sampled date, drift still compares actuals against the **current**
+  target revision captured for the read. Selecting a saved-change marker
+  inspects history; it does not switch the comparison's target or backdate a
+  new target. Label this explicitly beside chart and detail readout.
+- Existing immutable returns runs retain their bytes and view. This new live
+  series/history panel is not silently appended to old saved output.
+
 ## Independent worked cases
 
 All values below are exact EUR values at the chosen closing date. Percentage
@@ -167,6 +285,10 @@ point drift is actual percentage minus target percentage.
 | T10 currency | Instrument A worth USD 100 at EUR 0.9/USD, EUR cash 10; targets A 80%, cash 20% | Total EUR 100; A actual 90%, drift +10 pp; cash actual 10%, drift -10 pp; missing required USD/EUR makes drift unavailable |
 | T11 lifecycle | Instrument renamed, then retired with nonzero historical exposure; its holding account is closed | Same commodity target ID/percentage retained; name/status updates; historical dated actual rules unchanged; no redistribution |
 | T12 current vs historical | Revision 1 stock 60%/cash 40%, then revision 2 70%/30%; historical actual 65%/35% | Comparison labels current revision 2, drift -5/+5 pp; revision 1 retained; existing saved returns bytes unchanged |
+| T13 changing cash weight | Sample 1: A 900/cash 100; sample 2: A 1,900/cash 100; current targets A 80%/cash 20% | Actual A/cash 90%/10% then 95%/5%; cash drift -10 then -15 pp despite unchanged nominal cash; target column stays 80%/20% |
+| T14 actual gap and recovery | T13 with missing A price at an intermediate sample and usable prices at both endpoints | Two separate available chart segments; missing sample is a gap with unknown A units; recovered closing actual stays 95%/5%, never cash-only 100% |
+| T15 saved changes, current comparison | Historical actual A/cash 65%/35%; saved revision 1 60%/40%, later revision 2 70%/30% | All selected historical-date comparisons use current revision 2, drift -5/+5 pp; marker/list shows previous 60%/40% and new 70%/30% with save time and scope, without changing the comparison |
+| T16 signed chart fallback | A 1,100/cash -100 at one sample, positive-only holdings at adjacent samples | The signed date has no conventional 100% area stack and breaks the segment; table retains +110%/-10% and their signed drifts; no clipping to 100%/0% |
 
 ## Market and look-through follow-ups
 
@@ -206,8 +328,13 @@ one input image. Existing allocation and saved-run compatibility/integrity
 regressions must remain green. Exercise target backup/restore and the explicit
 export omission. A phone browser journey creates, changes and reopens targets,
 checks exact locale input and signed drift, partial-price and empty states,
-stale edit preservation, keyboard/accessibility and both themes. Run the
-relevant shared backend/frontend gates and integrated build before the PR.
+stale edit preservation, keyboard/accessibility and both themes. Add literal
+series cases T13-T16, no-target actuals, stable stacking order, gap recovery,
+zero/negative totals, saved-marker detail and accessible revision inspection.
+Verify date/instrument selection on phone and keyboard, target-column labels,
+no chart overflow and no saved-run serialization change. Shared liquidity/cash
+scope needs cross-consumer tests after its contract is settled. Run the relevant
+shared backend/frontend gates and integrated build before the PR.
 
 ## Acceptance record
 
@@ -233,3 +360,19 @@ storage rules above remain proposals, not accepted decisions. Await the specific
 requested changes and discuss their trade-offs before updating the contract or
 starting runtime code, as #411 requires. The grouping/history and separate
 exposure-enhancement choices remain accepted.
+
+### Owner amendments after the remaining-rules question (2026-11-06)
+
+- The owner specified rule 1 as the change: a common definition of liquid
+  accounts is needed to exclude some, also relevant to net worth. Account
+  examples and the distinction between liquidity, portfolio membership and
+  total/liquid net worth require clarification; see the open decision above.
+- The owner added allocation over time, a labelled stacked target column,
+  date/instrument inspection, optional saved-revision markers with before/after
+  details and accessible history. The supplied chart honesty rules are recorded
+  above, including explicit gaps and signed-allocation fallback.
+- The owner explicitly retained current-target historical comparisons and
+  saved-change timestamps rather than an effective-date target schedule.
+- No further amendments to rules 2-7 were specified. Their proposed behavior
+  remains as recorded; no new rejection or acceptance beyond the supplied
+  answers is inferred. Runtime implementation awaits the settled cash scope.
