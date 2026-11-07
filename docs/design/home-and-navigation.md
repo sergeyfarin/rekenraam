@@ -691,12 +691,24 @@ themselves (invalid choices stay identified).
   date and basis method. A total typed by hand is dropped when the pair's
   quantity or price changed elsewhere, with a note to enter it again.
 - **Locking and discarding.** While an investment save is in flight, the
-  tabs and the Activity selector are disabled. Cancel, the close button,
-  Escape in the shared dialog, and leaving the page for another path ask
-  *Discard this transaction?* only when a field differs from what the entry
-  opened with or an activity's working copy holds the owner's work. A
+  tabs, the Activity selector and the active form's fields are disabled.
+  These all ask *Discard this transaction?*:
+  - Cancel and the close button
+  - Escape, in the shared dialog or on a phone's panel
+  - the phone panel's backdrop
+  - a register row opened into the panel
+  - leaving the page for another path
+
+  They ask only when entered work would be lost: a field differs from what
+  the entry opened with, an activity's working copy holds the owner's work,
+  or the owner changed a shared selection (an explicit Pay from, a holding,
+  a position's currency). A picker that fills itself never counts. A
   same-path URL change keeps the entry. Closing the browser tab is left to
   the browser.
+- **Cost currency** is the shared currency, used by positions, Shares in's
+  basis and a reinvestment's cost currency. A position picker with the same
+  instrument in two cost currencies restores the one chosen; a currency the
+  holding does not carry selects nothing.
 
 ## Widgets
 
