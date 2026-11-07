@@ -625,7 +625,7 @@ The account model permits a holding outside a brokerage container and does not e
 | Slice | Issue |
 |---|---|
 | Entry shell and routing: one *New transaction*, four stable tabs with labels and accents, shared entry context with basic preservation and preview invalidation, editable account | #506, delivered 2026-11-05 |
-| Investment mode: brokerage and holding contexts, Activity selector, settlement candidates | #507, implemented in PR #519, awaiting merge |
+| Investment mode: brokerage and holding contexts, Activity selector, settlement candidates | #507, delivered 2026-11-07 |
 | Activity-specific restoration across activities and accounts, full acceptance coverage | #508 |
 | Move to account for posted transactions | #509 |
 
@@ -650,11 +650,12 @@ were left in (simple or split). Mode accents are their own tokens
 the indicator and AA for the label in every theme × palette); forced colours
 keep a Highlight underline on the selected tab and a dashed one on a muted
 tab. Interim choices until the later slices:
-- The Investment tab opens the existing record forms with the page's
-  holding or instrument (#186). Its "Choose a holding account to record an
-  investment" note sits at the top of that panel, since the holding picker
-  arrives with #507's Activity selector. The Investments page keeps its
-  record buttons until #507 replaces them.
+- Resolved by #507 (delivered 2026-11-07): the Investment tab shows the
+  grouped Activity selector, which opens the existing record forms with the
+  page's holding or instrument (#186). Its "Choose a holding account to
+  record an investment" note sits at the top of that panel, above the
+  selector. The Investments page's record buttons are gone; its header opens
+  New transaction on the Investment tab.
 - Editing and correcting show no tabs (a posted transaction's type stays
   with its correction workflows). The simple form shows the same positive
   amount with a Withdrawal/Deposit (or Charge/Credit) choice, and keeps its
@@ -1063,7 +1064,7 @@ Sequencing belongs in the roadmap; acceptance in the issues.
 | Density: compact and comfortable rows | #451 |
 | Shell look: olive two-tint rows, joined section tab, green place markers, card contrast | #489 |
 | Search button with centred search dialog | #490 |
-| One transaction entry: shell and ordinary modes (#506, delivered), Investment mode (#507), preservation (#508) | #491 |
+| One transaction entry: shell and ordinary modes (#506, delivered), Investment mode (#507, delivered), preservation (#508) | #491 |
 | Move to account for posted transactions | #509 |
 | Report filters take less space above the figures (later: filter bar or side panel, after a task check) | #492 |
 | Two-key navigation shortcuts | #452 |
