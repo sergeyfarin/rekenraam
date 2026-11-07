@@ -75,6 +75,8 @@
     reference: () => sourceReference,
     holding: () => sourcePosition?.account_id,
     instrument: () => sourcePosition?.commodity_id,
+    // A position is its holding, instrument and cost currency (#508 review).
+    currency: () => sourcePosition?.cost_commodity_id,
     pending: () => pending
   });
   if (workingCopy) untrack(() => {
@@ -238,6 +240,8 @@
 {/if}
 
 <form onsubmit={handlePreview} class="space-y-4" aria-busy={pending}>
+  <!-- Nothing in the form changes while its save is in flight (#508). -->
+  <fieldset disabled={pending} class="min-w-0 space-y-4">
   <h2 id="internal-transfer-title" class="text-base font-semibold text-foreground">{m.investments_transfer_internal_title()}</h2>
   <p class="text-sm text-muted">{m.investments_transfer_internal_help()}</p>
   <p class="text-xs text-muted" role="note">{m.investments_transfer_internal_wrapper_hint()}</p>
@@ -386,4 +390,5 @@
       </button>
     {/if}
   </div>
+  </fieldset>
 </form>

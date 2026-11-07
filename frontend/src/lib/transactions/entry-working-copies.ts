@@ -39,6 +39,14 @@ function lossKey(values: WorkingCopyValues, ignore: readonly string[]): string {
 
 export class EntryWorkingCopies {
   shared: SharedEntrySelections = {};
+  /** The selections the entry opened with: the page's holding or instrument. */
+  opening: SharedEntrySelections = {};
+  /**
+   * The owner changed a control in an activity form. Pickers also fill
+   * themselves (a holding's only position), so a shared selection that
+   * differs from the opening counts as work only after the owner acted.
+   */
+  touched = false;
   #copies = new Map<InvestmentActivity, Copy>();
   #pairs = new Map<TradePair, PairedTrade>();
 
@@ -61,12 +69,18 @@ export class EntryWorkingCopies {
     else this.#copies.set(activity, { initial: lossKey(copied, ignore), values: copied, ignore });
   }
 
-  /** True when closing the entry would lose something an activity's owner entered. */
+  /**
+   * True when closing the entry would lose something the owner entered: an
+   * activity's own fields, or a shared selection the owner changed from what
+   * the entry opened with (an explicit settlement choice included).
+   */
   hasUnsavedWork(): boolean {
     for (const copy of this.#copies.values()) {
       if (lossKey(copy.values, copy.ignore) !== copy.initial) return true;
     }
-    return false;
+    if (!this.touched) return false;
+    return (Object.keys(this.shared) as (keyof SharedEntrySelections)[]).some((key) =>
+      this.shared[key] !== undefined && this.shared[key] !== this.opening[key]);
   }
 
   pairOf(activity: InvestmentActivity): PairedTrade | undefined {

@@ -56,22 +56,26 @@
   let formError = $state<unknown>(undefined);
   // New transaction's working copy and shared context (#508).
   const workingCopy = useEntryActivity('external-transfer-in', {
-    values: () => ({ quantityStr, carriedBasisStr, basisUnknown, costCommodityID, originalAcquiredOn }),
+    values: () => ({ quantityStr, carriedBasisStr, basisUnknown, originalAcquiredOn }),
     date: () => effectiveOn,
     memo: () => memo,
     reference: () => sourceReference,
     holding: () => Number(holdingAccountID) || undefined,
     instrument: () => Number(instrumentID) || undefined,
+    // The basis currency is the shared cost currency (#508 review).
+    currency: () => Number(costCommodityID) || undefined,
     pending: () => pending
   });
   if (workingCopy) untrack(() => {
     quantityStr = workingCopy.quantityStr ?? quantityStr;
     carriedBasisStr = workingCopy.carriedBasisStr ?? carriedBasisStr;
     basisUnknown = workingCopy.basisUnknown ?? basisUnknown;
-    costCommodityID = workingCopy.costCommodityID ?? costCommodityID;
     originalAcquiredOn = workingCopy.originalAcquiredOn ?? originalAcquiredOn;
   });
-  untrack(() => { if (prefill?.reference) sourceReference = prefill.reference; });
+  untrack(() => {
+    if (prefill?.reference) sourceReference = prefill.reference;
+    if (prefill?.currencyID !== undefined) costCommodityID = String(prefill.currencyID);
+  });
   // A transfer dated behind later sales replays them (T-117); checkpoint and
   // gain consequences are confirmed together.
   let reconciliationModal = $state<CommitReviewState<ExternalTransferInRequest> | null>(null);
@@ -164,6 +168,8 @@
 {/if}
 
 <form onsubmit={handleSubmit} class="space-y-4" aria-busy={pending}>
+  <!-- Nothing in the form changes while its save is in flight (#508). -->
+  <fieldset disabled={pending} class="min-w-0 space-y-4">
   <h2 id="external-transfer-in-title" class="text-base font-semibold text-foreground">
     {m.investments_transfer_in_title()}
   </h2>
@@ -260,4 +266,5 @@
       {pending ? m.investments_transfer_pending() : m.investments_transfer_submit()}
     </button>
   </div>
+  </fieldset>
 </form>

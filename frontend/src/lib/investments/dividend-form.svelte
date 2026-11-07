@@ -419,6 +419,8 @@
 {/if}
 
 <form onsubmit={handleSubmit} aria-busy={pending} class="space-y-4">
+  <!-- Nothing in the form changes while its save is in flight (#508). -->
+  <fieldset disabled={pending} class="min-w-0 space-y-4">
   <h2 id={mode === 'withholding' ? 'withholding-title' : mode === 'cash' ? 'dividend-title' : 'reinvested-dividend-title'} class="text-base font-semibold text-foreground">{title}</h2>
   <EntryAccountStatus pending={accountsQuery.isFetching}
     error={accountsQuery.error}
@@ -711,4 +713,5 @@
       {submitLabel}
     </button>
   </div>
+  </fieldset>
 </form>

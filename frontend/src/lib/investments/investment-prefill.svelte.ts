@@ -31,7 +31,7 @@ export function usePrefilledInstrument(
  * candidates change (a dated picker reloads them with the date) and nothing
  * is chosen yet.
  */
-export function usePrefilledPosition<T extends { account_id: number; commodity_id: number }>(
+export function usePrefilledPosition<T extends { account_id: number; commodity_id: number; cost_commodity_id?: number }>(
   prefill: InvestmentPrefill | undefined,
   candidates: () => readonly T[],
   keyOf: (candidate: T) => string,

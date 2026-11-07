@@ -602,6 +602,10 @@
       ];
       formError = undefined;
       workBaseline = untrack(entryWork);
+      entry.copies.opening = untrack(() => ({
+        holdingAccountID: createDefaults?.investment?.holdingAccountID,
+        commodityID: createDefaults?.investment?.commodityID
+      }));
       return;
     }
 
@@ -1235,15 +1239,24 @@
   // Set once the entry saved or the owner chose to discard it.
   let leaving = false;
 
-  /** Cancel, Escape or the close button: closes now, or asks when work would be lost. */
-  export function requestCancel() {
-    if (busy || entry.saving) return;
+  /**
+   * Anything that would close or replace the entry: runs `then` now, or asks
+   * first when work would be lost. A host routes every dismissal through it:
+   * Cancel, Escape, a backdrop, or a row opened into the same panel.
+   */
+  export function requestLeave(then: () => void) {
+    if (busy || entry.saving || discardOpen) return;
     if (!hasUnsavedWork()) {
-      onCancel();
+      then();
       return;
     }
-    afterDiscard = onCancel;
+    afterDiscard = then;
     discardOpen = true;
+  }
+
+  /** Cancel, Escape or the close button. */
+  export function requestCancel() {
+    requestLeave(onCancel);
   }
 
   function confirmDiscard() {

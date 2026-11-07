@@ -316,6 +316,8 @@
 {/if}
 
 <form onsubmit={handleSubmit} aria-busy={pending} class="space-y-4">
+  <!-- Nothing in the form changes while its save is in flight (#508). -->
+  <fieldset disabled={pending} class="min-w-0 space-y-4">
   <h2 id="buy-title" class="text-base font-semibold text-foreground">
     {correction ? m.transactions_investment_replace_buy_title() : m.investments_buy_title()}
   </h2>
@@ -520,4 +522,5 @@
       {pending ? m.investments_buy_pending() : correction ? m.transactions_investment_replace_submit() : m.investments_buy_submit()}
     </button>
   </div>
+  </fieldset>
 </form>

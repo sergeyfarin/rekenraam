@@ -56,6 +56,11 @@
   const locked = $derived(entry?.saving ?? false);
   /** What the opened form starts from: the page's prefill, then the entry's shared context. */
   let openedPrefill = $state.raw<InvestmentPrefill | undefined>(undefined);
+  // Only the owner's input dispatches these: a picker that fills itself sets
+  // state without a DOM event.
+  function markTouched() {
+    if (entry) entry.copies.touched = true;
+  }
   function currentPrefill(): InvestmentPrefill | undefined {
     if (!entry) return prefill;
     const shared = entry.shared;
@@ -123,6 +128,8 @@
   {#if onCancel}<button type="button" onclick={onCancel} class="min-h-11 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">{m.transactions_form_cancel()}</button>{/if}
 </div>
 
+<!-- Any change the owner makes in an activity form is entered work (#508). -->
+<div class="contents" onchange={markTouched} oninput={markTouched}>
 {#if active === 'write-off'}
   <WriteOffForm {csrfToken} prefill={openedPrefill} onSaved={saved} onCancel={close} />
 {:else if active !== null}
@@ -164,3 +171,4 @@
   </div>
   </ModalDialog>
 {/if}
+</div>

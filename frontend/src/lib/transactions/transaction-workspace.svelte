@@ -82,6 +82,14 @@
     | { type: 'just-deleted'; transaction: TransactionResponse };
 
   let panel = $state<PanelState>({ type: 'none' });
+  // The open New transaction, so a dismissal or another row asks before its
+  // unsaved work is lost (#508).
+  let createEditor = $state<ReturnType<typeof TransactionEditor>>();
+  /** Shows `next` in the panel, through the entry's discard check when one is open. */
+  function replacePanel(next: PanelState) {
+    if (panel.type === 'create' && createEditor) createEditor.requestLeave(() => { panel = next; });
+    else panel = next;
+  }
   let investmentSaved = $state<InvestmentSaveKind>();
   afterNavigate(() => { investmentSaved = undefined; });
   let loadingTransactionID = $state<number | undefined>(undefined);
@@ -118,7 +126,7 @@
     loadError = undefined;
     try {
       const transaction = await getTransaction(transactionID);
-      if (loadingTransactionID === transactionID) panel = { type: 'detail', transaction };
+      if (loadingTransactionID === transactionID) replacePanel({ type: 'detail', transaction });
     } catch (error) {
       if (loadingTransactionID === transactionID) loadError = error;
     } finally {
@@ -158,10 +166,10 @@
   });
 
   const actions: TransactionWorkspaceActions = {
-    showDetail: (transaction) => { panel = { type: 'detail', transaction }; },
+    showDetail: (transaction) => { replacePanel({ type: 'detail', transaction }); },
     showTransaction,
-    edit: (transaction) => { panel = { type: 'edit', transaction }; },
-    correct: (transaction) => { panel = { type: 'correct', transaction }; },
+    edit: (transaction) => { replacePanel({ type: 'edit', transaction }); },
+    correct: (transaction) => { replacePanel({ type: 'correct', transaction }); },
     rowAction: (action, transactionID) => { void handleRowAction(action, transactionID); },
     get pending() { return actionPending; }
   };
@@ -181,11 +189,11 @@
       } else {
         const transaction = await getTransaction(transactionID);
         if ((action === 'edit' || action === 'correct' || action === 'unvoid') && transaction.transaction_kind === 'investment') {
-          panel = { type: 'detail', transaction };
+          replacePanel({ type: 'detail', transaction });
         } else if (action === 'edit' || action === 'correct') {
-          panel = { type: action, transaction };
+          replacePanel({ type: action, transaction });
         } else {
-          panel = { type: 'detail', transaction, initialAction: action === 'unvoid' ? 'unvoid' : undefined };
+          replacePanel({ type: 'detail', transaction, initialAction: action === 'unvoid' ? 'unvoid' : undefined });
         }
       }
     } catch (error) {
@@ -284,9 +292,9 @@
     <aside
       class="fixed inset-0 z-30 overflow-y-auto bg-surface outline-none lg:relative lg:inset-auto lg:z-auto lg:overflow-visible"
       aria-label={m.transactions_detail_actions()}
-      {@attach phoneModal({ onCancel: () => (panel = { type: 'none' }), pending: () => actionPending })}
+      {@attach phoneModal({ onCancel: () => replacePanel({ type: 'none' }), pending: () => actionPending })}
     >
-      <div class="fixed inset-0 bg-background/50 lg:hidden" role="presentation" onclick={() => (panel = { type: 'none' })}></div>
+      <div class="fixed inset-0 bg-background/50 lg:hidden" role="presentation" onclick={() => replacePanel({ type: 'none' })}></div>
 
       <div class="relative lg:side-panel-sticky" {@attach publishPanelHeight}>
         <Panel>
@@ -309,6 +317,7 @@
             <TransactionEditor mode="correct" transaction={panel.transaction} {csrfToken} onSaved={handleSaved} onCancel={handleCancel} />
           {:else if panel.type === 'create'}
             <TransactionEditor
+              bind:this={createEditor}
               mode="create"
               {csrfToken}
               createDefaults={{ ...pageDefaults, ...panel.chosen }}

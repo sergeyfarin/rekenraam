@@ -200,6 +200,8 @@
 {/if}
 
 <form onsubmit={handleSubmit} aria-busy={pending} class="space-y-4" aria-describedby="pil-copy">
+  <!-- Nothing in the form changes while its save is in flight (#508). -->
+  <fieldset disabled={pending} class="min-w-0 space-y-4">
   <h2 id="payment-in-lieu-title" class="text-base font-semibold text-foreground">
     {initial ? m.investments_payment_in_lieu_correct_title() : m.investments_payment_in_lieu_title()}
   </h2>
@@ -325,4 +327,5 @@
       {pending ? m.investments_payment_in_lieu_pending() : initial ? m.investments_payment_in_lieu_correct_submit() : m.investments_payment_in_lieu_submit()}
     </button>
   </div>
+  </fieldset>
 </form>

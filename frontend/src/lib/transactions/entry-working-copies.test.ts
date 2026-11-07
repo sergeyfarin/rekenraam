@@ -26,6 +26,21 @@ describe('EntryWorkingCopies (#508)', () => {
     expect(copies.hasUnsavedWork()).toBe(false);
   });
 
+  it('counts a shared selection the owner changed, never one a picker filled by itself (#508 review)', () => {
+    const copies = new EntryWorkingCopies();
+    copies.opening = { holdingAccountID: 7 };
+    copies.shared.holdingAccountID = 7;
+    copies.shared.currencyID = 3;
+    // A holding's only position filled the currency; the owner did nothing.
+    expect(copies.hasUnsavedWork()).toBe(false);
+    copies.touched = true;
+    expect(copies.hasUnsavedWork()).toBe(true);
+    delete copies.shared.currencyID;
+    expect(copies.hasUnsavedWork()).toBe(false);
+    copies.shared.settlementAccountID = 12;
+    expect(copies.hasUnsavedWork()).toBe(true);
+  });
+
   it('shares quantity and unit price within a pair, never across pairs', () => {
     const copies = new EntryWorkingCopies();
     copies.setPair('buy', { quantity: '10', unitPrice: '5' });

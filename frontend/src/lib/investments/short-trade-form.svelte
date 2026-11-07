@@ -362,6 +362,8 @@
 {/if}
 
 <form onsubmit={handleSubmit} aria-busy={pending} class="space-y-4" aria-labelledby="{idPrefix}-title">
+  <!-- Nothing in the form changes while its save is in flight (#508). -->
+  <fieldset disabled={pending} class="min-w-0 space-y-4">
   <h2 id="{idPrefix}-title" class="text-base font-semibold text-foreground">
     {correction
       ? cover ? m.investments_short_cover_correct_title() : m.investments_short_sale_correct_title()
@@ -542,4 +544,5 @@
         : cover ? m.investments_short_cover_submit() : m.investments_short_sale_submit()}
     </button>
   </div>
+  </fieldset>
 </form>

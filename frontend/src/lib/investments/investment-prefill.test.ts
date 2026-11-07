@@ -68,6 +68,16 @@ describe('prefilledPositionKey', () => {
     expect(prefilledPositionKey(positions, {}, key)).toBe('');
   });
 
+  it('lets the entry’s shared cost currency pick one of a holding’s currency positions (#508)', () => {
+    expect(prefilledPositionKey(positions, { holdingAccountID: 3, currencyID: 101 }, key)).toBe('3:12:101');
+    expect(prefilledPositionKey(positions, { holdingAccountID: 3, currencyID: 100 }, key)).toBe('3:12:100');
+    // A currency the holding does not carry selects nothing rather than another position.
+    expect(prefilledPositionKey(positions, { holdingAccountID: 1, currencyID: 101 }, key)).toBe('');
+    // Holdings without a cost currency (corporate actions) ignore it.
+    const holdings = [{ account_id: 3, commodity_id: 12 }];
+    expect(prefilledPositionKey(holdings, { holdingAccountID: 3, currencyID: 101 }, (h) => `${h.account_id}:${h.commodity_id}`)).toBe('3:12');
+  });
+
   it('treats duplicate keys as one position', () => {
     const holdings = [{ account_id: 1, commodity_id: 10 }, { account_id: 1, commodity_id: 10 }];
     expect(prefilledPositionKey(holdings, { holdingAccountID: 1 }, (h) => `${h.account_id}:${h.commodity_id}`)).toBe('1:10');

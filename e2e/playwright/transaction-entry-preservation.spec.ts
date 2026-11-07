@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from './support/fixtures';
 import { apiJSON } from './support/api';
-import { createCashAccount, readyForLedger } from './support/ledger';
+import { createCashAccount, ensureCurrency, readyForLedger } from './support/ledger';
 import { daysFromTodayISO, todayISO } from './support/dates';
 import { expectNoAccessibilityViolations, focusIsInside } from './support/a11y';
 import { openInvestmentActivity } from './support/investment-entry';
@@ -329,3 +329,94 @@ for (const locale of ['en', 'nl', 'ru', 'de', 'es', 'fr']) {
     await expect(entry).toBeHidden();
   });
 }
+
+test('a phone panel’s Escape keeps a filled entry until the discard is confirmed (#521 review)', async ({ page }) => {
+  const s = await setup(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/app/ledger/accounts/${s.checking.id}/register`);
+  await page.getByRole('button', { name: 'New transaction', exact: true }).click();
+  const entry = page.getByRole('region', { name: 'New transaction', exact: true });
+  await entry.getByLabel('Amount', { exact: true }).fill('12.34');
+  await page.keyboard.press('Escape');
+  const discard = page.getByRole('alertdialog', { name: 'Discard this transaction?' });
+  await expect(discard).toBeVisible();
+  await expect(entry.getByLabel('Amount', { exact: true })).toHaveValue('12.34');
+  await page.keyboard.press('Escape');
+  await expect(discard).toBeHidden();
+  await expect(entry.getByLabel('Amount', { exact: true })).toHaveValue('12.34');
+  await page.keyboard.press('Escape');
+  await discard.getByRole('button', { name: 'Discard', exact: true }).click();
+  await expect(entry).toBeHidden();
+});
+
+test('an explicitly chosen settlement account counts as entered work (#521 review)', async ({ page }) => {
+  const s = await setup(page);
+  await page.goto(`/app/ledger/accounts/${s.holding.id}/register`);
+  await page.getByRole('button', { name: 'New transaction', exact: true }).click();
+  await openInvestmentActivity(page, 'Buy');
+  const form = page.getByRole('dialog').filter({ has: page.locator('#buy-quantity') });
+  await form.locator('#buy-cash-account').selectOption(String(s.checking.id));
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  const entry = page.getByRole('region', { name: 'New transaction', exact: true });
+  await entry.getByRole('button', { name: 'Cancel', exact: true }).last().click();
+  await expect(page.getByRole('alertdialog', { name: 'Discard this transaction?' })).toBeVisible();
+});
+
+test('a multi-currency position selection survives closing and reopening its activity (#521 review)', async ({ page }) => {
+  const s = await setup(page);
+  const eur = await ensureCurrency(page, s.csrfToken, 'EUR', 'Euro');
+  const eurCash = await createCashAccount(page, s.csrfToken, `EUR cash ${s.suffix}`, eur, daysFromTodayISO(-10));
+  for (const [cash, currency] of [[s.cash.id, s.currencyID], [eurCash.id, eur]]) {
+    await apiJSON(page, 'POST', '/api/v1/investments/buy', s.csrfToken, {
+      transaction_date: daysFromTodayISO(-5), commodity_id: s.instrument.commodity_id, holding_account_id: s.holding.id,
+      cash_account_id: cash, quantity_value: '2', quantity_scale: 0,
+      cash_amount_value: '2000', cash_amount_scale: 2, cash_commodity_id: currency
+    });
+  }
+  await page.goto(`/app/ledger/accounts/${s.holding.id}/register`);
+  await page.getByRole('button', { name: 'New transaction', exact: true }).click();
+  await openInvestmentActivity(page, 'Shares out');
+  const form = page.getByRole('dialog').filter({ has: page.locator('#external-transfer-out-source') });
+  const chosen = `${s.holding.id}:${s.instrument.commodity_id}:${eur}`;
+  await form.locator('#external-transfer-out-source').selectOption(chosen);
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await openInvestmentActivity(page, 'Shares out');
+  await expect(page.locator('#external-transfer-out-source')).toHaveValue(chosen);
+});
+
+test('a cost currency chosen in Shares in is the one Reinvested dividend starts on (#521 review)', async ({ page }) => {
+  const s = await setup(page);
+  const eur = await ensureCurrency(page, s.csrfToken, 'EUR', 'Euro');
+  await page.goto(`/app/ledger/accounts/${s.holding.id}/register`);
+  await page.getByRole('button', { name: 'New transaction', exact: true }).click();
+  await openInvestmentActivity(page, 'Shares in');
+  const form = page.getByRole('dialog').filter({ has: page.locator('#transfer-in-currency') });
+  await form.locator('#transfer-in-currency').selectOption(String(eur));
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await openInvestmentActivity(page, 'Reinvested dividend');
+  await expect(page.locator('#div-cost-currency')).toHaveValue(String(eur));
+});
+
+test('account selections are locked while the investment save is pending (#521 review)', async ({ page }) => {
+  const s = await setup(page);
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  await page.route('**/api/v1/investments/buy', async (route) => {
+    await held;
+    await route.continue();
+  });
+  await page.goto(`/app/ledger/accounts/${s.holding.id}/register`);
+  await page.getByRole('button', { name: 'New transaction', exact: true }).click();
+  await openInvestmentActivity(page, 'Buy');
+  const form = page.getByRole('dialog').filter({ has: page.locator('#buy-quantity') });
+  await form.locator('#buy-quantity').fill('1');
+  await form.locator('#buy-unit-price').fill('10');
+  await form.getByRole('button', { name: 'Record buy', exact: true }).click();
+  await expect(form.getByRole('button', { name: 'Recording…' })).toBeVisible();
+  try {
+    await expect(form.locator('#buy-cash-account')).toBeDisabled();
+    await expect(form.locator('#buy-holding-account')).toBeDisabled();
+  } finally {
+    release();
+  }
+});
