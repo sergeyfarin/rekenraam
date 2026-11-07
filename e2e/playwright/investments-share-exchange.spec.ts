@@ -1,3 +1,4 @@
+import { openInvestmentActivity } from './support/investment-entry';
 import { expect, test, type Page } from './support/fixtures';
 import { apiExactText, apiJSON, csrfTokenFor, exactJSON } from './support/api';
 import { readyForLedger } from './support/ledger';
@@ -61,7 +62,7 @@ async function setup(page: Page) {
 
 async function openForm(page: Page, s: Awaited<ReturnType<typeof setup>>, newUnits: string, oldUnits: string) {
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Record share exchange' }).click();
+  await openInvestmentActivity(page, 'Record share exchange');
   await page.getByLabel('Effective date').fill(daysFromTodayISO(-10));
   await page.getByLabel('Holding to exchange').selectOption({ label: `${s.old.holdingName} · ${s.old.name}` });
   await page.getByLabel('New instrument').selectOption({ label: s.successor.name });

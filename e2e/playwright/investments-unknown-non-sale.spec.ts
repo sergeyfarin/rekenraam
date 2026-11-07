@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { apiJSON } from './support/api';
 import { readyForLedger } from './support/ledger';
 import { todayISO } from './support/dates';
+import { openInvestmentActivity } from './support/investment-entry';
 import { translationLocales } from './support/locales';
 
 test.use({ viewport: { width: 390, height: 844 } });
@@ -57,8 +58,8 @@ for (const locale of translationLocales) {
     await expect(cil).toBeHidden();
 
     await page.goto('/app/investments');
-    await page.getByRole('button', { name: settings.investments_record_capital_return, exact: true }).click();
-    const roc = page.locator('dialog[open]').filter({ has: page.locator('#capital-return-position') });
+    await openInvestmentActivity(page, 'capital-return');
+    const roc = page.locator('dialog[aria-labelledby="capital-return-title"]');
     await roc.locator('#capital-return-position').selectOption(`${holding.id}:${instrument.commodity_id}:${currencyID}`);
     await roc.locator('#capital-return-cash').selectOption(String(cash.id));
     await roc.locator('#capital-return-effective').fill(ago(20));

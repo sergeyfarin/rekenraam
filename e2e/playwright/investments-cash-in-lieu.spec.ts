@@ -137,7 +137,7 @@ test('a specific-lot cash-in-lieu correction changes currency without hidden old
   // Both cost-currency positions share one holding and instrument. The
   // overview must give them distinct identities and remain usable afterward.
   await page.goto('/app/investments');
-  await expect(page.getByRole('button',{name:'Record buy',exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'New transaction',exact:true})).toBeVisible();
   const positionRows=page.getByRole('button').filter({hasText:p.name});
   await expect(positionRows).toHaveCount(2);
   for (let index=0;index<2;index++) {

@@ -1,6 +1,8 @@
 import type { TransactionResponse } from '#lib/api/transactions.ts';
 import type { EntryDefaults } from './entry-mode.ts';
 
+export type InvestmentSaveKind = 'activity' | 'write-off';
+
 export type { EntryDefaults } from './entry-mode.ts';
 
 // New transaction from anywhere (#459, #477, #506). A page that shows *New
@@ -12,7 +14,7 @@ export type { EntryDefaults } from './entry-mode.ts';
 let pageAdd = $state<((defaults?: EntryDefaults) => void) | undefined>();
 
 /** The shared entry dialog: open with its prefill, and the last transaction it saved. */
-export const transactionEntry = $state<{ open: boolean; defaults?: EntryDefaults; saved?: TransactionResponse }>({ open: false });
+export const transactionEntry = $state<{ open: boolean; defaults?: EntryDefaults; saved?: TransactionResponse; savedInvestment?: InvestmentSaveKind }>({ open: false });
 
 /**
  * Provide the current page's opener; the returned function withdraws it. The
@@ -36,6 +38,7 @@ export function addTransaction(defaults?: EntryDefaults): void {
   transactionEntry.open = true;
   transactionEntry.defaults = defaults;
   transactionEntry.saved = undefined;
+  transactionEntry.savedInvestment = undefined;
 }
 
 /** New transaction on its Transfer tab (#481), the account as From when given. */
@@ -44,8 +47,9 @@ export function addTransfer(accountID?: number): void {
 }
 
 /** Cancel discards the working copy; saving closes it with the saved transaction. */
-export function closeTransactionEntry(saved?: TransactionResponse): void {
+export function closeTransactionEntry(saved?: TransactionResponse, investment?: InvestmentSaveKind): void {
   transactionEntry.open = false;
   transactionEntry.defaults = undefined;
   transactionEntry.saved = saved;
+  transactionEntry.savedInvestment = investment;
 }

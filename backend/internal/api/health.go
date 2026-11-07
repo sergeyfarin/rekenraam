@@ -197,6 +197,7 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 	mux.HandleFunc("GET /api/v1/pricing/source-health", pricingSourceHealth(logger, services.Auth, services.Pricing))
 	mux.HandleFunc("POST /api/v1/pricing/background-work/{work_id}/retry", retryPricingBackgroundWork(logger, services.Auth, services.Pricing, options))
 	mux.HandleFunc("GET /api/v1/investments/search", searchInvestments(logger, services.Auth, services.Investment))
+	mux.HandleFunc("GET /api/v1/investments/entry-accounts", investmentEntryAccounts(logger, services.Auth, services.Investment))
 	mux.HandleFunc("GET /api/v1/investments/instruments", listInvestmentInstruments(logger, services.Auth, services.Investment))
 	mux.HandleFunc("POST /api/v1/investments/instruments", createInvestmentInstrument(logger, services.Auth, services.Investment, options))
 	mux.HandleFunc("GET /api/v1/investments/instruments/{instrument_id}", readInvestmentInstrument(logger, services.Auth, services.Investment))

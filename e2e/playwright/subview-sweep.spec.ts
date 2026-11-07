@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, repoRoot, test as base, type Locator, type Page } from './support/fixtures';
 import { seedReferenceBook } from './support/reference-book';
+import { openInvestmentActivity } from './support/investment-entry';
 import { accessibilityViolations, type AxeViolation } from './support/a11y';
 import { apiJSON, csrfTokenFor } from './support/api';
 import { withRenderedContrast } from './support/rendered-contrast';
@@ -133,23 +134,23 @@ function correction(name: string, dates: string[], action: string): SubView {
 }
 
 const recordForms: Array<[string, string]> = [
-  ['buy', 'investments_record_buy'],
-  ['sell', 'investments_record_sell'],
-  ['short sale', 'investments_record_short_sale'],
-  ['short cover', 'investments_record_short_cover'],
-  ['payment in lieu', 'investments_record_payment_in_lieu'],
-  ['dividend', 'investments_record_dividend'],
-  ['withholding', 'investments_record_withholding'],
-  ['reinvested dividend', 'investments_record_reinvested'],
-  ['transfer in', 'investments_record_external_transfer_in'],
-  ['move between holdings', 'investments_record_internal_transfer'],
-  ['transfer out', 'investments_record_external_transfer_out'],
-  ['split', 'investments_record_split'],
-  ['share exchange', 'investments_record_share_exchange'],
-  ['cash-and-stock merger', 'investments_record_merger'],
-  ['spin-off', 'investments_record_spin_off'],
-  ['return of capital', 'investments_record_capital_return'],
-  ['write-off', 'investments_record_write_off']
+  ['buy', 'buy'],
+  ['sell', 'sell'],
+  ['short sale', 'short-open'],
+  ['short cover', 'short-cover'],
+  ['payment in lieu', 'payment-in-lieu'],
+  ['dividend', 'dividend'],
+  ['withholding', 'withholding'],
+  ['reinvested dividend', 'reinvested'],
+  ['transfer in', 'external-transfer-in'],
+  ['move between holdings', 'internal-transfer'],
+  ['transfer out', 'external-transfer-out'],
+  ['split', 'split'],
+  ['share exchange', 'share-exchange'],
+  ['cash-and-stock merger', 'cash-and-stock-merger'],
+  ['spin-off', 'spin-off'],
+  ['return of capital', 'capital-return'],
+  ['write-off', 'write-off']
 ];
 
 const subViews: SubView[] = [
@@ -307,9 +308,19 @@ const subViews: SubView[] = [
   },
 
   // ── Record forms (investment entry) ──────────────────────────────────
-  ...recordForms.map(([name, key]): SubView => ({
+  ...recordForms.map(([name, activity]): SubView => ({
     name: `record ${name}`, group: 'record form', path: () => '/app/investments',
-    open: (c) => clickAndDialog(c, key)
+    open: async (c) => {
+      await openInvestmentActivity(c.page, activity);
+      const dialog = openDialog(c.page);
+      await expect(dialog).toBeVisible();
+      await waitForPageReady(c.page);
+      // Keep this activity's identity after Escape: the shared entry dialog
+      // remains open, so a dynamic last-open-dialog locator would rebind to it.
+      const title = await dialog.getAttribute('aria-labelledby');
+      expect(title).toBeTruthy();
+      return c.page.locator(`dialog[aria-labelledby="${title}"]`);
+    }
   })),
 
   // ── Investment corrections on the book's operations ──────────────────

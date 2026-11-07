@@ -1,3 +1,4 @@
+import { openInvestmentActivity } from './support/investment-entry';
 import { expect, test, type Page } from './support/fixtures';
 import { apiExactText, apiJSON, csrfTokenFor, exactJSON } from './support/api';
 import { readyForLedger } from './support/ledger';
@@ -63,7 +64,7 @@ async function setup(page: Page) {
 
 async function openForm(page: Page, s: Awaited<ReturnType<typeof setup>>, newUnits: string, parentUnits: string, percent: string) {
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Record spin-off' }).click();
+  await openInvestmentActivity(page, 'Record spin-off');
   await page.getByLabel('Distribution date').fill(daysFromTodayISO(-10));
   await page.getByLabel('Parent holding').selectOption({ label: `${s.parent.holdingName} · ${s.parent.name}` });
   await page.getByLabel('Distributed instrument').selectOption({ label: s.spun.name });
@@ -90,7 +91,7 @@ test('a spin-off previews the exact basis split and the new lots name the parent
   await expect(preview).toContainText('Basis moved: 60.00');
   await expect(preview).toContainText('320.00');
   await expect(preview).toContainText('No gain or loss is realized');
-  await page.getByRole('dialog').getByRole('button', { name: 'Record spin-off' }).click();
+  await page.getByRole('dialog').last().getByRole('button', { name: 'Record spin-off' }).click();
   await expect(page.getByRole('heading', { name: 'Record a spin-off' })).toBeHidden();
 
   await page.getByRole('button', { name: `View lots for ${s.spun.name}` }).click();
@@ -127,7 +128,7 @@ test('a backdated spin-off revises the later parent sale through the gain review
   await s.sell(s.parent, 5, '5', '10000'); // basis 50.00
   await openForm(page, s, '1', '1', '20');
   await expect(page.getByRole('region', { name: 'Spin-off preview' })).toContainText(`10 ${s.parent.name} kept → 10 ${s.spun.name}`);
-  await page.getByRole('dialog').getByRole('button', { name: 'Record spin-off' }).click();
+  await page.getByRole('dialog').last().getByRole('button', { name: 'Record spin-off' }).click();
 
   const review = page.getByRole('alertdialog');
   await expect(review).toContainText(`Sale on ${daysFromTodayISO(-5)}: basis 50.00 → 40.00`);

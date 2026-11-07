@@ -1,10 +1,15 @@
 <script lang="ts">
+  import EntryAccountStatus from '#lib/investments/entry-account-status.svelte';
+  import { useSettlementCandidates } from '#lib/investments/settlement-candidates.svelte.ts';
+  import { isSettlementAccount } from '#lib/investments/settlement-accounts.ts';
+  import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
+  import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
   import { autofocus } from '#lib/components/autofocus.ts';
   import { useOwnerToday } from '#lib/dates/owner-date-context.ts';
   import { untrack } from 'svelte';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import APIFormError from '#lib/components/api-form-error.svelte';
-  import { accountsQueryOptions, type AccountResponse } from '#lib/api/accounts.ts';
+  import type { AccountResponse } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import {
     investmentInstrumentsQueryOptions, datedHoldingsQueryOptions, previewCapitalReturn,
@@ -42,6 +47,7 @@
     onCancel: () => void;
     prefill?: InvestmentPrefill;
   } = $props();
+  const entryPrefill = untrack(() => correction ? undefined : prefill);
 
   // A correction carries its evidence edits beside the replacement terms.
   type CapitalReturnPayload = CapitalReturnRequest & Pick<CapitalReturnReplacementRequest, 'source_evidence_edits'>;
@@ -51,14 +57,14 @@
     (position) => `${position.account_id}:${position.commodity_id}:${position.cost_commodity_id}`, () => positionKey, (key) => { positionKey = key; });
 
   const queryClient = useQueryClient();
-  const accountsQuery = createQuery(() => accountsQueryOptions(false, false));
+
   const instrumentsQuery = createQuery(() => investmentInstrumentsQueryOptions());
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
 
   const initial = untrack(() => correction?.terms);
   let positionKey = $state(initial ? `${initial.holding_account_id}:${initial.commodity_id}:${initial.currency_id}` : '');
   let cashAccountID = $state(initial?.cash_account_id ? String(initial.cash_account_id) :  '');
-  let effectiveOn = $state(initial?.effective_on ?? '');
+  let effectiveOn = $state(initial?.effective_on ?? entryPrefill?.transactionDate ?? '');
   // Holdings as they stood on the effective date, including ones a later
   // sale closed (#166); before a date is chosen, today's.
   const positionsQuery = createQuery(() => datedHoldingsQueryOptions(effectiveOn || ownerToday()));
@@ -72,8 +78,10 @@
   let explicitEntitlement = $state(!!initial?.lot_entitlements?.length || !!initial?.entitled_lot_ids?.length);
   let eligibleLots = $state.raw<CapitalReturnEffect[]>([]);
   let quantities = $state<Record<number, string>>(Object.fromEntries((initial?.lot_entitlements ?? []).map((e) => [e.lot_id, formatEditableAmount(e.quantity_value, e.quantity_scale)])));
-  let memo = $state(initial?.memo ?? '');
+  let memo = $state(initial?.memo ?? entryPrefill?.memo ?? '');
   let pending = $state(false);
+  const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(effectiveOn || ownerToday()));
+  const cashAccountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(paymentOn || effectiveOn || ownerToday()));
   let formError = $state<unknown>(undefined);
   let preview = $state<{
     effects: CapitalReturnEffect[];
@@ -86,11 +94,10 @@
   const locale = $derived(getLocale());
   const accounts = $derived(accountsQuery.data?.accounts ?? []);
   const holdingIDs = $derived(new Set(accounts.filter((account: AccountResponse) =>
-    account.status === 'active' && (account.account_kind === 'security_holding' || account.account_kind === 'fund_holding'))
+    isInvestmentHoldingAccount(account))
     .map((account: AccountResponse) => account.id)));
-  const cashAccounts = $derived(accounts.filter((account: AccountResponse) =>
-    account.account_class === 'asset' && account.status === 'active' && account.allows_postings &&
-    account.account_kind !== 'security_holding' && account.account_kind !== 'fund_holding'));
+  const cashAccounts = $derived((cashAccountsQuery.data?.accounts ?? []).filter((account: AccountResponse) =>
+    isSettlementAccount(account) && (!position || account.default_commodity_id === position.cost_commodity_id)));
   // Long holdings only: a return of capital does not apply to owed units (#173).
   const positions = $derived((positionsQuery.data ?? []).filter((position) =>
     position.position_side === 'long' &&
@@ -107,7 +114,7 @@
     instrumentsQuery.isPending || currenciesQuery.isPending);
   const loadError = $derived(accountsQuery.isError || positionsQuery.isError ||
     instrumentsQuery.isError || currenciesQuery.isError);
-  const canPreview = $derived(!loading && !loadError && !!position && !!cashAccountID &&
+  const canPreview = $derived(!cashAccountsQuery.isFetching && !cashAccountsQuery.isError && !loading && !loadError && !!position && cashAccounts.some((account) => String(account.id) === cashAccountID) &&
     !!effectiveOn && !!paymentOn && !!amount.trim() && (!correction || !!reason.trim()));
   const modalGainRows = $derived(preview?.gainImpact
     ? gainImpactRows(preview.gainImpact.changes, gainImpactCurrency(currenciesByID), locale) : []);
@@ -234,6 +241,8 @@
     setError: (error) => { formError = error; },
     setModal: (modal) => { reviewModal = modal; }
   });
+  const chooseSettlement = useSettlementCandidates(() => cashAccountsQuery.data?.accounts,
+    () => selectedPosition?.account_id, () => cashAccountID, (id) => { cashAccountID = id; }, entryPrefill, untrack(() => !!correction), () => selectedPosition?.cost_commodity_id);
 </script>
 
 {#if reviewModal && preview}
@@ -277,11 +286,20 @@
     </div>
     <div>
       <label for="capital-return-cash" class="mb-1 block text-sm font-medium text-foreground">{m.investments_capital_return_cash_account()}</label>
-      <select id="capital-return-cash" bind:value={cashAccountID} required onchange={discardPreview}
+      <select id="capital-return-cash" bind:value={cashAccountID} required onchange={() => { chooseSettlement(); discardPreview(); }}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         <option value="">{m.investments_form_select_account()}</option>
+      {#if cashAccountID && !cashAccounts.some((account) => String(account.id) === cashAccountID)}
+        <option value={cashAccountID} disabled>{(accountsQuery.data?.accounts ?? []).find((account) => String(account.id) === cashAccountID)?.name ?? cashAccountID}</option>
+      {/if}
         {#each cashAccounts as account (account.id)}<option value={String(account.id)}>{account.name}</option>{/each}
       </select>
+    <EntryAccountStatus pending={cashAccountsQuery.isFetching} error={cashAccountsQuery.error}
+      onRetry={() => cashAccountsQuery.refetch()} />
+    <p class="mt-1 text-xs text-muted">{cashAccountID ? m.investments_activity_settlement_hint() : m.investments_activity_settlement_choice()}</p>
+    {#if cashAccountsQuery.data && cashAccountID && !cashAccounts.some((account) => String(account.id) === cashAccountID)}
+      <p role="alert" class="mt-1 text-sm text-danger">{m.investments_activity_settlement_invalid()}</p>
+    {/if}
     </div>
     <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <div>

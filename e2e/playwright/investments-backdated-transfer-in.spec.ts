@@ -1,3 +1,4 @@
+import { openInvestmentActivity } from './support/investment-entry';
 import { expect, test } from './support/fixtures';
 import { apiJSON } from './support/api';
 import { readyForLedger } from './support/ledger';
@@ -45,7 +46,7 @@ test('a backdated transfer-in shows the sale gain it revises before recording', 
   }
 
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Transfer in investments' }).click();
+  await openInvestmentActivity(page, 'Transfer in investments');
   await page.getByLabel('Transfer date in this book').fill(daysFromTodayISO(-30));
   await page.getByLabel('Instrument').selectOption({ label: `${name} (${suffix.toUpperCase()})` });
   await page.getByLabel('Holding account').selectOption({ label: holdingName });

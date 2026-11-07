@@ -1,3 +1,4 @@
+import { openInvestmentActivity } from './support/investment-entry';
 import { expect, test, type Page } from './support/fixtures';
 import { apiJSON } from './support/api';
 import { readyForLedger } from './support/ledger';
@@ -37,7 +38,7 @@ for (const theme of ['light', 'dark']) {
     }, { theme });
     await page.goto('/app/investments');
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-    await page.getByRole('button', { name: copy.investments_record_dividend, exact: true }).click();
+    await openInvestmentActivity(page, 'dividend');
     const entry = page.getByRole('dialog', { name: copy.investments_dividend_title, exact: true });
     await entry.locator('#div-cash-account').selectOption(String(cash.id));
     await entry.locator('#div-income-account').selectOption(String(income.id));
@@ -85,7 +86,7 @@ for (const locale of translationLocales) {
     {
       const separate = shape === 'separate_tax';
       await page.goto('/app/investments');
-      await page.getByRole('button', { name: separate ? copy.investments_record_withholding : copy.investments_record_dividend, exact: true }).click();
+      await openInvestmentActivity(page, separate ? 'withholding' : 'dividend');
       const entry = page.getByRole('dialog', { name: separate ? copy.investments_withholding_title : copy.investments_dividend_title, exact: true });
       await expect(entry.locator('#div-instrument')).toHaveValue('');
       await expect(entry).toContainText(copy.investments_dividend_payer_help);

@@ -1,0 +1,31 @@
+get:
+  summary: Read investment entry account roles at the posting date
+  description: >-
+    A complete dated account snapshot. Eligibility shares investment command
+    rules; settlement requires an active default currency. Hierarchy metadata
+    supports manual-entry suggestions, never import mappings. Writes revalidate
+    their own role dependencies. No personal access token grant is added.
+  parameters:
+    - in: query
+      name: as_of
+      required: true
+      schema: { type: string, format: date }
+  responses:
+    "200":
+      description: Dated accounts and role eligibility
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentEntryAccountsResponse"
+    "400":
+      description: Invalid date
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

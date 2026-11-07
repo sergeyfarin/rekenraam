@@ -1,3 +1,4 @@
+import { openInvestmentActivity } from './support/investment-entry';
 import { expect, test, type Page } from './support/fixtures';
 import { apiJSON } from './support/api';
 import { todayISO } from './support/dates';
@@ -33,7 +34,7 @@ async function openActivity(page: Page, activityLabel: string) {
   await page.getByRole('button', { name: 'New transaction', exact: true }).click();
   const entry = page.getByRole('region', { name: 'New transaction', exact: true });
   await expect(entry.getByRole('tab', { name: 'Investment', exact: true })).toHaveAttribute('aria-selected', 'true');
-  await entry.getByRole('button', { name: activityLabel, exact: true }).click();
+  await openInvestmentActivity(page, activityLabel);
 }
 
 test('a holding register records a pre-filled buy and opens it in the investment detail', async ({ page }) => {
@@ -43,7 +44,7 @@ test('a holding register records a pre-filled buy and opens it in the investment
   await page.goto(`/app/ledger/accounts/${holding.id}/register`);
   await expect(page.getByRole('heading', { name: `Context holding ${suffix}` })).toBeVisible();
   await openActivity(page, 'Record buy');
-  const dialog = page.getByRole('dialog');
+  const dialog = page.getByRole('dialog').last();
   await expect(dialog.locator('#buy-instrument')).toHaveValue(name);
   await expect(dialog.locator('#buy-holding-account')).toHaveValue(String(holding.id));
   await dialog.locator('#buy-quantity').fill('5');
@@ -83,8 +84,8 @@ test('an instrument view lists its activity and pre-fills the instrument and its
 
   await page.getByRole('button', { name: 'New transaction', exact: true }).click();
   await expectNoAccessibilityViolations(page, 'instrument view investment entry');
-  await page.getByRole('button', { name: 'Record sell', exact: true }).click();
-  const dialog = page.getByRole('dialog');
+  await openInvestmentActivity(page, 'Record sell');
+  const dialog = page.getByRole('dialog').last();
   await expect(dialog.locator('#sell-instrument')).toHaveValue(name);
   await expect(dialog.locator('#sell-holding-account')).toHaveValue(String(holding.id));
 });

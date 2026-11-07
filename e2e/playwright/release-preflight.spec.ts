@@ -1,3 +1,4 @@
+import { openInvestmentActivity } from './support/investment-entry';
 import { expect, type Page, test } from './support/fixtures';
 import { apiJSON } from './support/api';
 import { monthStartISO, todayISO, todayQIF } from './support/dates';
@@ -97,12 +98,12 @@ test.describe.serial('release preflight journeys', () => {
     });
 
     await page.goto('/app/investments');
-    await page.getByRole('button', { name: 'Record buy' }).click();
+    await openInvestmentActivity(page, 'Record buy');
     await page.getByLabel('Instrument').fill(`Preflight Equity ${suffix}`);
     await page.getByRole('option').filter({ hasText: `Preflight Equity ${suffix}` }).click();
     await page.getByLabel('Holding account').selectOption(String(holding.id));
     await page.getByLabel('Quantity').fill('2.000');
-    await page.getByLabel('Cash account').selectOption(String(cash.id));
+    await page.getByLabel('Pay from').selectOption(String(cash.id));
     await page.getByLabel('Total cost').fill('20.00');
     await page.getByRole('button', { name: 'Record buy' }).last().click();
     // The row also carries an sr-only "View lots for {name}" label, so a bare
@@ -111,12 +112,12 @@ test.describe.serial('release preflight journeys', () => {
     await expect(holdingRow).toBeVisible();
     await expect(holdingRow).toContainText('2.000');
 
-    await page.getByRole('button', { name: 'Record sell' }).click();
+    await openInvestmentActivity(page, 'Record sell');
     await page.getByLabel('Instrument').fill(`Preflight Equity ${suffix}`);
     await page.getByRole('option').filter({ hasText: `Preflight Equity ${suffix}` }).click();
     await page.getByLabel('Holding account').selectOption(String(holding.id));
     await page.getByLabel('Quantity').fill('1.000');
-    await page.getByLabel('Cash account').selectOption(String(cash.id));
+    await page.getByLabel('Pay into').selectOption(String(cash.id));
     await page.getByLabel('Proceeds').fill('12.00');
     await expect(page.getByText('Sell preview')).toBeVisible();
     await page.getByRole('button', { name: 'Confirm sell' }).click();

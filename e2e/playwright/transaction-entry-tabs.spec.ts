@@ -80,7 +80,7 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(investment).toBeEnabled();
     await expect(investment).not.toHaveAttribute('data-muted');
     await expect(entry.getByText('Choose a holding account to record an investment.', { exact: true })).toBeVisible();
-    await expect(entry.getByRole('button', { name: 'Record buy', exact: true })).toBeVisible();
+    await expect(entry.getByRole('combobox', { name: 'Activity', exact: true })).toBeVisible();
     await expectNoAccessibilityViolations(page, `entry investment tab ${theme}`);
     await page.keyboard.press('Home');
     await expect(charge).toBeFocused();

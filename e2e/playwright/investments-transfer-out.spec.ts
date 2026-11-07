@@ -1,3 +1,4 @@
+import { openInvestmentActivity } from './support/investment-entry';
 import { expect, test, type Page } from './support/fixtures';
 import { apiExactText, apiJSON, exactJSON } from './support/api';
 import { readyForLedger } from './support/ledger';
@@ -48,7 +49,7 @@ test('part of a lot transfers out of the book with its computed cost basis on mo
   const s = await setup(page);
   const transferDate = daysFromTodayISO(-10);
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Transfer out investments' }).click();
+  await openInvestmentActivity(page, 'Transfer out investments');
   const dialog = page.getByRole('dialog', { name: 'Transfer investments out' });
   await dialog.getByLabel('Transfer date in this book').fill(transferDate);
   await dialog.getByLabel('Source position').selectOption({ label: s.sourceLabel });

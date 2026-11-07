@@ -1,3 +1,4 @@
+import { openInvestmentActivity } from './support/investment-entry';
 import { expect, test } from './support/fixtures';
 import { readyForLedger } from './support/ledger';
 import { apiJSON } from './support/api';
@@ -43,7 +44,7 @@ test('[acceptance] financial defaults use owner-local today across midnight and 
     await apiJSON(page, 'PUT', '/api/v1/settings/preferences', csrfToken, { time_zone: ownerZone });
 
     await page.goto('/app/investments');
-    await page.getByRole('button', { name: 'Record buy', exact: true }).click();
+    await openInvestmentActivity(page, 'Record buy');
     const buy = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Record buy', exact: true }) });
     await expect(buy.getByLabel('Date', { exact: true })).toHaveValue(today);
 

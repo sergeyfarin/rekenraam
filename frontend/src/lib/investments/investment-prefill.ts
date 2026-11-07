@@ -10,6 +10,9 @@ import { isSubledgerManagedAccountKind } from '#lib/accounts/subledger-accounts.
  */
 export type InvestmentPrefill = {
   holdingAccountID?: number;
+  startingAccountID?: number;
+  transactionDate?: string;
+  memo?: string;
   commodityID?: number;
 };
 

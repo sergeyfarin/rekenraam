@@ -1,3 +1,4 @@
+import { openInvestmentActivity } from './support/investment-entry';
 import { expect, test, type Page } from './support/fixtures';
 import { apiJSON } from './support/api';
 import { readyForLedger } from './support/ledger';
@@ -102,12 +103,12 @@ test('a backdated reinvested dividend shows the sale gain it revises', async ({ 
   await trade(page, p, 'sell', 5, '5', '15000');
 
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Record reinvested dividend' }).click();
-  await page.getByLabel('Date').fill(daysFromTodayISO(-20));
+  await openInvestmentActivity(page, 'Record reinvested dividend');
+  await page.getByRole('dialog').last().getByLabel('Date', { exact: true }).fill(daysFromTodayISO(-20));
   await page.getByLabel('Instrument').fill(p.name);
   await page.getByRole('option').filter({ hasText: p.name }).click();
   await page.getByLabel('Holding account').selectOption(String(p.holdingID));
-  await page.getByLabel('Currency account (for valuation)').selectOption(String(p.cashID));
+  await page.getByLabel('Cost currency').selectOption(String(p.currencyID));
   await page.getByLabel('Quantity').fill('10');
   await page.getByLabel('Dividend amount').fill('20.00');
   await page.getByLabel(/Income account/).selectOption({ index: 1 });

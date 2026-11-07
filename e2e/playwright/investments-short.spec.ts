@@ -1,3 +1,4 @@
+import { openInvestmentActivity } from './support/investment-entry';
 import { expect, test, type Page } from './support/fixtures';
 import { apiJSON } from './support/api';
 import { readyForLedger } from './support/ledger';
@@ -53,7 +54,7 @@ async function setup(page: Page) {
 }
 
 async function fillShortForm(page: Page, s: Awaited<ReturnType<typeof setup>>, date: string, quantity: string, amount: string) {
-  const form = page.getByRole('dialog');
+  const form = page.getByRole('dialog').last();
   await form.getByLabel('Date').fill(date);
   await form.getByLabel('Instrument').fill(s.name);
   await form.getByRole('option').filter({ hasText: s.name }).click();
@@ -67,7 +68,7 @@ async function fillShortForm(page: Page, s: Awaited<ReturnType<typeof setup>>, d
 test('a short sale is opened and covered on mobile with its result shown first', async ({ page }) => {
   const s = await setup(page);
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Record short sale' }).click();
+  await openInvestmentActivity(page, 'Record short sale');
   let form = await fillShortForm(page, s, daysFromTodayISO(-10), '10', '100.00');
   await expect(form).toContainText('not an ordinary sale');
   await form.getByRole('button', { name: 'Confirm short sale' }).click();
@@ -77,7 +78,7 @@ test('a short sale is opened and covered on mobile with its result shown first',
   await expect(row.getByTestId('position-side-short')).toHaveText('Short');
   await expect(row).toContainText('-10');
 
-  await page.getByRole('button', { name: 'Record short cover' }).click();
+  await openInvestmentActivity(page, 'Record short cover');
   form = await fillShortForm(page, s, daysFromTodayISO(-2), '10', '70.00');
   await expect(form.getByTestId('short-cover-result')).toContainText('+30.00');
   await expectNoAccessibilityViolations(page, 'short cover form with preview');
@@ -95,7 +96,7 @@ test('a holding that is long refuses a short sale with a translated reason', asy
   const s = await setup(page);
   await s.buy('5', '5000');
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Record short sale' }).click();
+  await openInvestmentActivity(page, 'Record short sale');
   const form = await fillShortForm(page, s, daysFromTodayISO(-2), '1', '10.00');
   await form.getByRole('button', { name: 'Confirm short sale' }).click();
   await expect(form.getByRole('alert')).toContainText('cannot be long and short of the same instrument');

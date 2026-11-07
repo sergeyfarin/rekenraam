@@ -3,6 +3,7 @@ import { expect, test, type Locator, type Page } from './support/fixtures';
 import { apiJSON } from './support/api';
 import { readyForLedger } from './support/ledger';
 import { todayISO } from './support/dates';
+import { openInvestmentActivity } from './support/investment-entry';
 
 /**
  * #461: the sell and short-cover forms label cost-basis methods through the
@@ -67,8 +68,8 @@ test(`sell and short-cover method labels are translated in ${locale} (#461)`, as
   await page.evaluate((value) => localStorage.setItem('PARAGLIDE_LOCALE', value), locale);
 
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: settings.investments_record_sell, exact: true }).click();
-  let form = page.locator('dialog[open]');
+  await openInvestmentActivity(page, 'sell');
+  let form = page.locator('dialog[aria-labelledby="sell-title"]');
   await fillTrade(form, 'sell', long);
   await expect(form.locator('#sell-method option')).toHaveText(methodLabels);
   await form.locator('#sell-method').selectOption('average_cost');
@@ -78,8 +79,8 @@ test(`sell and short-cover method labels are translated in ${locale} (#461)`, as
   await page.keyboard.press('Escape');
   await expect(form).toBeHidden();
 
-  await page.getByRole('button', { name: settings.investments_record_short_cover, exact: true }).click();
-  form = page.locator('dialog[open]');
+  await openInvestmentActivity(page, 'short-cover');
+  form = page.locator('dialog[aria-labelledby="short-cover-title"]');
   await fillTrade(form, 'short-cover', short);
   await expect(form.locator('#short-cover-method option')).toHaveText(methodLabels);
   await form.locator('#short-cover-method').selectOption('average_cost');

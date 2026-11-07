@@ -104,24 +104,33 @@ func (s *InvestmentService) accountInRole(ctx context.Context, accountID int64, 
 	// Recorded before the first rule is applied, so a rejection and an
 	// acceptance bind to the same version.
 	dependencies.observe(rule)
+	if err := investmentAccountRoleError(rule, date, role); err != nil {
+		return db.PostingAccountRule{}, err
+	}
+	return rule, nil
+}
+
+// Shared by dated entry choices and command validation. Commands still bind
+// and recheck their own account dependencies at the write boundary.
+func investmentAccountRoleError(rule db.PostingAccountRule, date string, role accountRoleForInvestment) error {
 	if !rule.AcceptsPostingsOn(date) {
-		return db.PostingAccountRule{}, ValidationError{Message: role.label + " is not active for postings"}
+		return ValidationError{Message: role.label + " is not active for postings"}
 	}
 	if rule.IsSystem {
-		return db.PostingAccountRule{}, ValidationError{Message: role.label + " cannot be a system account"}
+		return ValidationError{Message: role.label + " cannot be a system account"}
 	}
 	if len(role.allowedClasses) > 0 && !slices.Contains(role.allowedClasses, rule.AccountClass) {
-		return db.PostingAccountRule{}, ValidationError{Message: role.label + " has the wrong account class for this role"}
+		return ValidationError{Message: role.label + " has the wrong account class for this role"}
 	}
 	switch {
 	case role.subledgerManaged && !isSubledgerManagedAccount(rule):
-		return db.PostingAccountRule{}, ValidationError{Message: role.label + " must be a holding account managed by the investment subledger"}
+		return ValidationError{Message: role.label + " must be a holding account managed by the investment subledger"}
 	case !role.subledgerManaged && isSubledgerManagedAccount(rule):
 		// The exemption this command carries would otherwise let the posting
 		// through, and nothing downstream would write a lot for it.
-		return db.PostingAccountRule{}, ValidationError{Message: role.label + " cannot be a holding account managed by the investment subledger"}
+		return ValidationError{Message: role.label + " cannot be a holding account managed by the investment subledger"}
 	}
-	return rule, nil
+	return nil
 }
 
 // requireCommodityKind rejects a commodity that cannot play its part in the
