@@ -699,16 +699,19 @@ themselves (invalid choices stay identified).
   - a register row opened into the panel
   - leaving the page for another path
 
-  They ask only when entered work would be lost: a field differs from what
-  the entry opened with, an activity's working copy holds the owner's work,
-  or the owner changed a shared selection (an explicit Pay from, a holding,
-  a position's currency). A picker that fills itself never counts. A
+  They ask only when entered work would be lost: a field the owner changed
+  and did not change back. That includes posting dates, an explicitly
+  chosen income account, an explicit Pay from, a holding and a position's
+  currency. A default or a picker that fills itself never counts. A
   same-path URL change keeps the entry. Closing the browser tab is left to
   the browser.
 - **Cost currency** is the shared currency, used by positions, Shares in's
   basis and a reinvestment's cost currency. A position picker with the same
   instrument in two cost currencies restores the one chosen; a currency the
-  holding does not carry selects nothing.
+  holding does not carry selects nothing. A position chosen in an earlier
+  activity stays selected when its form reopens. If a new date makes it
+  unavailable, it shows as a disabled *earlier choice* with an
+  explanation, never a blank picker.
 
 ## Widgets
 
