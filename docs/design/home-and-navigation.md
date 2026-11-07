@@ -617,7 +617,7 @@ Guardrails:
 
 ### Investment-entry hierarchy verification (#507)
 
-The account model permits a holding outside a brokerage container and does not enforce brokerage membership. Manual-entry suggestions therefore use only a holding’s direct brokerage parent (or the starting brokerage container) and that container’s direct `brokerage_cash` children, plus the starting cash account. Nested arbitrary account groups and matching institution names do not establish settlement relationships. Missing hierarchy requires a choice, not a stored default. The dated entry-account read shares investment-command role validation; trade-date holdings and settlement-date cash choices may use different snapshots. Reinvestment selects its cost currency directly because it has no cash leg. See the [implementation contract](../plans/transaction-entry-investment-plan.md); #508 owns full activity working-copy preservation.
+The account model permits a holding outside a brokerage container and does not enforce brokerage membership. Manual-entry suggestions therefore use only a holding’s direct brokerage parent (or the starting brokerage container) and that container’s direct `brokerage_cash` children, plus the starting cash account. Nested arbitrary account groups and matching institution names do not establish settlement relationships. Missing hierarchy requires a choice, not a stored default. The dated entry-account read shares investment-command role validation; trade-date holdings and settlement-date cash choices may use different snapshots. Reinvestment selects its cost currency directly because it has no cash leg. See the [implementation contract](../plans/transaction-entry-investment-plan.md); #508 delivers full activity working-copy preservation.
 
 
 ### Entry delivery
@@ -626,7 +626,7 @@ The account model permits a holding outside a brokerage container and does not e
 |---|---|
 | Entry shell and routing: one *New transaction*, four stable tabs with labels and accents, shared entry context with basic preservation and preview invalidation, editable account | #506, delivered 2026-11-05 |
 | Investment mode: brokerage and holding contexts, Activity selector, settlement candidates | #507, delivered 2026-11-07 |
-| Activity-specific restoration across activities and accounts, full acceptance coverage | #508 |
+| Activity-specific restoration across activities and accounts, full acceptance coverage | #508, implemented (PR pending merge) |
 | Move to account for posted transactions | #509 |
 
 #491 tracks the first three slices. Move to account is its own issue.
@@ -663,7 +663,40 @@ tab. Interim choices until the later slices:
 - The approvals this slice has are the payee confirmation and the
   reconciliation override; a tab, account, direction or shape change closes
   either, and the override also rechecks the exact request it reviewed.
-  #508 extends the same rule to investment previews.
+  Resolved by #508: investment previews and reviews live in the open
+  activity form and close with it, so none outlives a switch.
+
+**Delivered in #508 (2026-11-07, PR pending merge).** The entry's shared
+context lives in the editor: its date, description and reference are the
+main date, memo and reference every tab and activity reads and writes. The
+holding, the subject instrument, the currency and an explicitly chosen
+settlement account are shared by stable ID (an automatic suggestion is
+never shared). The Activity selector remembers its choice across tabs. Each
+activity keeps a working copy of its own fields for the life of the entry:
+amounts, charges, secondary dates, lot choices, ratios and declarations.
+Reopening it restores that copy under the current shared context. An emptied
+picker keeps the last shared choice for the others, which validate it
+themselves (invalid choices stay identified).
+- **Unit price (owner decision 2026-11-07).** The trade forms had no
+  unit-price input, so Buy, Sell, Short sale and Short cover gained an
+  optional *Unit price*. With it the total, and in exact mode the gross, is
+  derived and shown read-only. Gross is quantity × unit price. Net adds
+  (buy, cover) or deducts (sell, short sale) each charge in the cash currency
+  that is not paid separately, with a rebate the other way: the backend's
+  net-settlement rule. A product finer than the currency's standard scale is
+  refused with its exact value, never rounded. The price is an entry aid and
+  is not stored.
+- **Carry pairs.** Buy ↔ Sell and Short sale ↔ Short cover keep the quantity
+  and unit price; each keeps its own charges, exact-mode choice, settlement
+  date and basis method. A total typed by hand is dropped when the pair's
+  quantity or price changed elsewhere, with a note to enter it again.
+- **Locking and discarding.** While an investment save is in flight, the
+  tabs and the Activity selector are disabled. Cancel, the close button,
+  Escape in the shared dialog, and leaving the page for another path ask
+  *Discard this transaction?* only when a field differs from what the entry
+  opened with or an activity's working copy holds the owner's work. A
+  same-path URL change keeps the entry. Closing the browser tab is left to
+  the browser.
 
 ## Widgets
 
@@ -1064,7 +1097,7 @@ Sequencing belongs in the roadmap; acceptance in the issues.
 | Density: compact and comfortable rows | #451 |
 | Shell look: olive two-tint rows, joined section tab, green place markers, card contrast | #489 |
 | Search button with centred search dialog | #490 |
-| One transaction entry: shell and ordinary modes (#506, delivered), Investment mode (#507, delivered), preservation (#508) | #491 |
+| One transaction entry: shell and ordinary modes (#506, delivered), Investment mode (#507, delivered), preservation (#508, implemented) | #491 |
 | Move to account for posted transactions | #509 |
 | Report filters take less space above the figures (later: filter bar or side panel, after a task check) | #492 |
 | Two-key navigation shortcuts | #452 |
