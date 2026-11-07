@@ -626,7 +626,7 @@ The account model permits a holding outside a brokerage container and does not e
 |---|---|
 | Entry shell and routing: one *New transaction*, four stable tabs with labels and accents, shared entry context with basic preservation and preview invalidation, editable account | #506, delivered 2026-11-05 |
 | Investment mode: brokerage and holding contexts, Activity selector, settlement candidates | #507, delivered 2026-11-07 |
-| Activity-specific restoration across activities and accounts, full acceptance coverage | #508, implemented (PR pending merge) |
+| Activity-specific restoration across activities and accounts, full acceptance coverage | #508, implemented in PR #521, awaiting merge |
 | Move to account for posted transactions | #509 |
 
 #491 tracks the first three slices. Move to account is its own issue.
@@ -666,7 +666,7 @@ tab. Interim choices until the later slices:
   Resolved by #508: investment previews and reviews live in the open
   activity form and close with it, so none outlives a switch.
 
-**Delivered in #508 (2026-11-07, PR pending merge).** The entry's shared
+**Implemented for #508 (2026-11-07, PR #521, awaiting merge).** The entry's shared
 context lives in the editor: its date, description and reference are the
 main date, memo and reference every tab and activity reads and writes. The
 holding, the subject instrument, the currency and an explicitly chosen
@@ -1097,7 +1097,7 @@ Sequencing belongs in the roadmap; acceptance in the issues.
 | Density: compact and comfortable rows | #451 |
 | Shell look: olive two-tint rows, joined section tab, green place markers, card contrast | #489 |
 | Search button with centred search dialog | #490 |
-| One transaction entry: shell and ordinary modes (#506, delivered), Investment mode (#507, delivered), preservation (#508, implemented) | #491 |
+| One transaction entry: shell and ordinary modes (#506, delivered), Investment mode (#507, delivered), preservation (#508, implemented in PR #521) | #491 |
 | Move to account for posted transactions | #509 |
 | Report filters take less space above the figures (later: filter bar or side panel, after a task check) | #492 |
 | Two-key navigation shortcuts | #452 |
