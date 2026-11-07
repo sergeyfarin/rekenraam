@@ -706,12 +706,16 @@ themselves (invalid choices stay identified).
   same-path URL change keeps the entry. Closing the browser tab is left to
   the browser.
 - **Cost currency** is the shared currency, used by positions, Shares in's
-  basis and a reinvestment's cost currency. A position picker with the same
+  basis, a reinvestment's cost currency and a cash-and-stock merger's cash
+  currency. A position picker with the same
   instrument in two cost currencies restores the one chosen; a currency the
   holding does not carry selects nothing. A position chosen in an earlier
   activity stays selected when its form reopens. If a new date makes it
   unavailable, it shows as a disabled *earlier choice* with an
-  explanation, never a blank picker.
+  explanation, never a blank picker. Lot quantities entered for lots the
+  position does not hold on the new date are named. Nothing is previewed
+  until the owner removes them, so a transfer never quietly moves fewer
+  units.
 
 ## Widgets
 
