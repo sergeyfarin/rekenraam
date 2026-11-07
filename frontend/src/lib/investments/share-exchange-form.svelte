@@ -1,10 +1,11 @@
 <script lang="ts">
+  import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
+  import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
   import { autofocus } from '#lib/components/autofocus.ts';
   import { useOwnerToday } from '#lib/dates/owner-date-context.ts';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import { untrack } from 'svelte';
   import APIFormError from '#lib/components/api-form-error.svelte';
-  import { accountsQueryOptions } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import {
     investmentInstrumentsQueryOptions, datedHoldingsQueryOptions, previewShareExchange, recordShareExchange,
@@ -45,6 +46,7 @@
     prefill?: InvestmentPrefill;
     correction?: { transactionID: number; terms: InvestmentCorrectionShareExchangeTerms };
   } = $props();
+  const entryPrefill = untrack(() => correction ? undefined : prefill);
 
   // A correction carries its evidence edits beside the creation terms.
   type ExchangePayload = ShareExchangeRequest & Pick<ShareExchangeReplacementRequest, 'source_evidence_edits'>;
@@ -55,13 +57,13 @@
     (holding) => holding.key, () => holdingKey, (key) => { holdingKey = key; });
 
   const queryClient = useQueryClient();
-  const accountsQuery = createQuery(() => accountsQueryOptions(false, false));
+
   const instrumentsQuery = createQuery(() => investmentInstrumentsQueryOptions());
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
 
   // Pre-fill once from the exchange being corrected; later edits are the user's.
   const initialTerms = untrack(() => correction?.terms);
-  let effectiveOn = $state(initialTerms?.effective_on ?? '');
+  let effectiveOn = $state(initialTerms?.effective_on ?? entryPrefill?.transactionDate ?? '');
   let holdingKey = $state(initialTerms ? `${initialTerms.holding_account_id}:${initialTerms.commodity_id}` : '');
   let newCommodityID = $state(initialTerms ? String(initialTerms.destination_commodity_id) : '');
   // Null follows the suggested destination; a choice the user makes sticks
@@ -77,8 +79,9 @@
   // replaces the rest of the recorded evidence (#311).
   const initialEvidence = initialTerms?.source_evidence as Record<string, unknown> | undefined;
   let sourceReference = $state(evidenceText(initialEvidence, 'reference'));
-  let memo = $state('');
+  let memo = $state(entryPrefill?.memo ?? '');
   let pending = $state(false);
+  const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(effectiveOn || ownerToday()));
   let formError = $state<unknown>(undefined);
   // The reviewed preview. Editing any field discards it, so the user always
   // records exactly the plan they saw.
@@ -96,8 +99,7 @@
 
   const locale = $derived(getLocale());
   const accounts = $derived((accountsQuery.data?.accounts ?? []).filter((account) =>
-    account.status === 'active' && account.allows_postings &&
-    (account.account_kind === 'security_holding' || account.account_kind === 'fund_holding')));
+    isInvestmentHoldingAccount(account)));
   const instruments = $derived((instrumentsQuery.data?.instruments ?? []).filter((instrument) => instrument.status === 'active'));
   // An exchange takes the whole long holding of an instrument in one account,
   // across every cost currency its lots carry.

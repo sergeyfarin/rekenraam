@@ -29,7 +29,7 @@
 <script lang="ts">
   import { publishPanelHeight } from '#lib/components/sticky-panel.ts';
   import { page } from '$app/state';
-  import { replaceState } from '$app/navigation';
+  import { afterNavigate, replaceState } from '$app/navigation';
   import type { Snippet } from 'svelte';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import Plus from '@lucide/svelte/icons/plus';
@@ -45,6 +45,7 @@
   import type { TransactionRowAction } from './row-action.ts';
   import TransactionDetailPanel from './transaction-detail-panel.svelte';
   import TransactionEditor from './transaction-editor.svelte';
+  import type { InvestmentSaveKind } from './add-transaction.svelte.ts';
   import { providePageAdd } from './add-transaction.svelte.ts';
 
   // The transaction workspace (#185): one list screen plus the shared side
@@ -81,6 +82,8 @@
     | { type: 'just-deleted'; transaction: TransactionResponse };
 
   let panel = $state<PanelState>({ type: 'none' });
+  let investmentSaved = $state<InvestmentSaveKind>();
+  afterNavigate(() => { investmentSaved = undefined; });
   let loadingTransactionID = $state<number | undefined>(undefined);
   let actionPending = $state(false);
   let loadError = $state<unknown>();
@@ -140,6 +143,7 @@
   // The editor reads them once on open; the Investment tab's prefill follows
   // the page as its queries load.
   function openCreate(chosen?: EntryDefaults) {
+    investmentSaved = undefined;
     panel = { type: 'create', chosen: Object.fromEntries(Object.entries(chosen ?? {}).filter(([, value]) => value !== undefined)) };
   }
   const pageDefaults = $derived(create.kind === 'entry' ? create.defaults : undefined);
@@ -192,6 +196,7 @@
   }
 
   async function handleSaved(saved: TransactionResponse) {
+    investmentSaved = undefined;
     await invalidate();
     panel = { type: 'detail', transaction: saved };
   }
@@ -248,6 +253,8 @@
     </button>
   {/if}
 {/snippet}
+
+<p role="status" class={investmentSaved ? 'mb-3 text-sm text-foreground' : 'sr-only'}>{investmentSaved ? investmentSaved === 'write-off' ? m.investments_write_off_success() : m.transactions_entry_saved() : ''}</p>
 
 {#if title}
   <PageHeader {title} {breadcrumbs} actions={create.kind === 'none' ? undefined : createAction} />
@@ -306,7 +313,7 @@
               {csrfToken}
               createDefaults={{ ...pageDefaults, ...panel.chosen }}
               onSaved={handleSaved}
-              onInvestmentSaved={() => (panel = { type: 'none' })}
+              onInvestmentSaved={(kind) => { panel = { type: 'none' }; investmentSaved = kind ?? 'activity'; }}
               onCancel={() => (panel = { type: 'none' })}
             />
           {:else if panel.type === 'just-deleted'}

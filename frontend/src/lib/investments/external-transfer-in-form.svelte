@@ -1,8 +1,10 @@
 <script lang="ts">
+  import { useOwnerToday } from '#lib/dates/owner-date-context.ts';
+  import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
+  import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
   import { autofocus } from '#lib/components/autofocus.ts';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import APIFormError from '#lib/components/api-form-error.svelte';
-  import { accountsQueryOptions } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import { TranslatedFormError } from '#lib/form-errors.ts';
   import {
@@ -28,14 +30,16 @@
     onCancel: () => void;
     prefill?: InvestmentPrefill;
   } = $props();
+  const ownerToday = useOwnerToday();
+  const entryPrefill = untrack(() => prefill);
   const initialPrefill = untrack(() => prefill);
 
   const queryClient = useQueryClient();
-  const accountsQuery = createQuery(() => accountsQueryOptions(false, false));
+
   const instrumentsQuery = createQuery(() => investmentInstrumentsQueryOptions());
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
 
-  let effectiveOn = $state('');
+  let effectiveOn = $state(entryPrefill?.transactionDate ?? '');
   let instrumentID = $state(initialPrefill?.commodityID === undefined ? '' : String(initialPrefill.commodityID));
   let holdingAccountID = $state(initialPrefill?.holdingAccountID === undefined ? '' : String(initialPrefill.holdingAccountID));
   let quantityStr = $state('');
@@ -45,8 +49,9 @@
   let costCommodityID = $state('');
   let originalAcquiredOn = $state('');
   let sourceReference = $state('');
-  let memo = $state('');
+  let memo = $state(entryPrefill?.memo ?? '');
   let pending = $state(false);
+  const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(effectiveOn || ownerToday()));
   let formError = $state<unknown>(undefined);
   // A transfer dated behind later sales replays them (T-117); checkpoint and
   // gain consequences are confirmed together.
@@ -55,8 +60,7 @@
   const instruments = $derived((instrumentsQuery.data?.instruments ?? []).filter((instrument) => instrument.status === 'active'));
   const selectedInstrument = $derived(instruments.find((instrument) => String(instrument.commodity_id) === instrumentID));
   const holdingAccounts = $derived((accountsQuery.data?.accounts ?? []).filter((account) =>
-    account.status === 'active' && account.allows_postings &&
-    (account.account_kind === 'security_holding' || account.account_kind === 'fund_holding')));
+    isInvestmentHoldingAccount(account)));
   const currencies = $derived((currenciesQuery.data?.currencies ?? []).filter((currency) => currency.status === 'active'));
   const currenciesByID = $derived(new Map<number, CurrencyResponse>(
     (currenciesQuery.data?.currencies ?? []).map((currency) => [currency.id, currency])));
@@ -67,7 +71,7 @@
   const loadError = $derived(accountsQuery.isError || instrumentsQuery.isError || currenciesQuery.isError);
   const canSubmit = $derived(
     !loading && !loadError && !!csrfToken && !!effectiveOn && !!selectedInstrument &&
-    !!holdingAccountID && !!quantityStr.trim() && (basisUnknown || !!carriedBasisStr.trim()) && !!costCommodityID
+    holdingAccounts.some((account) => String(account.id) === holdingAccountID) && !!quantityStr.trim() && (basisUnknown || !!carriedBasisStr.trim()) && !!costCommodityID
   );
 
 
@@ -174,8 +178,14 @@
       <select id="transfer-in-account" bind:value={holdingAccountID} required
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         <option value="">{m.investments_form_select_account()}</option>
+      {#if holdingAccountID && !holdingAccounts.some((account) => String(account.id) === holdingAccountID)}
+        <option value={holdingAccountID} disabled>{(accountsQuery.data?.accounts ?? []).find((account) => String(account.id) === holdingAccountID)?.name ?? holdingAccountID}</option>
+      {/if}
         {#each holdingAccounts as account (account.id)}<option value={String(account.id)}>{account.name}</option>{/each}
       </select>
+    {#if accountsQuery.data && holdingAccountID && !holdingAccounts.some((account) => String(account.id) === holdingAccountID)}
+      <p role="alert" class="mt-1 text-sm text-danger">{m.investments_activity_holding_invalid()}</p>
+    {/if}
     </div>
     <div>
       <label for="transfer-in-quantity" class="mb-1 block text-sm font-medium text-foreground">{m.investments_form_quantity()}</label>

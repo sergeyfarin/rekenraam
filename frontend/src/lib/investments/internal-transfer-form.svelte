@@ -1,11 +1,12 @@
 <script lang="ts">
+  import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
+  import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
   import { autofocus } from '#lib/components/autofocus.ts';
   import { untrack } from 'svelte';
   import { useOwnerToday } from '#lib/dates/owner-date-context.ts';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import { parseISO } from 'date-fns';
   import APIFormError from '#lib/components/api-form-error.svelte';
-  import { accountsQueryOptions } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import {
     investmentInstrumentsQueryOptions, datedHoldingsQueryOptions,
@@ -37,17 +38,18 @@
     onCancel: () => void;
     prefill?: InvestmentPrefill;
   } = $props();
+  const entryPrefill = untrack(() => prefill);
 
   // Pre-select the position the screen names (#186).
   usePrefilledPosition(untrack(() => prefill), () => positions,
     (position) => `${position.account_id}:${position.commodity_id}:${position.cost_commodity_id}`, () => sourceKey, (key) => { sourceKey = key; });
 
   const queryClient = useQueryClient();
-  const accountsQuery = createQuery(() => accountsQueryOptions(false, false));
+
   const instrumentsQuery = createQuery(() => investmentInstrumentsQueryOptions());
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
 
-  let effectiveOn = $state('');
+  let effectiveOn = $state(entryPrefill?.transactionDate ?? '');
   // Holdings and lots as they stood on the transfer date, including ones a
   // later sale closed (#166). A transfer behind later history is admitted
   // by replay; the writer rechecks everything at commit (#167).
@@ -60,8 +62,9 @@
   // user may keep one lot per source lot instead (T-135).
   let lineage = $state<'pooled_lot' | 'source_lots'>('pooled_lot');
   let sourceReference = $state('');
-  let memo = $state('');
+  let memo = $state(entryPrefill?.memo ?? '');
   let pending = $state(false);
+  const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(effectiveOn || ownerToday()));
   let formError = $state<unknown>(undefined);
   // The reviewed preview. Editing any field discards it, so the user always
   // records exactly the carried basis they saw.
@@ -76,8 +79,7 @@
   const locale = $derived(getLocale());
   const dateFormatter = $derived(new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'short', day: 'numeric' }));
   const accounts = $derived((accountsQuery.data?.accounts ?? []).filter((account) =>
-    account.status === 'active' && account.allows_postings &&
-    (account.account_kind === 'security_holding' || account.account_kind === 'fund_holding')));
+    isInvestmentHoldingAccount(account)));
   // Long holdings only: transferring a short obligation is not modeled (#173).
   const positions = $derived((positionsQuery.data ?? []).filter((position) =>
     position.position_side === 'long' && coefficientSign(position.quantity_value) > 0 &&

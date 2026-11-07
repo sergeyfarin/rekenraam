@@ -1,3 +1,4 @@
+import { openInvestmentActivity } from './support/investment-entry';
 import { expect, test, type Page } from './support/fixtures';
 import { apiJSON } from './support/api';
 import { readyForLedger } from './support/ledger';
@@ -68,7 +69,7 @@ test('a split of a holding sold since is entered by its date on mobile', async (
   await s.trade('sell', 10, '2', '3000'); // gain 10.00; the holding is closed today
 
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Record split' }).click();
+  await openInvestmentActivity(page, 'Record split');
   const holding = page.getByLabel('Holding', { exact: true });
   // Sold out today, it is still offered as a configured empty holding (#146).
   // An absence check here passed only while the form was still loading.
@@ -96,7 +97,7 @@ test('a return of capital on a holding sold since is entered by its date on mobi
   await s.trade('sell', 10, '2', '3000');
 
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Return of capital', exact: true }).click();
+  await openInvestmentActivity(page, 'Return of capital');
   const dialog = page.getByRole('dialog', { name: 'Record a return of capital' });
   await dialog.getByLabel('Effective date').fill(daysFromTodayISO(-20));
   await dialog.getByLabel('Position').selectOption({ label: s.positionLabel });
@@ -120,7 +121,7 @@ test('an outbound transfer from a lot consumed since lists that lot by its date'
   await s.trade('sell', 5, '3', '6000'); // FIFO: the first lot, basis 30.00
 
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Transfer out investments' }).click();
+  await openInvestmentActivity(page, 'Transfer out investments');
   const dialog = page.getByRole('dialog', { name: 'Transfer investments out' });
   await dialog.getByLabel('Transfer date in this book').fill(daysFromTodayISO(-20));
   await dialog.getByLabel('Source position').selectOption({ label: s.positionLabel });
@@ -144,7 +145,7 @@ test('a dated outbound transfer that a later sale cannot survive is refused by n
   await s.trade('sell', 5, '3', '6000'); // needs all three shares
 
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Transfer out investments' }).click();
+  await openInvestmentActivity(page, 'Transfer out investments');
   const dialog = page.getByRole('dialog', { name: 'Transfer investments out' });
   await dialog.getByLabel('Transfer date in this book').fill(daysFromTodayISO(-20));
   await dialog.getByLabel('Source position').selectOption({ label: s.positionLabel });
@@ -161,7 +162,7 @@ test('an internal move from a lot consumed since is entered by its date on mobil
   await s.trade('sell', 5, '3', '6000'); // FIFO: the first lot, basis 30.00
 
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Move between holdings' }).click();
+  await openInvestmentActivity(page, 'Move between holdings');
   await page.getByLabel('Transfer date in this book').fill(daysFromTodayISO(-20));
   await page.getByLabel('Source position').selectOption({ label: s.positionLabel });
   await page.getByLabel('Destination holding account').selectOption({ label: s.destinationLabel });
@@ -186,7 +187,7 @@ test('a dated internal move that a later sale cannot survive is refused by name'
   await s.trade('sell', 5, '3', '6000'); // needs all three shares
 
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Move between holdings' }).click();
+  await openInvestmentActivity(page, 'Move between holdings');
   await page.getByLabel('Transfer date in this book').fill(daysFromTodayISO(-20));
   await page.getByLabel('Source position').selectOption({ label: s.positionLabel });
   await page.getByLabel('Destination holding account').selectOption({ label: s.destinationLabel });

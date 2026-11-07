@@ -37,11 +37,13 @@
 
   afterNavigate(() => {
     transactionEntry.saved = undefined;
+    transactionEntry.savedInvestment = undefined;
   });
 
   // The open flag never outlives the dialog: after signing out, the next
   // session must not reopen an empty entry.
   onDestroy(() => closeTransactionEntry());
+  const savedMessage = $derived(transactionEntry.savedInvestment === 'write-off' ? m.investments_write_off_success() : m.transactions_entry_saved());
 </script>
 
 {#if transactionEntry.open}
@@ -56,20 +58,20 @@
       csrfToken={sessionQuery.data?.csrf_token}
       createDefaults={transactionEntry.defaults}
       onSaved={saved}
-      onInvestmentSaved={() => closeTransactionEntry()}
+      onInvestmentSaved={(kind) => closeTransactionEntry(undefined, kind ?? 'activity')}
       onCancel={() => closeTransactionEntry()}
     />
   </ModalDialog>
 {/if}
 
 <!-- Mounted before it has text, so the confirmation is announced. -->
-<p role="status" class="sr-only">{transactionEntry.saved ? m.transactions_entry_saved() : ''}</p>
-{#if transactionEntry.saved}
+<p role="status" class="sr-only">{transactionEntry.saved || transactionEntry.savedInvestment ? savedMessage : ''}</p>
+{#if transactionEntry.saved || transactionEntry.savedInvestment}
   {@const added = transactionEntry.saved}
-  <div class="fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-md items-center gap-3 rounded-(--radius-panel) border border-border bg-surface py-2 pr-2 pl-4 text-sm shadow-(--shadow-panel)">
-    <span aria-hidden="true" class="min-w-0 flex-1">{m.transactions_entry_saved()}</span>
-    <a href={`/app/ledger/transactions?transaction_id=${added.id}`} class="inline-flex min-h-11 items-center px-2 font-semibold text-accent underline-offset-4 hover:underline">{m.transactions_entry_view()}</a>
-    <button type="button" aria-label={m.transactions_detail_close()} onclick={() => (transactionEntry.saved = undefined)} class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-muted hover:bg-control-hover hover:text-foreground">
+  <div class="pointer-events-none fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-md items-center gap-3 rounded-(--radius-panel) border border-border bg-surface py-2 pr-2 pl-4 text-sm shadow-(--shadow-panel)">
+    <span aria-hidden="true" class="min-w-0 flex-1">{savedMessage}</span>
+    {#if added}<a href={`/app/ledger/transactions?transaction_id=${added.id}`} class="pointer-events-auto inline-flex min-h-11 items-center px-2 font-semibold text-accent underline-offset-4 hover:underline">{m.transactions_entry_view()}</a>{/if}
+    <button type="button" aria-label={m.transactions_detail_close()} onclick={() => { transactionEntry.saved = undefined; transactionEntry.savedInvestment = undefined; }} class="pointer-events-auto inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-muted hover:bg-control-hover hover:text-foreground">
       <X size={16} aria-hidden="true" />
     </button>
   </div>

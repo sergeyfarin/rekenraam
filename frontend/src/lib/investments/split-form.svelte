@@ -1,10 +1,11 @@
 <script lang="ts">
+  import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
+  import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
   import { autofocus } from '#lib/components/autofocus.ts';
   import { useOwnerToday } from '#lib/dates/owner-date-context.ts';
   import { untrack } from 'svelte';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import APIFormError from '#lib/components/api-form-error.svelte';
-  import { accountsQueryOptions } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import {
     investmentInstrumentsQueryOptions, datedHoldingsQueryOptions, previewInvestmentSplit,
@@ -41,6 +42,7 @@
     prefill?: InvestmentPrefill;
     correction?: { transactionID?: number; operationID?: number; terms: InvestmentCorrectionSplitTerms };
   } = $props();
+  const entryPrefill = untrack(() => correction ? undefined : prefill);
 
   // A correction carries its evidence edits beside the creation terms.
   type SplitPayload = InvestmentSplitRequest & Pick<InvestmentSplitReplacementRequest, 'source_evidence_edits'>;
@@ -51,13 +53,13 @@
     (holding) => holding.key, () => holdingKey, (key) => { holdingKey = key; });
 
   const queryClient = useQueryClient();
-  const accountsQuery = createQuery(() => accountsQueryOptions(false, false));
+
   const instrumentsQuery = createQuery(() => investmentInstrumentsQueryOptions());
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
 
   // Pre-fill once from the split being corrected; later edits are the user's.
   const initialTerms = untrack(() => correction?.terms);
-  let effectiveOn = $state(initialTerms?.effective_on ?? '');
+  let effectiveOn = $state(initialTerms?.effective_on ?? entryPrefill?.transactionDate ?? '');
   let holdingKey = $state(initialTerms ? `${initialTerms.holding_account_id}:${initialTerms.commodity_id}` : '');
   let newUnits = $state(initialTerms ? String(initialTerms.ratio_numerator) : '');
   let oldUnits = $state(initialTerms ? String(initialTerms.ratio_denominator) : '');
@@ -67,8 +69,9 @@
   // recorded evidence exactly (#312).
   const initialEvidence = initialTerms?.source_evidence as Record<string, unknown> | undefined;
   let sourceReference = $state(evidenceText(initialEvidence, 'reference'));
-  let memo = $state('');
+  let memo = $state(entryPrefill?.memo ?? '');
   let pending = $state(false);
+  const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(effectiveOn || ownerToday()));
   let formError = $state<unknown>(undefined);
   // The reviewed preview. Editing any field discards it, so the user always
   // records exactly the plan they saw.
@@ -86,8 +89,7 @@
 
   const locale = $derived(getLocale());
   const accounts = $derived((accountsQuery.data?.accounts ?? []).filter((account) =>
-    account.status === 'active' && account.allows_postings &&
-    (account.account_kind === 'security_holding' || account.account_kind === 'fund_holding')));
+    isInvestmentHoldingAccount(account)));
   // A split applies to the whole holding of a security in one account,
   // across every basis currency its lots carry.
   const holdings = $derived.by(() => {

@@ -1,3 +1,4 @@
+import { openInvestmentActivity } from './support/investment-entry';
 import { expect, test, type Page } from './support/fixtures';
 import { apiJSON } from './support/api';
 import { ensureCurrency, readyForLedger } from './support/ledger';
@@ -66,7 +67,7 @@ async function expenseBalance(page: Page, accountID: number): Promise<string> {
 test('a payment in lieu is recorded, corrected and reversed on mobile', async ({ page }) => {
   const s = await setup(page);
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Record payment in lieu' }).click();
+  await openInvestmentActivity(page, 'Record payment in lieu');
   const form = page.getByRole('dialog', { name: 'Payment in lieu of dividend' });
   await form.getByLabel('Short holding').selectOption(String(s.holdingID));
   await form.getByLabel('Instrument').selectOption(String(s.commodityID));
@@ -147,7 +148,7 @@ test('a payment in lieu correction changes its date, cash account and currency o
 test('unsupported short attribution leaves recorded cash effective with a warning', async ({ page }) => {
   const s = await setup(page);
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Record payment in lieu' }).click();
+  await openInvestmentActivity(page, 'Record payment in lieu');
   const form = page.getByRole('dialog', { name: 'Payment in lieu of dividend' });
   await form.getByLabel('Short holding').selectOption(String(s.holdingID));
   await form.getByLabel('Instrument').selectOption(String(s.commodityID));
@@ -225,7 +226,7 @@ for (const locale of translationLocales) {
     const copy = JSON.parse(readFileSync(new URL(`../../frontend/messages/settings/${locale}.json`, import.meta.url), 'utf8')) as Record<string, string>;
     await page.evaluate(value => localStorage.setItem('PARAGLIDE_LOCALE', value), locale);
     await page.goto('/app/investments');
-    await page.getByRole('button', { name: copy.investments_record_payment_in_lieu, exact: true }).click();
+    await openInvestmentActivity(page, 'payment-in-lieu');
     const entry = page.getByRole('dialog', { name: copy.investments_payment_in_lieu_title, exact: true });
     await expect(entry.locator('#pil-ex-date')).toHaveValue('');
     await entry.locator('#pil-cash').selectOption(String(s.cashID));

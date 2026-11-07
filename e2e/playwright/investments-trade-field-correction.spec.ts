@@ -59,7 +59,7 @@ test.describe('on a phone', () => {
     await page.goto(`/app/ledger/transactions?transaction_id=${misbooked.transaction.id}`);
     await page.getByRole('button', { name: 'Correct buy…' }).click();
     await page.getByLabel('Reason for correction').fill('bought at the other broker a day earlier');
-    await page.getByLabel('Date').fill(daysFromTodayISO(-31));
+    await page.getByRole('dialog').last().getByLabel('Date', { exact: true }).fill(daysFromTodayISO(-31));
     await page.getByLabel('Holding account').selectOption(String(target.id));
     await page.getByRole('button', { name: 'Review and replace' }).click();
 

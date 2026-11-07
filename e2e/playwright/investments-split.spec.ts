@@ -1,3 +1,4 @@
+import { openInvestmentActivity } from './support/investment-entry';
 import { expect, test, type Page } from './support/fixtures';
 import { apiExactText, apiJSON, csrfTokenFor, exactJSON } from './support/api';
 import { readyForLedger } from './support/ledger';
@@ -64,7 +65,7 @@ test('a backdated split previews its lot effect and revises the later sale gain 
   await s.trade('sell', 5, '5', '10000'); // basis 50.00, gain 50.00
 
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Record split' }).click();
+  await openInvestmentActivity(page, 'Record split');
   await page.getByLabel('Holding', { exact: true }).selectOption({ label: s.holdingLabel });
   await page.getByLabel('Split effective date').fill(daysFromTodayISO(-20));
   await page.getByLabel('New shares').fill('2');
@@ -88,7 +89,7 @@ test('an unrepresentable reverse split is refused with a translated reason', asy
   const s = await setup(page);
   await s.trade('buy', 30, '10', '10000');
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Record split' }).click();
+  await openInvestmentActivity(page, 'Record split');
   await page.getByLabel('Holding', { exact: true }).selectOption({ label: s.holdingLabel });
   await page.getByLabel('Split effective date').fill(daysFromTodayISO(-20));
   await page.getByLabel('New shares').fill('1');
@@ -143,7 +144,7 @@ test('reversing a split a later sale depends on is refused with a translated rea
 test('an empty holding records a zero-delta split and a later backdated acquisition applies it on mobile', async ({ page }) => {
   const s = await setup(page);
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Record split' }).click();
+  await openInvestmentActivity(page, 'Record split');
   await page.getByLabel('Holding', { exact: true }).selectOption({ label: s.holdingLabel });
   await page.getByLabel('Split effective date').fill(daysFromTodayISO(-20));
   await page.getByLabel('New shares').fill('2');
@@ -163,7 +164,7 @@ test('an empty holding records a zero-delta split and a later backdated acquisit
 test('a journal-free split is inspected, corrected, settled and reversed by operation on mobile', async ({ page }) => {
   const s = await setup(page);
   await page.goto('/app/investments');
-  await page.getByRole('button', { name: 'Record split' }).click();
+  await openInvestmentActivity(page, 'Record split');
   await page.getByLabel('Holding', { exact: true }).selectOption({ label: s.holdingLabel });
   await page.getByLabel('Split effective date').fill(daysFromTodayISO(-20));
   await page.getByLabel('New shares').fill('2');

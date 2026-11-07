@@ -1,10 +1,12 @@
 <script lang="ts">
+  import { useOwnerToday } from '#lib/dates/owner-date-context.ts';
+  import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
+  import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import { tick, untrack } from 'svelte';
   import { parseISO } from 'date-fns';
   import APIFormError from '#lib/components/api-form-error.svelte';
   import ModalDialog from '#lib/components/modal-dialog.svelte';
-  import { accountsQueryOptions } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions } from '#lib/api/currencies.ts';
   import {
     datedHoldingsQueryOptions, investmentInstrumentsQueryOptions,
@@ -38,17 +40,19 @@
   let { csrfToken, onSaved, onCancel, prefill }: {
     csrfToken: string; onSaved: () => void; onCancel: () => void; prefill?: InvestmentPrefill;
   } = $props();
+  const ownerToday = useOwnerToday();
+  const entryPrefill = untrack(() => prefill);
 
   // Pre-select the position the screen names (#186).
   usePrefilledPosition(untrack(() => prefill), () => holdings,
     (position) => `${position.account_id}:${position.commodity_id}:${position.cost_commodity_id}`, () => holdingKey, (key) => { holdingKey = key; });
 
   const queryClient = useQueryClient();
-  const accountsQuery = createQuery(() => accountsQueryOptions(false, false));
+
   const instrumentsQuery = createQuery(() => investmentInstrumentsQueryOptions());
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
   // Require a deliberate calendar date; discovery and the writer use that slot.
-  let transactionDate = $state('');
+  let transactionDate = $state(entryPrefill?.transactionDate ?? '');
   const holdingsQuery = createQuery(() => datedHoldingsQueryOptions(transactionDate));
   let holdingKey = $state('');
   let quantity = $state('');
@@ -56,6 +60,7 @@
   let quantities = $state<Record<number, string>>({});
   let reason = $state('');
   let pending = $state(false);
+  const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(transactionDate || ownerToday()));
   let formError = $state<unknown>();
   let preview = $state<{
     result: SellPreviewResponse; impact: ReconciliationImpactResponse; payload: InvestmentWriteOffRequest;
@@ -66,8 +71,7 @@
 
   const locale = $derived(getLocale());
   const dateFormatter = $derived(new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'short', day: 'numeric' }));
-  const accounts = $derived((accountsQuery.data?.accounts ?? []).filter(account => account.status === 'active' &&
-    account.allows_postings && (account.account_kind === 'security_holding' || account.account_kind === 'fund_holding')));
+  const accounts = $derived((accountsQuery.data?.accounts ?? []).filter(account => isInvestmentHoldingAccount(account)));
   const instruments = $derived(instrumentsQuery.data?.instruments ?? []);
   const currenciesByID = $derived(new Map((currenciesQuery.data?.currencies ?? []).map(currency => [currency.id, currency])));
   const holdings = $derived((holdingsQuery.data ?? []).filter(holding => holding.position_side === 'long' &&

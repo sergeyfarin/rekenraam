@@ -1,10 +1,14 @@
 <script lang="ts">
+  import EntryAccountStatus from '#lib/investments/entry-account-status.svelte';
+  import { useSettlementCandidates } from '#lib/investments/settlement-candidates.svelte.ts';
+  import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
+  import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
   import { useOwnerToday } from '#lib/dates/owner-date-context.ts';
   import { untrack } from 'svelte';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import APIFormError from '#lib/components/api-form-error.svelte';
   import { m } from '#lib/paraglide/messages.js';
-  import { accountsQueryOptions, type AccountResponse } from '#lib/api/accounts.ts';
+  import type { AccountResponse } from '#lib/api/accounts.ts';
   import { formatEditableAmount } from '#lib/money/amount.ts';
   import { parseDividendAmounts, type AmountFieldError } from '#lib/investments/form-amounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
@@ -55,10 +59,11 @@
     onCancel: () => void;
     prefill?: InvestmentPrefill;
   } = $props();
+  const entryPrefill = untrack(() => prefill);
   const initialPrefill = untrack(() => prefill);
 
   const queryClient = useQueryClient();
-  const accountsQuery = createQuery(() => accountsQueryOptions(false, false));
+
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
   const dividendDefaultsQuery = createQuery(() => ({
     queryKey: ['api', 'investments', 'dividend-defaults'] as const,
@@ -100,10 +105,11 @@
   usePrefilledInstrument(initialPrefill, selectInstrument);
 
   // Form fields
-  let transactionDate = $state(ownerToday());
+  let transactionDate = $state(entryPrefill?.transactionDate ?? ownerToday());
   // cash dividend and separate withholding only
   let exDate = $state('');
   let cashAccountID = $state('');
+  let reinvestmentCurrencyID = $state('');
   let incomeAccountID = $state('');
   let withholdingAccountID = $state('');
   let amountStr = $state('');
@@ -112,8 +118,9 @@
   // reinvested only
   let holdingAccountID = $state(initialPrefill?.holdingAccountID === undefined ? '' : String(initialPrefill.holdingAccountID));
   let quantityStr = $state('');
-  let memo = $state('');
+  let memo = $state(entryPrefill?.memo ?? '');
   let pending = $state(false);
+  const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(transactionDate || ownerToday()));
   let formError = $state<unknown>(undefined);
 
   // Both dividend shapes can be backdated into a reconciled period, so both get
@@ -139,8 +146,7 @@
   const holdingAccounts = $derived(
     (accountsQuery.data?.accounts ?? []).filter(
       (a: AccountResponse) =>
-        (a.account_kind === 'security_holding' || a.account_kind === 'fund_holding') &&
-        a.status === 'active'
+        isInvestmentHoldingAccount(a)
     )
   );
 
@@ -172,7 +178,7 @@
       : []
   );
 
-  const cashCommodityID = $derived(selectedCashAccount?.default_commodity_id);
+  const cashCommodityID = $derived(mode === 'reinvested' ? Number(reinvestmentCurrencyID) || undefined : selectedCashAccount?.default_commodity_id);
   const cashCurrencyCode = $derived(
     cashCommodityID ? (currenciesByID.get(cashCommodityID)?.code ?? '') : ''
   );
@@ -208,7 +214,7 @@
   }
 
   const canSubmitCash = $derived(
-    cashAccountID !== '' &&
+    cashAccounts.some((account) => String(account.id) === cashAccountID) &&
     !!cashCommodityID &&
     (mode === 'withholding' ? withholdingAccountID !== '' : incomeAccountID !== '') &&
     amountStr.trim() !== ''
@@ -216,14 +222,16 @@
 
   const canSubmitReinvested = $derived(
     !!selectedInstrument &&
-    holdingAccountID !== '' &&
-    cashAccountID !== '' &&
+    holdingAccounts.some((account) => String(account.id) === holdingAccountID) &&
     !!cashCommodityID &&
     quantityStr.trim() !== '' &&
     amountStr.trim() !== ''
   );
 
-  const canSubmit = $derived(mode !== 'reinvested' ? canSubmitCash : canSubmitReinvested);
+  const canSubmit = $derived(
+    !accountsQuery.isFetching && !accountsQuery.isError &&
+    (mode !== 'reinvested' ? canSubmitCash : canSubmitReinvested)
+  );
 
   async function handleSubmit(e: Event) {
     e.preventDefault();
@@ -373,6 +381,8 @@
       ? (mode === 'withholding' ? m.investments_withholding_pending() : mode === 'cash' ? m.investments_dividend_pending() : m.investments_reinvested_pending())
       : (mode === 'withholding' ? m.investments_record_withholding() : mode === 'cash' ? m.investments_dividend_submit() : m.investments_reinvested_submit())
   );
+  const chooseSettlement = useSettlementCandidates(() => accountsQuery.data?.accounts,
+    () => Number(holdingAccountID) || undefined, () => cashAccountID, (id) => { cashAccountID = id; }, entryPrefill, untrack(() => mode === 'reinvested'));
 </script>
 
 {#if reconciliationModal}
@@ -388,6 +398,9 @@
 
 <form onsubmit={handleSubmit} aria-busy={pending} class="space-y-4">
   <h2 id={mode === 'withholding' ? 'withholding-title' : mode === 'cash' ? 'dividend-title' : 'reinvested-dividend-title'} class="text-base font-semibold text-foreground">{title}</h2>
+  <EntryAccountStatus pending={accountsQuery.isFetching}
+    error={accountsQuery.error}
+    onRetry={() => queryClient.invalidateQueries({ queryKey: ['api', 'accounts', 'investment-entry'] })} />
 
   <!-- Date -->
   <div>
@@ -481,30 +494,57 @@
         required
       >
         <option value="">{m.investments_form_select_account()}</option>
+      {#if holdingAccountID && !holdingAccounts.some((account) => String(account.id) === holdingAccountID)}
+        <option value={holdingAccountID} disabled>{(accountsQuery.data?.accounts ?? []).find((account) => String(account.id) === holdingAccountID)?.name ?? holdingAccountID}</option>
+      {/if}
         {#each holdingAccounts as acc (acc.id)}
           <option value={String(acc.id)}>{acc.name}</option>
         {/each}
       </select>
+    {#if accountsQuery.data && holdingAccountID && !holdingAccounts.some((account) => String(account.id) === holdingAccountID)}
+      <p role="alert" class="mt-1 text-sm text-danger">{m.investments_activity_holding_invalid()}</p>
+    {/if}
     </div>
   {/if}
 
+  {#if mode === 'reinvested'}
+    <div>
+      <label for="div-cost-currency" class="mb-1 block text-sm font-medium text-foreground">{m.investments_activity_cost_currency()}</label>
+      <select id="div-cost-currency" bind:value={reinvestmentCurrencyID} required
+        class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
+        <option value="">{m.investments_transfer_select_currency()}</option>
+        {#each (currenciesQuery.data?.currencies ?? []).filter((currency) => currency.status === 'active') as currency (currency.id)}
+          <option value={String(currency.id)}>{currency.code}</option>
+        {/each}
+      </select>
+    </div>
+  {:else}
   <!-- Cash account -->
   <div>
     <label for="div-cash-account" class="mb-1 block text-sm font-medium text-foreground">
-      {mode !== 'reinvested' ? m.investments_form_cash_account() : m.investments_form_currency_account()}
+      {mode === 'withholding' ? m.investments_activity_pay_from() : m.investments_activity_pay_into()}
     </label>
-    <select
+    <select onchange={chooseSettlement}
       id="div-cash-account"
       bind:value={cashAccountID}
       class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"
       required
     >
       <option value="">{m.investments_form_select_account()}</option>
+      {#if cashAccountID && !cashAccounts.some((account) => String(account.id) === cashAccountID)}
+        <option value={cashAccountID} disabled>{(accountsQuery.data?.accounts ?? []).find((account) => String(account.id) === cashAccountID)?.name ?? cashAccountID}</option>
+      {/if}
       {#each cashAccounts as acc (acc.id)}
         <option value={String(acc.id)}>{acc.name}</option>
       {/each}
     </select>
+    <p class="mt-1 text-xs text-muted">{cashAccountID ? m.investments_activity_settlement_hint() : m.investments_activity_settlement_choice()}</p>
+    {#if accountsQuery.data && cashAccountID && !cashAccounts.some((account) => String(account.id) === cashAccountID)}
+      <p role="alert" class="mt-1 text-sm text-danger">{m.investments_activity_settlement_invalid()}</p>
+    {/if}
   </div>
+
+  {/if}
 
   <!-- Quantity (reinvested only) -->
   {#if mode === 'reinvested'}

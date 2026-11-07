@@ -338,6 +338,21 @@ func TestLargeBookExportAndSelfCheckStayBounded(t *testing.T) {
 	}
 	assert.Less(t, homeUsage.Wall, 10*time.Second, "home wall time")
 	assert.Less(t, homeUsage.PeakHeap, uint64(256<<20), "home peak heap")
+
+	// Entry account choices are complete beyond the ordinary account-list cap
+	// (#507). Reading hierarchy and command eligibility must not scan holdings
+	// or issue one request/query per account.
+	entry := NewInvestmentService(db.NewInvestmentRepository(writer),
+		NewAccountService(db.NewAccountRepository(writer), nil, nil), transactions, nil)
+	probe = startResourceProbe()
+	entryAccounts, err := entry.EntryAccounts(context.Background(), "2025-01-01")
+	entryUsage := probe.finish()
+	require.NoError(t, err)
+	assert.Len(t, entryAccounts, largeBookGroupAccounts+2*largeBookLeafAccounts)
+	t.Logf("investment entry accounts: wall=%s allocated=%dMiB peak-heap=%dMiB", entryUsage.Wall.Round(time.Millisecond), entryUsage.Allocated>>20, entryUsage.PeakHeap>>20)
+	assert.Less(t, entryUsage.Wall, 5*time.Second, "investment entry account wall time")
+	assert.Less(t, entryUsage.PeakHeap, uint64(64<<20), "investment entry account peak heap")
+
 }
 
 func BenchmarkLargeBookBundleExport(b *testing.B) {
