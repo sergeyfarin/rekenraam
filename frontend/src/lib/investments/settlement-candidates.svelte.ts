@@ -36,7 +36,7 @@ export function useSettlementCandidates(
     // After the select's own binding has stored the choice.
     if (context) queueMicrotask(() => {
       const value = selected();
-      context.shared.settlementAccountID = value ? Number(value) : undefined;
+      context.copies.setShared('settlementAccountID', value ? Number(value) : undefined, true);
     });
   };
 }

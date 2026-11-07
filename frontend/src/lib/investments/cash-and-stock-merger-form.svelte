@@ -34,6 +34,7 @@
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { usePrefilledPosition } from '#lib/investments/investment-prefill.svelte.ts';
+  import { restoredPositionKey } from '#lib/investments/investment-prefill.ts';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
 
   const ownerToday = useOwnerToday();
@@ -62,7 +63,8 @@
   // Pre-select the holding the screen names (#186); a correction keeps its own.
   usePrefilledPosition(untrack(() => correction ? undefined : prefill),
     () => holdings.map((holding) => ({ account_id: holding.accountID, commodity_id: holding.commodityID, key: holding.key })),
-    (holding) => holding.key, () => holdingKey, (key) => { holdingKey = key; });
+    (holding) => holding.key, () => holdingKey, (key) => { holdingKey = key; },
+    restoredPositionKey(untrack(() => correction ? undefined : prefill), false));
 
   const queryClient = useQueryClient();
 
@@ -363,12 +365,14 @@
         <select id="merger-holding" aria-describedby="merger-holding-hint" bind:value={holdingKey} required onchange={selectHolding}
           class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
           <option value="">{m.investments_exchange_select_holding()}</option>
+        {#if holdingKey && !holdings.some((item) => item.key === holdingKey)}<option value={holdingKey} disabled>{m.investments_activity_position_unavailable_option()}</option>{/if}
           {#each holdings as holding (holding.key)}
             <option value={holding.key}>
               {accounts.find((account) => account.id === holding.accountID)?.name} · {instrumentLabel(holding.commodityID)}
             </option>
           {/each}
         </select>
+      {#if positionsQuery.data && holdingKey && !holdings.some((item) => item.key === holdingKey)}<p role="alert" class="mt-1 text-sm text-danger">{m.investments_activity_position_unavailable()}</p>{/if}
         <p id="merger-holding-hint" class="mt-1 text-xs text-muted">{m.investments_dated_holdings_hint()}</p>
       {/if}
     </div>

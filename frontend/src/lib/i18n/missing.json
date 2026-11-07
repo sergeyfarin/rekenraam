@@ -1,8 +1,8 @@
 {
   "counts": {
-    "es": 110,
-    "fr": 110,
-    "de": 110
+    "es": 112,
+    "fr": 112,
+    "de": 112
   },
   "keys": {
     "es": [
@@ -91,6 +91,8 @@
       "investments_activity_pay_from",
       "investments_activity_pay_into",
       "investments_activity_payment_in_lieu",
+      "investments_activity_position_unavailable",
+      "investments_activity_position_unavailable_option",
       "investments_activity_reinvested",
       "investments_activity_sell",
       "investments_activity_settlement_choice",
@@ -203,6 +205,8 @@
       "investments_activity_pay_from",
       "investments_activity_pay_into",
       "investments_activity_payment_in_lieu",
+      "investments_activity_position_unavailable",
+      "investments_activity_position_unavailable_option",
       "investments_activity_reinvested",
       "investments_activity_sell",
       "investments_activity_settlement_choice",
@@ -315,6 +319,8 @@
       "investments_activity_pay_from",
       "investments_activity_pay_into",
       "investments_activity_payment_in_lieu",
+      "investments_activity_position_unavailable",
+      "investments_activity_position_unavailable_option",
       "investments_activity_reinvested",
       "investments_activity_sell",
       "investments_activity_settlement_choice",

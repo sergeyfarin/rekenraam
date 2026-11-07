@@ -1745,5 +1745,7 @@
   "transactions_entry_discard_title": "Deze transactie verwerpen?",
   "transactions_entry_discard_body": "Wat je in deze transactie hebt ingevoerd, is niet opgeslagen en gaat verloren.",
   "transactions_entry_discard_keep": "Verder bewerken",
-  "transactions_entry_discard_confirm": "Verwerpen"
+  "transactions_entry_discard_confirm": "Verwerpen",
+  "investments_activity_position_unavailable_option": "Eerdere keuze, niet beschikbaar op deze datum",
+  "investments_activity_position_unavailable": "De eerder gekozen positie is op deze datum niet beschikbaar. Kies een andere of wijzig de datum."
 }

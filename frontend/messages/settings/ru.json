@@ -1745,5 +1745,7 @@
   "transactions_entry_discard_title": "Отменить эту транзакцию?",
   "transactions_entry_discard_body": "Введённые данные не сохранены и будут потеряны.",
   "transactions_entry_discard_keep": "Продолжить ввод",
-  "transactions_entry_discard_confirm": "Отменить ввод"
+  "transactions_entry_discard_confirm": "Отменить ввод",
+  "investments_activity_position_unavailable_option": "Прежний выбор, недоступен на эту дату",
+  "investments_activity_position_unavailable": "Выбранная ранее позиция недоступна на эту дату. Выберите другую или измените дату."
 }

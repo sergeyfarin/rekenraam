@@ -36,6 +36,7 @@
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { usePrefilledPosition } from '#lib/investments/investment-prefill.svelte.ts';
+  import { restoredPositionKey } from '#lib/investments/investment-prefill.ts';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
 
   let { csrfToken, onSaved, onCancel, prefill }: {
@@ -46,7 +47,8 @@
 
   // Pre-select the position the screen names (#186).
   usePrefilledPosition(untrack(() => prefill), () => holdings,
-    (position) => `${position.account_id}:${position.commodity_id}:${position.cost_commodity_id}`, () => holdingKey, (key) => { holdingKey = key; });
+    (position) => `${position.account_id}:${position.commodity_id}:${position.cost_commodity_id}`, () => holdingKey, (key) => { holdingKey = key; },
+    restoredPositionKey(untrack(() => prefill), true));
 
   const queryClient = useQueryClient();
 
@@ -233,12 +235,14 @@
           <select id="write-off-holding" bind:value={holdingKey} required onchange={changeHolding} aria-describedby="write-off-dated-hint"
             class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm">
             <option value="">{m.investments_form_select_account()}</option>
+        {#if holdingKey && !holdings.some((item) => `${item.account_id}:${item.commodity_id}:${item.cost_commodity_id}` === holdingKey)}<option value={holdingKey} disabled>{m.investments_activity_position_unavailable_option()}</option>{/if}
             {#each holdings as item (`${item.account_id}:${item.commodity_id}:${item.cost_commodity_id}`)}
               <option value={`${item.account_id}:${item.commodity_id}:${item.cost_commodity_id}`}>
                 {accounts.find(account => account.id === item.account_id)?.name} · {instruments.find(inst => inst.commodity_id === item.commodity_id)?.display_name ?? `#${item.commodity_id}`} · {currenciesByID.get(item.cost_commodity_id)?.code}
               </option>
             {/each}
           </select>
+      {#if holdingsQuery.data && holdingKey && !holdings.some((item) => `${item.account_id}:${item.commodity_id}:${item.cost_commodity_id}` === holdingKey)}<p role="alert" class="mt-1 text-sm text-danger">{m.investments_activity_position_unavailable()}</p>{/if}
           <p id="write-off-dated-hint" class="mt-1 text-xs text-muted">{m.investments_dated_holdings_hint()}</p>
         </div>
         {#if holding}

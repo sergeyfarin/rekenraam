@@ -33,6 +33,7 @@
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { usePrefilledPosition } from '#lib/investments/investment-prefill.svelte.ts';
+  import { restoredPositionKey } from '#lib/investments/investment-prefill.ts';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
 
   const ownerToday = useOwnerToday();
@@ -55,7 +56,8 @@
 
   // Pre-select the position the screen names (#186).
   usePrefilledPosition(untrack(() => correction ? undefined : prefill), () => positions,
-    (position) => `${position.account_id}:${position.commodity_id}:${position.cost_commodity_id}`, () => positionKey, (key) => { positionKey = key; });
+    (position) => `${position.account_id}:${position.commodity_id}:${position.cost_commodity_id}`, () => positionKey, (key) => { positionKey = key; },
+    restoredPositionKey(untrack(() => correction ? undefined : prefill), true));
 
   const queryClient = useQueryClient();
 
@@ -296,6 +298,7 @@
       <select id="capital-return-position" aria-describedby="capital-return-position-hint" {@attach autofocus} bind:value={positionKey} required onchange={() => { discardPreview(); eligibleLots = []; quantities = {}; }}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         <option value="">{m.investments_transfer_internal_select_source()}</option>
+        {#if positionKey && !positions.some((item) => `${item.account_id}:${item.commodity_id}:${item.cost_commodity_id}` === positionKey)}<option value={positionKey} disabled>{m.investments_activity_position_unavailable_option()}</option>{/if}
         {#each positions as item (`${item.account_id}:${item.commodity_id}:${item.cost_commodity_id}`)}
           {@const account = accounts.find((candidate: AccountResponse) => candidate.id === item.account_id)}
           {@const instrument = (instrumentsQuery.data?.instruments ?? []).find((candidate) => candidate.commodity_id === item.commodity_id)}
@@ -304,6 +307,7 @@
           </option>
         {/each}
       </select>
+      {#if positionsQuery.data && positionKey && !positions.some((item) => `${item.account_id}:${item.commodity_id}:${item.cost_commodity_id}` === positionKey)}<p role="alert" class="mt-1 text-sm text-danger">{m.investments_activity_position_unavailable()}</p>{/if}
       <p id="capital-return-position-hint" class="mt-1 text-xs text-muted">{m.investments_dated_holdings_hint()}</p>
       {/if}
     </div>

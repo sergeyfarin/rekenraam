@@ -30,23 +30,19 @@ export type PairedTrade = { quantity: string; unitPrice: string };
 /** The trade fields a paired activity keeps in its working copy. */
 export type TradeCopy = PairedTrade & { cashAmount: string; gross: string };
 
-type Copy = { initial: string; values: WorkingCopyValues; ignore: readonly string[] };
+/**
+ * A working copy and, per field, the value it last took by itself (opening,
+ * restoring, a default or suggestion filling in). A field differing from its
+ * baseline was changed by the owner: that is the work closing would lose.
+ */
+type Copy = { values: WorkingCopyValues; baseline: Record<string, string> };
 
-/** The values as loss detection reads them: without fields the form fills by itself. */
-function lossKey(values: WorkingCopyValues, ignore: readonly string[]): string {
-  return JSON.stringify(Object.fromEntries(Object.entries(values).filter(([key]) => !ignore.includes(key))));
-}
+const fieldKey = (value: unknown) => JSON.stringify(value) ?? 'undefined';
 
 export class EntryWorkingCopies {
   shared: SharedEntrySelections = {};
-  /** The selections the entry opened with: the page's holding or instrument. */
-  opening: SharedEntrySelections = {};
-  /**
-   * The owner changed a control in an activity form. Pickers also fill
-   * themselves (a holding's only position), so a shared selection that
-   * differs from the opening counts as work only after the owner acted.
-   */
-  touched = false;
+  /** Each shared selection as the entry opened with it or as it filled itself. */
+  sharedBaseline: SharedEntrySelections = {};
   #copies = new Map<InvestmentActivity, Copy>();
   #pairs = new Map<TradePair, PairedTrade>();
 
@@ -57,30 +53,47 @@ export class EntryWorkingCopies {
   }
 
   /**
-   * Keeps the activity's current fields. The first call for an activity is
-   * what it opened with, so only a later difference is the owner's work.
-   * `ignore` names fields the form fills by itself (a default income
-   * account), which are restored but never count as work to lose.
+   * Keeps the activity's current fields. `owner` says whether this change
+   * came from the owner's own input; any other change (the first keep, a
+   * default arriving, a picker filling itself) moves that field's baseline.
    */
-  keep(activity: InvestmentActivity, values: WorkingCopyValues, ignore: readonly string[] = []): void {
-    const existing = this.#copies.get(activity);
+  keep(activity: InvestmentActivity, values: WorkingCopyValues, owner: boolean): void {
     const copied = structuredClone(values);
-    if (existing) existing.values = copied;
-    else this.#copies.set(activity, { initial: lossKey(copied, ignore), values: copied, ignore });
+    const existing = this.#copies.get(activity);
+    if (!existing) {
+      this.#copies.set(activity, {
+        values: copied,
+        baseline: Object.fromEntries(Object.entries(copied).map(([key, value]) => [key, fieldKey(value)]))
+      });
+      return;
+    }
+    if (!owner) {
+      for (const [key, value] of Object.entries(copied)) {
+        if (fieldKey(value) !== fieldKey(existing.values[key])) existing.baseline[key] = fieldKey(value);
+      }
+    }
+    existing.values = copied;
+  }
+
+  /** Records a shared selection; one not made by the owner becomes its baseline. */
+  setShared<K extends keyof SharedEntrySelections>(key: K, value: SharedEntrySelections[K], owner: boolean): void {
+    this.shared[key] = value;
+    if (!owner) this.sharedBaseline[key] = value;
   }
 
   /**
-   * True when closing the entry would lose something the owner entered: an
-   * activity's own fields, or a shared selection the owner changed from what
-   * the entry opened with (an explicit settlement choice included).
+   * True when closing the entry would lose something the owner entered: a
+   * field of an activity, or a shared selection, the owner changed and did
+   * not change back.
    */
   hasUnsavedWork(): boolean {
     for (const copy of this.#copies.values()) {
-      if (lossKey(copy.values, copy.ignore) !== copy.initial) return true;
+      for (const [key, value] of Object.entries(copy.values)) {
+        if (fieldKey(value) !== (copy.baseline[key] ?? fieldKey(undefined))) return true;
+      }
     }
-    if (!this.touched) return false;
     return (Object.keys(this.shared) as (keyof SharedEntrySelections)[]).some((key) =>
-      this.shared[key] !== undefined && this.shared[key] !== this.opening[key]);
+      this.shared[key] !== this.sharedBaseline[key]);
   }
 
   pairOf(activity: InvestmentActivity): PairedTrade | undefined {

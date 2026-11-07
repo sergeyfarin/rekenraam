@@ -1745,5 +1745,7 @@
   "transactions_entry_discard_title": "Discard this transaction?",
   "transactions_entry_discard_body": "What you entered in this transaction has not been saved and will be lost.",
   "transactions_entry_discard_keep": "Keep editing",
-  "transactions_entry_discard_confirm": "Discard"
+  "transactions_entry_discard_confirm": "Discard",
+  "investments_activity_position_unavailable_option": "Earlier choice, not available on this date",
+  "investments_activity_position_unavailable": "The position chosen earlier is not available on this date. Choose another one, or change the date."
 }

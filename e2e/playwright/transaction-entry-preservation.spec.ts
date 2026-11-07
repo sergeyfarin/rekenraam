@@ -420,3 +420,74 @@ test('account selections are locked while the investment save is pending (#521 r
     release();
   }
 });
+
+test('an income account chosen alone is work to lose (#521 re-review)', async ({ page }) => {
+  const s = await setup(page);
+  await page.goto(`/app/ledger/accounts/${s.holding.id}/register`);
+  await page.getByRole('button', { name: 'New transaction', exact: true }).click();
+  await openInvestmentActivity(page, 'Cash dividend');
+  const form = page.getByRole('dialog').filter({ has: page.locator('#div-income-account') });
+  const value = await form.locator('#div-income-account option').evaluateAll(options => options.map(o => (o as HTMLOptionElement).value).find(v => v !== '')!);
+  expect(value).toBeTruthy();
+  await form.locator('#div-income-account').selectOption(value);
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  const entry = page.getByRole('region', { name: 'New transaction', exact: true });
+  await entry.getByRole('button', { name: 'Cancel', exact: true }).last().click();
+  await expect(page.getByRole('alertdialog', { name: 'Discard this transaction?' })).toBeVisible();
+});
+
+async function seedBuy(s: Awaited<ReturnType<typeof setup>>, page: Page) {
+  await apiJSON(page, 'POST', '/api/v1/investments/buy', s.csrfToken, {
+    transaction_date: daysFromTodayISO(-5), commodity_id: s.instrument.commodity_id, holding_account_id: s.holding.id,
+    cash_account_id: s.cash.id, quantity_value: '2', quantity_scale: 0,
+    cash_amount_value: '2000', cash_amount_scale: 2, cash_commodity_id: s.currencyID
+  });
+}
+
+test('undoing the only typed change leaves an automatic position clean (#521 re-review)', async ({ page }) => {
+  const s = await setup(page);
+  await seedBuy(s, page);
+  await page.goto(`/app/ledger/accounts/${s.holding.id}/register`);
+  await page.getByRole('button', { name: 'New transaction', exact: true }).click();
+  await openInvestmentActivity(page, 'Shares out');
+  const form = page.getByRole('dialog').filter({ has: page.locator('#external-transfer-out-source') });
+  await expect(form.locator('#external-transfer-out-source')).not.toHaveValue('');
+  await form.locator('#external-transfer-out-memo').fill('temporary');
+  await form.locator('#external-transfer-out-memo').fill('');
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  const entry = page.getByRole('region', { name: 'New transaction', exact: true });
+  await entry.getByRole('button', { name: 'Cancel', exact: true }).last().click();
+  await expect(entry).toBeHidden();
+  await expect(page.getByRole('alertdialog', { name: 'Discard this transaction?' })).toHaveCount(0);
+});
+
+test('a selected position invalidated by a new main date stays identified (#521 re-review)', async ({ page }) => {
+  const s = await setup(page);
+  await seedBuy(s, page);
+  await page.goto(`/app/ledger/accounts/${s.holding.id}/register`);
+  await page.getByRole('button', { name: 'New transaction', exact: true }).click();
+  await openInvestmentActivity(page, 'Shares out');
+  const form = page.getByRole('dialog').filter({ has: page.locator('#external-transfer-out-source') });
+  const chosen = `${s.holding.id}:${s.instrument.commodity_id}:${s.currencyID}`;
+  await expect(form.locator('#external-transfer-out-source')).toHaveValue(chosen);
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await openInvestmentActivity(page, 'Buy');
+  const trade = page.getByRole('dialog').filter({ has: page.locator('#buy-quantity') });
+  await trade.locator('#buy-date').fill(daysFromTodayISO(-7));
+  await trade.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await openInvestmentActivity(page, 'Shares out');
+  await expect(page.locator('#external-transfer-out-date')).toHaveValue(daysFromTodayISO(-7));
+  await expect(page.locator('#external-transfer-out-source')).toHaveValue(chosen);
+  await expect(form.getByRole('alert')).toBeVisible();
+});
+
+test('a posting-date-only change counts as unsaved work (#521 re-review)', async ({ page }) => {
+  const s = await setup(page);
+  await page.goto(`/app/ledger/accounts/${s.checking.id}/register`);
+  await page.getByRole('button', { name: 'New transaction', exact: true }).click();
+  const entry = page.getByRole('region', { name: 'New transaction', exact: true });
+  await entry.getByRole('button', { name: 'Posted on another day' }).click();
+  await entry.locator('input[aria-describedby="transaction-posted-on-hint"]').fill(daysFromTodayISO(-1));
+  await entry.getByRole('button', { name: 'Cancel', exact: true }).last().click();
+  await expect(page.getByRole('alertdialog', { name: 'Discard this transaction?' })).toBeVisible();
+});

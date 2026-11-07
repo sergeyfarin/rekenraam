@@ -126,7 +126,6 @@
   // New transaction's working copy and shared context (#508).
   const workingCopy = useEntryActivity(untrack(() => mode === 'reinvested' ? 'reinvested' : mode === 'withholding' ? 'withholding' : 'dividend'), {
     values: () => ({ exDate, incomeAccountID, withholdingAccountID, amountStr, withholdingStr, showWithholding, quantityStr }),
-    filledByForm: ['incomeAccountID', 'withholdingAccountID'],
     date: () => transactionDate,
     memo: () => memo,
     holding: () => Number(holdingAccountID) || undefined,

@@ -602,7 +602,7 @@
       ];
       formError = undefined;
       workBaseline = untrack(entryWork);
-      entry.copies.opening = untrack(() => ({
+      entry.copies.sharedBaseline = untrack(() => ({
         holdingAccountID: createDefaults?.investment?.holdingAccountID,
         commodityID: createDefaults?.investment?.commodityID
       }));
@@ -1226,9 +1226,12 @@
   // lost: a field differs from what the entry opened with, or an investment
   // activity's working copy holds the owner's work.
   function entryWork(): string {
+    // Every field the owner enters, financial dates included (#521 review);
+    // never one the form fills by itself (a currency from the account).
     return JSON.stringify([transactionDate, payeeSearch, description, categoryID, amountStr, accountID,
-      noteMarkdown, externalRefHint, tagIDs, sentStr, receivedStr, feeStr, transferToID,
-      splitLegs.map((leg) => [leg.accountID, leg.amountStr, leg.memo])]);
+      accountPostedOn, noteMarkdown, externalRefHint, tagIDs, sentStr, receivedStr, feeStr, feePaidBy,
+      feeAccountID, conversionSide, transferToID, transferToCommodityID, leavesOn, arrivesOn,
+      splitLegs.map((leg) => [leg.accountID, leg.commodityID, leg.amountStr, leg.memo, leg.postedOn])]);
   }
   let workBaseline: string | undefined;
   function hasUnsavedWork(): boolean {

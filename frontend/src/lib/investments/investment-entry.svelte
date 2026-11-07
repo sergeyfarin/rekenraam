@@ -57,9 +57,9 @@
   /** What the opened form starts from: the page's prefill, then the entry's shared context. */
   let openedPrefill = $state.raw<InvestmentPrefill | undefined>(undefined);
   // Only the owner's input dispatches these: a picker that fills itself sets
-  // state without a DOM event.
-  function markTouched() {
-    if (entry) entry.copies.touched = true;
+  // state without a DOM event, so what changes while one is handled is theirs.
+  function markOwnerInput() {
+    entry?.markOwnerInput();
   }
   function currentPrefill(): InvestmentPrefill | undefined {
     if (!entry) return prefill;
@@ -69,6 +69,9 @@
       holdingAccountID: shared.holdingAccountID ?? prefill?.holdingAccountID,
       commodityID: shared.commodityID ?? prefill?.commodityID,
       currencyID: shared.currencyID,
+      // An earlier activity's position stays the choice when the form reopens,
+      // even when it no longer fits (#521 review).
+      restoredSelection: shared.holdingAccountID !== undefined && shared.commodityID !== undefined,
       transactionDate: entry.date || prefill?.transactionDate,
       memo: entry.memo,
       reference: entry.reference
@@ -129,7 +132,7 @@
 </div>
 
 <!-- Any change the owner makes in an activity form is entered work (#508). -->
-<div class="contents" onchange={markTouched} oninput={markTouched}>
+<div class="contents" onchangecapture={markOwnerInput} oninputcapture={markOwnerInput}>
 {#if active === 'write-off'}
   <WriteOffForm {csrfToken} prefill={openedPrefill} onSaved={saved} onCancel={close} />
 {:else if active !== null}

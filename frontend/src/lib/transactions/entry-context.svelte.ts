@@ -27,6 +27,21 @@ export class EntryContext {
   /** An investment save is in flight: account, tab and activity are locked. */
   saving = $state(false);
   readonly copies = new EntryWorkingCopies();
+  /**
+   * True while the owner's own input event is being handled, including the
+   * effects it causes (bindings, derived totals). A change outside it (a
+   * query arriving, a picker filling itself) is not the owner's work.
+   */
+  ownerInput = false;
+  #inputTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** An activity form received the owner's input or change event. */
+  markOwnerInput(): void {
+    this.ownerInput = true;
+    clearTimeout(this.#inputTimer);
+    // After the event's handlers and Svelte's effect flush (microtasks).
+    this.#inputTimer = setTimeout(() => { this.ownerInput = false; }, 0);
+  }
   #access: EntryAccess;
 
   constructor(access: EntryAccess) {
@@ -72,8 +87,6 @@ export type ActivityBinding<T extends WorkingCopyValues> = {
   correction?: boolean;
   /** The fields only this activity has; restored when it opens again. */
   values: () => T;
-  /** Fields among `values` the form fills by itself; never counted as unsaved work. */
-  filledByForm?: readonly (keyof T & string)[];
   /** The activity's main date; secondary dates belong in `values`. */
   date?: () => string;
   memo?: () => string;
@@ -103,7 +116,7 @@ export function useEntryActivity<T extends WorkingCopyValues>(
   const restored = context.copies.restore<T>(activity);
   $effect(() => {
     const values = $state.snapshot(binding.values()) as WorkingCopyValues;
-    untrack(() => context.copies.keep(activity, values, binding.filledByForm));
+    untrack(() => context.copies.keep(activity, values, context.ownerInput));
   });
   // An emptied date keeps the last real one: the main date is never blank.
   if (binding.date) follow(binding.date, (value) => { if (value) context.date = value; });
@@ -112,9 +125,12 @@ export function useEntryActivity<T extends WorkingCopyValues>(
   // A holding, instrument or currency is shared once chosen. An emptied
   // picker (a dated list reloading, a write-off date change) keeps the last
   // choice for the other activities, which validate it themselves.
-  if (binding.holding) follow(binding.holding, (value) => { if (value !== undefined) context.shared.holdingAccountID = value; });
-  if (binding.instrument) follow(binding.instrument, (value) => { if (value !== undefined) context.shared.commodityID = value; });
-  if (binding.currency) follow(binding.currency, (value) => { if (value !== undefined) context.shared.currencyID = value; });
+  const share = (key: 'holdingAccountID' | 'commodityID' | 'currencyID') => (value: number | undefined) => {
+    if (value !== undefined) context.copies.setShared(key, value, context.ownerInput);
+  };
+  if (binding.holding) follow(binding.holding, share('holdingAccountID'));
+  if (binding.instrument) follow(binding.instrument, share('commodityID'));
+  if (binding.currency) follow(binding.currency, share('currencyID'));
   $effect(() => {
     context.saving = binding.pending();
     return () => { context.saving = false; };

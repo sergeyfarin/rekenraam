@@ -6,7 +6,7 @@ describe('EntryWorkingCopies (#508)', () => {
   it('restores what an activity was left with, as an independent copy', () => {
     const copies = new EntryWorkingCopies();
     const charges = [{ amount: '1' }];
-    copies.keep('buy', { exactMode: true, charges });
+    copies.keep('buy', { exactMode: true, charges }, false);
     charges[0].amount = 'changed after keep';
     const restored = copies.restore<{ exactMode: boolean; charges: { amount: string }[] }>('buy')!;
     expect(restored).toEqual({ exactMode: true, charges: [{ amount: '1' }] });
@@ -15,29 +15,37 @@ describe('EntryWorkingCopies (#508)', () => {
     expect(copies.restore('sell')).toBeUndefined();
   });
 
-  it('counts only changes after an activity opened as unsaved work', () => {
+  it('counts only the owner’s changes, never a field that filled itself (#521 review)', () => {
     const copies = new EntryWorkingCopies();
-    copies.keep('split', { ratio: '' });
-    copies.keep('dividend', { amount: '' });
+    copies.keep('split', { ratio: '' }, false);
+    copies.keep('dividend', { amount: '', incomeAccountID: '' }, false);
     expect(copies.hasUnsavedWork()).toBe(false);
-    copies.keep('split', { ratio: '2:1' });
+    // A default income account arriving later is not work…
+    copies.keep('dividend', { amount: '', incomeAccountID: '4' }, false);
+    expect(copies.hasUnsavedWork()).toBe(false);
+    // …but the owner choosing another one is, even with nothing else entered.
+    copies.keep('dividend', { amount: '', incomeAccountID: '5' }, true);
     expect(copies.hasUnsavedWork()).toBe(true);
-    copies.keep('split', { ratio: '' });
+    copies.keep('dividend', { amount: '', incomeAccountID: '4' }, true);
+    expect(copies.hasUnsavedWork()).toBe(false);
+    copies.keep('split', { ratio: '2:1' }, true);
+    expect(copies.hasUnsavedWork()).toBe(true);
+    copies.keep('split', { ratio: '' }, true);
     expect(copies.hasUnsavedWork()).toBe(false);
   });
 
-  it('counts a shared selection the owner changed, never one a picker filled by itself (#508 review)', () => {
+  it('counts a shared selection the owner changed, never one a picker filled by itself (#521 review)', () => {
     const copies = new EntryWorkingCopies();
-    copies.opening = { holdingAccountID: 7 };
-    copies.shared.holdingAccountID = 7;
-    copies.shared.currencyID = 3;
+    copies.sharedBaseline = { holdingAccountID: 7 };
+    copies.setShared('holdingAccountID', 7, false);
     // A holding's only position filled the currency; the owner did nothing.
+    copies.setShared('currencyID', 3, false);
     expect(copies.hasUnsavedWork()).toBe(false);
-    copies.touched = true;
+    copies.setShared('currencyID', 4, true);
     expect(copies.hasUnsavedWork()).toBe(true);
-    delete copies.shared.currencyID;
+    copies.setShared('currencyID', 3, true);
     expect(copies.hasUnsavedWork()).toBe(false);
-    copies.shared.settlementAccountID = 12;
+    copies.setShared('settlementAccountID', 12, true);
     expect(copies.hasUnsavedWork()).toBe(true);
   });
 

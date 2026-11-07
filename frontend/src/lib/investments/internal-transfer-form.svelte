@@ -29,6 +29,7 @@
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { usePrefilledPosition } from '#lib/investments/investment-prefill.svelte.ts';
+  import { restoredPositionKey } from '#lib/investments/investment-prefill.ts';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
 
   const ownerToday = useOwnerToday();
@@ -43,7 +44,8 @@
 
   // Pre-select the position the screen names (#186).
   usePrefilledPosition(untrack(() => prefill), () => positions,
-    (position) => `${position.account_id}:${position.commodity_id}:${position.cost_commodity_id}`, () => sourceKey, (key) => { sourceKey = key; });
+    (position) => `${position.account_id}:${position.commodity_id}:${position.cost_commodity_id}`, () => sourceKey, (key) => { sourceKey = key; },
+    restoredPositionKey(untrack(() => prefill), true));
 
   const queryClient = useQueryClient();
 
@@ -264,6 +266,7 @@
         onchange={() => { quantities = {}; pooledQuantity = ''; lineage = 'pooled_lot'; destinationAccountID = ''; discardPreview(); }}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         <option value="">{m.investments_transfer_internal_select_source()}</option>
+        {#if sourceKey && !positions.some((item) => `${item.account_id}:${item.commodity_id}:${item.cost_commodity_id}` === sourceKey)}<option value={sourceKey} disabled>{m.investments_activity_position_unavailable_option()}</option>{/if}
         {#each positions as position (`${position.account_id}:${position.commodity_id}:${position.cost_commodity_id}`)}
           {@const account = accounts.find((item) => item.id === position.account_id)}
           {@const instrument = (instrumentsQuery.data?.instruments ?? []).find((item) => item.commodity_id === position.commodity_id)}
@@ -273,6 +276,7 @@
           </option>
         {/each}
       </select>
+      {#if positionsQuery.data && sourceKey && !positions.some((item) => `${item.account_id}:${item.commodity_id}:${item.cost_commodity_id}` === sourceKey)}<p role="alert" class="mt-1 text-sm text-danger">{m.investments_activity_position_unavailable()}</p>{/if}
       <p id="internal-transfer-source-hint" class="mt-1 text-xs text-muted">{m.investments_dated_holdings_hint()}</p>
     </div>
     {#if sourcePosition}
