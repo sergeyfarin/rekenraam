@@ -1,4 +1,6 @@
 <script lang="ts">
+  import UnavailableAllocations from '#lib/investments/unavailable-allocations.svelte';
+  import { unavailableAllocations, withoutAllocations } from '#lib/investments/lot-allocations.ts';
   import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
   import EntryAccountStatus from '#lib/investments/entry-account-status.svelte';
   import { useSettlementCandidates } from '#lib/investments/settlement-candidates.svelte.ts';
@@ -137,8 +139,11 @@
     instrumentsQuery.isPending || currenciesQuery.isPending);
   const loadError = $derived(accountsQuery.isError || positionsQuery.isError ||
     instrumentsQuery.isError || currenciesQuery.isError);
+  // Restored quantities on lots not held on this date (#521 review).
+  const unavailableLots = $derived(eligibleLots.length > 0 ? unavailableAllocations(quantities, eligibleLots.map((lot) => lot.lot_id)) : []);
   const canPreview = $derived(!cashAccountsQuery.isFetching && !cashAccountsQuery.isError && !loading && !loadError && !!position && cashAccounts.some((account) => String(account.id) === cashAccountID) &&
-    !!effectiveOn && !!paymentOn && !!amount.trim() && (!correction || !!reason.trim()));
+    !!effectiveOn && !!paymentOn && !!amount.trim() && (!correction || !!reason.trim()) &&
+    unavailableLots.length === 0);
   const modalGainRows = $derived(preview?.gainImpact
     ? gainImpactRows(preview.gainImpact.changes, gainImpactCurrency(currenciesByID), locale) : []);
 
@@ -406,6 +411,7 @@
     {/if}
     </fieldset>
   {/if}
+  {#if unavailableLots.length > 0}<UnavailableAllocations onRemove={() => { quantities = withoutAllocations(quantities, unavailableLots); }} />{/if}
   <APIFormError error={formError} id="capital-return-form-error" />
   <div class="flex flex-wrap justify-end gap-3">
     <button type="button" onclick={onCancel}

@@ -75,10 +75,14 @@ export class EntryWorkingCopies {
     existing.values = copied;
   }
 
-  /** Records a shared selection; one not made by the owner becomes its baseline. */
+  /**
+   * Records a shared selection. A change not made by the owner becomes its
+   * baseline; an automatic write of the value already there (a form
+   * restoring the owner's earlier choice) keeps its ownership (#521 review).
+   */
   setShared<K extends keyof SharedEntrySelections>(key: K, value: SharedEntrySelections[K], owner: boolean): void {
+    if (!owner && this.shared[key] !== value) this.sharedBaseline[key] = value;
     this.shared[key] = value;
-    if (!owner) this.sharedBaseline[key] = value;
   }
 
   /**

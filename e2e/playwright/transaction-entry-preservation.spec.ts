@@ -491,3 +491,169 @@ test('a posting-date-only change counts as unsaved work (#521 re-review)', async
   await entry.getByRole('button', { name: 'Cancel', exact: true }).last().click();
   await expect(page.getByRole('alertdialog', { name: 'Discard this transaction?' })).toBeVisible();
 });
+
+async function start(page: Page, accountID: number) {
+  await page.goto(`/app/ledger/accounts/${accountID}/register`);
+  await page.getByRole('button', { name: 'New transaction', exact: true }).click();
+  return page.getByRole('region', { name: 'New transaction', exact: true });
+}
+
+async function cancelEntry(page: Page) {
+  const entry = page.getByRole('region', { name: 'New transaction', exact: true });
+  await entry.getByRole('button', { name: 'Cancel', exact: true }).last().click();
+  await expect(page.getByRole('alertdialog', { name: 'Discard this transaction?' })).toBeVisible();
+}
+
+async function position(s: Awaited<ReturnType<typeof setup>>, page: Page, currency = s.currencyID, cash = s.cash.id) {
+  await apiJSON(page, 'POST', '/api/v1/investments/buy', s.csrfToken, {
+    transaction_date: daysFromTodayISO(-5), commodity_id: s.instrument.commodity_id, holding_account_id: s.holding.id,
+    cash_account_id: cash, quantity_value: '2', quantity_scale: 0,
+    cash_amount_value: '2000', cash_amount_scale: 2, cash_commodity_id: currency
+  });
+}
+
+test('(#521 third review) choosing an instrument through autocomplete counts as owner work', async ({ page }) => {
+  const s = await setup(page);
+  const entry = await start(page, s.checking.id);
+  await entry.getByRole('tab', { name: 'Investment', exact: true }).click();
+  await openInvestmentActivity(page, 'Buy');
+  const form = page.getByRole('dialog').filter({ has: page.locator('#buy-quantity') });
+  await form.locator('#buy-instrument').fill(`KP${s.suffix}`);
+  await form.getByRole('listbox').getByRole('option').click();
+  await expect(form.locator('#buy-instrument')).toHaveValue(`Keep shares ${s.suffix}`);
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await cancelEntry(page);
+});
+
+test('(#521 third review) an explicitly chosen cash entry currency counts as owner work', async ({ page }) => {
+  const s = await setup(page);
+  const receivable = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/accounts', s.csrfToken, {
+    name: `Review receivable ${s.suffix}`, account_class: 'asset', account_kind: 'receivable', allows_postings: true
+  });
+  const entry = await start(page, receivable.id);
+  await entry.getByRole('combobox', { name: 'Currency', exact: true }).selectOption(String(s.currencyID));
+  await cancelEntry(page);
+});
+
+test('(#521 third review) an explicit cost currency stays owner work after automatic position restoration', async ({ page }) => {
+  const s = await setup(page);
+  const eur = await ensureCurrency(page, s.csrfToken, 'EUR', 'Euro');
+  const eurCash = await createCashAccount(page, s.csrfToken, `EUR cash ${s.suffix}`, eur, daysFromTodayISO(-10));
+  await position(s, page);
+  await position(s, page, eur, eurCash.id);
+  await start(page, s.holding.id);
+  await openInvestmentActivity(page, 'Shares in');
+  const incoming = page.getByRole('dialog').filter({ has: page.locator('#transfer-in-currency') });
+  await incoming.locator('#transfer-in-currency').selectOption(String(eur));
+  await incoming.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await openInvestmentActivity(page, 'Shares out');
+  const outgoing = page.getByRole('dialog').filter({ has: page.locator('#external-transfer-out-source') });
+  await expect(outgoing.locator('#external-transfer-out-source')).toHaveValue(`${s.holding.id}:${s.instrument.commodity_id}:${eur}`);
+  await outgoing.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await cancelEntry(page);
+});
+
+test('(#521 third review) merger cost currency is shared with a subsequent reinvestment', async ({ page }) => {
+  const s = await setup(page);
+  await position(s, page);
+  const eur = await ensureCurrency(page, s.csrfToken, 'EUR', 'Euro');
+  const eurCash = await createCashAccount(page, s.csrfToken, `Merger EUR cash ${s.suffix}`, eur, daysFromTodayISO(-10));
+  await position(s, page, eur, eurCash.id);
+  const target = await apiJSON<{ commodity_id: number }>(page, 'POST', '/api/v1/investments/instruments', s.csrfToken, {
+    commodity_code: `NEW${s.suffix}`, instrument_type: 'stock', display_name: `Target ${s.suffix}`,
+    quantity_scale: 0, price_scale: 2, quote_commodity_id: s.currencyID, effective_from: daysFromTodayISO(-10)
+  });
+  await start(page, s.holding.id);
+  await openInvestmentActivity(page, 'Cash-and-stock merger');
+  const form = page.getByRole('dialog').filter({ has: page.locator('#merger-new-instrument') });
+  await form.locator('#merger-new-instrument').selectOption(String(target.commodity_id));
+  await form.locator('#merger-currency').selectOption(String(eur));
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await openInvestmentActivity(page, 'Reinvested dividend');
+  await expect(page.locator('#div-cost-currency')).toHaveValue(String(eur));
+});
+
+test('(#521 third review) keyboard instrument selection counts as owner work', async ({ page }) => {
+  const s = await setup(page);
+  const entry = await start(page, s.checking.id);
+  await entry.getByRole('tab', { name: 'Investment', exact: true }).click();
+  await openInvestmentActivity(page, 'Buy');
+  const form = page.getByRole('dialog').filter({ has: page.locator('#buy-quantity') });
+  const input = form.locator('#buy-instrument');
+  await input.fill(`KP${s.suffix}`);
+  const choice = form.getByRole('listbox').getByRole('option');
+  await expect(choice).toBeVisible();
+  await input.press('Tab');
+  await expect(choice).toBeFocused();
+  await choice.press('Enter');
+  await expect(input).toHaveValue(`Keep shares ${s.suffix}`);
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await cancelEntry(page);
+});
+
+test('(#521 third review) unavailable lot allocations remain visible rather than becoming a valid subset', async ({ page }) => {
+  const s = await setup(page);
+  await apiJSON(page, 'POST', '/api/v1/investments/buy', s.csrfToken, {
+    transaction_date: daysFromTodayISO(-8), commodity_id: s.instrument.commodity_id, holding_account_id: s.holding.id,
+    cash_account_id: s.cash.id, quantity_value: '2', quantity_scale: 0,
+    cash_amount_value: '2000', cash_amount_scale: 2, cash_commodity_id: s.currencyID
+  });
+  await position(s, page);
+  await start(page, s.holding.id);
+  await openInvestmentActivity(page, 'Shares out');
+  const form = page.getByRole('dialog').filter({ has: page.locator('#external-transfer-out-source') });
+  const choices = form.locator('input[id^="external-transfer-out-lot-"]');
+  await expect(choices).toHaveCount(2);
+  await choices.nth(0).fill('1');
+  await choices.nth(1).fill('1');
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await openInvestmentActivity(page, 'Buy');
+  const trade = page.getByRole('dialog').filter({ has: page.locator('#buy-quantity') });
+  await trade.locator('#buy-date').fill(daysFromTodayISO(-6));
+  await trade.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await openInvestmentActivity(page, 'Shares out');
+  await expect(choices).toHaveCount(1);
+  await expect(choices).toHaveValue('1');
+  await expect(form.getByRole('alert')).toContainText('not used');
+  await expect(form.getByRole('button', { name: 'Preview transfer', exact: true })).toBeDisabled();
+  // Removing them is the owner's explicit decision; only then does the preview run.
+  await form.getByRole('button', { name: 'Remove those quantities', exact: true }).click();
+  await expect(form.getByRole('alert')).toHaveCount(0);
+  const [request] = await Promise.all([
+    page.waitForRequest((r) => r.method() === 'POST' && new URL(r.url()).pathname === '/api/v1/investments/transfers/external/out/preview'),
+    form.getByRole('button', { name: 'Preview transfer', exact: true }).click()
+  ]);
+  expect(request.postDataJSON().lot_allocations).toHaveLength(1);
+});
+
+test('(#521 third review) all eight position pickers reopen safely with an unavailable position', async ({ page }) => {
+  const s = await setup(page);
+  await position(s, page);
+  await start(page, s.holding.id);
+  await openInvestmentActivity(page, 'Shares out');
+  const initial = page.getByRole('dialog').filter({ has: page.locator('#external-transfer-out-source') });
+  await expect(initial.locator('#external-transfer-out-source')).not.toHaveValue('');
+  await initial.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await openInvestmentActivity(page, 'Buy');
+  const trade = page.getByRole('dialog').filter({ has: page.locator('#buy-quantity') });
+  await trade.locator('#buy-date').fill(daysFromTodayISO(-11));
+  await trade.getByRole('button', { name: 'Cancel', exact: true }).click();
+  for (const [activity, id, cost] of [
+    ['Shares out', 'external-transfer-out-source', true],
+    ['Move shares between holdings', 'internal-transfer-source', true],
+    ['Return of capital', 'capital-return-position', true],
+    ['Write-off', 'write-off-holding', true],
+    ['Share exchange', 'exchange-holding', false],
+    ['Spin-off', 'spin-off-holding', false],
+    ['Cash-and-stock merger', 'merger-holding', false],
+    ['Split', 'split-holding', false]
+  ] as const) {
+    await openInvestmentActivity(page, activity);
+    // Write-off is inline, the others are dialogs: scope by the form itself.
+    const form = page.locator('form').filter({ has: page.locator(`#${id}`) });
+    const key = `${s.holding.id}:${s.instrument.commodity_id}${cost ? `:${s.currencyID}` : ''}`;
+    await expect(form.locator(`#${id}`)).toHaveValue(key);
+    await expect(form.getByRole('alert')).toContainText('not available');
+    await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  }
+});

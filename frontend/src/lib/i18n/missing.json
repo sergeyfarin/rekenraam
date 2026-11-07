@@ -1,8 +1,8 @@
 {
   "counts": {
-    "es": 112,
-    "fr": 112,
-    "de": 112
+    "es": 114,
+    "fr": 114,
+    "de": 114
   },
   "keys": {
     "es": [
@@ -88,6 +88,8 @@
       "investments_activity_holding_invalid",
       "investments_activity_income",
       "investments_activity_internal_transfer",
+      "investments_activity_lots_unavailable",
+      "investments_activity_lots_unavailable_remove",
       "investments_activity_pay_from",
       "investments_activity_pay_into",
       "investments_activity_payment_in_lieu",
@@ -202,6 +204,8 @@
       "investments_activity_holding_invalid",
       "investments_activity_income",
       "investments_activity_internal_transfer",
+      "investments_activity_lots_unavailable",
+      "investments_activity_lots_unavailable_remove",
       "investments_activity_pay_from",
       "investments_activity_pay_into",
       "investments_activity_payment_in_lieu",
@@ -316,6 +320,8 @@
       "investments_activity_holding_invalid",
       "investments_activity_income",
       "investments_activity_internal_transfer",
+      "investments_activity_lots_unavailable",
+      "investments_activity_lots_unavailable_remove",
       "investments_activity_pay_from",
       "investments_activity_pay_into",
       "investments_activity_payment_in_lieu",

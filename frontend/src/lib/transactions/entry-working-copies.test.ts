@@ -49,6 +49,17 @@ describe('EntryWorkingCopies (#508)', () => {
     expect(copies.hasUnsavedWork()).toBe(true);
   });
 
+  it('keeps the owner’s choice owned when a form restores the same value by itself', () => {
+    const copies = new EntryWorkingCopies();
+    copies.setShared('currencyID', 9, true);
+    // Shares out finds the matching position and writes the same currency.
+    copies.setShared('currencyID', 9, false);
+    expect(copies.hasUnsavedWork()).toBe(true);
+    // A different value written automatically becomes the baseline.
+    copies.setShared('currencyID', 3, false);
+    expect(copies.hasUnsavedWork()).toBe(false);
+  });
+
   it('shares quantity and unit price within a pair, never across pairs', () => {
     const copies = new EntryWorkingCopies();
     copies.setPair('buy', { quantity: '10', unitPrice: '5' });

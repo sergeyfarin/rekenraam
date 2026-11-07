@@ -103,12 +103,14 @@
   // New transaction's working copy and shared context (#508).
   const workingCopy = useEntryActivity('cash-and-stock-merger', {
     correction: !!initialTerms,
-    values: () => ({ payableOn, newCommodityID, chosenDestination, newUnits, oldUnits, chosenCurrencyID, cashAmount, electionPercent }),
+    values: () => ({ payableOn, newCommodityID, chosenDestination, newUnits, oldUnits, cashAmount, electionPercent }),
     date: () => effectiveOn,
     memo: () => memo,
     reference: () => sourceReference,
     holding: () => selectedHolding?.accountID,
     instrument: () => selectedHolding?.commodityID,
+    // The merger's cash currency is the position's cost currency (#521 review).
+    currency: () => chosenCurrencyID ? Number(chosenCurrencyID) : undefined,
     pending: () => pending
   });
   if (workingCopy) untrack(() => {
@@ -117,11 +119,16 @@
     chosenDestination = workingCopy.chosenDestination ?? chosenDestination;
     newUnits = workingCopy.newUnits ?? newUnits;
     oldUnits = workingCopy.oldUnits ?? oldUnits;
-    chosenCurrencyID = workingCopy.chosenCurrencyID ?? chosenCurrencyID;
     cashAmount = workingCopy.cashAmount ?? cashAmount;
     electionPercent = workingCopy.electionPercent ?? electionPercent;
   });
   untrack(() => { if (!initialTerms && prefill?.reference) sourceReference = prefill.reference; });
+  // The entry's cost currency, once the holding shows it carries it.
+  const sharedCurrencyID = untrack(() => initialTerms ? undefined : prefill?.currencyID);
+  $effect(() => {
+    if (sharedCurrencyID === undefined || untrack(() => chosenCurrencyID) !== null) return;
+    if (selectedHolding?.costCurrencyIDs.includes(sharedCurrencyID)) untrack(() => { chosenCurrencyID = String(sharedCurrencyID); });
+  });
   // The reviewed preview. Editing any field discards it, so the user always
   // records exactly the plan they saw.
   let preview = $state<{

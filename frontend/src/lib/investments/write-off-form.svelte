@@ -1,4 +1,6 @@
 <script lang="ts">
+  import UnavailableAllocations from '#lib/investments/unavailable-allocations.svelte';
+  import { unavailableAllocations, withoutAllocations } from '#lib/investments/lot-allocations.ts';
   import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
   import { useOwnerToday } from '#lib/dates/owner-date-context.ts';
   import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
@@ -102,8 +104,11 @@
     (!!transactionDate && holdingsQuery.isFetching));
   const loadError = $derived(accountsQuery.error ?? instrumentsQuery.error ?? currenciesQuery.error ??
     (transactionDate ? holdingsQuery.error : undefined));
+  // Restored quantities on lots not held on this date (#521 review).
+  const unavailableLots = $derived(!loading && !!holding && method === 'specific_lot' ? unavailableAllocations(quantities, lots.map((lot) => lot.lot_id)) : []);
   const canPreview = $derived(!loading && !loadError && !!transactionDate && !!holding && !!instrument &&
-    !!quantity.trim() && !!reason.trim() && (method !== 'specific_lot' || lots.length > 0));
+    !!quantity.trim() && !!reason.trim() && (method !== 'specific_lot' || lots.length > 0) &&
+    unavailableLots.length === 0);
   const basisCurrency = $derived(currenciesByID.get(preview?.result.disposal_decision.cost_commodity_id ?? holding?.cost_commodity_id ?? 0));
   const gainImpact = $derived(preview && hasGainChanges(preview.impact.gain_impact) ? preview.impact.gain_impact : null);
   const gainRows = $derived(gainImpact ? gainImpactRows(gainImpact.changes, gainImpactCurrency(currenciesByID), locale) : []);
@@ -227,7 +232,7 @@
         <APIFormError error={loadError} />
       {:else if !transactionDate}
         <p class="text-sm text-muted" role="status">{m.investments_write_off_choose_date()}</p>
-      {:else if holdings.length === 0}
+      {:else if holdings.length === 0 && !holdingKey}
         <p class="text-sm text-muted" role="status">{m.investments_write_off_empty()}</p>
       {:else}
         <div>
@@ -301,6 +306,7 @@
         </section>
       {/if}
     </fieldset>
+    {#if unavailableLots.length > 0}<UnavailableAllocations onRemove={() => { quantities = withoutAllocations(quantities, unavailableLots); }} />{/if}
     <APIFormError error={formError} id="write-off-error" />
     <div class="flex flex-wrap justify-end gap-3">
       <button type="button" onclick={close} disabled={pending || reviewing}

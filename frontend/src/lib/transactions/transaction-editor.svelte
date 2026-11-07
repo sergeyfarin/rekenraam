@@ -1226,9 +1226,10 @@
   // lost: a field differs from what the entry opened with, or an investment
   // activity's working copy holds the owner's work.
   function entryWork(): string {
-    // Every field the owner enters, financial dates included (#521 review);
-    // never one the form fills by itself (a currency from the account).
-    return JSON.stringify([transactionDate, payeeSearch, description, categoryID, amountStr, accountID,
+    // Every field the owner enters, financial dates included (#521 review).
+    // simpleCommodityID holds only a chosen currency; one taken from the
+    // account is inferredCommodityID and stays out.
+    return JSON.stringify([transactionDate, payeeSearch, description, categoryID, amountStr, accountID, simpleCommodityID,
       accountPostedOn, noteMarkdown, externalRefHint, tagIDs, sentStr, receivedStr, feeStr, feePaidBy,
       feeAccountID, conversionSide, transferToID, transferToCommodityID, leavesOn, arrivesOn,
       splitLegs.map((leg) => [leg.accountID, leg.commodityID, leg.amountStr, leg.memo, leg.postedOn])]);

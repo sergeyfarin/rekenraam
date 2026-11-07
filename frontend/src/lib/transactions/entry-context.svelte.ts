@@ -35,7 +35,7 @@ export class EntryContext {
   ownerInput = false;
   #inputTimer: ReturnType<typeof setTimeout> | undefined;
 
-  /** An activity form received the owner's input or change event. */
+  /** An activity form received the owner's input, change, click or key event. */
   markOwnerInput(): void {
     this.ownerInput = true;
     clearTimeout(this.#inputTimer);

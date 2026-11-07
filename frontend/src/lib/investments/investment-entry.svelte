@@ -56,8 +56,9 @@
   const locked = $derived(entry?.saving ?? false);
   /** What the opened form starts from: the page's prefill, then the entry's shared context. */
   let openedPrefill = $state.raw<InvestmentPrefill | undefined>(undefined);
-  // Only the owner's input dispatches these: a picker that fills itself sets
-  // state without a DOM event, so what changes while one is handled is theirs.
+  // Only the owner dispatches these: typing, choosing, clicking a result (or
+  // pressing Enter on it) and keys. A picker that fills itself sets state
+  // without a DOM event, so what changes while one is handled is theirs.
   function markOwnerInput() {
     entry?.markOwnerInput();
   }
@@ -132,7 +133,7 @@
 </div>
 
 <!-- Any change the owner makes in an activity form is entered work (#508). -->
-<div class="contents" onchangecapture={markOwnerInput} oninputcapture={markOwnerInput}>
+<div class="contents" onchangecapture={markOwnerInput} oninputcapture={markOwnerInput} onclickcapture={markOwnerInput} onkeydowncapture={markOwnerInput}>
 {#if active === 'write-off'}
   <WriteOffForm {csrfToken} prefill={openedPrefill} onSaved={saved} onCancel={close} />
 {:else if active !== null}
