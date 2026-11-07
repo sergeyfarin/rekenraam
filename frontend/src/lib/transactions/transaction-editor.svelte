@@ -53,6 +53,8 @@
     type EntryTabLabel
   } from './entry-mode';
   import EntryTabs from './entry-tabs.svelte';
+  import { EntryContext, provideEntryContext } from './entry-context.svelte.ts';
+  import { beforeNavigate, goto } from '$app/navigation';
   import type { InvestmentSaveKind } from '#lib/transactions/add-transaction.svelte.ts';
   import InvestmentEntry from '#lib/investments/investment-entry.svelte';
   import { getLocale } from '#lib/paraglide/runtime.js';
@@ -297,6 +299,20 @@
   let transactionKind = $state<string>('ordinary');
   let noteMarkdown = $state('');
   let externalRefHint = $state('');
+
+  // New transaction's shared context (#508): the date, description and
+  // reference above are the entry's main date, memo and reference for every
+  // tab and investment activity, and the activities' working copies live here
+  // for as long as the entry is open.
+  const entry = new EntryContext({
+    date: () => transactionDate,
+    setDate: (value) => { transactionDate = value; },
+    memo: () => description,
+    setMemo: (value) => { description = value; },
+    reference: () => externalRefHint,
+    setReference: (value) => { externalRefHint = value; }
+  });
+  provideEntryContext(entry);
 
   // What the split editor carries for the entry and never shows (#481).
   let splitCarry = $state<SplitEntryCarry>({});
@@ -585,6 +601,7 @@
         { accountID: '', commodityID: '', amountStr: '', memo: '', postedOn: '' }
       ];
       formError = undefined;
+      workBaseline = untrack(entryWork);
       return;
     }
 
@@ -910,6 +927,7 @@
       saved = await createTransaction(finalPayload, csrfToken!);
     }
 
+    leaving = true;
     await onSaved?.(saved);
   }
 
@@ -1199,13 +1217,72 @@
     tier = 'transfer';
   }
 
+  // ── Discarding (#508) ─────────────────────────────────────────────
+  // Closing or leaving asks first only when something entered would be
+  // lost: a field differs from what the entry opened with, or an investment
+  // activity's working copy holds the owner's work.
+  function entryWork(): string {
+    return JSON.stringify([transactionDate, payeeSearch, description, categoryID, amountStr, accountID,
+      noteMarkdown, externalRefHint, tagIDs, sentStr, receivedStr, feeStr, transferToID,
+      splitLegs.map((leg) => [leg.accountID, leg.amountStr, leg.memo])]);
+  }
+  let workBaseline: string | undefined;
+  function hasUnsavedWork(): boolean {
+    return tabbed && (entryWork() !== workBaseline || entry.copies.hasUnsavedWork());
+  }
+  let discardOpen = $state(false);
+  let afterDiscard: (() => void) | null = null;
+  // Set once the entry saved or the owner chose to discard it.
+  let leaving = false;
+
+  /** Cancel, Escape or the close button: closes now, or asks when work would be lost. */
+  export function requestCancel() {
+    if (busy || entry.saving) return;
+    if (!hasUnsavedWork()) {
+      onCancel();
+      return;
+    }
+    afterDiscard = onCancel;
+    discardOpen = true;
+  }
+
+  function confirmDiscard() {
+    discardOpen = false;
+    leaving = true;
+    const next = afterDiscard;
+    afterDiscard = null;
+    next?.();
+  }
+
+  function keepEditing() {
+    discardOpen = false;
+    afterDiscard = null;
+  }
+
+  // Leaving the page the entry lives on loses it too. A same-page URL change
+  // (a filter, a selection) keeps the entry, and closing the browser tab is
+  // the browser's own decision.
+  beforeNavigate((navigation) => {
+    if (leaving || !navigation.to || navigation.type === 'leave') return;
+    if (navigation.to.url.pathname === navigation.from?.url.pathname || !hasUnsavedWork()) return;
+    navigation.cancel();
+    const target = navigation.to.url;
+    const delta = navigation.type === 'popstate' ? navigation.delta : undefined;
+    afterDiscard = () => {
+      onCancel();
+      if (delta) history.go(delta);
+      else void goto(target);
+    };
+    discardOpen = true;
+  });
+
   /**
    * New transaction's tab switch (#506). Nothing is reset: each tab's fields
    * stay as entered, Withdrawal ↔ Deposit keep the amount and only change its
    * direction, and the cash tabs come back in the shape they were left in.
    */
   function selectTab(next: EntryTab) {
-    if (busy || next === entryTab) return;
+    if (busy || entry.saving || next === entryTab) return;
     if (entryTab === 'out' || entryTab === 'in') cashShape = tier === 'split' ? 'split' : 'simple';
     // A payment started as a Withdrawal that is really a transfer: an empty
     // Transfer amount starts from the amount leaving the same account. One
@@ -1423,6 +1500,26 @@
   }
 </script>
 
+{#if discardOpen}
+  <ModalDialog role="alertdialog" labelledby={`${uid}-discard-title`} describedby={`${uid}-discard-body`}
+    onCancel={keepEditing} class="max-w-md">
+    <div class="space-y-2 px-4 py-3">
+      <h3 id={`${uid}-discard-title`} class="text-sm font-semibold text-foreground">{m.transactions_entry_discard_title()}</h3>
+      <p id={`${uid}-discard-body`} class="text-sm text-muted">{m.transactions_entry_discard_body()}</p>
+    </div>
+    <div class="flex flex-wrap justify-end gap-2 border-t border-border px-4 py-3">
+      <button type="button" data-initial-focus onclick={keepEditing}
+        class="inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-border bg-control px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover">
+        {m.transactions_entry_discard_keep()}
+      </button>
+      <button type="button" onclick={confirmDiscard}
+        class="inline-flex min-h-11 items-center rounded-[var(--radius-control)] bg-foreground px-4 py-2 text-sm font-semibold text-background transition hover:opacity-90">
+        {m.transactions_entry_discard_confirm()}
+      </button>
+    </div>
+  </ModalDialog>
+{/if}
+
 <!-- Reconciliation warning modal -->
 {#if reconciliationModal.open}
   <ModalDialog role="alertdialog" labelledby="recon-modal-title" {pending}
@@ -1486,7 +1583,7 @@
     <button
       type="button"
       class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover"
-      onclick={onCancel}
+      onclick={requestCancel}
       disabled={busy}
       aria-label={m.transactions_form_cancel()}
       title={m.transactions_form_cancel()}
@@ -1503,7 +1600,7 @@
       panelID={`${uid}-entry-panel`}
       idPrefix={uid}
       label={m.transactions_entry_tabs_label()}
-      disabled={busy}
+      disabled={busy || entry.saving}
     />
   {/if}
 
@@ -2253,7 +2350,7 @@
     <button
       type="button"
       class="inline-flex items-center gap-2 rounded-[var(--radius-control)] border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-control-hover"
-      onclick={onCancel}
+      onclick={requestCancel}
       disabled={busy}
     >
       <X size={16} aria-hidden="true" />
@@ -2281,7 +2378,8 @@
         <p class="text-sm text-foreground">{m.transactions_entry_investment_holding_needed()}</p>
       {/if}
       <p class="text-sm text-muted">{m.transactions_entry_investment_intro()}</p>
-      <InvestmentEntry prefill={{ ...createDefaults?.investment, startingAccountID: accountID ?? createDefaults?.accountID, transactionDate, memo: description }} onSaved={onInvestmentSaved} {onCancel} />
+      <InvestmentEntry prefill={{ ...createDefaults?.investment, startingAccountID: accountID ?? createDefaults?.accountID, transactionDate, memo: description }}
+        onSaved={(kind) => { leaving = true; onInvestmentSaved?.(kind); }} onCancel={requestCancel} />
     </div>
   {/if}
   </div>

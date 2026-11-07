@@ -13,6 +13,8 @@
   import { m } from '#lib/paraglide/messages.js';
   import { parseTradeAmounts, type AmountFieldError } from '#lib/investments/form-amounts.ts';
   import TradeEconomicsFields from '#lib/investments/trade-economics-fields.svelte';
+  import TradeUnitPrice from '#lib/investments/trade-unit-price.svelte';
+  import { useEntryActivity, useTradePair } from '#lib/transactions/entry-context.svelte.ts';
   import {
     correctionLotDrafts, correctionTradeDraft, exactTradeFields, parseCorrectionLotChoices,
     type CorrectionLotDraft, type TradeChargeDraft
@@ -127,6 +129,36 @@
   const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(transactionDate || ownerToday()));
   const cashAccountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(settlementDate || transactionDate || ownerToday()));
   let formError = $state<unknown>(undefined);
+
+  // New transaction's working copy (#508): this trade's own fields, the
+  // quantity and unit price shared with its pair, and the shared context.
+  let unitPriceStr = $state('');
+  type TradeWorkingCopy = { quantity: string; unitPrice: string; cashAmount: string; gross: string;
+    exactMode: boolean; settlementDate: string; charges: TradeChargeDraft[]; costBasisMethod: CostBasisMethod };
+  const workingCopy = useEntryActivity<TradeWorkingCopy>('sell', {
+    correction: !!initialCorrection,
+    values: () => ({ quantity: quantityStr, unitPrice: unitPriceStr, cashAmount: cashAmountStr, gross: grossAmountStr,
+      exactMode, settlementDate, charges, costBasisMethod }),
+    date: () => transactionDate,
+    memo: () => memo,
+    holding: () => Number(holdingAccountID) || undefined,
+    instrument: () => commodityID,
+    pending: () => pending
+  });
+  const opening = useTradePair('sell', !!initialCorrection, workingCopy,
+    () => ({ quantity: quantityStr, unitPrice: unitPriceStr }));
+  if (opening) {
+    quantityStr = opening.quantity;
+    unitPriceStr = opening.unitPrice;
+    cashAmountStr = opening.cashAmount;
+    grossAmountStr = opening.gross;
+    exactMode = workingCopy?.exactMode ?? false;
+    settlementDate = workingCopy?.settlementDate ?? '';
+    charges = workingCopy?.charges ?? [];
+    costBasisMethod = untrack(() => workingCopy?.costBasisMethod ?? costBasisMethod);
+  }
+  /** The pair's quantity or price changed elsewhere, so this trade's typed total was dropped. */
+  const totalDropped = opening?.recalculate ?? false;
 
 
   // See buy-form: a backdated sell must be able to proceed deliberately rather
@@ -570,6 +602,10 @@
     {/if}
   </div>
 
+  <TradeUnitPrice idPrefix="sell" side="sell" bind:unitPrice={unitPriceStr} bind:cashAmount={cashAmountStr}
+    bind:gross={grossAmountStr} quantity={quantityStr} {exactMode} {charges} {cashCommodityID}
+    scale={cashCommodityID ? currenciesByID.get(cashCommodityID)?.standard_scale : undefined} currencyCode={cashCurrencyCode} />
+
   <!-- Proceeds -->
   <div>
     <label for="sell-cash-amount" class="mb-1 block text-sm font-medium text-foreground">
@@ -583,13 +619,18 @@
       type="text"
       inputmode="decimal"
       bind:value={cashAmountStr}
+      readonly={unitPriceStr.trim() !== ''}
+      aria-describedby={totalDropped && cashAmountStr === '' && unitPriceStr.trim() === '' ? 'sell-total-dropped' : undefined}
       placeholder={formatEditableAmount('0', 2)}
       class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted"
       required
     />
+    {#if totalDropped && cashAmountStr === '' && unitPriceStr.trim() === ''}
+      <p id="sell-total-dropped" class="mt-1 text-xs text-muted">{m.investments_trade_total_reenter()}</p>
+    {/if}
   </div>
 
-  <TradeEconomicsFields side="sell" cashCommodityID={cashCommodityID}
+  <TradeEconomicsFields side="sell" cashCommodityID={cashCommodityID} grossDerived={unitPriceStr.trim() !== ''}
     accounts={accountsQuery.data?.accounts ?? []} currencies={currenciesQuery.data?.currencies ?? []}
     bind:exactMode bind:gross={grossAmountStr} bind:settlementDate bind:charges />
 

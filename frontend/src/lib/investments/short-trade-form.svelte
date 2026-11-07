@@ -16,6 +16,8 @@
   import { m } from '#lib/paraglide/messages.js';
   import { parseTradeAmounts, type AmountFieldError } from '#lib/investments/form-amounts.ts';
   import TradeEconomicsFields from '#lib/investments/trade-economics-fields.svelte';
+  import TradeUnitPrice from '#lib/investments/trade-unit-price.svelte';
+  import { useEntryActivity, useTradePair } from '#lib/transactions/entry-context.svelte.ts';
   import { correctionTradeDraft, exactTradeFields, type TradeChargeDraft } from '#lib/investments/trade-economics.ts';
   import type { AccountResponse } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
@@ -136,6 +138,38 @@
   const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(transactionDate || ownerToday()));
   const cashAccountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(settlementDate || transactionDate || ownerToday()));
   let formError = $state<unknown>(undefined);
+
+  // New transaction's working copy (#508): this trade's own fields, the
+  // quantity and unit price shared with its pair, and the shared context.
+  let unitPriceStr = $state('');
+  const activity = untrack(() => mode === 'cover' ? 'short-cover' : 'short-open');
+  type TradeWorkingCopy = { quantity: string; unitPrice: string; cashAmount: string; gross: string;
+    exactMode: boolean; settlementDate: string; charges: TradeChargeDraft[]; costBasisMethod: CostBasisMethod };
+  const workingCopy = useEntryActivity<TradeWorkingCopy>(activity, {
+    correction: !!initialCorrection,
+    values: () => ({ quantity: quantityStr, unitPrice: unitPriceStr, cashAmount: cashAmountStr, gross: grossAmountStr,
+      exactMode, settlementDate, charges, costBasisMethod }),
+    date: () => transactionDate,
+    memo: () => memo,
+    holding: () => Number(holdingAccountID) || undefined,
+    instrument: () => commodityID,
+    pending: () => pending
+  });
+  const opening = useTradePair(activity, !!initialCorrection, workingCopy,
+    () => ({ quantity: quantityStr, unitPrice: unitPriceStr }));
+  if (opening) {
+    quantityStr = opening.quantity;
+    unitPriceStr = opening.unitPrice;
+    cashAmountStr = opening.cashAmount;
+    grossAmountStr = opening.gross;
+    exactMode = workingCopy?.exactMode ?? false;
+    settlementDate = workingCopy?.settlementDate ?? '';
+    charges = workingCopy?.charges ?? [];
+    costBasisMethod = untrack(() => workingCopy?.costBasisMethod ?? costBasisMethod);
+  }
+  /** The pair's quantity or price changed elsewhere, so this trade's typed total was dropped. */
+  const totalDropped = opening?.recalculate ?? false;
+  const showTotalDropped = $derived(totalDropped && cashAmountStr === '' && unitPriceStr.trim() === '');
 
   let reconciliationModal = $state<CommitReviewState<InvestmentTradeRequest> | null>(null);
 
@@ -421,16 +455,22 @@
     {/if}
   </div>
 
+  <TradeUnitPrice {idPrefix} side={economicsSide} bind:unitPrice={unitPriceStr} bind:cashAmount={cashAmountStr}
+    bind:gross={grossAmountStr} quantity={quantityStr} {exactMode} {charges} {cashCommodityID}
+    scale={cashCommodityID ? currenciesByID.get(cashCommodityID)?.standard_scale : undefined} currencyCode={cashCurrencyCode} />
+
   <div>
     <label for="{idPrefix}-cash-amount" class="mb-1 block text-sm font-medium text-foreground">
       {cover ? m.investments_short_cover_cost() : m.investments_short_sale_proceeds()}
       {#if cashCurrencyCode}<span class="ml-1 text-xs font-normal text-muted">({cashCurrencyCode})</span>{/if}
     </label>
     <input id="{idPrefix}-cash-amount" type="text" inputmode="decimal" bind:value={cashAmountStr} placeholder={formatEditableAmount('0', 2)} required
+      readonly={unitPriceStr.trim() !== ''} aria-describedby={showTotalDropped ? `${idPrefix}-total-dropped` : undefined}
       class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted" />
+    {#if showTotalDropped}<p id="{idPrefix}-total-dropped" class="mt-1 text-xs text-muted">{m.investments_trade_total_reenter()}</p>{/if}
   </div>
 
-  <TradeEconomicsFields side={economicsSide} cashCommodityID={cashCommodityID}
+  <TradeEconomicsFields side={economicsSide} cashCommodityID={cashCommodityID} grossDerived={unitPriceStr.trim() !== ''}
     accounts={accountsQuery.data?.accounts ?? []} currencies={currenciesQuery.data?.currencies ?? []}
     bind:exactMode bind:gross={grossAmountStr} bind:settlementDate bind:charges />
 

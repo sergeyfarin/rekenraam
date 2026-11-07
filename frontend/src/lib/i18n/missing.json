@@ -1,8 +1,8 @@
 {
   "counts": {
-    "es": 99,
-    "fr": 99,
-    "de": 99
+    "es": 110,
+    "fr": 110,
+    "de": 110
   },
   "keys": {
     "es": [
@@ -104,7 +104,18 @@
       "investments_activity_split",
       "investments_activity_trades",
       "investments_activity_withholding",
-      "investments_activity_write_off"
+      "investments_activity_write_off",
+      "investments_trade_total_reenter",
+      "investments_trade_unit_price",
+      "investments_trade_unit_price_charges",
+      "investments_trade_unit_price_currency",
+      "investments_trade_unit_price_hint",
+      "investments_trade_unit_price_non_positive",
+      "investments_trade_unit_price_precision",
+      "transactions_entry_discard_body",
+      "transactions_entry_discard_confirm",
+      "transactions_entry_discard_keep",
+      "transactions_entry_discard_title"
     ],
     "fr": [
       "allocation_actual",
@@ -205,7 +216,18 @@
       "investments_activity_split",
       "investments_activity_trades",
       "investments_activity_withholding",
-      "investments_activity_write_off"
+      "investments_activity_write_off",
+      "investments_trade_total_reenter",
+      "investments_trade_unit_price",
+      "investments_trade_unit_price_charges",
+      "investments_trade_unit_price_currency",
+      "investments_trade_unit_price_hint",
+      "investments_trade_unit_price_non_positive",
+      "investments_trade_unit_price_precision",
+      "transactions_entry_discard_body",
+      "transactions_entry_discard_confirm",
+      "transactions_entry_discard_keep",
+      "transactions_entry_discard_title"
     ],
     "de": [
       "allocation_actual",
@@ -306,7 +328,18 @@
       "investments_activity_split",
       "investments_activity_trades",
       "investments_activity_withholding",
-      "investments_activity_write_off"
+      "investments_activity_write_off",
+      "investments_trade_total_reenter",
+      "investments_trade_unit_price",
+      "investments_trade_unit_price_charges",
+      "investments_trade_unit_price_currency",
+      "investments_trade_unit_price_hint",
+      "investments_trade_unit_price_non_positive",
+      "investments_trade_unit_price_precision",
+      "transactions_entry_discard_body",
+      "transactions_entry_discard_confirm",
+      "transactions_entry_discard_keep",
+      "transactions_entry_discard_title"
     ]
   }
 }

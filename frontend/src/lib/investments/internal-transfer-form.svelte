@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
   import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
   import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
   import { autofocus } from '#lib/components/autofocus.ts';
@@ -66,6 +67,23 @@
   let pending = $state(false);
   const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(effectiveOn || ownerToday()));
   let formError = $state<unknown>(undefined);
+  // New transaction's working copy and shared context (#508).
+  const workingCopy = useEntryActivity('internal-transfer', {
+    values: () => ({ destinationAccountID, quantities, pooledQuantity, lineage }),
+    date: () => effectiveOn,
+    memo: () => memo,
+    reference: () => sourceReference,
+    holding: () => sourcePosition?.account_id,
+    instrument: () => sourcePosition?.commodity_id,
+    pending: () => pending
+  });
+  if (workingCopy) untrack(() => {
+    destinationAccountID = workingCopy.destinationAccountID ?? destinationAccountID;
+    quantities = workingCopy.quantities ?? quantities;
+    pooledQuantity = workingCopy.pooledQuantity ?? pooledQuantity;
+    lineage = workingCopy.lineage ?? lineage;
+  });
+  untrack(() => { if (prefill?.reference) sourceReference = prefill.reference; });
   // The reviewed preview. Editing any field discards it, so the user always
   // records exactly the carried basis they saw.
   let preview = $state<{

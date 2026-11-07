@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
   import EntryAccountStatus from '#lib/investments/entry-account-status.svelte';
   import { useSettlementCandidates } from '#lib/investments/settlement-candidates.svelte.ts';
   import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
@@ -122,6 +123,27 @@
   let pending = $state(false);
   const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(transactionDate || ownerToday()));
   let formError = $state<unknown>(undefined);
+  // New transaction's working copy and shared context (#508).
+  const workingCopy = useEntryActivity(untrack(() => mode === 'reinvested' ? 'reinvested' : mode === 'withholding' ? 'withholding' : 'dividend'), {
+    values: () => ({ exDate, incomeAccountID, withholdingAccountID, amountStr, withholdingStr, showWithholding, quantityStr }),
+    filledByForm: ['incomeAccountID', 'withholdingAccountID'],
+    date: () => transactionDate,
+    memo: () => memo,
+    holding: () => Number(holdingAccountID) || undefined,
+    instrument: () => selectedInstrument?.commodity_id,
+    currency: () => Number(reinvestmentCurrencyID) || undefined,
+    pending: () => pending
+  });
+  if (workingCopy) untrack(() => {
+    exDate = workingCopy.exDate ?? exDate;
+    incomeAccountID = workingCopy.incomeAccountID ?? incomeAccountID;
+    withholdingAccountID = workingCopy.withholdingAccountID ?? withholdingAccountID;
+    amountStr = workingCopy.amountStr ?? amountStr;
+    withholdingStr = workingCopy.withholdingStr ?? withholdingStr;
+    showWithholding = workingCopy.showWithholding ?? showWithholding;
+    quantityStr = workingCopy.quantityStr ?? quantityStr;
+  });
+  untrack(() => { if (prefill?.currencyID !== undefined && mode === 'reinvested') reinvestmentCurrencyID = String(prefill.currencyID); });
 
   // Both dividend shapes can be backdated into a reconciled period, so both get
   // the same named confirmation as the trade forms (T-53). The pending payload

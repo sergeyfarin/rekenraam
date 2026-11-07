@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
   import { useSettlementCandidates } from '#lib/investments/settlement-candidates.svelte.ts';
   import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
   import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
@@ -73,6 +74,24 @@
   let pending = $state(false);
   const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(paymentDate || ownerToday()));
   let formError = $state<unknown>(undefined);
+  // New transaction's working copy and shared context (#508).
+  const workingCopy = useEntryActivity('payment-in-lieu', {
+    correction: !!initial,
+    values: () => ({ exDate, expenseAccountID, amountStr, showRecovery, recoveryStr, recoveryAccountID }),
+    date: () => paymentDate,
+    memo: () => memo,
+    holding: () => Number(holdingAccountID) || undefined,
+    instrument: () => Number(commodityID) || undefined,
+    pending: () => pending
+  });
+  if (workingCopy) untrack(() => {
+    exDate = workingCopy.exDate ?? exDate;
+    expenseAccountID = workingCopy.expenseAccountID ?? expenseAccountID;
+    amountStr = workingCopy.amountStr ?? amountStr;
+    showRecovery = workingCopy.showRecovery ?? showRecovery;
+    recoveryStr = workingCopy.recoveryStr ?? recoveryStr;
+    recoveryAccountID = workingCopy.recoveryAccountID ?? recoveryAccountID;
+  });
   let review = $state.raw<CommitReviewState<PaymentInLieuRequest> | null>(null);
 
 

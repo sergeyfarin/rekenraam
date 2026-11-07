@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
   import EntryAccountStatus from '#lib/investments/entry-account-status.svelte';
   import { useSettlementCandidates } from '#lib/investments/settlement-candidates.svelte.ts';
   import { isSettlementAccount } from '#lib/investments/settlement-accounts.ts';
@@ -97,6 +98,28 @@
   const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(effectiveOn || ownerToday()));
   const cashAccountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(payableOn || effectiveOn || ownerToday()));
   let formError = $state<unknown>(undefined);
+  // New transaction's working copy and shared context (#508).
+  const workingCopy = useEntryActivity('cash-and-stock-merger', {
+    correction: !!initialTerms,
+    values: () => ({ payableOn, newCommodityID, chosenDestination, newUnits, oldUnits, chosenCurrencyID, cashAmount, electionPercent }),
+    date: () => effectiveOn,
+    memo: () => memo,
+    reference: () => sourceReference,
+    holding: () => selectedHolding?.accountID,
+    instrument: () => selectedHolding?.commodityID,
+    pending: () => pending
+  });
+  if (workingCopy) untrack(() => {
+    payableOn = workingCopy.payableOn ?? payableOn;
+    newCommodityID = workingCopy.newCommodityID ?? newCommodityID;
+    chosenDestination = workingCopy.chosenDestination ?? chosenDestination;
+    newUnits = workingCopy.newUnits ?? newUnits;
+    oldUnits = workingCopy.oldUnits ?? oldUnits;
+    chosenCurrencyID = workingCopy.chosenCurrencyID ?? chosenCurrencyID;
+    cashAmount = workingCopy.cashAmount ?? cashAmount;
+    electionPercent = workingCopy.electionPercent ?? electionPercent;
+  });
+  untrack(() => { if (!initialTerms && prefill?.reference) sourceReference = prefill.reference; });
   // The reviewed preview. Editing any field discards it, so the user always
   // records exactly the plan they saw.
   let preview = $state<{

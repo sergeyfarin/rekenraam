@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
   import EntryAccountStatus from '#lib/investments/entry-account-status.svelte';
   import { useSettlementCandidates } from '#lib/investments/settlement-candidates.svelte.ts';
   import { isSettlementAccount } from '#lib/investments/settlement-accounts.ts';
@@ -83,6 +84,24 @@
   const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(effectiveOn || ownerToday()));
   const cashAccountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(paymentOn || effectiveOn || ownerToday()));
   let formError = $state<unknown>(undefined);
+  // New transaction's working copy and shared context (#508).
+  const workingCopy = useEntryActivity('capital-return', {
+    correction: !!initial,
+    values: () => ({ paymentOn, amount, explicitEntitlement, quantities }),
+    date: () => effectiveOn,
+    memo: () => memo,
+    reference: () => reference,
+    holding: () => selectedPosition?.account_id,
+    instrument: () => selectedPosition?.commodity_id,
+    pending: () => pending
+  });
+  if (workingCopy) untrack(() => {
+    paymentOn = workingCopy.paymentOn ?? paymentOn;
+    amount = workingCopy.amount ?? amount;
+    explicitEntitlement = workingCopy.explicitEntitlement ?? explicitEntitlement;
+    quantities = workingCopy.quantities ?? quantities;
+  });
+  untrack(() => { if (!initial && prefill?.reference) reference = prefill.reference; });
   let preview = $state<{
     effects: CapitalReturnEffect[];
     impacts: ReconciliationImpactResponse['affected_checkpoints'];

@@ -1734,5 +1734,16 @@
   "investments_activity_spin_off": "Выделение компании",
   "investments_activity_capital_return": "Возврат капитала",
   "investments_activity_continue": "Продолжить",
-  "investments_activity_holding_invalid": "На выбранную дату этот счёт нельзя использовать для данной операции. Выберите подходящий счёт ценных бумаг."
+  "investments_activity_holding_invalid": "На выбранную дату этот счёт нельзя использовать для данной операции. Выберите подходящий счёт ценных бумаг.",
+  "investments_trade_unit_price": "Цена за единицу",
+  "investments_trade_unit_price_hint": "Если указана цена за единицу, итог считается как количество × цена с учётом сборов этой сделки.",
+  "investments_trade_unit_price_currency": "Выберите денежный счёт, чтобы рассчитать итог.",
+  "investments_trade_unit_price_precision": "Количество × цена = {exact}: знаков после запятой больше, чем допускает {currency}. Введите итог вручную.",
+  "investments_trade_unit_price_charges": "Сумма сбора указана неверно, поэтому итог нельзя рассчитать.",
+  "investments_trade_unit_price_non_positive": "Сборы больше выручки. Проверьте суммы.",
+  "investments_trade_total_reenter": "Количество или цена изменились в другой операции, поэтому введите этот итог заново.",
+  "transactions_entry_discard_title": "Отменить эту транзакцию?",
+  "transactions_entry_discard_body": "Введённые данные не сохранены и будут потеряны.",
+  "transactions_entry_discard_keep": "Продолжить ввод",
+  "transactions_entry_discard_confirm": "Отменить ввод"
 }

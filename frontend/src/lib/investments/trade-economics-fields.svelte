@@ -6,7 +6,7 @@
 
   let {
     exactMode = $bindable(), gross = $bindable(), settlementDate = $bindable(), charges = $bindable(),
-    side, cashCommodityID, accounts, currencies
+    side, cashCommodityID, accounts, currencies, grossDerived = false
   }: {
     exactMode: boolean;
     gross: string;
@@ -16,6 +16,8 @@
     cashCommodityID: number | undefined;
     accounts: AccountResponse[];
     currencies: CurrencyResponse[];
+    /** A unit price derives the gross (#508); the field shows it read-only. */
+    grossDerived?: boolean;
   } = $props();
 
   const cashAccounts = $derived(accounts.filter((a) => a.status === 'active' && a.allows_postings && a.account_class === 'asset' && a.account_kind !== 'security_holding' && a.account_kind !== 'fund_holding'));
@@ -36,7 +38,7 @@
       <p class="text-xs text-muted">{m.investments_trade_exact_help()}</p>
       <div>
         <label for="trade-gross-{side}" class="mb-1 block text-sm font-medium text-foreground">{m.investments_trade_gross()}</label>
-        <input id="trade-gross-{side}" type="text" inputmode="decimal" bind:value={gross} required
+        <input id="trade-gross-{side}" type="text" inputmode="decimal" bind:value={gross} required readonly={grossDerived}
           class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-mono text-foreground" />
       </div>
       <div>

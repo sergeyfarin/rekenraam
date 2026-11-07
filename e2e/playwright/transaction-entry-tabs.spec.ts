@@ -86,8 +86,9 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(charge).toBeFocused();
     await expect(entry.getByRole('combobox', { name: 'Account', exact: true })).toHaveValue(String(s.card.id));
 
-    // Escape still discards from the tabs and returns focus.
+    // Escape from the tabs asks before discarding (#508), then returns focus.
     await page.keyboard.press('Escape');
+    await page.getByRole('alertdialog', { name: 'Discard this transaction?' }).getByRole('button', { name: 'Discard', exact: true }).click();
     await expect(entry).toHaveCount(0);
     await expect(page.locator('#main-content')).toBeFocused();
   });

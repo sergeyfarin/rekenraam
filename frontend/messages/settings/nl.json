@@ -1734,5 +1734,16 @@
   "investments_activity_spin_off": "Afsplitsing",
   "investments_activity_capital_return": "Kapitaalteruggave",
   "investments_activity_continue": "Doorgaan",
-  "investments_activity_holding_invalid": "Deze effectenrekening kan deze activiteit niet op de gekozen datum verwerken. Kies een geldige effectenrekening."
+  "investments_activity_holding_invalid": "Deze effectenrekening kan deze activiteit niet op de gekozen datum verwerken. Kies een geldige effectenrekening.",
+  "investments_trade_unit_price": "Prijs per stuk",
+  "investments_trade_unit_price_hint": "Met een prijs per stuk wordt het totaal berekend uit aantal × prijs en de eigen kosten van deze transactie.",
+  "investments_trade_unit_price_currency": "Kies de geldrekening om het totaal te berekenen.",
+  "investments_trade_unit_price_precision": "Aantal × prijs is {exact}, met meer decimalen dan {currency} toestaat. Voer het totaal zelf in.",
+  "investments_trade_unit_price_charges": "Een kostenbedrag is ongeldig, dus het totaal kan niet worden berekend.",
+  "investments_trade_unit_price_non_positive": "De kosten zijn hoger dan de opbrengst. Controleer de bedragen.",
+  "investments_trade_total_reenter": "Het aantal of de prijs is in de andere activiteit gewijzigd. Voer dit totaal opnieuw in.",
+  "transactions_entry_discard_title": "Deze transactie verwerpen?",
+  "transactions_entry_discard_body": "Wat je in deze transactie hebt ingevoerd, is niet opgeslagen en gaat verloren.",
+  "transactions_entry_discard_keep": "Verder bewerken",
+  "transactions_entry_discard_confirm": "Verwerpen"
 }

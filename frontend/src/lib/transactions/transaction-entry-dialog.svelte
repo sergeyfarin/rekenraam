@@ -17,9 +17,11 @@
   // full-screen sheet on phones. The shell mounts it once, outside every page,
   // and outside the shell's error state, so a background refresh of Home, any
   // page or the session leaves the working copy alone; the editor itself reads
-  // its prefill once (#433). Cancel and Escape discard
-  // it; the dialog returns focus to the control that opened it.
+  // its prefill once (#433). Cancel and Escape close it, asking first when
+  // entered work would be lost (#508); the dialog returns focus to the
+  // control that opened it.
   const sessionQuery = createQuery(() => authSessionQueryOptions());
+  let editor = $state<ReturnType<typeof TransactionEditor>>();
   const queryClient = useQueryClient();
 
   async function saved(transaction: TransactionResponse) {
@@ -49,11 +51,12 @@
 {#if transactionEntry.open}
   <ModalDialog
     label={m.transactions_form_create_title()}
-    onCancel={() => closeTransactionEntry()}
+    onCancel={() => editor ? editor.requestCancel() : closeTransactionEntry()}
     {fallbackFocus}
     class="max-w-2xl p-4 sm:p-6 max-md:m-0! max-md:h-dvh max-md:max-h-dvh! max-md:w-full! max-md:max-w-none! max-md:rounded-none! max-md:border-0"
   >
     <TransactionEditor
+      bind:this={editor}
       mode="create"
       csrfToken={sessionQuery.data?.csrf_token}
       createDefaults={transactionEntry.defaults}

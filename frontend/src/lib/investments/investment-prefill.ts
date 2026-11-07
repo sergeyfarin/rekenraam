@@ -13,6 +13,10 @@ export type InvestmentPrefill = {
   startingAccountID?: number;
   transactionDate?: string;
   memo?: string;
+  /** New transaction's shared reference (#508). */
+  reference?: string;
+  /** New transaction's shared currency, where an activity chooses one (#508). */
+  currencyID?: number;
   commodityID?: number;
 };
 

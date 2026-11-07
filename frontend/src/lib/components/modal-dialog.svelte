@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, type Snippet } from 'svelte';
+  import { onMount, tick, type Snippet } from 'svelte';
   import { captureOpener, returnFocus, scopeBusy, wrapTab } from './modal-focus.ts';
 
   // The app's one modal dialog (#327). Mount it to open it and unmount it to
@@ -68,8 +68,14 @@
   // owner agrees to close.
   function closed() {
     if (closing) return;
-    if (busy() || !onCancel) dialog.showModal();
-    else onCancel();
+    if (busy() || !onCancel) {
+      dialog.showModal();
+      return;
+    }
+    onCancel();
+    // The owner may ask before closing (a discard confirmation, #508); a
+    // dialog that is still mounted then stays open.
+    void tick().then(() => { if (!closing && !dialog.open) dialog.showModal(); });
   }
 
   function backdropClick(event: MouseEvent) {

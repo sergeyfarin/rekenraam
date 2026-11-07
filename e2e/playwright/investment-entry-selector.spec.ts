@@ -62,8 +62,9 @@ for (const theme of ['light', 'dark']) {
     await buy.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeFocused();
 
+    // The explicit choice is the entry's (#508): Sell starts on it, never on a suggestion.
     await openInvestmentActivity(page, 'Sell');
-    await expect(page.getByLabel('Pay into', { exact: true })).toHaveValue(String(s.checking.id));
+    await expect(page.getByLabel('Pay into', { exact: true })).toHaveValue(String(s.other.id));
     await page.getByRole('dialog').filter({ has: page.locator('#sell-cash-account') }).getByRole('button', { name: 'Cancel', exact: true }).click();
     await openInvestmentActivity(page, 'Split');
     const split = page.getByRole('dialog').filter({ has: page.locator('#split-date') });

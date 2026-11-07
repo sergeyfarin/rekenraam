@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
   import { useOwnerToday } from '#lib/dates/owner-date-context.ts';
   import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
   import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
@@ -62,6 +63,20 @@
   let pending = $state(false);
   const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(transactionDate || ownerToday()));
   let formError = $state<unknown>();
+  // New transaction's working copy and shared context (#508).
+  const workingCopy = useEntryActivity('write-off', {
+    values: () => ({ quantity, method, quantities, reason }),
+    date: () => transactionDate,
+    holding: () => holding?.account_id,
+    instrument: () => holding?.commodity_id,
+    pending: () => pending
+  });
+  if (workingCopy) untrack(() => {
+    quantity = workingCopy.quantity ?? quantity;
+    method = workingCopy.method ?? method;
+    quantities = workingCopy.quantities ?? quantities;
+    reason = workingCopy.reason ?? reason;
+  });
   let preview = $state<{
     result: SellPreviewResponse; impact: ReconciliationImpactResponse; payload: InvestmentWriteOffRequest;
   } | null>(null);

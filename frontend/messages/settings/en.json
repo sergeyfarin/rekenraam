@@ -1734,5 +1734,16 @@
   "investments_activity_spin_off": "Spin-off",
   "investments_activity_capital_return": "Return of capital",
   "investments_activity_continue": "Continue",
-  "investments_activity_holding_invalid": "This holding cannot receive this activity on the selected date. Choose a valid holding account."
+  "investments_activity_holding_invalid": "This holding cannot receive this activity on the selected date. Choose a valid holding account.",
+  "investments_trade_unit_price": "Unit price",
+  "investments_trade_unit_price_hint": "With a unit price, the total is calculated from quantity × unit price and this trade’s own charges.",
+  "investments_trade_unit_price_currency": "Choose the cash account to calculate the total.",
+  "investments_trade_unit_price_precision": "Quantity × unit price is {exact}, which has more decimals than {currency} allows. Enter the total instead.",
+  "investments_trade_unit_price_charges": "A charge amount is not valid, so the total cannot be calculated.",
+  "investments_trade_unit_price_non_positive": "The charges are larger than the proceeds. Check the amounts.",
+  "investments_trade_total_reenter": "The quantity or unit price changed in the other activity, so enter this total again.",
+  "transactions_entry_discard_title": "Discard this transaction?",
+  "transactions_entry_discard_body": "What you entered in this transaction has not been saved and will be lost.",
+  "transactions_entry_discard_keep": "Keep editing",
+  "transactions_entry_discard_confirm": "Discard"
 }
