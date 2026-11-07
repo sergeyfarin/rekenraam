@@ -414,7 +414,7 @@
     >
       <option value="">{m.investments_form_select_account()}</option>
       {#if cashAccountID && !cashAccounts.some((account) => String(account.id) === cashAccountID)}
-        <option value={cashAccountID} disabled>{(accountsQuery.data?.accounts ?? []).find((account) => String(account.id) === cashAccountID)?.name ?? cashAccountID}</option>
+        <option value={cashAccountID} disabled>{(cashAccountsQuery.data?.accounts ?? []).find((account) => String(account.id) === cashAccountID)?.name ?? cashAccountID}</option>
       {/if}
       {#each cashAccounts as acc (acc.id)}
         <option value={String(acc.id)}>{acc.name}</option>

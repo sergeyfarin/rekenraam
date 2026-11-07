@@ -228,7 +228,10 @@
     amountStr.trim() !== ''
   );
 
-  const canSubmit = $derived(!accountsQuery.isFetching && !accountsQuery.isError && mode !== 'reinvested' ? canSubmitCash : canSubmitReinvested);
+  const canSubmit = $derived(
+    !accountsQuery.isFetching && !accountsQuery.isError &&
+    (mode !== 'reinvested' ? canSubmitCash : canSubmitReinvested)
+  );
 
   async function handleSubmit(e: Event) {
     e.preventDefault();

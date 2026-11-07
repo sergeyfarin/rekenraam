@@ -625,7 +625,7 @@ The account model permits a holding outside a brokerage container and does not e
 | Slice | Issue |
 |---|---|
 | Entry shell and routing: one *New transaction*, four stable tabs with labels and accents, shared entry context with basic preservation and preview invalidation, editable account | #506, delivered 2026-11-05 |
-| Investment mode: brokerage and holding contexts, Activity selector, settlement candidates | #507, delivered 2026-11-06 |
+| Investment mode: brokerage and holding contexts, Activity selector, settlement candidates | #507, implemented in PR #519, awaiting merge |
 | Activity-specific restoration across activities and accounts, full acceptance coverage | #508 |
 | Move to account for posted transactions | #509 |
 

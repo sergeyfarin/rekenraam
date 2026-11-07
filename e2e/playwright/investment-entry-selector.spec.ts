@@ -160,3 +160,49 @@ test('dated choices show loading and retry without calling a prefilling holding 
   await expect(retry).toBeHidden();
   await expectNoAccessibilityViolations(page, 'investment entry recovered account choices');
 });
+
+test('reinvestment waits for refreshed dated accounts and recovers after an error', async ({ page }) => {
+  const s = await setup(page);
+  await page.goto(`/app/ledger/accounts/${s.holding.id}/register`);
+  await page.getByRole('button', { name: 'New transaction', exact: true }).click();
+  await openInvestmentActivity(page, 'reinvested');
+  const form = page.locator('dialog[aria-labelledby="reinvested-dividend-title"]');
+  await expect(form.locator('#div-holding-account')).toHaveValue(String(s.holding.id));
+  await form.locator('#div-cost-currency').selectOption(String(s.currencyID));
+  await form.locator('#div-quantity').fill('1');
+  await form.locator('#div-amount').fill('10');
+  const submit = form.getByRole('button', { name: 'Record reinvested dividend', exact: true });
+  await expect(submit).toBeEnabled();
+
+  let release!: () => void;
+  const blocked = new Promise<void>(resolve => { release = resolve; });
+  let fail = true;
+  await page.route('**/api/v1/investments/entry-accounts?*', async route => {
+    await blocked;
+    if (fail) await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'RESOURCE_BUSY', message: 'test refusal' } }) });
+    else await route.continue();
+  });
+  // Make the successful cached snapshot stale, then use the normal reconnect
+  // refresh. Its holdings remain available while the refresh is pending/failed.
+  await page.clock.setFixedTime(new Date(Date.now() + 20_000));
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('offline'));
+    window.dispatchEvent(new Event('online'));
+  });
+  try {
+    await expect(form.getByText('Loading accounts', { exact: true })).toBeVisible();
+    await expect(submit).toBeDisabled();
+  } finally {
+    release();
+  }
+  const retry = form.getByRole('button', { name: 'Retry accounts', exact: true });
+  await expect(retry).toBeVisible({ timeout: 15_000 });
+  await expect(form.locator('#div-holding-account')).toHaveValue(String(s.holding.id));
+  await expect(submit).toBeDisabled();
+  fail = false;
+  await retry.click();
+  await expect(retry).toBeHidden();
+  await expect(submit).toBeEnabled();
+  await expect(form.locator('#div-quantity')).toHaveValue('1');
+  await expect(form.locator('#div-amount')).toHaveValue('10');
+});
