@@ -82,8 +82,9 @@ automatically. Whoever posts the report should search the forum for
 
 ## Upstream report
 
-Status: **drafted, awaiting owner approval** (#541). Once it is posted, the
-thread link goes on #541 and in this section.
+Status: **draft approved by the owner on 2026-11-08; the owner is posting
+it** (#541). Once it is posted, the thread link goes on #541 and in this
+section.
 
 Draft for the [SQLite forum](https://sqlite.org/forum/forum):
 
