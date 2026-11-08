@@ -44,6 +44,14 @@ type accountsResponse struct {
 	Accounts []accountResponse `json:"accounts"`
 }
 
+// accountListResponse is one page of GET /accounts. NextCursor is always
+// present: null on the last page, so a client cannot mistake a bounded page
+// for the whole list (#518).
+type accountListResponse struct {
+	Accounts   []accountResponse `json:"accounts"`
+	NextCursor *string           `json:"next_cursor"`
+}
+
 type accountRequest struct {
 	Code                  string          `json:"code"`
 	Name                  string          `json:"name"`
@@ -94,19 +102,35 @@ func listAccounts(logger *slog.Logger, authService *app.AuthService, accountServ
 			return
 		}
 
-		accounts, err := accountService.ListAccounts(r.Context(), app.ListAccountsInput{
+		limit := 0
+		if value := r.URL.Query().Get("limit"); value != "" {
+			parsed, err := strconv.Atoi(value)
+			if err != nil || parsed < 1 || parsed > app.AccountListMaxLimit {
+				writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "limit is invalid")
+				return
+			}
+			limit = parsed
+		}
+
+		page, err := accountService.ListAccounts(r.Context(), app.ListAccountsInput{
 			Status:          r.URL.Query().Get("status"),
 			AccountClass:    r.URL.Query().Get("account_class"),
 			IncludeArchived: includeArchived,
 			IncludeSystem:   includeSystem,
 			Query:           r.URL.Query().Get("q"),
+			Cursor:          r.URL.Query().Get("cursor"),
+			Limit:           limit,
 		})
 		if err != nil {
 			writeAccountServiceError(w, r, logger, "list accounts", err)
 			return
 		}
 
-		writeJSON(w, http.StatusOK, accountsResponse{Accounts: toAccountResponses(accounts)})
+		response := accountListResponse{Accounts: toAccountResponses(page.Accounts)}
+		if page.NextCursor != "" {
+			response.NextCursor = &page.NextCursor
+		}
+		writeJSON(w, http.StatusOK, response)
 	}
 }
 

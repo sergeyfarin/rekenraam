@@ -177,7 +177,9 @@ Deliver incrementally, tracked in #441, in this order:
 7. **Search depth (#439):** payee actions with editor prefill and last-used
    category, payee filtering and full-text transaction search.
 8. **Widget depth (#440):** lazy expanded returns, allocation and forecast
-   charts, then further widgets for existing capabilities.
+   charts, then further widgets for existing capabilities: the forecast's
+   lowest balance and first negative date (#533), savings rate (#534) and
+   cash runway (#535), each from an existing read with no widget-only rule.
 9. **Power use**, any time after #436: compact and comfortable density for
    registers and transactions (#451) and two-key navigation shortcuts (#452).
 
@@ -247,6 +249,9 @@ These are valuable, but they are not allowed to displace the current plan:
   decided ([ADR 0021](adrs/0021-entered-asset-values.md): dated values beside
   the ledger, never postings); ready in three slices. #437 and #453 do not
   wait for it.
+- Savings goals [#536](https://github.com/sergeyfarin/rekenraam/issues/536):
+  targets and progress over account balances, never postings. Needs an
+  accepted plan and a product-requirements change before any slice.
 - Report filters taking less space above the figures
   [#492](https://github.com/sergeyfarin/rekenraam/issues/492): a compact
   filter bar or a right-hand panel, chosen after a task check. Other

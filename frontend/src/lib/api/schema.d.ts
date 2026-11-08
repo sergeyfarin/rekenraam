@@ -5077,6 +5077,10 @@ export interface paths {
                     include_system?: boolean;
                     /** @description Small-set account name, code, role, or kind filter. */
                     q?: string;
+                    /** @description Maximum number of accounts in this page. */
+                    limit?: number;
+                    /** @description Opaque `next_cursor` from the previous page. Resend the same filters with it; the next page continues the same order after the last returned account. */
+                    cursor?: string;
                 };
                 header?: never;
                 path?: never;
@@ -5084,14 +5088,14 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Current accounts */
+                /** @description One page of current accounts. A non-null `next_cursor` means more accounts follow; clients that need the whole catalog follow it until it is null. */
                 200: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["AccountsResponse"];
+                        "application/json": components["schemas"]["AccountListResponse"];
                     };
                 };
                 /** @description Invalid query */
@@ -29390,6 +29394,11 @@ export interface components {
         SearchCatalogResponse: {
             items: components["schemas"]["SearchCatalogItem"][];
             next_cursor?: string;
+        };
+        AccountListResponse: {
+            accounts: components["schemas"]["AccountResponse"][];
+            /** @description Cursor for the next page, or null when this is the last page. */
+            next_cursor: string | null;
         };
         AccountsResponse: {
             accounts: components["schemas"]["AccountResponse"][];

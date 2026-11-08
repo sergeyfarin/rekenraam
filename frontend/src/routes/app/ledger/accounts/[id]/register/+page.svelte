@@ -3,7 +3,7 @@
   import { createQuery } from '@tanstack/svelte-query';
   import { m } from '#lib/paraglide/messages.js';
   import { breadcrumbs, routeFor } from '#lib/navigation/routes.ts';
-  import { accountsQueryOptions } from '#lib/api/accounts.ts';
+  import { accountQueryOptions } from '#lib/api/accounts.ts';
   import AccountRegister from '#lib/transactions/account-register.svelte';
   import TransactionWorkspace, { type TransactionWorkspaceCreate } from '#lib/transactions/transaction-workspace.svelte';
   import { accountEntryKind } from '#lib/transactions/entry-account.ts';
@@ -12,8 +12,10 @@
 
   const accountID = $derived(Number(page.params.id));
 
-  const accountsQuery = createQuery(() => accountsQueryOptions(false, false));
-  const account = $derived(accountsQuery.data?.accounts.find((a) => a.id === accountID));
+  // The register's own account, read by id: an archived account or one far
+  // down a large catalog still names the page and seeds New transaction (#518).
+  const accountQuery = createQuery(() => ({ ...accountQueryOptions(accountID), enabled: Number.isInteger(accountID) && accountID > 0 }));
+  const account = $derived(accountQuery.data);
   // The h1 names the account once it has loaded; until then, the page.
   const accountName = $derived(account?.name || account?.code || m.accounts_title());
   const instrumentsQuery = createQuery(() => ({
