@@ -59,11 +59,19 @@ for (const width of [1280, 390]) {
     test('recurring tab survives reload, Back and sharing and Due clears it', async ({ page }) => {
       await readyForLedger(page);
       await page.goto('/app/planning/recurring?highlight=kept');
-      await expect(page.getByRole('button', { name: 'Due for review', exact: true })).toHaveAttribute('aria-pressed', 'true');
+      const dueBtn = page.getByRole('button', { name: 'Due for review', exact: true });
+      const templatesBtn = page.getByRole('button', { name: 'Templates', exact: true });
+      await expect(dueBtn).toHaveAttribute('aria-pressed', 'true');
+      await expect(dueBtn).toHaveClass(/bg-selected/);
+      await expect(templatesBtn).not.toHaveClass(/bg-selected/);
       const historyLength = await page.evaluate(() => history.length);
-      await page.getByRole('button', { name: 'Templates', exact: true }).click();
+      await templatesBtn.click();
       const assertSelection = async (target: Page) => {
-        await expect(target.getByRole('button', { name: 'Templates', exact: true })).toHaveAttribute('aria-pressed', 'true');
+        const targetTemplates = target.getByRole('button', { name: 'Templates', exact: true });
+        const targetDue = target.getByRole('button', { name: 'Due for review', exact: true });
+        await expect(targetTemplates).toHaveAttribute('aria-pressed', 'true');
+        await expect(targetTemplates).toHaveClass(/bg-selected/);
+        await expect(targetDue).not.toHaveClass(/bg-selected/);
         await expect(target).toHaveURL((url) => url.searchParams.get('tab') === 'templates' && url.searchParams.get('highlight') === 'kept');
       };
       await assertSelection(page);
