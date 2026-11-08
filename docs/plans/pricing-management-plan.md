@@ -136,7 +136,8 @@ known in the trigger, and the sweep's own `FXDemand` read discards an
 over-wide hint. A quote currency first recorded after the last posting of the
 holding (an instrument reclassified later, or the first observation in a new
 currency) has no outbox wakeup and is picked up by the next scheduled or manual
-sweep. Named regressions:
+sweep; that wakeup is
+[#540](https://github.com/sergeyfarin/rekenraam/issues/540). Named regressions:
 `TestFXDemandIncludesTheQuoteCurrencyOfAHeldInstrument`,
 `TestFXDemandIncludesAHeldCommodityObservationCurrency`,
 `TestFXDemandIgnoresDraftAndVoidedHoldings` and
