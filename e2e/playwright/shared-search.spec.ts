@@ -57,8 +57,8 @@ for (const width of [1280, 390]) {
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(`/app/investments/instruments/${ids.get('REF')}`);
     await waitForPageReady(page);
-    if (width === 390) await expect(page.getByRole('dialog', { name: 'Search', exact: true })).toHaveCount(0);
-    else await expect(search(page)).toHaveAttribute('aria-expanded', 'false');
+    // Outside Home the search is a dialog at every width (#490).
+    await expect(page.getByRole('dialog', { name: 'Search', exact: true })).toHaveCount(0);
     await page.keyboard.press('Control+k');
     await expect(search(page)).toHaveValue('');
   });
@@ -111,11 +111,11 @@ test('shared search navigates pages and reference objects with keyboard and scop
   const activeID = await search(page).getAttribute('aria-activedescendant');
   await expect(page.locator(`[id="${activeID}"]`)).toHaveAttribute('aria-selected', 'true');
   await page.keyboard.press('Escape');
-  await expect(search(page)).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByRole('dialog', { name: 'Search', exact: true })).toHaveCount(0);
 
   await page.evaluate(() => localStorage.setItem('PARAGLIDE_LOCALE', 'nl'));
   await page.reload();
-  await expect(page.getByRole('combobox', { name: 'Zoeken', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Zoeken Ctrl K', exact: true })).toBeVisible();
   await page.keyboard.press('/');
   const dutch = page.getByRole('combobox', { name: 'Zoeken', exact: true });
   await dutch.fill('Boodschappen');
@@ -131,7 +131,7 @@ test('commands open an unsaved editor, shortcuts respect editable and modal fiel
   await filter.press('/');
   await expect(filter).toHaveValue('sample/');
   await expect(page).toHaveURL(url => url.searchParams.get('q') === 'sample/');
-  await expect(search(page)).toHaveAttribute('aria-expanded', 'false');
+  await expect(search(page)).toHaveCount(0);
   await filter.press('Control+k');
   await expect(search(page)).toBeFocused();
   await search(page).fill('New transaction');
@@ -141,12 +141,12 @@ test('commands open an unsaved editor, shortcuts respect editable and modal fiel
   const form = page.getByRole('region', { name: 'New transaction', exact: true });
   await form.getByLabel('Amount', { exact: true }).fill('12.34');
   await form.getByLabel('Description', { exact: true }).fill('/');
-  await expect(search(page)).toHaveAttribute('aria-expanded', 'false');
+  await expect(search(page)).toHaveCount(0);
   await expect(page).toHaveURL(url => url.pathname === '/app/ledger/transactions' && !url.searchParams.has('create') && url.searchParams.get('q') === 'sample/');
   await form.getByRole('button', { name: 'Cancel', exact: true }).last().click();
   await page.reload();
   await expect(heading).toHaveCount(0);
-  await expect(search(page)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Search Ctrl K', exact: true })).toBeVisible();
   await page.keyboard.press('/');
   await search(page).fill('Hide amounts');
   await page.keyboard.press('Enter');
