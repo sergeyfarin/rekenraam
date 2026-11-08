@@ -12,12 +12,20 @@
   --font-sans: "Inter Variable", "Segoe UI", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", "SFMono-Regular", "SF Mono", monospace;
 
-  --color-background: oklch(0.976 0.009 108);
+  /* The page is the old page tone (#f7f7ef) so cards stand clearly whiter
+     than it (#489). */
+  --color-background: oklch(0.973 0.011 108);
   --color-foreground: oklch(0.235 0.023 108);
   --color-surface: oklch(0.996 0.004 108);
   --color-surface-strong: oklch(0.942 0.019 108);
   --color-sidebar: oklch(0.958 0.017 108);
   --color-toolbar: oklch(0.985 0.008 108);
+  /* Shell rows (#489): two steps of the neutral hue, so the header reads as
+     two levels without a heavy band. The pages row is the old sidebar tone
+     (#f2f2e5); the sections row is one step deeper. Each base colour and
+     theme redefines both. */
+  --color-shell-pages: oklch(0.953 0.019 108);
+  --color-shell-sections: oklch(0.918 0.026 108);
   --color-control: oklch(0.993 0.004 108);
   --color-control-hover: oklch(0.935 0.018 108);
   /*
@@ -72,6 +80,15 @@
   --color-entry-transfer-soft: oklch(0.95 0.022 250);
   --color-entry-investment: oklch(0.53 0.14 305);
   --color-entry-investment-soft: oklch(0.95 0.025 305);
+  /* Place markers (#489): the one colour that says "you are here" or
+     "count waiting" in the shell: the current page's underline, tab and
+     Review count badges. It follows the chosen accent palette. */
+  --color-nav-marker: var(--color-accent);
+  --color-nav-marker-foreground: var(--color-accent-foreground);
+  /* Focus rings must hold 3:1 on the darker shell rows too (#489): the
+     white-lightened accent read 2.9:1 on the sections row, so the light
+     theme draws the accent itself; the dark theme keeps the lift. */
+  --color-focus-ring: var(--color-accent);
   --radius-panel: 10px;
   --radius-control: 8px;
   --shadow-panel: 0 10px 28px -22px rgb(30 36 20 / 0.42);
@@ -90,6 +107,8 @@
   --color-surface-strong: oklch(0.31 0.024 108);
   --color-sidebar: oklch(0.21 0.02 108);
   --color-toolbar: oklch(0.255 0.02 108);
+  --color-shell-pages: oklch(0.215 0.02 108);
+  --color-shell-sections: oklch(0.255 0.024 108);
   --color-control: oklch(0.28 0.022 108);
   --color-control-hover: oklch(0.35 0.026 108);
   --color-selected: oklch(0.68 0.13 154);
@@ -118,6 +137,7 @@
   --color-entry-transfer-soft: oklch(0.31 0.05 250);
   --color-entry-investment: oklch(0.72 0.12 305);
   --color-entry-investment-soft: oklch(0.31 0.05 305);
+  --color-focus-ring: color-mix(in oklab, var(--color-accent) 72%, white);
   --shadow-panel: 0 16px 36px -26px rgb(0 0 0 / 0.78);
 }
 
@@ -131,6 +151,8 @@
     --color-surface-strong: oklch(0.31 0.024 108);
     --color-sidebar: oklch(0.21 0.02 108);
     --color-toolbar: oklch(0.255 0.02 108);
+    --color-shell-pages: oklch(0.215 0.02 108);
+    --color-shell-sections: oklch(0.255 0.024 108);
     --color-control: oklch(0.28 0.022 108);
     --color-control-hover: oklch(0.35 0.026 108);
     --color-selected: oklch(0.68 0.13 154);
@@ -159,6 +181,7 @@
     --color-entry-transfer-soft: oklch(0.31 0.05 250);
     --color-entry-investment: oklch(0.72 0.12 305);
     --color-entry-investment-soft: oklch(0.31 0.05 305);
+    --color-focus-ring: color-mix(in oklab, var(--color-accent) 72%, white);
     --shadow-panel: 0 16px 36px -26px rgb(0 0 0 / 0.78);
   }
 }
@@ -170,11 +193,14 @@
   --color-surface-strong: oklch(0.944 0.008 250);
   --color-sidebar: oklch(0.958 0.008 250);
   --color-toolbar: oklch(0.985 0.004 250);
+  --color-shell-pages: oklch(0.952 0.01 250);
+  --color-shell-sections: oklch(0.918 0.014 250);
   --color-control: oklch(0.993 0.002 250);
   --color-control-hover: oklch(0.935 0.01 250);
   --color-row-hover: oklch(0.965 0.008 250);
   --color-border: oklch(0.86 0.014 250);
-  --color-muted: oklch(0.51 0.025 255);
+  /* 0.48 like olive (#489): 0.51 read 4.2:1 on the sections row. */
+  --color-muted: oklch(0.48 0.025 255);
   --shadow-panel: 0 10px 28px -22px rgb(18 28 44 / 0.42);
 }
 
@@ -185,11 +211,13 @@
   --color-surface-strong: oklch(0.94 0.006 286);
   --color-sidebar: oklch(0.956 0.006 286);
   --color-toolbar: oklch(0.985 0.003 286);
+  --color-shell-pages: oklch(0.954 0.007 286);
+  --color-shell-sections: oklch(0.92 0.01 286);
   --color-control: oklch(0.993 0.002 286);
   --color-control-hover: oklch(0.936 0.008 286);
   --color-row-hover: oklch(0.965 0.006 286);
   --color-border: oklch(0.86 0.012 286);
-  --color-muted: oklch(0.5 0.018 286);
+  --color-muted: oklch(0.48 0.018 286);
   --shadow-panel: 0 10px 28px -22px rgb(26 24 32 / 0.42);
 }
 
@@ -200,6 +228,8 @@
   --color-surface-strong: oklch(0.31 0.018 255);
   --color-sidebar: oklch(0.21 0.016 255);
   --color-toolbar: oklch(0.255 0.016 255);
+  --color-shell-pages: oklch(0.215 0.016 255);
+  --color-shell-sections: oklch(0.255 0.018 255);
   --color-control: oklch(0.28 0.018 255);
   --color-control-hover: oklch(0.35 0.02 255);
   --color-row-hover: oklch(0.295 0.018 255);
@@ -214,6 +244,8 @@
   --color-surface-strong: oklch(0.31 0.014 286);
   --color-sidebar: oklch(0.21 0.012 286);
   --color-toolbar: oklch(0.255 0.012 286);
+  --color-shell-pages: oklch(0.215 0.012 286);
+  --color-shell-sections: oklch(0.255 0.014 286);
   --color-control: oklch(0.28 0.014 286);
   --color-control-hover: oklch(0.35 0.016 286);
   --color-row-hover: oklch(0.295 0.014 286);
@@ -311,6 +343,13 @@
   --color-surface-strong: var(--color-surface-strong);
   --color-sidebar: var(--color-sidebar);
   --color-toolbar: var(--color-toolbar);
+  --color-shell-pages: var(--color-shell-pages);
+  --color-shell-sections: var(--color-shell-sections);
+  /* The tint the current shell tab joins: set per row by data-joined. */
+  --color-shell-joined: var(--shell-joined-tint, var(--color-shell-pages));
+  --color-nav-marker: var(--color-nav-marker);
+  --color-nav-marker-foreground: var(--color-nav-marker-foreground);
+  --color-focus-ring: var(--color-focus-ring);
   --color-control: var(--color-control);
   --color-control-hover: var(--color-control-hover);
   --color-selected: var(--color-selected);
@@ -385,7 +424,7 @@
   }
 
   :focus-visible {
-    outline: 2px solid color-mix(in oklab, var(--color-accent) 72%, white);
+    outline: 2px solid var(--color-focus-ring);
     outline-offset: 3px;
   }
 }
@@ -432,23 +471,121 @@
   }
 
   /*
-   * The shell's header and tab row sit on the page background, translucent so
-   * content scrolling under them stays faintly visible. Content itself (cards,
-   * menus, dialogs) is never translucent, and neither is the bar for someone
-   * who asked for less transparency.
+   * Shell rows (#489). The sections row and the pages row each carry their
+   * own tint, slightly translucent so content scrolling under them stays
+   * faintly visible. Content itself (cards, menus, dialogs) is never
+   * translucent, and neither is a row for someone who asked for less
+   * transparency. The sections row stacks above the pages row so its menus
+   * (phone sections, search, settings) open over it.
+   *
+   * Content scrolls beneath these tints, so muted shell text must stay at AA
+   * over the darkest fill that can sit behind it (#501: 84% read 4.41:1 over
+   * a bg-foreground control). theme-contrast.test.ts pins the floor for every
+   * palette.
    */
-  /* Content scrolls beneath this tint, so muted tab text must stay at AA over the
-     darkest fill that can sit behind it: 84% read 4.41:1 over a bg-foreground control.
-     theme-contrast.test.ts pins the floor for every palette. */
-  .shell-bar {
-    background-color: color-mix(in oklab, var(--color-background) 94%, transparent);
+  .shell-sections-row {
+    position: relative;
+    z-index: 1;
+    background-color: color-mix(in oklab, var(--color-shell-sections) 94%, transparent);
     backdrop-filter: blur(12px);
   }
 
+  /* Solid: the current section's tab joins it, and a translucent row
+     picked up dark content scrolling under it while the tab, over the
+     sections row, did not, leaving a seam (#525 review). */
+  .shell-pages-row {
+    background-color: var(--color-shell-pages);
+  }
+
   @media (prefers-reduced-transparency: reduce) {
-    .shell-bar {
-      background-color: var(--color-background);
+    .shell-sections-row {
+      background-color: var(--color-shell-sections);
       backdrop-filter: none;
+    }
+  }
+
+  /*
+   * The current section is a tab in the tint of what it opens into, joined
+   * to it as in MS Money: the pages row under a section, the page itself on
+   * Home, Settings and Review, which have no pages row. The phone menu
+   * button is the same tab; on desktop the Review link and the Settings
+   * button become it on their pages (`shell-end-tab`, drawn with the
+   * `shell-joined` utility).
+   * Both the tab and what it joins are opaque, so they meet without a seam
+   * whatever scrolls beneath. The shape (rounded top, open bottom) marks it as
+   * well as the tint; forced colours outline it, since they drop the fill.
+   */
+  .shell-section-tab {
+    display: flex;
+    align-items: center;
+    height: 2.75rem;
+    border-radius: 10px 10px 0 0;
+    color: var(--color-muted);
+    @apply text-sm;
+    font-weight: 500;
+    transition: color 150ms;
+  }
+
+  .shell-section-tab:hover {
+    color: var(--color-foreground);
+  }
+
+  .shell-section-tab[aria-current],
+  .shell-section-tab[data-current] {
+    background-color: var(--shell-joined-tint, var(--color-shell-pages));
+    color: var(--color-foreground);
+    font-weight: 600;
+  }
+
+  [data-joined='page'] {
+    --shell-joined-tint: var(--color-background);
+  }
+
+  .shell-page-tab {
+    color: var(--color-muted);
+    @apply text-sm;
+    font-weight: 500;
+    transition: color 150ms;
+  }
+
+  .shell-page-tab:hover {
+    color: var(--color-foreground);
+  }
+
+  /* The current page: a marker-coloured underline (3:1 on the pages row),
+     plus the foreground weight, so it is not marked by colour alone. */
+  .shell-page-tab[aria-current='page'] {
+    color: var(--color-foreground);
+    font-weight: 600;
+  }
+
+  .shell-page-tab[aria-current='page']::after {
+    content: '';
+    position: absolute;
+    inset-inline: 0.375rem;
+    bottom: 0;
+    height: 3px;
+    border-radius: 3px 3px 0 0;
+    background-color: var(--color-nav-marker);
+  }
+
+  @media (forced-colors: active) {
+    .shell-section-tab[aria-current],
+    .shell-section-tab[data-current] {
+      border: 1px solid CanvasText;
+      border-bottom: 0;
+    }
+
+    .shell-page-tab[aria-current='page']::after {
+      forced-color-adjust: none;
+      background-color: CanvasText;
+    }
+  }
+
+  @media (forced-colors: active) and (width >= 64rem) {
+    .shell-end-tab[data-current] {
+      border: 1px solid CanvasText;
+      border-bottom: 0;
     }
   }
 
