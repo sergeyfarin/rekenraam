@@ -85,8 +85,15 @@ test.describe('MFA enrollment fixture controls', () => {
       } else {
         const spentStep = await activation;
         expect(spentStep).toBe(sampledStep - (mode === 'current' ? 0 : 1));
-        expect(statuses).toEqual(mode === 'boundary' ? [401, 200] : [200]);
-        expect(samples).toBe(mode === 'boundary' ? 2 : 1);
+        // A previous-step code is refused if the real clock crosses a 30 s
+        // step between sampling and the server's check; the helper proves the
+        // advancement before resampling. Allow that one natural refusal, so
+        // only the injected boundary is mandatory (#384 follow-up).
+        const injected = mode === 'boundary' ? 1 : 0;
+        const natural = samples - 1 - injected;
+        expect(natural).toBeGreaterThanOrEqual(0);
+        expect(natural).toBeLessThanOrEqual(mode === 'current' ? 0 : 1);
+        expect(statuses).toEqual([...Array<number>(samples - 1).fill(401), 200]);
         await expect(page.getByRole('heading', { name: 'Recovery codes', exact: true })).toBeVisible();
         await expect(page.locator('ul.font-mono li')).toHaveCount(10);
       }
