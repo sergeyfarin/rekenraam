@@ -990,3 +990,74 @@ test('(#521 seventh review) a unit price carried to the pair is cleared under an
   await expect(sell.locator('#sell-quantity')).toHaveValue('1');
   await expect(sell.getByText('The cash account’s currency changed')).toBeVisible();
 });
+
+/**
+ * Holds each automatic preview until the test releases it, so responses can
+ * return out of order. `first` names the request that is released first.
+ */
+async function holdPreviews(page: Page, path: string, first: (payload: { cash_account_id: number }) => boolean) {
+  const gates = { first: Promise.withResolvers<void>(), second: Promise.withResolvers<void>() };
+  const arrived = { first: Promise.withResolvers<void>(), second: Promise.withResolvers<void>() };
+  await page.route(`**${path}`, async (route) => {
+    const which = first(route.request().postDataJSON()) ? 'first' : 'second';
+    const response = await route.fetch();
+    arrived[which].resolve();
+    await gates[which].promise;
+    await route.fulfill({ response });
+  });
+  return {
+    arrived: { first: arrived.first.promise, second: arrived.second.promise },
+    release: (which: 'first' | 'second') => gates[which].resolve(),
+    releaseAll: () => { gates.first.resolve(); gates.second.resolve(); }
+  };
+}
+
+for (const side of [
+  { activity: 'Sell', prefix: 'sell', path: '/api/v1/investments/sell/preview', confirm: 'Confirm sell' },
+  { activity: 'Short cover', prefix: 'short-cover', path: '/api/v1/investments/short-cover/preview', confirm: 'Confirm cover' }
+] as const) {
+  test(`(#521 eighth review) a superseded ${side.activity} preview cannot enable confirmation`, async ({ page }) => {
+    const s = await setup(page);
+    const e = await euroCash(page, s);
+    if (side.prefix === 'sell') {
+      await position(s, page);
+      await position(s, page, e.eur, e.cash.id);
+    } else {
+      for (const [cash, currency] of [[s.cash.id, s.currencyID], [e.cash.id, e.eur]]) {
+        await apiJSON(page, 'POST', '/api/v1/investments/short-sale', s.csrfToken, {
+          transaction_date: daysFromTodayISO(-5), commodity_id: s.instrument.commodity_id, holding_account_id: s.holding.id,
+          cash_account_id: cash, quantity_value: '2', quantity_scale: 0,
+          cash_amount_value: '2000', cash_amount_scale: 2, cash_commodity_id: currency
+        });
+      }
+    }
+    const held = await holdPreviews(page, side.path, (payload) => payload.cash_account_id === s.cash.id);
+    try {
+      await start(page, s.holding.id);
+      await openInvestmentActivity(page, side.activity);
+      const form = page.getByRole('dialog').filter({ has: page.locator(`#${side.prefix}-quantity`) });
+      const confirm = form.getByRole('button', { name: side.confirm, exact: true });
+      await form.locator(`#${side.prefix}-cash-account`).selectOption(String(s.cash.id));
+      await form.locator(`#${side.prefix}-quantity`).fill('1');
+      await form.locator(`#${side.prefix}-cash-amount`).fill('10');
+      await held.arrived.first;
+      await form.locator(`#${side.prefix}-cash-account`).selectOption(String(e.cash.id));
+      await expect(form.locator(`#${side.prefix}-cash-amount`)).toHaveValue('');
+      await form.locator(`#${side.prefix}-cash-amount`).fill('20');
+      await held.arrived.second;
+
+      // The old USD response returns first: it is ignored, and the EUR preview is still pending.
+      const stale = page.waitForResponse((r) => new URL(r.url()).pathname === side.path && r.request().postDataJSON().cash_account_id === s.cash.id);
+      held.release('first');
+      await stale;
+      await expect(form.getByText('Computing allocation…')).toBeVisible();
+      await expect(confirm).toBeDisabled();
+
+      held.release('second');
+      await expect(confirm).toBeEnabled();
+      await expect(form.getByText('Computing allocation…')).toBeHidden();
+    } finally {
+      held.releaseAll();
+    }
+  });
+}

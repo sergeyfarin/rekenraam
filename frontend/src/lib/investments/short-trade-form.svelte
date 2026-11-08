@@ -49,6 +49,7 @@
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { usePrefilledInstrument } from '#lib/investments/investment-prefill.svelte.ts';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
+  import { latestRequest } from '#lib/investments/latest-request.ts';
 
   const ownerToday = useOwnerToday();
 
@@ -183,6 +184,8 @@
   let previewPending = $state(false);
   let previewError = $state<unknown>(undefined);
   let previewDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+  // A response for inputs the owner has since changed is never shown (#508).
+  const previewRequests = latestRequest();
 
   const holdingAccounts = $derived(
     (accountsQuery.data?.accounts ?? []).filter(
@@ -260,8 +263,10 @@
     // Track every input the preview depends on.
     void [selectedInstrument?.commodity_id, holdingAccountID, cashAccountID, quantityStr, cashAmountStr,
       costBasisMethod, cashCommodityID, transactionDate, exactMode, grossAmountStr, settlementDate, JSON.stringify(charges)];
+    previewRequests.invalidate();
     preview = null;
     previewError = undefined;
+    previewPending = false;
     clearTimeout(previewDebounceTimer);
     if (!fieldsReady) return;
     previewDebounceTimer = setTimeout(() => void triggerPreview(), 400);
@@ -276,14 +281,16 @@
       if (built.reason === 'too_large') previewError = new Error(amountErrorMessage(built.reason));
       return;
     }
+    const current = previewRequests.start();
     previewPending = true;
     previewError = undefined;
     try {
-      preview = await previewShortCover(built.payload);
+      const result = await previewShortCover(built.payload);
+      if (current()) preview = result;
     } catch (err) {
-      previewError = err;
+      if (current()) previewError = err;
     } finally {
-      previewPending = false;
+      if (current()) previewPending = false;
     }
   }
 

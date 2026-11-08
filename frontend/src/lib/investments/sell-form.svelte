@@ -40,6 +40,7 @@
   import { gainImpactCurrency, gainImpactRows } from '#lib/investments/gain-impact.ts';
   import { commitReview, type CommitReviewState } from '#lib/investments/commit-review.ts';
   import type { ReviewGuards } from '#lib/investments/preview-review.ts';
+  import { latestRequest } from '#lib/investments/latest-request.ts';
   import type { GainImpact } from '#lib/api/investments.ts';
   import { formatScaledValue, costBasisMethodLabel } from '#lib/investments/investment-labels.ts';
   import { coefficientSign } from '#lib/money/amount.ts';
@@ -179,10 +180,14 @@
   let previewPending = $state(false);
   let previewError = $state<unknown>(undefined);
   let previewDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+  // A response for inputs the owner has since changed is never shown (#508).
+  const previewRequests = latestRequest();
 
   function clearPreview() {
+    previewRequests.invalidate();
     preview = null;
     previewError = undefined;
+    previewPending = false;
   }
 
   const holdingAccounts = $derived(
@@ -295,12 +300,13 @@
       return;
     }
 
+    const current = previewRequests.start();
     previewPending = true;
     previewError = undefined;
     preview = null;
 
     try {
-      preview = await previewSell({
+      const result = await previewSell({
         transaction_date: transactionDate,
         commodity_id: selectedInstrument.commodity_id,
         holding_account_id: Number(holdingAccountID),
@@ -313,10 +319,11 @@
         ...(economics?.ok ? economics.fields : {}),
         cost_basis_method: costBasisMethod
       });
+      if (current()) preview = result;
     } catch (err) {
-      previewError = err;
+      if (current()) previewError = err;
     } finally {
-      previewPending = false;
+      if (current()) previewPending = false;
     }
   }
 
