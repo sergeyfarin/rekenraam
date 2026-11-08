@@ -748,3 +748,63 @@ test('(#521 fourth review) a forced close leaves the discard confirmation usable
   await expect(discard).toHaveCount(0);
   await expect(dialog.getByLabel('Description', { exact: true })).toHaveValue('Keep this entry');
 });
+
+/** A second holding of the same instrument whose only position is costed in EUR, and a merger target. */
+async function euroMerger(s: Awaited<ReturnType<typeof setup>>, page: Page) {
+  await position(s, page);
+  const eur = await ensureCurrency(page, s.csrfToken, 'EUR', 'Euro');
+  const eurCash = await createCashAccount(page, s.csrfToken, `EUR cash ${s.suffix}`, eur, daysFromTodayISO(-10));
+  const euroHolding = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/holding-accounts', s.csrfToken, {
+    instrument_id: s.instrument.id, name: `EUR holding ${s.suffix}`, parent_account_id: s.broker.id,
+    opened_on: daysFromTodayISO(-10), effective_from: daysFromTodayISO(-10)
+  });
+  await apiJSON(page, 'POST', '/api/v1/investments/buy', s.csrfToken, {
+    transaction_date: daysFromTodayISO(-5), commodity_id: s.instrument.commodity_id, holding_account_id: euroHolding.id,
+    cash_account_id: eurCash.id, quantity_value: '2', quantity_scale: 0,
+    cash_amount_value: '2000', cash_amount_scale: 2, cash_commodity_id: eur
+  });
+  const target = await apiJSON<{ commodity_id: number }>(page, 'POST', '/api/v1/investments/instruments', s.csrfToken, {
+    commodity_code: `NEW${s.suffix}`, instrument_type: 'stock', display_name: `Target ${s.suffix}`,
+    quantity_scale: 0, price_scale: 2, quote_commodity_id: s.currencyID, effective_from: daysFromTodayISO(-10)
+  });
+  return {
+    eur, target,
+    usdKey: `${s.holding.id}:${s.instrument.commodity_id}`,
+    eurKey: `${euroHolding.id}:${s.instrument.commodity_id}`,
+    euroHoldingID: euroHolding.id
+  };
+}
+
+test('(#521 fifth review) changing the merger holding keeps an explicitly chosen cash currency', async ({ page }) => {
+  const s = await setup(page);
+  const e = await euroMerger(s, page);
+  await start(page, e.euroHoldingID);
+  await openInvestmentActivity(page, 'Cash-and-stock merger');
+  const form = page.getByRole('dialog').filter({ has: page.locator('#merger-new-instrument') });
+  await form.locator('#merger-new-instrument').selectOption(String(e.target.commodity_id));
+  await form.locator('#merger-currency').selectOption(String(e.eur));
+  await form.locator('#merger-cash').fill('10');
+  await form.locator('#merger-holding').selectOption(e.usdKey);
+  await expect(form.locator('#merger-cash')).toHaveValue('10');
+  await expect(form.locator('#merger-currency')).toHaveValue(String(e.eur));
+  await expect(form.locator('#merger-currency-unavailable')).toContainText('EUR');
+  await expect(form.getByRole('button', { name: 'Preview merger', exact: true })).toBeDisabled();
+});
+
+test('(#521 fifth review) the default merger currency follows the holding until an amount is entered in it', async ({ page }) => {
+  const s = await setup(page);
+  const e = await euroMerger(s, page);
+  await start(page, s.holding.id);
+  await openInvestmentActivity(page, 'Cash-and-stock merger');
+  const form = page.getByRole('dialog').filter({ has: page.locator('#merger-new-instrument') });
+  await form.locator('#merger-holding').selectOption(e.usdKey);
+  await expect(form.locator('#merger-currency')).toHaveValue(String(s.currencyID));
+  await form.locator('#merger-holding').selectOption(e.eurKey);
+  await expect(form.locator('#merger-currency')).toHaveValue(String(e.eur));
+  await form.locator('#merger-holding').selectOption(e.usdKey);
+  await expect(form.locator('#merger-currency')).toHaveValue(String(s.currencyID));
+  await form.locator('#merger-cash').fill('10');
+  await form.locator('#merger-holding').selectOption(e.eurKey);
+  await expect(form.locator('#merger-currency')).toHaveValue(String(s.currencyID));
+  await expect(form.locator('#merger-currency-unavailable')).toContainText('USD');
+});

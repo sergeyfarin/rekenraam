@@ -218,9 +218,14 @@
     discardPreview();
   }
 
-  function selectHolding() {
+  // A new holding never relabels the cash (#508): a chosen currency stays,
+  // and so does the default the amount was entered in. A currency the new
+  // holding has no lots in is then named and must be corrected
+  // (currencyNotCarried). With nothing entered, the default follows.
+  function selectHolding(key: string) {
+    if (chosenCurrencyID === null && cashAmount.trim() && currencyID) chosenCurrencyID = currencyID;
+    holdingKey = key;
     chosenDestination = null;
-    chosenCurrencyID = null;
     discardPreview();
   }
 
@@ -376,7 +381,7 @@
           · {instrumentLabel(correction.terms.commodity_id)}
         </p>
       {:else}
-        <select id="merger-holding" aria-describedby="merger-holding-hint" bind:value={holdingKey} required onchange={selectHolding}
+        <select id="merger-holding" aria-describedby="merger-holding-hint" value={holdingKey} required onchange={(event) => selectHolding(event.currentTarget.value)}
           class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
           <option value="">{m.investments_exchange_select_holding()}</option>
         {#if holdingKey && !holdings.some((item) => item.key === holdingKey)}<option value={holdingKey} disabled>{m.investments_activity_position_unavailable_option()}</option>{/if}
