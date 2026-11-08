@@ -107,17 +107,32 @@ func (s *PricingService) Workspace(ctx context.Context, asOf string) (PricingWor
 		kinds[commodity.ID] = commodity.Kind
 	}
 	if baseID > 0 {
+		held := []int64{}
+		addBasePair := func(commodityID int64) {
+			key := [2]int64{commodityID, baseID}
+			if !pairs[key] {
+				pairs[key] = true
+				snapshot.Pairs = append(snapshot.Pairs, db.PricingPairRecord{BaseCommodityID: commodityID, QuoteCommodityID: baseID})
+			}
+		}
 		for _, amounts := range balances {
 			for commodityID, amount := range amounts {
-				key := [2]int64{commodityID, baseID}
+				if commodityID == baseID || amount.Sign() == 0 {
+					continue
+				}
+				held = append(held, commodityID)
 				if kinds[commodityID] != "currency" && priced[commodityID] {
 					continue
 				}
-				if commodityID != baseID && amount.Sign() != 0 && !pairs[key] {
-					pairs[key] = true
-					snapshot.Pairs = append(snapshot.Pairs, db.PricingPairRecord{BaseCommodityID: commodityID, QuoteCommodityID: baseID})
-				}
+				addBasePair(commodityID)
 			}
+		}
+		legs, err := s.missingChainedRateLegs(ctx, baseID, held, asOf, boundary)
+		if err != nil {
+			return result, err
+		}
+		for _, currencyID := range legs {
+			addBasePair(currencyID)
 		}
 	}
 	slices.SortFunc(snapshot.Pairs, func(a, b db.PricingPairRecord) int {
@@ -171,6 +186,29 @@ func (s *PricingService) Workspace(ctx context.Context, asOf string) (PricingWor
 		return result, err
 	}
 	return result, nil
+}
+
+// missingChainedRateLegs names the quote currencies whose rate to the base
+// currency valuation lacks for a held commodity: one priced only in a
+// currency the book neither holds nor defaults an account to, so no series,
+// account or balance puts that currency's pair in Prices. The report's own
+// rate table (RateTable.MissingChainLeg) decides, exactly as Home's gaps do;
+// a holding a direct price values asks for no rate (#531).
+func (s *PricingService) missingChainedRateLegs(ctx context.Context, baseID int64, held []int64, asOf string, boundary db.ObservationBoundary) ([]int64, error) {
+	if len(held) == 0 {
+		return nil, nil
+	}
+	table, err := newRateTableAtBoundary(ctx, s.repository, ReportingCurrencyInput{CommodityID: baseID}, held, asOf, asOf, boundary)
+	if err != nil {
+		return nil, fmt.Errorf("judge chained price coverage: %w", err)
+	}
+	legs := []int64{}
+	for _, commodityID := range dedupeIDs(held) {
+		if currencyID, missing := table.MissingChainLeg(commodityID, asOf); missing {
+			legs = append(legs, currencyID)
+		}
+	}
+	return dedupeIDs(legs), nil
 }
 
 // refuseUnvaluableCoverage marks missing a pair recent enough by age that
