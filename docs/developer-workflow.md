@@ -61,7 +61,10 @@ official 3.54.1. The released candidate, go-sqlite3 v1.14.53 (SQLite 3.54.1),
 passes both probes but is held: 3.54.1 re-prepares common joined statements,
 which slows `internal/app` from 186 s to 250 s and breaks the race deadline
 ([candidate review](reviews/sqlite-driver-candidate-2026-11-08.md)). The
-production module pin remains v1.14.52.
+production module pin remains v1.14.52. Every driver admission review also
+builds the [FTS5 integrity probe](reviews/fts5-integrity-stale-structure-2026-11-08.md)
+against the candidate engine without its `refresh` argument and records
+whether the #403 workaround (`refreshFTS5StructuresTx`) is still needed.
 
 ### Install
 

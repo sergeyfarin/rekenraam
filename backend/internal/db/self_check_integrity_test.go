@@ -38,7 +38,8 @@ func TestSQLiteIntegrityOnAReusedReaderAfterSearchWrites(t *testing.T) {
 
 	// Canary: the bare pragma on this connection still sees the stale FTS5
 	// structure, so the runs above did exercise the case. If a SQLite upgrade
-	// fixes the engine, this fails and the refresh can be reconsidered.
+	// fixes the engine, this fails and the refresh can be reconsidered; rerun
+	// docs/reviews/fixtures/fts5-integrity-stale-structure-probe.c.txt too (#541).
 	var bare string
 	require.NoError(t, readOnly.QueryRowContext(ctx, `PRAGMA integrity_check`).Scan(&bare))
 	insertSearchRow(4)
