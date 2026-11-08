@@ -152,5 +152,8 @@ holding's first posted entry date. The posted-only rule is unchanged: drafts,
 voided transactions, superseded versions and previews hold nothing. Migration
 `0010_fx_work_after_holding_posting.sql` adds
 `fx_work_after_holding_posting_version_insert`, the posting-outbox wakeup for
-that demand, with the same coalescing as the posted-currency trigger. Details
+that demand, with the same coalescing as the posted-currency trigger. Its work
+(reason `holding_entered`) is a hint only: the sweep takes the start date from
+`FXDemand` and never from the hint, because the trigger cannot pick the
+current instrument version. Details
 are in `docs/plans/pricing-management-plan.md` → Posted-only historical demand.

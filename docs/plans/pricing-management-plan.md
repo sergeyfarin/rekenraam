@@ -131,9 +131,14 @@ sold later keeps its obligation like a balance that returns to zero. A watched
 instrument the book never held demands no rate. The posting outbox gains
 `fx_work_after_holding_posting_version_insert` (migration 0010), which wakes
 coverage for those currencies when a posted version of the holding is
-written; it reads every instrument version because the owner-local day is not
-known in the trigger, and the sweep's own `FXDemand` read discards an
-over-wide hint. A quote currency first recorded after the last posting of the
+written. It reads every instrument version because the owner-local day is not
+known in the trigger, so an obsolete version can name a currency the holding
+no longer demands, at the holding's date. Its work therefore carries reason
+`holding_entered` and is only a wakeup: unlike posted-currency work, the sweep
+never lets its `start_date` reach back before the `FXDemand` start, so an
+obsolete quote currency cannot backdate another source's later demand for the
+same currency or spend provider quota on dates nothing needs
+(`TestFXHoldingWakeupCannotBackdateOtherDemand`). A quote currency first recorded after the last posting of the
 holding (an instrument reclassified later, or the first observation in a new
 currency) has no outbox wakeup and is picked up by the next scheduled or manual
 sweep; that wakeup is

@@ -99,7 +99,9 @@ scan:
 		}
 		// A deferred date is a wakeup hint, not historical demand. Re-read the
 		// current posting/account state so cancellation or edits cannot revive it.
-		if payload.Reason != "deferred" && payload.StartDate != "" && (start == "" || payload.StartDate < start) {
+		// A holding wakeup's date is likewise only a hint (#532 review).
+		if payload.Reason != "deferred" && payload.Reason != fxHoldingWakeupReason &&
+			payload.StartDate != "" && (start == "" || payload.StartDate < start) {
 			start = payload.StartDate
 		}
 		if payload.Next != nil && target.Base.ID == payload.Next.BaseID && target.Quote.ID == payload.Next.QuoteID && start < payload.Next.Date {

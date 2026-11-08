@@ -6,7 +6,10 @@
 -- so a trade that creates the demand enqueues FX coverage like a posted
 -- currency does (fx_work_after_posting_version_insert). Every instrument
 -- version is consulted because the owner-local reference day is not known
--- here; the sweep re-reads current demand, so an over-wide hint does nothing.
+-- here, so an obsolete version can name a currency the holding no longer
+-- demands. The work therefore carries reason 'holding_entered': a wakeup
+-- hint whose start_date only coalesces outbox work. The sweep takes the start
+-- from its own FXDemand read and never reaches back to the hint's date.
 -- +goose StatementBegin
 CREATE TRIGGER fx_work_after_holding_posting_version_insert
 AFTER INSERT ON posting_versions
@@ -15,7 +18,7 @@ WHEN EXISTS (SELECT 1 FROM transaction_versions tv WHERE tv.id = NEW.transaction
 BEGIN
   INSERT INTO background_work_items (book_id, kind, payload_json, available_at, created_at, updated_at)
   SELECT NEW.book_id, 'pricing.fx_coverage',
-    json_object('reason', 'transaction_entered', 'start_date', je.entry_date, 'currency_id', quoted.commodity_id),
+    json_object('reason', 'holding_entered', 'start_date', je.entry_date, 'currency_id', quoted.commodity_id),
     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
   FROM (
     SELECT iv.quote_commodity_id AS commodity_id

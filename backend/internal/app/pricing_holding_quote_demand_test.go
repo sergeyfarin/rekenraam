@@ -2,13 +2,16 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"rekenraam/backend/internal/db"
 	"rekenraam/backend/internal/exact"
+	"rekenraam/backend/internal/marketdata"
 )
 
 // #532: a EUR book buys a USD-quoted stock with EUR cash. The ledger posts
@@ -181,4 +184,66 @@ func TestFXDemandKeepsASoldHoldingsQuoteCurrency(t *testing.T) {
 	record, found := demandFor(t, f, usd)
 	require.True(t, found)
 	assert.Equal(t, "2026-09-28", record.StartDate)
+}
+
+// recordingFXProvider answers every EUR/USD request at 1 and records the
+// requested dates, so a test can see how far back a sweep reaches.
+type recordingFXProvider struct{ dates *[]string }
+
+func (p recordingFXProvider) Code() string { return "frankfurter" }
+func (p recordingFXProvider) Name() string { return "recording" }
+func (p recordingFXProvider) Capabilities() marketdata.ProviderCapabilities {
+	return marketdata.ProviderCapabilities{FXRates: true, HistoricalFXRates: true}
+}
+func (p recordingFXProvider) FetchFXRates(ctx context.Context, request marketdata.FXRateRequest) ([]marketdata.FXRateObservation, error) {
+	*p.dates = append(*p.dates, request.Date)
+	return fakeFXProvider{code: "frankfurter", rates: map[string]fakeFXRate{"EUR/USD": {value: 1}, "USD/EUR": {value: 1}}}.FetchFXRates(ctx, request)
+}
+
+// PR #539 review: the holding trigger reads every instrument version, so an
+// obsolete version's quote currency still wakes coverage at the holding's
+// date. That wakeup is only a hint: the sweep must take the start date from
+// FXDemand, never reach back to the hint's earlier date for a currency
+// demanded later by something else.
+func TestFXHoldingWakeupCannotBackdateOtherDemand(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f := newHomeFixture(t)
+	usd := seedTestCurrencyCommodity(t, f.database, "USD")
+	quoteInstrument(t, f, usd)
+	_, err := f.database.Exec(`INSERT INTO investment_instrument_versions (instrument_id, version_seq, effective_from, recorded_at,
+		changed_by_user_id, change_reason, status, instrument_type, display_name, quote_commodity_id, trading_commodity_id, quantity_scale, price_scale)
+		SELECT instrument_id, 2, effective_from, '2026-10-15T00:00:00Z', 1, 'correct mistaken quote currency', status, instrument_type,
+			display_name, ?, ?, quantity_scale, price_scale
+		FROM investment_instrument_versions WHERE version_seq = 1`, f.eurCommodityID, f.eurCommodityID)
+	require.NoError(t, err)
+	f.move(t, "2026-10-15", f.cashAccountID, usd, 100)
+	f.buyTenWithEUR(t, "2026-09-28")
+
+	demand, found := demandFor(t, f, usd)
+	require.True(t, found)
+	require.Equal(t, "2026-10-15", demand.StartDate, "USD is demanded only by the later USD balance")
+	var raw string
+	require.NoError(t, f.database.QueryRow(`SELECT payload_json FROM background_work_items
+		WHERE kind = 'pricing.fx_coverage' AND json_extract(payload_json, '$.currency_id') = ?
+		  AND json_extract(payload_json, '$.start_date') = '2026-09-28'`, usd).Scan(&raw),
+		"the obsolete version's currency still wakes coverage at the holding's date")
+	var payload fxCoverageWorkPayload
+	require.NoError(t, json.Unmarshal([]byte(raw), &payload))
+
+	dates := []string{}
+	service := NewPricingService(db.NewPricingRepository(f.database), marketdata.NewRegistry(recordingFXProvider{dates: &dates}))
+	service.SetNowForTest(func() time.Time { return time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC) })
+	_, err = f.database.Exec(`UPDATE market_data_sources SET status = 'disabled' WHERE kind = 'provider' AND code <> 'frankfurter'`)
+	require.NoError(t, err)
+	source := marketDataSourceIDByCode(t, f.database, "frankfurter")
+	_, err = service.SavePolicy(ctx, PricingPolicyInput{OwnerUserID: 1, DefaultSourceID: &source, MaxBackfillDays: 1})
+	require.NoError(t, err)
+
+	_, _, err = service.runFXCoverage(ctx, 1, payload)
+	require.NoError(t, err)
+	require.NotEmpty(t, dates, "the wakeup still covers the demanded dates")
+	for _, date := range dates {
+		assert.GreaterOrEqual(t, date, demand.StartDate, "a holding hint must not extend an unrelated USD obligation")
+	}
 }
