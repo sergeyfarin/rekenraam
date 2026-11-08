@@ -16,21 +16,25 @@ import { test as base, expect, launchApp, stop, waitForHealthy, workerStateRoot 
  *
  * An external E2E_BASE_URL app has one book, so these tests skip there.
  */
-export const test = base.extend<{ ownedBookURL: string }>({
-  ownedBookURL: [async ({}, use, testInfo) => {
+export const test = base.extend<{ ownedBook: { url: string; databasePath: string }; ownedBookURL: string; ownedBookDatabasePath: string }>({
+  ownedBook: [async ({}, use, testInfo) => {
     testInfo.skip(Boolean(process.env.E2E_BASE_URL), 'needs a book of its own; an external app has one book');
     // Under the worker state root, so global setup clears it and the log
     // survives a failure for inspection.
     const directory = mkdtempSync(path.join(workerStateRoot, 'owned-'));
-    const { app, url, log, logPath } = launchApp(directory, await freePort());
+    const { app, url, databasePath, log, logPath } = launchApp(directory, await freePort());
     try {
       await waitForHealthy(app, url, logPath);
-      await use(url);
+      await use({ url, databasePath });
     } finally {
       await stop(app);
       log.end();
     }
   }, { timeout: 60_000 }],
+  ownedBookURL: async ({ ownedBook }, use) => { await use(ownedBook.url); },
+  // For seeding shapes the API cannot build quickly, such as thousands of
+  // accounts (#518); see bulk-accounts.ts.
+  ownedBookDatabasePath: async ({ ownedBook }, use) => { await use(ownedBook.databasePath); },
   baseURL: async ({ ownedBookURL }, use) => { await use(ownedBookURL); }
 });
 export { expect };

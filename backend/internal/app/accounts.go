@@ -1,11 +1,14 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"slices"
 	"strings"
 	"time"
@@ -21,8 +24,13 @@ const (
 	accountExternalRefMaxBytes = 200
 	accountCommentMaxBytes     = 5000
 	accountJSONMaxBytes        = 10000
-	accountListLimit           = 2000
-	systemAccountDate          = "0001-01-01"
+	// AccountListMaxLimit is the largest account-list page and also its
+	// default. A longer list continues through next_cursor (#518).
+	AccountListMaxLimit = 2000
+	// accountListMaxCursorBytes bounds a supplied cursor before decoding; a
+	// genuine cursor is a short JSON tuple plus one account name.
+	accountListMaxCursorBytes = 2048
+	systemAccountDate         = "0001-01-01"
 )
 
 var (
@@ -110,6 +118,18 @@ type ListAccountsInput struct {
 	IncludeArchived bool
 	IncludeSystem   bool
 	Query           string
+	// Cursor continues a previous page's NextCursor; empty starts at the
+	// first account. Limit is the page size, 0 meaning AccountListMaxLimit.
+	Cursor string
+	Limit  int
+}
+
+// AccountListPage is one page of the current account list. NextCursor is
+// empty on the last page; otherwise passing it back with the same filters
+// returns the accounts after this page, in the same order (#518).
+type AccountListPage struct {
+	Accounts   []Account
+	NextCursor string
 }
 
 type CreateAccountInput struct {
@@ -216,36 +236,106 @@ func NewAccountService(repository *db.AccountRepository, institutionRepository *
 // SetSettings resolves owner-entered account dates from the owner's day (#339).
 func (s *AccountService) SetSettings(settings *SettingsService) { s.settings = settings }
 
-func (s *AccountService) ListAccounts(ctx context.Context, input ListAccountsInput) ([]Account, error) {
+func (s *AccountService) ListAccounts(ctx context.Context, input ListAccountsInput) (AccountListPage, error) {
 	ctx, referenceErr := s.settings.referenceContext(ctx, s.now())
 	if referenceErr != nil {
-		return nil, referenceErr
+		return AccountListPage{}, referenceErr
 	}
 
 	status := strings.TrimSpace(input.Status)
 	if status != "" && status != "active" && status != "closed" && status != "archived" {
-		return nil, ValidationError{Message: "account status is invalid"}
+		return AccountListPage{}, ValidationError{Message: "account status is invalid"}
 	}
 
 	accountClass := strings.TrimSpace(input.AccountClass)
 	if accountClass != "" && !accountClasses[accountClass] {
-		return nil, ValidationError{Message: "account class is invalid"}
+		return AccountListPage{}, ValidationError{Message: "account class is invalid"}
 	}
 
-	records, err := s.repository.ListAccounts(ctx, db.ListAccountsParams{
+	limit := input.Limit
+	if limit == 0 {
+		limit = AccountListMaxLimit
+	}
+	if limit < 1 || limit > AccountListMaxLimit {
+		return AccountListPage{}, ValidationError{Message: fmt.Sprintf("account list limit must be between 1 and %d", AccountListMaxLimit)}
+	}
+
+	var after *db.AccountListPosition
+	if input.Cursor != "" {
+		position, err := decodeAccountListCursor(input.Cursor)
+		if err != nil {
+			return AccountListPage{}, err
+		}
+		after = &position
+	}
+
+	page, err := s.repository.ListAccounts(ctx, db.ListAccountsParams{
 		BookID:          BookID,
 		Status:          status,
 		AccountClass:    accountClass,
 		IncludeArchived: input.IncludeArchived,
 		IncludeSystem:   input.IncludeSystem,
 		Query:           strings.TrimSpace(input.Query),
-		Limit:           accountListLimit,
+		After:           after,
+		Limit:           limit,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("list accounts: %w", err)
+		return AccountListPage{}, fmt.Errorf("list accounts: %w", err)
 	}
 
-	return toAccounts(records), nil
+	result := AccountListPage{Accounts: toAccounts(page.Records)}
+	if page.Next != nil {
+		cursor, err := encodeAccountListCursor(*page.Next)
+		if err != nil {
+			return AccountListPage{}, err
+		}
+		result.NextCursor = cursor
+	}
+	return result, nil
+}
+
+// accountListCursor is the opaque next_cursor payload: the last returned
+// account's place in the list order. It names no filter, so a client must
+// resend the same filters with it; a keyset position stays meaningful under
+// any filter, and an account inserted or renamed between pages lands on
+// whichever side of the cursor its new position falls.
+type accountListCursor struct {
+	Version   int    `json:"v"`
+	ClassRank int    `json:"r"`
+	SortName  string `json:"n"`
+	ID        int64  `json:"i"`
+}
+
+func encodeAccountListCursor(position db.AccountListPosition) (string, error) {
+	payload, err := json.Marshal(accountListCursor{Version: 1, ClassRank: position.ClassRank, SortName: position.SortName, ID: position.ID})
+	if err != nil {
+		return "", fmt.Errorf("encode account list cursor: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(payload), nil
+}
+
+func decodeAccountListCursor(value string) (db.AccountListPosition, error) {
+	invalid := ValidationError{Message: "account list cursor is invalid"}
+	if len(value) > accountListMaxCursorBytes {
+		return db.AccountListPosition{}, invalid
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil {
+		return db.AccountListPosition{}, invalid
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var cursor accountListCursor
+	if err := decoder.Decode(&cursor); err != nil {
+		return db.AccountListPosition{}, invalid
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return db.AccountListPosition{}, invalid
+	}
+	if cursor.Version != 1 || cursor.ClassRank < 1 || cursor.ID <= 0 {
+		return db.AccountListPosition{}, invalid
+	}
+	return db.AccountListPosition{ClassRank: cursor.ClassRank, SortName: cursor.SortName, ID: cursor.ID}, nil
 }
 
 func (s *AccountService) Account(ctx context.Context, accountID int64) (Account, error) {

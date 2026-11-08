@@ -124,7 +124,27 @@ type ListAccountsParams struct {
 	IncludeArchived bool
 	IncludeSystem   bool
 	Query           string
-	Limit           int
+	// After continues a listing strictly after this position in the list
+	// order; nil starts at the first account (#518).
+	After *AccountListPosition
+	Limit int
+}
+
+// AccountListPosition is one account's place in the account-list order:
+// class rank, then display sort name, then id. The id makes it total, so a
+// keyset cursor built from it never skips or repeats an unchanged account
+// (#518).
+type AccountListPosition struct {
+	ClassRank int
+	SortName  string
+	ID        int64
+}
+
+// AccountListPage is one bounded page of the account list. Next is the
+// position of its last row when more rows follow, and nil on the last page.
+type AccountListPage struct {
+	Records []AccountRecord
+	Next    *AccountListPosition
 }
 
 type CreateAccountParams struct {
@@ -220,7 +240,51 @@ func NewAccountRepository(database *sql.DB) *AccountRepository {
 	return &AccountRepository{database: database}
 }
 
-func (r *AccountRepository) ListAccounts(ctx context.Context, params ListAccountsParams) ([]AccountRecord, error) {
+// accountListClassRank and accountListSortName are the SQL forms of the
+// account-list order; AccountListPositionOf is their Go mirror. The keyset
+// predicate compares the very same expressions the ORDER BY sorts on, so the
+// cursor and the order cannot disagree on collation or NULL handling.
+const (
+	accountListClassRank = `CASE av.account_class
+				WHEN 'asset' THEN 1
+				WHEN 'liability' THEN 2
+				WHEN 'equity' THEN 3
+				WHEN 'income' THEN 4
+				WHEN 'expense' THEN 5
+				ELSE 99
+			END`
+	accountListSortName = `COALESCE(av.name, a.system_role, '')`
+)
+
+var accountListClassRanks = map[string]int{
+	"asset":     1,
+	"liability": 2,
+	"equity":    3,
+	"income":    4,
+	"expense":   5,
+}
+
+// AccountListPositionOf returns the record's place in the account-list order.
+func AccountListPositionOf(record AccountRecord) AccountListPosition {
+	rank, ok := accountListClassRanks[record.AccountClass]
+	if !ok {
+		rank = 99
+	}
+	sortName := ""
+	switch {
+	case record.Name.Valid:
+		sortName = record.Name.String
+	case record.SystemRole.Valid:
+		sortName = record.SystemRole.String
+	}
+	return AccountListPosition{ClassRank: rank, SortName: sortName, ID: record.ID}
+}
+
+func (r *AccountRepository) ListAccounts(ctx context.Context, params ListAccountsParams) (AccountListPage, error) {
+	if params.Limit <= 0 {
+		return AccountListPage{}, fmt.Errorf("list accounts: limit must be positive")
+	}
+
 	where := []string{"a.book_id = ?"}
 	args := []any{params.BookID}
 
@@ -247,28 +311,39 @@ func (r *AccountRepository) ListAccounts(ctx context.Context, params ListAccount
 		args = append(args, like, like, like, like)
 	}
 
-	args = append(args, params.Limit)
+	if after := params.After; after != nil {
+		where = append(where, "("+accountListClassRank+" > ? OR ("+accountListClassRank+" = ? AND ("+
+			accountListSortName+" > ? OR ("+accountListSortName+" = ? AND a.id > ?))))")
+		args = append(args, after.ClassRank, after.ClassRank, after.SortName, after.SortName, after.ID)
+	}
+
+	// One extra row tells whether another page follows without a count.
+	args = append(args, params.Limit+1)
 
 	rows, err := r.database.QueryContext(ctx, currentAccountSelect(ctx, "AND "+strings.Join(where, " AND ")+`
 		ORDER BY
-			CASE av.account_class
-				WHEN 'asset' THEN 1
-				WHEN 'liability' THEN 2
-				WHEN 'equity' THEN 3
-				WHEN 'income' THEN 4
-				WHEN 'expense' THEN 5
-				ELSE 99
-			END,
-			COALESCE(av.name, a.system_role, ''),
+			`+accountListClassRank+`,
+			`+accountListSortName+`,
 			a.id
 		LIMIT ?
 	`), args...)
 	if err != nil {
-		return nil, fmt.Errorf("list accounts: %w", err)
+		return AccountListPage{}, fmt.Errorf("list accounts: %w", err)
 	}
 	defer rows.Close()
 
-	return scanAccountRecords(rows)
+	records, err := scanAccountRecords(rows)
+	if err != nil {
+		return AccountListPage{}, err
+	}
+
+	page := AccountListPage{Records: records}
+	if len(records) > params.Limit {
+		page.Records = records[:params.Limit]
+		next := AccountListPositionOf(page.Records[params.Limit-1])
+		page.Next = &next
+	}
+	return page, nil
 }
 
 // PostingAccountSummary holds the account fields needed to enrich posting responses.

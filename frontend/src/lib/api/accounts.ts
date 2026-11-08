@@ -3,6 +3,7 @@ import { APIClientError, apiClient, toAPIClientError, toNetworkError } from '#li
 
 export type AccountResponse = components['schemas']['AccountResponse'];
 export type AccountsResponse = components['schemas']['AccountsResponse'];
+export type AccountListResponse = components['schemas']['AccountListResponse'];
 export type AccountRequest = components['schemas']['AccountRequest'];
 export type AccountLifecycleRequest = components['schemas']['AccountLifecycleRequest'];
 
@@ -22,13 +23,38 @@ export function accountsQueryOptions(includeArchived = false, includeSystem = fa
   };
 }
 
+// The account list is cursor-paged (#518). Pickers, filters and lookups
+// need the whole catalog, so this follows next_cursor until the last page
+// and hands consumers one complete list; a failed page fails the whole read
+// instead of returning a silently partial catalog. An account renamed between
+// pages can reappear after the cursor, so rows are kept once by id.
 export async function getAccounts(includeArchived = false, includeSystem = false): Promise<AccountsResponse> {
+  const accounts: AccountResponse[] = [];
+  const seen = new Set<number>();
+  let cursor: string | undefined;
+  for (;;) {
+    const page = await getAccountPage(includeArchived, includeSystem, cursor);
+    for (const account of page.accounts) {
+      if (!seen.has(account.id)) {
+        seen.add(account.id);
+        accounts.push(account);
+      }
+    }
+    if (page.next_cursor === null || page.next_cursor === undefined || page.next_cursor === cursor) {
+      return { accounts };
+    }
+    cursor = page.next_cursor;
+  }
+}
+
+async function getAccountPage(includeArchived: boolean, includeSystem: boolean, cursor: string | undefined): Promise<AccountListResponse> {
   try {
     const { data, error, response } = await apiClient.GET('/api/v1/accounts', {
       params: {
         query: {
           include_archived: includeArchived || undefined,
-          include_system: includeSystem || undefined
+          include_system: includeSystem || undefined,
+          cursor
         }
       }
     });
@@ -45,6 +71,17 @@ export async function getAccounts(includeArchived = false, includeSystem = false
 
     throw toNetworkError(error);
   }
+}
+
+// One account by id, current version, whatever its status: a register
+// reached directly needs its own account, not a search of the list (#518).
+// The key sits under accountsQueryKey so every account invalidation refreshes it.
+export function accountQueryOptions(accountID: number) {
+  return {
+    queryKey: [...accountsQueryKey, 'detail', accountID] as const,
+    queryFn: () => getAccount(accountID),
+    staleTime: 10_000
+  };
 }
 
 export async function getAccount(accountID: number): Promise<AccountResponse> {
