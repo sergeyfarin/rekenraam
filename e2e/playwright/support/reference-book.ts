@@ -102,12 +102,14 @@ async function call<T>(page: Page, method: string, path: string, body: unknown, 
 
 /**
  * Seeds the reference book into the signed-in browser's book. EUR and USD are
- * added when missing; system accounts come from the ledger setup.
+ * added when missing; system accounts come from the ledger setup. A caller
+ * with a database of its own (the website screenshots) may pass an empty
+ * suffix, as the Go reader does, so names read as the fixture spells them.
  */
-export async function seedReferenceBook(page: Page): Promise<SeededReferenceBook> {
+export async function seedReferenceBook(page: Page, options: { suffix?: string } = {}): Promise<SeededReferenceBook> {
   const book = await loadReferenceBook();
   const { csrfToken } = await readyForLedger(page);
-  const suffix = `X${Date.now().toString(36).toUpperCase()}`;
+  const suffix = options.suffix ?? `X${Date.now().toString(36).toUpperCase()}`;
   const ids = new Map<string, number>();
   const transactions: SeededReferenceBook['transactions'] = { ordinary: [], investment: [] };
   ids.set('EUR', await ensureCurrency(page, csrfToken, 'EUR', 'Euro'));

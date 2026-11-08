@@ -35,6 +35,7 @@
 
   const section = $derived(entry?.section);
   const onHome = $derived(entry?.route === '/app');
+  const onReview = $derived(entry?.route === '/app/review');
   const tabbed = $derived(section !== undefined && section !== 'home' && section !== 'settings' && section !== 'review');
   // The link's name is its visible text (label and badge) so it matches what
   // voice control users say; the status sentence rides along as a description.
@@ -71,8 +72,19 @@
     return section === id ? 'true' : undefined;
   }
 
-  const linkClass =
-    'flex min-h-10 items-center rounded-full px-3 text-sm font-medium text-muted transition hover:text-foreground aria-[current]:bg-surface-strong aria-[current]:text-foreground';
+  // The current section's tab joins what it opens into: its pages row, or
+  // the page itself where there is none (app.css shell-section-tab).
+  const joined = $derived(tabbed ? 'pages' : 'page');
+  const currentLabel = $derived(
+    tabbed && section ? sectionFor(section)?.title() : section === 'settings' ? m.settings_title() : section === 'review' ? m.attention_review() : m.nav_home()
+  );
+
+  const tabClass = 'shell-section-tab px-3.5';
+  // Review on its own page: a pill on phones (the menu button is the tab
+  // there), the joined tab on desktop, covering the bar's border.
+  const endTabClass = 'max-lg:rounded-full max-lg:hover:bg-control-hover lg:-mb-px lg:h-11 lg:self-end lg:rounded-t-[10px] lg:bg-shell-joined lg:px-3';
+  const menuLinkClass =
+    'flex min-h-10 items-center rounded-(--radius-control) px-3 text-sm font-medium text-muted transition hover:bg-control-hover hover:text-foreground aria-[current]:bg-surface-strong aria-[current]:text-foreground';
 </script>
 
 <a
@@ -82,34 +94,39 @@
   {m.nav_skip_to_content()}
 </a>
 
+<!-- Each row carries its own tint and translucency (app.css shell rows). -->
 <div data-print-hide class="shell-bar sticky top-0 z-30 border-b border-border/70" {@attach publishHeight}>
-  <div class="mx-auto max-w-[100rem] px-4 sm:px-6 lg:px-8">
-    <header class="flex h-14 items-center gap-2">
-      <!-- Desktop: Home, then the sections as plain links to their overviews. -->
-      <nav aria-label={m.nav_sections_label()} class="-ml-3 hidden min-w-0 lg:block">
-        <ul class="flex items-center gap-1">
-          <li><a href="/app" aria-current={onHome ? 'page' : undefined} class={linkClass}>{m.nav_home()}</a></li>
+  <div class="shell-sections-row" data-joined={joined}>
+    <header class="mx-auto flex h-14 max-w-[100rem] items-center gap-2 px-4 sm:px-6 lg:px-8">
+      <!-- Desktop: Home, then the sections as plain links to their overviews.
+           The current one is a tab joined to the row below; on Home it covers
+           the bar's bottom border to open into the page. -->
+      <nav aria-label={m.nav_sections_label()} class="-ml-3.5 hidden min-w-0 self-end lg:block" class:-mb-px={!tabbed}>
+        <ul class="flex items-end gap-0.5">
+          <li><a href="/app" aria-current={onHome ? 'page' : undefined} class={tabClass}>{m.nav_home()}</a></li>
           {#each sections as item (item.id)}
             <li>
-              <a href={item.overview} aria-current={sectionCurrent(item.id, item.overview)} class={linkClass}>{item.title()}</a>
+              <a href={item.overview} aria-current={sectionCurrent(item.id, item.overview)} class={tabClass}>{item.title()}</a>
             </li>
           {/each}
         </ul>
       </nav>
 
-      <!-- Phone: the same links behind one disclosure button. -->
-      <div class="relative -ml-2 min-w-0 lg:hidden" {@attach dismissible(() => menuOpen, closeMenu)}>
+      <!-- Phone: the same links behind one disclosure button, drawn as the
+           current section's tab. -->
+      <div class="relative -ml-2.5 min-w-0 self-end lg:hidden" class:-mb-px={!tabbed} {@attach dismissible(() => menuOpen, closeMenu)}>
         <button
           bind:this={menuButton}
           type="button"
           aria-expanded={menuOpen}
           aria-controls="shell-phone-menu"
           onclick={() => (menuOpen = !menuOpen)}
-          class="inline-flex min-h-10 max-w-full items-center gap-2 rounded-(--radius-control) px-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
+          data-current
+          class="shell-section-tab max-w-full gap-2 px-2.5"
         >
           {#if menuOpen}<X size={18} aria-hidden="true" />{:else}<Menu size={18} class="shrink-0" aria-hidden="true" />{/if}
           <span class="sr-only">{m.nav_menu()}:</span>
-          <span class="truncate">{section && section !== 'home' && section !== 'settings' && section !== 'review' ? sectionFor(section)?.title() : section === 'settings' ? m.settings_title() : section === 'review' ? m.attention_review() : m.nav_home()}</span>
+          <span class="truncate">{currentLabel}</span>
         </button>
 
         {#if menuOpen}
@@ -119,10 +136,10 @@
             class="absolute left-0 top-full z-40 mt-2 max-h-[calc(100dvh-4rem)] w-64 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-(--radius-panel) border border-border bg-surface p-2 shadow-(--shadow-panel)"
           >
             <ul class="grid gap-1">
-              <li><a href="/app" aria-current={onHome ? 'page' : undefined} class={linkClass}>{m.nav_home()}</a></li>
+              <li><a href="/app" aria-current={onHome ? 'page' : undefined} class={menuLinkClass}>{m.nav_home()}</a></li>
               {#each sections as item (item.id)}
                 <li>
-                  <a href={item.overview} aria-current={sectionCurrent(item.id, item.overview)} class={linkClass}>{item.title()}</a>
+                  <a href={item.overview} aria-current={sectionCurrent(item.id, item.overview)} class={menuLinkClass}>{item.title()}</a>
                 </li>
               {/each}
             </ul>
@@ -130,9 +147,12 @@
         {/if}
       </div>
 
-      <div class="ml-auto flex min-w-0 items-center gap-1">
-        <a href="/app/review" aria-current={entry?.route === '/app/review' ? 'page' : undefined} aria-describedby={reviewStatusID} class="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-2 text-sm font-semibold text-foreground hover:bg-control-hover">
-          <ListChecks size={18} class="shrink-0 sm:hidden" aria-hidden="true" /><span class="sr-only sm:not-sr-only">{m.attention_review()}</span> <span class="rounded-full bg-foreground px-1.5 text-xs text-background">{reviewBadge.text}</span>
+      <!-- Stretched so the Review link and Settings button can sit on the
+           row's edge as the current tab (desktop, on their own pages). -->
+      <div class="ml-auto flex min-w-0 items-center gap-1 self-stretch">
+        <a href="/app/review" aria-current={onReview ? 'page' : undefined} data-current={onReview ? '' : undefined} aria-describedby={reviewStatusID}
+          class="shell-end-tab inline-flex min-h-11 shrink-0 items-center gap-1.5 px-2 text-sm font-semibold text-foreground {onReview ? endTabClass : 'rounded-full hover:bg-control-hover'}">
+          <ListChecks size={18} class="shrink-0 sm:hidden" aria-hidden="true" /><span class="sr-only sm:not-sr-only">{m.attention_review()}</span> <span class="rounded-full bg-nav-marker px-1.5 text-xs text-nav-marker-foreground">{reviewBadge.text}</span>
         </a>
         <span id={reviewStatusID} hidden>{reviewBadge.label}</span>
         <!-- Home places the same search large and centred instead (#477). -->
@@ -145,9 +165,13 @@
         <SettingsMenu currentRoute={entry?.route} {signOutPending} {signOutError} {onSignOut} />
       </div>
     </header>
-
-    {#if tabbed && section}
-      <SectionTabs {section} {entry} {search} {badges} />
-    {/if}
   </div>
+
+  {#if tabbed && section}
+    <div class="shell-pages-row">
+      <div class="mx-auto max-w-[100rem] px-4 sm:px-6 lg:px-8">
+        <SectionTabs {section} {entry} {search} {badges} />
+      </div>
+    </div>
+  {/if}
 </div>

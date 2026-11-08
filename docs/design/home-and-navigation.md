@@ -87,7 +87,12 @@ header on every page.
   [review](../reviews/navigation-and-pages-options-2026-10-29.md#d2-section-menus)).
   The current section is a tab in the pages-row tint, joined to the row
   under it (as MS Money did), so a section visibly opens into its pages; the
-  current page has a green underline. Green otherwise marks only count
+  current page has a green underline. Home, Settings and Review have no
+  pages row, so their tab takes the page tint and opens into the page
+  (#489): Home's section link, and on desktop the Review link and the
+  Settings button on their own pages. On phones the menu button is the
+  current location's tab. Green is
+  the chosen accent palette's colour, through the `nav-marker` token. Green otherwise marks only count
   badges and selected chips.
   A page that needs attention shows a number badge on its tab (*Import 1*),
   with the full sentence for screen readers. A section is navigation only: it
@@ -118,6 +123,9 @@ header on every page.
   slightly translucent in its own tint, solid under
   `prefers-reduced-transparency`. Content (cards, widgets, menus, dialogs) is
   never translucent. Cards stand clearly whiter than the page.
+  The sections row stays slightly translucent; the pages row is solid
+  (#489 review): the current tab joins it, and a translucent row took on
+  dark content scrolling under it while the tab did not, leaving a seam.
 - **Right side:** a *Review* button with the count of items needing action
   (the total behind Home's status line, `!` when the check failed), hide
   amounts (eye), Customize (Home only), and a settings
@@ -1144,7 +1152,7 @@ Sequencing belongs in the roadmap; acceptance in the issues.
 | Search depth: payee actions with prefilled editor and last-used category, full-text transaction search | #439 |
 | Widget depth: lazy expanded returns, allocation and forecast charts; further widgets | #440 |
 | Density: compact and comfortable rows | #451 |
-| Shell look: olive two-tint rows, joined section tab, green place markers, card contrast | #489 |
+| Shell look: olive two-tint rows, joined section tab, green place markers, card contrast (delivered 2026-11-08) | #489 |
 | Search button with centred search dialog | #490 |
 | One transaction entry: shell and ordinary modes (#506, delivered), Investment mode (#507, delivered), preservation (#508, delivered) | #491, closed 2026-11-08 |
 | Move to account for posted transactions | #509 |
