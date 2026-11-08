@@ -189,6 +189,29 @@ func TestSavePricingPolicy_ValidationFailureReturnsBadRequest(t *testing.T) {
 	assert.Equal(t, "VALIDATION_FAILED", body.Error.Code)
 }
 
+// #480: the book's default currency is the one coverage base, so the policy
+// carries none. A client that still sends base_commodity_id is refused rather
+// than silently ignored, and the response no longer reports one.
+func TestSavePricingPolicy_RefusesAValuationBase(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapPricingAPITest(t, handler)
+
+	res := doPricingRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPut, "/api/v1/pricing/policy", map[string]any{
+		"base_commodity_id": 1, "rounding_mode": "half_up", "weekend_policy": "skip",
+	}, http.StatusBadRequest)
+	var body errorResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, "VALIDATION_FAILED", body.Error.Code)
+
+	saved := doPricingRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPut, "/api/v1/pricing/policy", pricingPolicyRequest{
+		RoundingMode: "half_up", WeekendPolicy: "skip",
+	}, http.StatusOK)
+	var policy map[string]any
+	require.NoError(t, json.NewDecoder(saved.Body).Decode(&policy))
+	assert.NotContains(t, policy, "base_commodity_id")
+}
+
 // --- Source assignments, refresh runs, source health, sources ---
 
 func TestPricingSourceAssignments_CreateUpdateList_HTTP(t *testing.T) {

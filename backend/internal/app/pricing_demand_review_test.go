@@ -20,7 +20,7 @@ func TestFXRefreshEmptyDemandIsReadOnceAcrossTriangulationAttempts(t *testing.T)
 	f := newPostedCurrencyFixture(t)
 	f.pricing = NewPricingService(db.NewPricingRepository(f.database), marketdata.NewRegistry())
 	f.pricing.SetNowForTest(func() time.Time { return time.Date(2026, 6, 12, 12, 0, 0, 0, time.UTC) })
-	_, err := f.pricing.SavePolicy(ctx, PricingPolicyInput{OwnerUserID: 1, BaseCommodityID: &f.foreign, TriangulationMaxHops: 1})
+	_, err := f.pricing.SavePolicy(ctx, PricingPolicyInput{OwnerUserID: 1, TriangulationMaxHops: 1})
 	require.NoError(t, err)
 
 	// No statement cache is enabled. Observe compilation of the demand's
@@ -54,10 +54,15 @@ func TestFXRefreshEmptyDemandIsReadOnceAcrossTriangulationAttempts(t *testing.T)
 	require.Equal(t, 2*oneRead, reads.Load(), "negative control detects another demand query")
 	reads.Store(0)
 
-	run, err := f.pricing.runFXRefresh(ctx, 1, 0, "manual")
+	// With the book default as the only FX base (#480), an empty demand has no
+	// refresh targets, so drive a triangulation attempt directly.
+	target := fxRefreshTarget{Base: db.PricingCurrencyRecord{ID: f.eurCommodityID, Code: "EUR"}, Quote: db.PricingCurrencyRecord{ID: f.foreign, Code: "USD"}}
+	_, err = f.pricing.triangulationCandidates(ctx, target, demand)
 	require.NoError(t, err)
-	require.Equal(t, 2, run.ItemsFailed, "the configured FX base and book default exercise two unsuccessful derivations")
-	assert.Equal(t, oneRead, reads.Load(), "a loaded empty demand must not become an uninitialized demand on each attempt")
+	assert.Zero(t, reads.Load(), "a loaded empty demand must not become an uninitialized demand on each attempt")
+	_, err = f.pricing.triangulationCandidates(ctx, target, nil)
+	require.NoError(t, err)
+	assert.Equal(t, oneRead, reads.Load(), "negative control: an unloaded demand is read")
 }
 
 func TestFXRefreshDemandUsesOwnerDayCapturedAtRunStart(t *testing.T) {

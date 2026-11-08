@@ -399,7 +399,6 @@
   "currencies_last_run": "Última ejecución {status} el {time}",
   "currencies_loading_copy": "Leyendo las monedas activas, la preferencia predeterminada y los últimos tipos observados.",
   "currencies_loading_title": "Cargando las monedas",
-  "currencies_policy_base_label": "Moneda base de cambio",
   "currencies_policy_hops_hint": "Monedas intermedias por las que puede pasar un tipo derivado cuando no existe un tipo directo. Con 0 se desactivan los tipos derivados.",
   "currencies_policy_hops_label": "Saltos",
   "currencies_policy_hour_label": "Hora",

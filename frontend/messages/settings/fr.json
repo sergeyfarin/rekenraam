@@ -399,7 +399,6 @@
   "currencies_last_run": "Dernière exécution {status} le {time}",
   "currencies_loading_copy": "Lecture des devises actives, de la préférence par défaut et des derniers taux observés.",
   "currencies_loading_title": "Chargement des devises",
-  "currencies_policy_base_label": "Devise de référence des taux",
   "currencies_policy_hops_hint": "Devises intermédiaires par lesquelles un taux dérivé peut transiter lorsqu'aucun taux direct n'existe. La valeur 0 désactive les taux dérivés.",
   "currencies_policy_hops_label": "Sauts",
   "currencies_policy_hour_label": "Heure",

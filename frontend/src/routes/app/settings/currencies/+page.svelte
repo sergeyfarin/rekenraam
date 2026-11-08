@@ -52,7 +52,6 @@
   const queryClient = useQueryClient();
 
   let rateDirection = $state<RateDirection>('currency_default');
-  let policyBaseCommodityID = $state('');
   let policyDefaultSourceID = $state('');
   let refreshEnabled = $state(false);
   let refreshHourLocal = $state(4);
@@ -174,11 +173,6 @@
     }
 
     initializedPolicyMarker = marker;
-    policyBaseCommodityID = pageQuery.data?.policy.base_commodity_id
-      ? String(pageQuery.data.policy.base_commodity_id)
-      : defaultCurrency
-        ? String(defaultCurrency.id)
-        : '';
     policyDefaultSourceID = pageQuery.data?.policy.default_source_id
       ? String(pageQuery.data.policy.default_source_id)
       : providerSources[0]
@@ -245,7 +239,6 @@
     try {
       await savePricingPolicy(
         {
-          base_commodity_id: numberOrUndefined(policyBaseCommodityID),
           default_source_id: numberOrUndefined(policyDefaultSourceID),
           refresh_enabled: refreshEnabled,
           refresh_hour_utc: pageQuery.data?.policy.refresh_hour_utc ?? refreshHourLocal,
@@ -462,18 +455,6 @@
       </div>
 
       <div class="mt-6 grid gap-4 lg:grid-cols-2">
-        <label class="block text-sm font-semibold text-foreground">
-          {m.currencies_policy_base_label()}
-          <select
-            bind:value={policyBaseCommodityID}
-            class="mt-2 w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"
-          >
-            {#each activeCurrencies as currency}
-              <option value={String(currency.id)}>{currency.code} - {currencyName(currency)}</option>
-            {/each}
-          </select>
-        </label>
-
         <label class="block text-sm font-semibold text-foreground">
           {m.currencies_policy_provider_label()}
           <select

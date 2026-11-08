@@ -107,7 +107,6 @@ type PriceObservationInput struct {
 type PricingPolicy struct {
 	ID                   int64
 	BookID               int64
-	BaseCommodityID      *int64
 	DefaultSourceID      *int64
 	RefreshEnabled       bool
 	RefreshHourUTC       int
@@ -128,7 +127,6 @@ type PricingPolicyInput struct {
 	OwnerUserID          int64
 	AuthSessionID        int64
 	RequestID            string
-	BaseCommodityID      *int64
 	DefaultSourceID      *int64
 	RefreshEnabled       bool
 	RefreshHourUTC       int
@@ -661,7 +659,6 @@ func cleanPricingPolicySpec(input PricingPolicyInput) (db.PricingPolicySpec, err
 		return db.PricingPolicySpec{}, ValidationError{Message: "weekend policy is invalid"}
 	}
 	return db.PricingPolicySpec{
-		BaseCommodityID:      nullableInt64(input.BaseCommodityID),
 		DefaultSourceID:      nullableInt64(input.DefaultSourceID),
 		RefreshEnabled:       input.RefreshEnabled,
 		RefreshHourUTC:       input.RefreshHourUTC,
@@ -777,7 +774,7 @@ func toPriceObservations(records []db.PriceObservationRecord) []PriceObservation
 }
 
 func toPricingPolicy(record db.PricingPolicyRecord) PricingPolicy {
-	return PricingPolicy{ID: record.ID, BookID: record.BookID, BaseCommodityID: nullableSQLInt64Ptr(record.BaseCommodityID), DefaultSourceID: nullableSQLInt64Ptr(record.DefaultSourceID), RefreshEnabled: record.RefreshEnabled, RefreshHourUTC: record.RefreshHourUTC, RefreshMinuteUTC: record.RefreshMinuteUTC, RefreshHourLocal: record.RefreshHourLocal, RefreshMinuteLocal: record.RefreshMinuteLocal, MaxBackfillDays: record.MaxBackfillDays, StalenessMaxDays: record.StalenessMaxDays, TriangulationMaxHops: record.TriangulationMaxHops, RoundingMode: record.RoundingMode, PreferOfficialFX: record.PreferOfficialFX, WeekendPolicy: record.WeekendPolicy, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}
+	return PricingPolicy{ID: record.ID, BookID: record.BookID, DefaultSourceID: nullableSQLInt64Ptr(record.DefaultSourceID), RefreshEnabled: record.RefreshEnabled, RefreshHourUTC: record.RefreshHourUTC, RefreshMinuteUTC: record.RefreshMinuteUTC, RefreshHourLocal: record.RefreshHourLocal, RefreshMinuteLocal: record.RefreshMinuteLocal, MaxBackfillDays: record.MaxBackfillDays, StalenessMaxDays: record.StalenessMaxDays, TriangulationMaxHops: record.TriangulationMaxHops, RoundingMode: record.RoundingMode, PreferOfficialFX: record.PreferOfficialFX, WeekendPolicy: record.WeekendPolicy, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}
 }
 
 func toPricingSourceAssignment(record db.PricingSourceAssignmentRecord) PricingSourceAssignment {

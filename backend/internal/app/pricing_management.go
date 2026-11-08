@@ -68,16 +68,13 @@ func (s *PricingService) Workspace(ctx context.Context, asOf string) (PricingWor
 	if err != nil {
 		return result, err
 	}
-	baseID := int64(0)
-	if policy.BaseCommodityID != nil {
-		baseID = *policy.BaseCommodityID
-	} else {
-		base, err := s.repository.DefaultCurrency(ctx, BookID)
-		if err != nil {
-			return result, err
-		}
-		baseID = base.ID
+	// The book's default currency is the one valuation base: Net worth and
+	// Home value in it, so Prices judges coverage against the same pairs.
+	base, err := s.repository.DefaultCurrency(ctx, BookID)
+	if err != nil {
+		return result, err
 	}
+	baseID := base.ID
 
 	boundary, err := s.repository.CurrentObservationBoundary(ctx, BookID, s.now())
 	if err != nil {

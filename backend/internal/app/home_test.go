@@ -337,6 +337,44 @@ func TestHomeBriefingMissingRateIsCountedAsARate(t *testing.T) {
 	requireHomeCents(t, 5000, netWorth.Change, "net worth change")
 }
 
+// #480: the book's default currency is the only coverage base. The pricing
+// policy used to carry a base of its own; set to USD in a EUR book, Prices
+// judged BTC/USD and skipped the USD balance as "the base" while Net worth,
+// and so Home, needed BTC/EUR and USD/EUR. A saved policy has no base now
+// (the API rejects the field), and Prices lists the pairs Home names.
+func TestHomePricingAndNetWorthShareTheDefaultCurrencyBase(t *testing.T) {
+	t.Parallel()
+	f := newHomeFixture(t)
+	f.move(t, "2026-09-10", f.cashAccountID, f.eurCommodityID, 100000)
+	usd := seedTestCurrencyCommodity(t, f.database, "USD")
+	receivable := seedTestAccountWithClass(t, f.database, "active", true, "asset", "receivable")
+	f.move(t, "2026-10-01", receivable, usd, 5000)
+	btc := seedTestCryptoCommodity(t, f.database, "BTC")
+	wallet := seedTestAccountWithClass(t, f.database, "active", true, "asset", "crypto_wallet")
+	f.move(t, "2026-10-01", wallet, btc, 50)
+	_, err := f.pricing.SavePolicy(context.Background(), PricingPolicyInput{OwnerUserID: 1, TriangulationMaxHops: 1})
+	require.NoError(t, err)
+
+	netWorth := homeHeadline(t, f.briefing(t), HomeHeadlineNetWorth)
+	assert.ElementsMatch(t, []HomeValuationInput{
+		{CommodityID: usd, Code: "USD", Kind: "rate"},
+		{CommodityID: btc, Code: "BTC", Kind: "price"},
+	}, netWorth.Missing)
+	f.requirePricingLists(t, netWorth.Missing, "unusable")
+
+	workspace, err := f.pricing.Workspace(context.Background(), "2026-10-15")
+	require.NoError(t, err)
+	for _, commodityID := range []int64{usd, btc} {
+		quotes := []int64{}
+		for _, coverage := range workspace.Coverage {
+			if coverage.BaseCommodityID == commodityID {
+				quotes = append(quotes, coverage.QuoteCommodityID)
+			}
+		}
+		assert.Equal(t, []int64{f.eurCommodityID}, quotes, "commodity %d is judged against the default currency Net worth values in", commodityID)
+	}
+}
+
 func TestHomeBriefingWithoutDefaultCurrencyNamesWhy(t *testing.T) {
 	t.Parallel()
 	f := newHomeFixture(t)

@@ -44,7 +44,7 @@ func (s *PricingService) runFXCoverage(ctx context.Context, ownerUserID int64, p
 	if err != nil {
 		return fail(err)
 	}
-	targets, err := s.fxRefreshTargets(ctx, policy, demand)
+	targets, err := s.fxRefreshTargets(ctx, demand)
 	if err != nil {
 		return fail(err)
 	}
@@ -63,9 +63,6 @@ func (s *PricingService) runFXCoverage(ctx context.Context, ownerUserID int64, p
 		return fail(err)
 	}
 	baseCurrencyID := defaultCurrency.ID
-	if policy.BaseCommodityID != nil {
-		baseCurrencyID = *policy.BaseCommodityID
-	}
 	location, err := s.bookLocation(ctx)
 	if err != nil {
 		return fail(err)
