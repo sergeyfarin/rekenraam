@@ -139,3 +139,18 @@ recreates `fx_work_after_posting_version_insert` and
 field instead of ignoring it. Changing the default currency moves every
 consumer together; a second base needs a new decision and must show coverage
 for both bases.
+
+## Amendment — held-instrument quote currencies, 2026-11-08
+
+FX demand covered account defaults and posted currencies only, so a book that
+bought a security quoted in a currency it otherwise never used (a EUR book
+buying a USD stock with EUR cash) never fetched the rate valuation chains the
+holding through (#532). `FXDemand` now also demands, for each non-currency
+commodity in the current posted ledger, its instrument's current quote
+currency and every currency a non-voided observation prices it in, from the
+holding's first posted entry date. The posted-only rule is unchanged: drafts,
+voided transactions, superseded versions and previews hold nothing. Migration
+`0010_fx_work_after_holding_posting.sql` adds
+`fx_work_after_holding_posting_version_insert`, the posting-outbox wakeup for
+that demand, with the same coalescing as the posted-currency trigger. Details
+are in `docs/plans/pricing-management-plan.md` → Posted-only historical demand.

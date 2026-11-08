@@ -101,12 +101,9 @@ already lists the pair (stale or usable). Named regressions:
 `TestPricingListsNoRateForAQuoteCurrencyADirectPriceMakesUnneeded`, beside
 `TestPricingDiscoversAnUnpricedNonCurrencyBalance`.
 
-Decision: FX refresh demand is not widened here. `FXDemand` still reads only
-account defaults and posted currencies, so automation does not yet fetch such a
-leg; the owner sees the missing pair and can enter it by hand. Widening it
-changes durable historical demand (start dates, posting-outbox triggers,
-triangulation candidates) and needs a source for the quote currency that holds
-across history, so it is its own slice: #532.
+FX refresh demand was not widened in #531; #532 then made `FXDemand` demand
+such a leg (below), so automation fetches it and the hand-entered rate is no
+longer the only repair.
 
 ### Posted-only historical demand (#465, #466)
 
@@ -119,6 +116,31 @@ manual refresh, daily schedule and durable worker therefore share one
 base-relative pair set. Posting a multi-currency receivable or payable without
 a default commodity now attempts the required pairs instead of completing an
 empty sweep.
+
+A posted holding also demands the currencies it is valued through (#532). A
+non-currency commodity (security or crypto) in the current posted ledger
+contributes, at its first posted entry date, its instrument's current quote
+currency (`quote_commodity_id`, which names the leg before any quote arrives)
+and every currency a non-voided observation prices it in (what the rate table
+actually chains through, #281). Both sources are used: the quote currency alone
+misses an instrument with no quote currency recorded or a manual price in
+another currency, and observations alone miss a fresh buy whose first quote has
+not arrived. The posted-only rule is the holding's: a draft, a voided
+transaction or a preview holds nothing and demands nothing, while a holding
+sold later keeps its obligation like a balance that returns to zero. A watched
+instrument the book never held demands no rate. The posting outbox gains
+`fx_work_after_holding_posting_version_insert` (migration 0010), which wakes
+coverage for those currencies when a posted version of the holding is
+written; it reads every instrument version because the owner-local day is not
+known in the trigger, and the sweep's own `FXDemand` read discards an
+over-wide hint. A quote currency first recorded after the last posting of the
+holding (an instrument reclassified later, or the first observation in a new
+currency) has no outbox wakeup and is picked up by the next scheduled or manual
+sweep. Named regressions:
+`TestFXDemandIncludesTheQuoteCurrencyOfAHeldInstrument`,
+`TestFXDemandIncludesAHeldCommodityObservationCurrency`,
+`TestFXDemandIgnoresDraftAndVoidedHoldings` and
+`TestFXDemandKeepsASoldHoldingsQuoteCurrency`.
 
 An empty demand result is a loaded set, so failed triangulation attempts do
 not query it again. Immediate latest refreshes, like durable sweeps, pin
