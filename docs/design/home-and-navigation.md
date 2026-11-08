@@ -694,6 +694,11 @@ themselves (invalid choices stay identified).
   was typed in: when the settlement account's currency changes, in the
   form or by restoring under another shared account, it is cleared with a
   note to enter it again in the new currency, never relabelled.
+- **Automatic previews.** Sell and Short cover preview as the owner types.
+  Any input change supersedes the request in flight: a superseded
+  response, success or error, is ignored, so only the preview for the
+  current inputs can show a result or enable the confirm button
+  (`latestRequest`).
 - **Locking and discarding.** While an investment save is in flight, the
   tabs, the Activity selector and the active form's fields are disabled.
   These all ask *Discard this transaction?*:
