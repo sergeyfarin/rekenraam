@@ -470,6 +470,18 @@ func (t *RateTable) DirectGap(commodityID int64, onDate string) (RateGap, bool) 
 	return gap, failed
 }
 
+// MissingChainLeg says whether Convert, valuing the commodity on onDate, would
+// fail only for want of a reporting rate for a currency the commodity has a
+// usable price in, and names that currency (RateGap.ViaCommodityID). It
+// records nothing in the table's coverage. Prices lists that currency's pair
+// with it, so every rate Home names missing has a row to fix it in (#531).
+func (t *RateTable) MissingChainLeg(commodityID int64, onDate string) (int64, bool) {
+	probe := t.withFreshCoverage()
+	probe.resolveUnits(commodityID, onDate)
+	gap, failed := probe.gaps[commodityID]
+	return gap.ViaCommodityID, failed && gap.ViaCommodityID != 0
+}
+
 // resolveUnits is resolve for units of onDate: a security or crypto quote
 // observed before onDate priced a unit of its own day, so its base quantity is
 // multiplied by the instrument's split factor in between (#407), exactly; the

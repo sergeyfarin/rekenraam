@@ -210,8 +210,10 @@ report, so an old price does block the headline; the report's window, not
 Home, decides that. Prices never calls usable a price valuation refuses: it
 applies the shorter of the two limits (and returns both), judges a recent
 quote with the report's rate table (a quote across conflicting splits is
-`missing`), and lists a balance in an instrument nothing prices yet, so the
-`?status=unusable` link always shows what Home named. The book's default
+`missing`), lists a balance in an instrument nothing prices yet, and lists
+the rate pair of a chained conversion's missing currency leg (asked of the
+same rate table, so a holding a direct price values adds no pair; #531), so
+the `?status=unusable` link always shows what Home named. The book's default
 currency is the one base for all of them: the pricing policy has no
 base of its own (#480), so Prices, attention, FX coverage, the report and Home
 always judge the same pairs.

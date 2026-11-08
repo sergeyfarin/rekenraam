@@ -85,6 +85,29 @@ own dated conversion coverage and complete-only totals. Historical provider
 refresh planning remains a separate demand owner under ADR 0010 below; a valid
 manual rate can repair current coverage before automated history arrives.
 
+### Chained quote-currency legs (#531)
+
+A held instrument priced only in a currency the book neither holds nor
+defaults an account to is valued by chaining through that currency (#281), yet
+no series, account default or balance put the currency's rate pair in the
+workspace, so Home could name a missing rate Prices did not list. The
+workspace now asks the report's own rate table, at the workspace date and
+observation boundary, how it would value each held commodity
+(`RateTable.MissingChainLeg`); each currency leg that fails there adds its
+pair to the default currency. The rule is the consumer's, not restated: a holding
+a usable direct price values asks for nothing, and an existing rate series
+already lists the pair (stale or usable). Named regressions:
+`TestPricingListsTheMissingRateOfAChainedQuoteCurrency` and its control
+`TestPricingListsNoRateForAQuoteCurrencyADirectPriceMakesUnneeded`, beside
+`TestPricingDiscoversAnUnpricedNonCurrencyBalance`.
+
+Decision: FX refresh demand is not widened here. `FXDemand` still reads only
+account defaults and posted currencies, so automation does not yet fetch such a
+leg; the owner sees the missing pair and can enter it by hand. Widening it
+changes durable historical demand (start dates, posting-outbox triggers,
+triangulation candidates) and needs a source for the quote currency that holds
+across history, so it is its own slice: #532.
+
 ### Posted-only historical demand (#465, #466)
 
 Durable FX planning derives its currency set from active account defaults plus

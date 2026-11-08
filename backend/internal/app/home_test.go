@@ -316,6 +316,65 @@ func TestPricingDiscoversAnUnpricedNonCurrencyBalance(t *testing.T) {
 	assert.Equal(t, "usable", ethPairs[0].Status)
 }
 
+// A holding priced only in a currency the book holds no balance in and no
+// account defaults to is valued by chaining through that currency's rate.
+// With no rate entered Home names the currency, so Prices lists its pair to
+// the default currency even though no series, account or balance demands it.
+func TestPricingListsTheMissingRateOfAChainedQuoteCurrency(t *testing.T) {
+	t.Parallel()
+	f := newHomeFixture(t)
+	f.move(t, "2026-09-10", f.cashAccountID, f.eurCommodityID, 100000)
+	f.buyTen(t) // its EUR price is outside the window on 15 Oct
+	usd := seedTestCurrencyCommodity(t, f.database, "USD")
+	f.priceIn(t, f.stockCommodityID, usd, "2026-10-15", "60")
+
+	netWorth := homeHeadline(t, f.briefing(t), HomeHeadlineNetWorth)
+	assert.Equal(t, []HomeValuationInput{{CommodityID: usd, Code: "USD", Kind: "rate"}}, netWorth.Missing)
+	f.requirePricingLists(t, netWorth.Missing, "unusable")
+
+	pairsOf := func(base int64) []PricingCoverage {
+		workspace, err := f.pricing.Workspace(context.Background(), "2026-10-15")
+		require.NoError(t, err)
+		found := []PricingCoverage{}
+		for _, coverage := range workspace.Coverage {
+			if coverage.BaseCommodityID == base {
+				found = append(found, coverage)
+			}
+		}
+		return found
+	}
+	usdPairs := pairsOf(usd)
+	require.Len(t, usdPairs, 1, "one rate pair, to the default currency")
+	assert.Equal(t, f.eurCommodityID, usdPairs[0].QuoteCommodityID)
+	assert.Equal(t, "missing", usdPairs[0].Status)
+
+	// Once entered, the rate's own series keeps the pair listed as usable.
+	f.price(t, usd, "2026-10-15", "1")
+	usdPairs = pairsOf(usd)
+	require.Len(t, usdPairs, 1)
+	assert.Equal(t, "usable", usdPairs[0].Status)
+	assert.Empty(t, homeHeadline(t, f.briefing(t), HomeHeadlineNetWorth).Missing)
+}
+
+// The control: a current price in the default currency values the holding
+// directly, so a USD quote of the same instrument adds no USD/EUR pair.
+func TestPricingListsNoRateForAQuoteCurrencyADirectPriceMakesUnneeded(t *testing.T) {
+	t.Parallel()
+	f := newHomeFixture(t)
+	f.move(t, "2026-09-10", f.cashAccountID, f.eurCommodityID, 100000)
+	f.buyTen(t)
+	f.price(t, f.stockCommodityID, "2026-10-15", "55")
+	usd := seedTestCurrencyCommodity(t, f.database, "USD")
+	f.priceIn(t, f.stockCommodityID, usd, "2026-10-15", "60")
+
+	assert.Empty(t, homeHeadline(t, f.briefing(t), HomeHeadlineNetWorth).Missing)
+	workspace, err := f.pricing.Workspace(context.Background(), "2026-10-15")
+	require.NoError(t, err)
+	for _, coverage := range workspace.Coverage {
+		assert.NotEqual(t, usd, coverage.BaseCommodityID, "no USD rate pair: nothing needs one")
+	}
+}
+
 func TestHomeBriefingMissingRateIsCountedAsARate(t *testing.T) {
 	t.Parallel()
 	f := newHomeFixture(t)
