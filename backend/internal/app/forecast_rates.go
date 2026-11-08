@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"math/big"
+	"slices"
 	"sort"
 	"time"
 
@@ -157,7 +158,7 @@ func forecastNeededCurrencies(series []ForecastSeries) []int64 {
 	for id := range set {
 		result = append(result, id)
 	}
-	sort.Slice(result, func(i, j int) bool { return result[i] < result[j] })
+	slices.Sort(result)
 	return result
 }
 

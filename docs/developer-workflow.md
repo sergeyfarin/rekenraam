@@ -57,8 +57,11 @@ consumers. Its reproduction section includes the named native audit tests and
 the independent upstream-bug probe retained for driver-admission follow-up #356.
 The [#356 prerequisite recheck](reviews/sqlite-driver-upgrade-blocker-2026-10-20.md)
 adds an isolated C admission probe: it fails on official 3.53.4 and passes on
-official 3.54.1. A released Go driver carrying those fixes is still required;
-the production module pin remains unchanged.
+official 3.54.1. The released candidate, go-sqlite3 v1.14.53 (SQLite 3.54.1),
+passes both probes but is held: 3.54.1 re-prepares common joined statements,
+which slows `internal/app` from 186 s to 250 s and breaks the race deadline
+([candidate review](reviews/sqlite-driver-candidate-2026-11-08.md)). The
+production module pin remains v1.14.52.
 
 ### Install
 
@@ -90,7 +93,7 @@ HTTPS reverse proxy for direct access from phones or other LAN clients.
 ### Public website
 
 The separate `website/` project renders static HTML for the app's six locales.
-It needs Node 24 and no npm dependencies or Go server. The website source and
+It needs Node 26 and no npm dependencies or Go server. The website source and
 the self-hosted application have independent builds; `pnpm build` still builds
 only the app. See the [website contract](design/public-website.md) for content,
 localization, privacy and publication boundaries.
@@ -1143,7 +1146,7 @@ Workflow conventions:
 
 - Use `pnpm install --frozen-lockfile` in CI.
 - Keep CI commands aligned with the local wrapper scripts in `scripts/`.
-- Use Node 24.
+- Use Node 26 (the current LTS line; the Docker image builds on `node:26` too).
 - Use the Go version declared in `backend/go.mod`.
 - Keep job structure simple and readable.
 - Keep validation frequency explicit; measure job cost before changing event selection.

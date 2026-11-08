@@ -3,7 +3,7 @@
   import BasisProvenanceSummary from '#lib/investments/basis-provenance-summary.svelte';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import { parseISO } from 'date-fns';
-  import AlertTriangle from '@lucide/svelte/icons/triangle-alert';
+  import TriangleExclamationPoint from '@lucide/svelte/icons/triangle-exclamation-point';
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import APIFormError from '#lib/components/api-form-error.svelte';
@@ -1036,7 +1036,7 @@
       <ul class="divide-y divide-border px-4 py-3 text-sm">
         {#each impacts as checkpoint (checkpoint.checkpoint_id)}
           <li class="flex gap-2 py-2 text-foreground">
-            <AlertTriangle size={16} class="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
+            <TriangleExclamationPoint size={16} class="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
             {m.transactions_reconciliation_checkpoint_label({
               account: checkpoint.account_label,
               commodity: checkpoint.commodity_code,

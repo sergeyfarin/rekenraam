@@ -137,7 +137,7 @@ func TestSecurityMiddlewareCSPLoadsOnlySameOriginResources(t *testing.T) {
 
 	allowed := map[string]bool{"'self'": true, "'none'": true, "'unsafe-inline'": true, "data:": true}
 	directives := map[string]bool{}
-	for _, directive := range strings.Split(res.Header().Get("Content-Security-Policy"), ";") {
+	for directive := range strings.SplitSeq(res.Header().Get("Content-Security-Policy"), ";") {
 		fields := strings.Fields(directive)
 		if len(fields) == 0 {
 			continue

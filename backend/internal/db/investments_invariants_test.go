@@ -294,10 +294,7 @@ func allocateSequentially(lots []InvestmentLotRecord, sellQty int64) []LotAlloca
 			break
 		}
 		lotQty := l.RemainingQuantityValue.BigInt().Int64()
-		take := lotQty
-		if take > remaining {
-			take = remaining
-		}
+		take := min(lotQty, remaining)
 		allocations = append(allocations, LotAllocation{LotID: l.ID, QuantityValue: exact.New(take), QuantityScale: l.RemainingQuantityScale})
 		remaining -= take
 	}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"sort"
 	"time"
 
@@ -537,7 +538,7 @@ func (t *RateTable) resolveChained(commodityID int64, onDate string) (resolvedRa
 	for quoteID := range byQuote {
 		quoteIDs = append(quoteIDs, quoteID)
 	}
-	sort.Slice(quoteIDs, func(i, j int) bool { return quoteIDs[i] < quoteIDs[j] })
+	slices.Sort(quoteIDs)
 
 	var first, second db.ReportingRateRecord
 	var found bool

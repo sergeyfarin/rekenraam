@@ -13,6 +13,7 @@ import (
 	"io"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"rekenraam/backend/internal/db"
@@ -1152,11 +1153,12 @@ valid. Schema 16 is unchanged: no column or representation changes in #392.`,
 	}
 
 	if filter.From != "" || filter.To != "" || len(filter.AccountIDs) > 0 || len(filter.CommodityIDs) > 0 {
-		scope := "THIS EXPORT IS FILTERED\nSee manifest.json for the exact query and what it resolved to."
+		var scope strings.Builder
+		scope.WriteString("THIS EXPORT IS FILTERED\nSee manifest.json for the exact query and what it resolved to.")
 		for _, note := range filter.Notes {
-			scope += "\n  - " + note
+			scope.WriteString("\n  - " + note)
 		}
-		sections = append(sections, scope)
+		sections = append(sections, scope.String())
 	}
 
 	for _, section := range sections {

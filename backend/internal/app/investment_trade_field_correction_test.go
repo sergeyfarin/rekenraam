@@ -287,8 +287,8 @@ func TestReplaceBuyDateKeepsMultiJournalFeeDates(t *testing.T) {
 	withFee := func(date, settles string) InvestmentTradeInput {
 		trade := tradeOn(f, f.holdingAccountID, date, 10, 0)
 		trade.SettlementDate = settles
-		trade.GrossAmountValue, trade.GrossAmountScale = tradeMoney(-100000), 2
-		trade.NetSettlementValue, trade.NetSettlementScale = tradeMoney(-100000), 2
+		trade.GrossAmountValue, trade.GrossAmountScale = new(int64(-100000)), 2
+		trade.NetSettlementValue, trade.NetSettlementScale = new(int64(-100000)), 2
 		trade.Charges = []InvestmentTradeChargeInput{{Kind: "commission", AmountValue: -250, AmountScale: 2,
 			CommodityID: f.eurCommodityID, Treatment: "separately_expensed", ChargeAccountID: &fees,
 			CashAccountID: &f.cashAccountID, PaidOn: "2026-03-10"}}

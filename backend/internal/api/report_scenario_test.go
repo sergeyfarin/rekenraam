@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"maps"
 	"math/big"
 	"net/http"
 	"net/url"
@@ -185,9 +186,7 @@ func (s seededReportScenario) query(accounts []string, extra url.Values) string 
 	for _, key := range accounts {
 		values.Add("account_id", strconvFormatInt(s.accountIDs[key]))
 	}
-	for key, value := range extra {
-		values[key] = value
-	}
+	maps.Copy(values, extra)
 	return "?" + values.Encode()
 }
 

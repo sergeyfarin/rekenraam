@@ -1,7 +1,7 @@
 <script lang="ts">
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-  import Building2 from '@lucide/svelte/icons/building-2';
+  import BuildingComplex from '@lucide/svelte/icons/building-complex';
   import Plus from '@lucide/svelte/icons/plus';
   import RefreshCw from '@lucide/svelte/icons/refresh-cw';
   import WalletCards from '@lucide/svelte/icons/wallet-cards';
@@ -384,7 +384,7 @@
           class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-control-hover"
           onclick={() => (editor = { type: 'institution-create' })}
         >
-          <Building2 size={16} aria-hidden="true" />
+          <BuildingComplex size={16} aria-hidden="true" />
           {m.institutions_add_institution()}
         </button>
       </div>
@@ -471,7 +471,7 @@
           class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-control-hover"
           onclick={() => (editor = { type: 'institution-create' })}
         >
-          <Building2 size={16} aria-hidden="true" />
+          <BuildingComplex size={16} aria-hidden="true" />
           {m.institutions_add_institution()}
         </button>
       </div>

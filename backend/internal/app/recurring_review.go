@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -107,7 +108,7 @@ func recurringAmounts(postings []db.RecurringDuePosting) ([]RecurringAmount, err
 	for id := range totals {
 		ids = append(ids, id)
 	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	slices.Sort(ids)
 	result := make([]RecurringAmount, 0, len(ids))
 	for _, id := range ids {
 		t := totals[id]

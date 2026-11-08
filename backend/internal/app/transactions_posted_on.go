@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -307,7 +308,7 @@ func sumPostingsByCommodity(postings []PostingInput) (map[int64]*exact.ScaledInt
 		}
 		sum.AddCoefficient(posting.QuantityValue, posting.QuantityScale)
 	}
-	sort.Slice(commodities, func(i, j int) bool { return commodities[i] < commodities[j] })
+	slices.Sort(commodities)
 	return sums, commodities
 }
 

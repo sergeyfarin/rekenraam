@@ -65,9 +65,11 @@ below continue alongside it and do not block it.
    [#337](https://github.com/sergeyfarin/rekenraam/issues/337). Signing
    [#333](https://github.com/sergeyfarin/rekenraam/issues/333) (signing decision
    accepted; candidate validation remains) and the upstream
-   driver-release prerequisite
+   driver prerequisite
    [#356](https://github.com/sergeyfarin/rekenraam/issues/356) retain separate
-   acceptance. Release remains on hold; these gates do not block accepted
+   acceptance (#356's released candidate is held on a statement re-preparation
+   cost regression; see its
+   [candidate review](reviews/sqlite-driver-candidate-2026-11-08.md)). Release remains on hold; these gates do not block accepted
    maintenance. Adoption assets #335 stay P3 for later release preparation.
    See [Public-release gates](#public-release-gates) for the remaining evidence.
 2. **Track the remaining bounded maintenance follow-ups.**

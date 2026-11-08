@@ -5,7 +5,7 @@
   import { transactionTitle } from '#lib/transactions/transaction-title.ts';
   import { systemLabelText } from '#lib/transactions/system-label.ts';
   import { createInfiniteQuery, useQueryClient } from '@tanstack/svelte-query';
-  import CheckCircle from '@lucide/svelte/icons/check-circle';
+  import CircleCheckBig from '@lucide/svelte/icons/circle-check-big';
   import Circle from '@lucide/svelte/icons/circle';
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
@@ -228,7 +228,7 @@
       : m.register_recon_uncleared()
     }>
       {#if status === 'reconciled'}
-        <CheckCircle size={13} class="text-positive" aria-hidden="true" />
+        <CircleCheckBig size={13} class="text-positive" aria-hidden="true" />
         <span class="sr-only">{m.register_recon_reconciled()}</span>
       {:else if status === 'cleared'}
         <Circle size={13} class="text-accent" aria-hidden="true" />

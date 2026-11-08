@@ -18,7 +18,7 @@ func TestCleanInvestmentInstrumentSpecDefaultsAndNormalizesFields(t *testing.T) 
 	quoteCommodityID := int64(10)
 	tradingCommodityID := int64(20)
 	spec, err := cleanInvestmentInstrumentSpec(InvestmentInstrumentInput{
-		CommodityID:        ptrInt64(30),
+		CommodityID:        new(int64(30)),
 		CommodityCode:      " VWRL ",
 		DisplayName:        " Vanguard FTSE All-World UCITS ETF ",
 		Symbol:             " vwrl ",
@@ -86,10 +86,6 @@ func TestCleanInvestmentInstrumentSpecRejectsInvalidInputs(t *testing.T) {
 			require.Error(t, err)
 		})
 	}
-}
-
-func ptrInt64(value int64) *int64 {
-	return &value
 }
 
 func TestPreviewSellRealizedGainAlignsMismatchedCostBasisScales(t *testing.T) {

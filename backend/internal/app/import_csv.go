@@ -428,8 +428,8 @@ func csvRecordEmpty(record []string) bool {
 }
 
 func invertCanonicalAmount(value string) string {
-	if strings.HasPrefix(value, "-") {
-		return strings.TrimPrefix(value, "-")
+	if after, ok := strings.CutPrefix(value, "-"); ok {
+		return after
 	}
 	if value == "0" || strings.Trim(value, "0.") == "" {
 		return value

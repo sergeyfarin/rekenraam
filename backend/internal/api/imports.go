@@ -1378,10 +1378,8 @@ func linkImportSplit(logger *slog.Logger, authService *app.AuthService, importSe
 			return
 		}
 		if err := importService.LinkTrading212Split(r.Context(), app.LinkTrading212SplitInput{
-			Trading212SplitRowInput: app.Trading212SplitRowInput{
-				OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r),
-				RequestID: RequestIDFromContext(r.Context()), BatchID: batchID, RowID: rowID,
-			},
+			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r),
+			RequestID: RequestIDFromContext(r.Context()), BatchID: batchID, RowID: rowID,
 			OperationID: request.OperationID,
 		}); err != nil {
 			writeImportSplitLinkError(w, r, logger, "link import split", err)
@@ -1501,10 +1499,8 @@ func linkImportShort(logger *slog.Logger, authService *app.AuthService, importSe
 			return
 		}
 		if err := importService.LinkTrading212Short(r.Context(), app.LinkTrading212ShortInput{
-			Trading212ShortRowInput: app.Trading212ShortRowInput{
-				OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r),
-				RequestID: RequestIDFromContext(r.Context()), BatchID: batchID, RowID: rowID,
-			},
+			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r),
+			RequestID: RequestIDFromContext(r.Context()), BatchID: batchID, RowID: rowID,
 			OperationID: request.OperationID,
 		}); err != nil {
 			writeImportShortLinkError(w, r, logger, "link import short", err)

@@ -998,8 +998,7 @@ func (s *ImportService) PreviewCommit(ctx context.Context, input PreviewCommitIn
 				return PreviewCommitResult{}, err
 			}
 			impact, err := s.investmentService.DividendReconciliationImpact(ctx, dividend)
-			var validation ValidationError
-			if errors.As(err, &validation) {
+			if _, ok := errors.AsType[ValidationError](err); ok {
 				continue
 			}
 			if err != nil {

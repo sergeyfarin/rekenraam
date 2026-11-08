@@ -68,7 +68,7 @@ func paymentDensityInts(tb testing.TB, name string, fallback []int) []int {
 		return fallback
 	}
 	var values []int
-	for _, field := range strings.Split(raw, ",") {
+	for field := range strings.SplitSeq(raw, ",") {
 		value, err := strconv.Atoi(strings.TrimSpace(field))
 		require.NoError(tb, err, "%s", name)
 		values = append(values, value)

@@ -16,8 +16,8 @@ func TestTradeCorrectionContextReadsImmutableSourceFacts(t *testing.T) {
 		OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
 		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
 		CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
-		QuantityValue: exact.New(10), GrossAmountValue: tradeMoney(-100000), GrossAmountScale: 2,
-		NetSettlementValue: tradeMoney(-100200), NetSettlementScale: 2,
+		QuantityValue: exact.New(10), GrossAmountValue: new(int64(-100000)), GrossAmountScale: 2,
+		NetSettlementValue: new(int64(-100200)), NetSettlementScale: 2,
 		SettlementDate: "2026-01-03", Memo: "original broker fill", Charges: []InvestmentTradeChargeInput{{
 			Kind: "commission", AmountValue: -200, AmountScale: 2,
 			CommodityID: f.eurCommodityID, Treatment: "clearing_included",

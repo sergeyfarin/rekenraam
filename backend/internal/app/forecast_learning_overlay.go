@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"sort"
 	"time"
 
@@ -183,12 +184,12 @@ func forecastLearningWindow(input forecastNormalizedInput, asOf string) (string,
 	}
 	// With no explicit override every category defaults to weekly.
 	start := learningPeriodStart(origin, "week")
-	for i := 0; i < forecastLearningHistoryWeeks; i++ {
+	for range forecastLearningHistoryWeeks {
 		start = learningPreviousPeriod(start, "week")
 	}
 	if needsMonths {
 		monthly := learningPeriodStart(origin, "month")
-		for i := 0; i < forecastLearningHistoryMonths; i++ {
+		for range forecastLearningHistoryMonths {
 			monthly = learningPreviousPeriod(monthly, "month")
 		}
 		if monthly.Before(start) {
@@ -274,8 +275,7 @@ func buildForecastLearnedSpending(ctx context.Context, fitter *ForecastLearningF
 
 	fitted, err := fitter.Fit(ctx, ForecastLearningFitRequest{Groups: histories})
 	if err != nil {
-		var unavailable *ForecastLearningUnavailableError
-		if errors.As(err, &unavailable) {
+		if unavailable, ok := errors.AsType[*ForecastLearningUnavailableError](err); ok {
 			overlay.Reason = forecastLearningOverlayReason(unavailable.Reason)
 			overlay.Exclusions = []ForecastLearningExclusion{}
 			return overlay, nil
@@ -351,7 +351,7 @@ func (b *forecastLearningBuild) categoryOptions() []ForecastLearningOption {
 		}
 		ids = append(ids, id)
 	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	slices.Sort(ids)
 	options := make([]ForecastLearningOption, 0, len(ids))
 	for _, id := range ids {
 		account := b.accounts[id]
@@ -656,7 +656,7 @@ func (b *forecastLearningBuild) combine(overlay *ForecastLearnedSpending) error 
 	for id := range totals {
 		commodityIDs = append(commodityIDs, id)
 	}
-	sort.Slice(commodityIDs, func(i, j int) bool { return commodityIDs[i] < commodityIDs[j] })
+	slices.Sort(commodityIDs)
 	for _, id := range commodityIDs {
 		aggregate, err := b.aggregateSeries(id, totals[id], totalDeltas[id])
 		if err != nil {

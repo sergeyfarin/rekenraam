@@ -1,0 +1,38 @@
+/* Synthetic diagnostic for #356: counts SQLITE_STMTSTATUS_REPREPARE and
+ * authorizer SELECT callbacks over three rebinds of each statement. Official
+ * 3.53.4 reports reprepare=0 for every shape; 3.54.1 reports reprepare=2 for
+ * the joined statements whose bound equality takes part in constant
+ * propagation. Compile with an official amalgamation, e.g.
+ *   cc -O1 -DSQLITE_THREADSAFE=1 -DSQLITE_ENABLE_FTS5 -DSQLITE_OMIT_DEPRECATED \
+ *     -I DIR DIR/sqlite3.c probe.c -lm -lpthread -ldl
+ * This is not a production driver, migration or application test replacement.
+ */
+#include <stdio.h>
+#include "sqlite3.h"
+static int auths;
+static int auth(void*u,int op,const char*a,const char*b,const char*c,const char*d){ if(op==SQLITE_SELECT) auths++; return SQLITE_OK; }
+static void run(sqlite3*db,const char*sql,int nb){
+  sqlite3_stmt*s; auths=0;
+  sqlite3_prepare_v2(db,sql,-1,&s,0);
+  for(int round=0;round<3;round++){
+    sqlite3_reset(s);
+    for(int i=1;i<=nb;i++) sqlite3_bind_int64(s,i,i+round);
+    while(sqlite3_step(s)==SQLITE_ROW){}
+  }
+  printf("reprepare=%d select-auth=%d  %s\n", sqlite3_stmt_status(s,SQLITE_STMTSTATUS_REPREPARE,0), auths, sql);
+  sqlite3_finalize(s);
+}
+int main(){
+  sqlite3*db; sqlite3_open(":memory:",&db);
+  sqlite3_exec(db,"CREATE TABLE k(code TEXT, base_kind TEXT); INSERT INTO k VALUES('a','x'),('b','y');"
+    "CREATE TABLE a(id INTEGER PRIMARY KEY, code TEXT, book INT); INSERT INTO a VALUES(1,'a',1),(2,'b',1);",0,0,0);
+  sqlite3_set_authorizer(db,auth,0);
+  printf("%s\n", sqlite3_libversion());
+  run(db,"SELECT k.base_kind FROM a JOIN k ON k.code=a.code WHERE a.id = ?",1);
+  run(db,"SELECT k.base_kind FROM a JOIN k ON k.code=a.code WHERE a.id IN (?,?)",2);
+  run(db,"SELECT k.base_kind FROM a JOIN k ON k.code=a.code WHERE a.book = ? AND a.id IN (?,?)",3);
+  run(db,"SELECT code FROM a WHERE id = ?",1);
+  run(db,"SELECT code FROM a WHERE book = ?",1);
+  run(db,"SELECT code FROM a WHERE code = ?",1);
+  return 0;
+}

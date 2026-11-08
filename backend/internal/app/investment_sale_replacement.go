@@ -190,8 +190,7 @@ func validateSaleReplacementElections(replacement InvestmentTradeInput) error {
 }
 
 func mapReplaceSaleError(err error, sourceOperationID int64) error {
-	var dependency *db.InvestmentReplayDependencyError
-	if errors.As(err, &dependency) {
+	if dependency, ok := errors.AsType[*db.InvestmentReplayDependencyError](err); ok {
 		if dependency.OperationID == sourceOperationID {
 			return ErrInvestmentLotsInsufficient
 		}

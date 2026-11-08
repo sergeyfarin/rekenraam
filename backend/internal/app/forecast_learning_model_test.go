@@ -214,7 +214,7 @@ func TestForecastLearningFallsBackUnlessValidatedBetter(t *testing.T) {
 // explicit per-month-number profile.
 func learningSeasonalAmounts(years int, profile map[time.Month]string, overrides map[string]string) []string {
 	amounts := make([]string, 0, years*12)
-	for year := 0; year < years; year++ {
+	for year := range years {
 		for month := time.January; month <= time.December; month++ {
 			amount := "100.00"
 			if value, ok := profile[month]; ok {

@@ -132,9 +132,9 @@ func TestConcurrentRecurringGeneratorsWithIndependentDatabasePools(t *testing.T)
 func TestRecurringCatchUpCapHoldsWatermarkUntilWindowComplete(t *testing.T) {
 	t.Parallel()
 	f, s, input := recurringFixture(t)
-	input.Patch.Frequency = recurringTestPtr("daily")
+	input.Patch.Frequency = new("daily")
 	input.Patch.DayOfMonth = NullablePatch[int]{}
-	input.Patch.LeadDays = recurringTestPtr(0)
+	input.Patch.LeadDays = new(0)
 	template, err := s.CreateTemplate(context.Background(), input)
 	require.NoError(t, err)
 	s.now = func() time.Time { return time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC) }
@@ -159,7 +159,7 @@ func TestRecurringValidationFailureIsBlockedOnceAndDoesNotStopOtherTemplates(t *
 	ctx := context.Background()
 	bad, err := s.CreateTemplate(ctx, input)
 	require.NoError(t, err)
-	input.Patch.Name = recurringTestPtr("Second template")
+	input.Patch.Name = new("Second template")
 	_, err = s.CreateTemplate(ctx, input)
 	require.NoError(t, err)
 	// Simulate stored corruption; creation itself refuses imbalance.
@@ -227,9 +227,9 @@ func TestConcurrentTemplateEditCannotAdvanceAStaleGenerationWatermark(t *testing
 			edit := WriteRecurringTemplateInput{OwnerUserID: input.OwnerUserID, TemplateID: captured.ID}
 			switch change {
 			case "schedule":
-				edit.Patch.DayOfMonth = NullablePatch[int]{Set: true, Value: recurringTestPtr(2)}
+				edit.Patch.DayOfMonth = NullablePatch[int]{Set: true, Value: new(2)}
 			case "disable":
-				edit.Patch.Enabled = recurringTestPtr(false)
+				edit.Patch.Enabled = new(false)
 			}
 			var updated RecurringTemplate
 			if change == "archive" {
@@ -262,9 +262,9 @@ func TestRecurringSchedulerUsesOwnerLocalDateAndUTCAttribution(t *testing.T) {
 	t.Parallel()
 	f, s, input := recurringFixture(t)
 	ctx := context.Background()
-	input.Patch.Frequency = recurringTestPtr("daily")
+	input.Patch.Frequency = new("daily")
 	input.Patch.DayOfMonth = NullablePatch[int]{}
-	input.Patch.LeadDays = recurringTestPtr(0)
+	input.Patch.LeadDays = new(0)
 	_, err := s.settings.SavePreferences(ctx, SaveUserPreferencesInput{UserID: input.OwnerUserID, TimeZone: "Europe/Amsterdam"})
 	require.NoError(t, err)
 	s.now = func() time.Time { return time.Date(2026, 8, 30, 23, 30, 0, 0, time.UTC) }
@@ -333,9 +333,9 @@ func TestRecurringSchedulerStartupCreatesAReachableDraft(t *testing.T) {
 func TestDowntimeCatchUpBeyondEnumerationCapMakesProgress(t *testing.T) {
 	t.Parallel()
 	f, s, input := recurringFixture(t)
-	input.Patch.Frequency = recurringTestPtr("daily")
+	input.Patch.Frequency = new("daily")
 	input.Patch.DayOfMonth = NullablePatch[int]{}
-	input.Patch.LeadDays = recurringTestPtr(0)
+	input.Patch.LeadDays = new(0)
 	template, err := s.CreateTemplate(context.Background(), input)
 	require.NoError(t, err)
 	s.now = func() time.Time { return time.Date(2038, 1, 1, 12, 0, 0, 0, time.UTC) }

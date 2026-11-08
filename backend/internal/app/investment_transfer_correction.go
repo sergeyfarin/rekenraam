@@ -174,8 +174,7 @@ func (s *InvestmentService) transferCorrectionPlan(ctx context.Context, ownerUse
 }
 
 func mapTransferCorrectionError(err error) error {
-	var dependency *db.InvestmentReplayDependencyError
-	if errors.As(err, &dependency) {
+	if dependency, ok := errors.AsType[*db.InvestmentReplayDependencyError](err); ok {
 		return InvestmentTransferDependencyError{OperationID: dependency.OperationID, DecisionID: dependency.DecisionID}
 	}
 	switch {

@@ -255,11 +255,9 @@ func TestWritePathsEnforceTheCheckpointBoundaryInTheRepository(t *testing.T) {
 	t.Run("soft_delete", func(t *testing.T) {
 		f, created, candidates, versionID := setup(t)
 		_, err := f.transactionService.repository.SetTransactionDeleted(ctx, db.SetTransactionDeletedParams{
-			TransactionLifecycleParams: db.TransactionLifecycleParams{
-				BookID: BookID, TransactionID: created.ID, ActorUserID: f.ownerUserID,
-				OriginType: "browser_api", Operation: "transaction.soft_delete", RecordedAt: "2026-03-01T00:00:00Z",
-				ChangeReason: "deleted", CheckpointCandidates: candidates, ExpectedVersionID: versionID,
-			}, Deleted: true,
+			BookID: BookID, TransactionID: created.ID, ActorUserID: f.ownerUserID,
+			OriginType: "browser_api", Operation: "transaction.soft_delete", RecordedAt: "2026-03-01T00:00:00Z",
+			ChangeReason: "deleted", CheckpointCandidates: candidates, ExpectedVersionID: versionID, Deleted: true,
 		})
 		require.ErrorIs(t, err, db.ErrReconciliationOverrideRequired)
 	})

@@ -17,7 +17,7 @@ func TestTransferBasisKnowledgeRequiresCompleteAmountPair(t *testing.T) {
 	_, err := f.investmentService.ExternalTransferIn(context.Background(), knownTransferInput(f))
 	require.NoError(t, err)
 	for _, knowledge := range []string{"known", "unknown"} {
-		for mask := 0; mask < 8; mask++ {
+		for mask := range 8 {
 			name := knowledge + "/"
 			values := []any{nil, nil, nil}
 			if mask&1 != 0 {

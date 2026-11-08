@@ -6,9 +6,9 @@
   import { tagsQueryOptions } from '#lib/api/tags.ts';
   import Plus from '@lucide/svelte/icons/plus';
   import Save from '@lucide/svelte/icons/save';
-  import Trash2 from '@lucide/svelte/icons/trash-2';
+  import Trash from '@lucide/svelte/icons/trash';
   import X from '@lucide/svelte/icons/x';
-  import AlertTriangle from '@lucide/svelte/icons/triangle-alert';
+  import TriangleExclamationPoint from '@lucide/svelte/icons/triangle-exclamation-point';
   import ModalDialog from '#lib/components/modal-dialog.svelte';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import APIFormError from '#lib/components/api-form-error.svelte';
@@ -1542,7 +1542,7 @@
   <ModalDialog role="alertdialog" labelledby="recon-modal-title" {pending}
     onCancel={() => (reconciliationModal = { ...reconciliationModal, open: false })} class="max-w-lg">
     <div class="flex items-start gap-3 border-b border-border px-4 py-3">
-      <AlertTriangle size={18} class="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
+      <TriangleExclamationPoint size={18} class="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
       <div class="min-w-0">
         <h3 id="recon-modal-title" class="text-sm font-semibold text-foreground">
           {m.transactions_reconciliation_warning_title()}
@@ -1577,7 +1577,7 @@
         onclick={confirmReconciliationOverride}
         disabled={pending}
       >
-        <AlertTriangle size={14} aria-hidden="true" />
+        <TriangleExclamationPoint size={14} aria-hidden="true" />
         {m.transactions_reconciliation_confirm()}
       </button>
     </div>
@@ -1631,7 +1631,7 @@
   <!-- Correction banner -->
   {#if mode === 'correct'}
     <div class="flex items-start gap-2 rounded-[var(--radius-control)] border border-warning/40 bg-warning-soft px-3 py-2.5 text-sm text-foreground">
-      <AlertTriangle size={15} class="mt-0.5 shrink-0" aria-hidden="true" />
+      <TriangleExclamationPoint size={15} class="mt-0.5 shrink-0" aria-hidden="true" />
       <span>{m.transactions_correction_banner()}</span>
     </div>
   {/if}
@@ -1816,7 +1816,7 @@
     <div class="space-y-3" role="group" aria-label={m.transactions_transfer_title()}>
       {#if transferMessage}
         <p role="alert" class="flex items-start gap-2 rounded-[var(--radius-control)] border border-danger/40 bg-danger-soft px-3 py-2.5 text-sm text-foreground">
-          <AlertTriangle size={15} class="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
+          <TriangleExclamationPoint size={15} class="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
           <span>{transferMessage}</span>
         </p>
       {/if}
@@ -1993,7 +1993,7 @@
     <!-- ── Tier 1: simple two-posting form ─────────────────────────── -->
     {#if entryMessage}
       <p role="alert" class="flex items-start gap-2 rounded-[var(--radius-control)] border border-danger/40 bg-danger-soft px-3 py-2.5 text-sm text-foreground">
-        <AlertTriangle size={15} class="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
+        <TriangleExclamationPoint size={15} class="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
         <span>{entryMessage}</span>
       </p>
     {/if}
@@ -2170,7 +2170,7 @@
     <div class="space-y-3">
       {#if entryMessage}
         <p role="alert" class="flex items-start gap-2 rounded-[var(--radius-control)] border border-danger/40 bg-danger-soft px-3 py-2.5 text-sm text-foreground">
-          <AlertTriangle size={15} class="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
+          <TriangleExclamationPoint size={15} class="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
           <span>{entryMessage}</span>
         </p>
       {/if}
@@ -2227,7 +2227,7 @@
                 aria-label={m.transactions_split_remove_leg()}
                 disabled={splitLegs.length <= 2}
               >
-                <Trash2 size={14} aria-hidden="true" />
+                <Trash size={14} aria-hidden="true" />
               </button>
             </div>
 

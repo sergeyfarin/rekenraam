@@ -144,11 +144,9 @@ func TestEveryLifecycleWriteRefusesASupersededVersion(t *testing.T) {
 			},
 			write: func(f *investmentsTestFixture, id int64, staleVersionID int64) error {
 				_, err := f.transactionService.repository.SetTransactionDeleted(ctx, db.SetTransactionDeletedParams{
-					TransactionLifecycleParams: db.TransactionLifecycleParams{
-						BookID: BookID, TransactionID: id, ActorUserID: f.ownerUserID,
-						OriginType: "browser_api", Operation: "transaction.soft_delete",
-						RecordedAt: "2026-09-13T12:00:00Z", ChangeReason: "deleted", ExpectedVersionID: staleVersionID,
-					}, Deleted: true,
+					BookID: BookID, TransactionID: id, ActorUserID: f.ownerUserID,
+					OriginType: "browser_api", Operation: "transaction.soft_delete",
+					RecordedAt: "2026-09-13T12:00:00Z", ChangeReason: "deleted", ExpectedVersionID: staleVersionID, Deleted: true,
 				})
 				return err
 			},

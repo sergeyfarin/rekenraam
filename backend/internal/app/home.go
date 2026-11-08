@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"sort"
 	"time"
 
@@ -143,7 +144,7 @@ func (s *TransactionService) HomeBriefing(ctx context.Context, ownerUserID int64
 			cashAccountIDs = append(cashAccountIDs, account.ID)
 		}
 	}
-	sort.Slice(cashAccountIDs, func(i, j int) bool { return cashAccountIDs[i] < cashAccountIDs[j] })
+	slices.Sort(cashAccountIDs)
 
 	if s.pricingRepository != nil {
 		currency, err := s.pricingRepository.DefaultCurrency(ctx, BookID)

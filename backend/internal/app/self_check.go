@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -1401,7 +1402,7 @@ func (s *SelfCheckService) balanceChecks(ctx context.Context, snapshot *sql.Tx) 
 			}
 		}
 	}
-	sort.Slice(bookResult.Sample, func(i, j int) bool { return bookResult.Sample[i] < bookResult.Sample[j] })
+	slices.Sort(bookResult.Sample)
 	if bookResult.Status == SelfCheckFailed {
 		bookResult.Summary = fmt.Sprintf("%d commodities do not sum to zero across the book", bookResult.FindingCount)
 	}
@@ -1425,7 +1426,7 @@ func imbalanceResult[K comparable](checkID string, totals map[K]*exact.ScaledInt
 		result.FindingCount++
 		result.Sample = append(result.Sample, id)
 	}
-	sort.Slice(result.Sample, func(i, j int) bool { return result.Sample[i] < result.Sample[j] })
+	slices.Sort(result.Sample)
 	if len(result.Sample) > db.SelfCheckSampleLimit {
 		result.Sample = result.Sample[:db.SelfCheckSampleLimit]
 	}
@@ -1845,7 +1846,7 @@ func (s *SelfCheckService) lotReconciliationCheck(ctx context.Context, snapshot 
 		result.Status = SelfCheckFailed
 		result.FindingCount = negative + overConsumed + negativeBasis + mismatched + eventQuantityMismatch + basisMismatch + invalidBasis
 		result.Summary = joinSummaries(summaries)
-		sort.Slice(result.Sample, func(i, j int) bool { return result.Sample[i] < result.Sample[j] })
+		slices.Sort(result.Sample)
 	}
 	if len(lots) == 0 && len(holdings) == 0 {
 		result.Summary = "no investment lots or posted holding positions in this book"
@@ -1870,7 +1871,7 @@ func withUnavailableBasis(result SelfCheckResult, lots []db.SelfCheckLotRecord) 
 	if result.UnavailableCount == 0 {
 		return result
 	}
-	sort.Slice(result.UnavailableSample, func(i, j int) bool { return result.UnavailableSample[i] < result.UnavailableSample[j] })
+	slices.Sort(result.UnavailableSample)
 	unavailable := fmt.Sprintf("%d lots have unknown projected basis; basis reconciliation is unavailable", result.UnavailableCount)
 	if result.Status == SelfCheckFailed {
 		result.Summary = joinSummaries([]string{result.Summary, unavailable})
@@ -2024,7 +2025,7 @@ func (s *SelfCheckService) checkpointIntegrityCheck(ctx context.Context, snapsho
 		result.Status = SelfCheckFailed
 		result.FindingCount = mismatched + stale
 		result.Summary = joinSummaries(summaries)
-		sort.Slice(result.Sample, func(i, j int) bool { return result.Sample[i] < result.Sample[j] })
+		slices.Sort(result.Sample)
 	}
 
 	return result, nil
@@ -2144,10 +2145,8 @@ func (s *SelfCheckService) commodityPositionSignCheck(ctx context.Context, snaps
 }
 
 func appendCapped(sample []int64, id int64) []int64 {
-	for _, existing := range sample {
-		if existing == id {
-			return sample
-		}
+	if slices.Contains(sample, id) {
+		return sample
 	}
 	if len(sample) >= db.SelfCheckSampleLimit {
 		return sample
@@ -2162,11 +2161,12 @@ func joinSummaries(summaries []string) string {
 	case 1:
 		return summaries[0]
 	default:
-		joined := summaries[0]
+		var joined strings.Builder
+		joined.WriteString(summaries[0])
 		for _, summary := range summaries[1:] {
-			joined += "; " + summary
+			joined.WriteString("; " + summary)
 		}
-		return joined
+		return joined.String()
 	}
 }
 

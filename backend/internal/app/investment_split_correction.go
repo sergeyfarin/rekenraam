@@ -269,8 +269,7 @@ func (s *InvestmentService) prepareSplitInverseHeader(ctx context.Context, opera
 }
 
 func mapSplitCorrectionError(err error) error {
-	var dependency *db.InvestmentReplayDependencyError
-	if errors.As(err, &dependency) {
+	if dependency, ok := errors.AsType[*db.InvestmentReplayDependencyError](err); ok {
 		return InvestmentSplitDependencyError{OperationID: dependency.OperationID, DecisionID: dependency.DecisionID}
 	}
 	switch {

@@ -264,8 +264,7 @@ func toInvestmentSplitPlan(numerator, denominator int64, plan db.SplitPlan) Inve
 }
 
 func mapInvestmentSplitError(err error) error {
-	var dependency *db.InvestmentReplayDependencyError
-	if errors.As(err, &dependency) {
+	if dependency, ok := errors.AsType[*db.InvestmentReplayDependencyError](err); ok {
 		return InvestmentSplitDependencyError{OperationID: dependency.OperationID, DecisionID: dependency.DecisionID}
 	}
 	switch {

@@ -417,7 +417,7 @@ func TestBuildTransactionSpec_RefusesNonCanonicalStagedText(t *testing.T) {
 	// The adapter applies the file's convention before staging, so the commit
 	// path sees ISO dates and canonical amounts. Text in any other shape is
 	// refused, never re-read with per-value detection (#300; T-36 class).
-	resolution := ImportRowResolution{AccountID: 3, CommodityID: 7, CategoryID: ptrInt64(9)}
+	resolution := ImportRowResolution{AccountID: 3, CommodityID: 7, CategoryID: new(int64(9))}
 	for _, normalized := range []string{
 		`{"date": "2026-03-02", "amount": "-1.234,56"}`,
 		`{"date": "2026-03-02", "amount": "-12.50", "splits": [{"amount": "-12,50"}]}`,

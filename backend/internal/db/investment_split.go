@@ -239,7 +239,7 @@ func planSplitTx(ctx context.Context, tx *sql.Tx, params CreateSplitParams, oper
 		return splitWritePlan{}, err
 	}
 	replacing := params.ReplacesOperationID > 0
-	plan := splitWritePlan{SplitPlan: SplitPlan{Replayed: replacing || latest != "" && params.EffectiveOn < latest}}
+	plan := splitWritePlan{Replayed: replacing || latest != "" && params.EffectiveOn < latest}
 	rows, err := tx.QueryContext(ctx, `SELECT DISTINCT cost_commodity_id FROM investment_lots
 		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND position_side = 'long'
 		ORDER BY cost_commodity_id`, params.BookID, params.AccountID, params.CommodityID)

@@ -229,7 +229,7 @@ func TestForecastAPINoStore(t *testing.T) {
 func TestForecastEventPagesReconcileToDailyComponents(t *testing.T) {
 	fixture := newForecastAPIFixture(t)
 	entries := make([]string, 0, 205)
-	for index := 0; index < 205; index++ {
+	for range 205 {
 		entries = append(entries, `{"entry_date":"2026-09-08","postings":[{"account_id":`+strconvFormatInt(fixture.checking.ID)+`,"commodity_id":`+strconvFormatInt(fixture.currency)+`,"quantity_value":"100","quantity_scale":2},{"account_id":`+strconvFormatInt(fixture.expense.ID)+`,"commodity_id":`+strconvFormatInt(fixture.currency)+`,"quantity_value":"-100","quantity_scale":2}]}`)
 	}
 	body := `{"transaction_date":"2026-09-08","description":"Paged forecast","journal_entries":[` + strings.Join(entries, ",") + `]}`

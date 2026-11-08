@@ -5,10 +5,10 @@
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import Upload from '@lucide/svelte/icons/upload';
-  import CheckCircle from '@lucide/svelte/icons/circle-check';
-  import AlertCircle from '@lucide/svelte/icons/circle-alert';
+  import CircleCheckBig from '@lucide/svelte/icons/circle-check';
+  import CircleExclamationPoint from '@lucide/svelte/icons/circle-exclamation-point';
   import Info from '@lucide/svelte/icons/info';
-  import Trash2 from '@lucide/svelte/icons/trash-2';
+  import Trash from '@lucide/svelte/icons/trash';
   import Plus from '@lucide/svelte/icons/plus';
   import Loader from '@lucide/svelte/icons/loader-circle';
   import Panel from '#lib/components/panel.svelte';
@@ -1441,7 +1441,7 @@
                           onclick={() => handleDeleteConnection(conn.id)}
                           disabled={deletingConnectionId === conn.id}
                         >
-                          <Trash2 size={12} aria-hidden="true" />
+                          <Trash size={12} aria-hidden="true" />
                           {m.import_connections_delete_confirm_button()}
                         </button>
                       </div>
@@ -1451,7 +1451,7 @@
                         class="inline-flex items-center gap-1 rounded-(--radius-control) border border-border px-2.5 py-1 text-xs font-medium text-muted transition hover:bg-control-hover hover:text-foreground"
                         onclick={() => { confirmDeleteConnectionId = conn.id; deleteConnectionError = undefined; }}
                       >
-                        <Trash2 size={12} aria-hidden="true" />
+                        <Trash size={12} aria-hidden="true" />
                         {m.import_connections_delete()}
                       </button>
                     {/if}
@@ -1572,7 +1572,7 @@
     <Panel>
       {#if fetchFailed}
         <div class="flex items-center gap-2">
-          <AlertCircle size={20} class="text-warning shrink-0" aria-hidden="true" />
+          <CircleExclamationPoint size={20} class="text-warning shrink-0" aria-hidden="true" />
           <p class="text-sm font-semibold text-foreground">{m.import_fetching_failed_title()}</p>
         </div>
         <p class="mt-2 text-sm text-muted">{m.import_fetching_failed_copy()}</p>
@@ -1608,7 +1608,7 @@
     {#if previewData.warnings.length > 0}
       <Panel>
         <div class="flex items-center gap-2">
-          <AlertCircle size={16} class="text-warning shrink-0" aria-hidden="true" />
+          <CircleExclamationPoint size={16} class="text-warning shrink-0" aria-hidden="true" />
           <p class="text-sm font-semibold text-foreground">{m.import_preview_warnings_title()}</p>
         </div>
         <ul class="mt-3 space-y-1">
@@ -2125,7 +2125,7 @@
   <div class="max-w-2xl space-y-6">
     <Panel>
       <div class="flex items-center gap-2">
-        <CheckCircle size={20} class="text-positive shrink-0" aria-hidden="true" />
+        <CircleCheckBig size={20} class="text-positive shrink-0" aria-hidden="true" />
         <p class="text-sm font-semibold text-foreground">{m.import_result_title()}</p>
       </div>
 

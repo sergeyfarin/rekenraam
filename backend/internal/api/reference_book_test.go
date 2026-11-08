@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -225,7 +226,7 @@ func seedReferenceBook(t *testing.T, handler http.Handler) seededReferenceBook {
 func referenceCapture(t *testing.T, response any, field, why string) int64 {
 	t.Helper()
 	value := response
-	for _, name := range strings.Split(field, ".") {
+	for name := range strings.SplitSeq(field, ".") {
 		object, ok := value.(map[string]any)
 		require.True(t, ok, "%s: %s is not an object at %s", why, field, name)
 		value = object[name]
@@ -500,9 +501,7 @@ func (s seededReferenceBook) reportQuery(t *testing.T, accounts []string, extra 
 	for _, key := range accounts {
 		values.Add("account_id", strconvFormatInt(s.id(t, key)))
 	}
-	for key, value := range extra {
-		values[key] = value
-	}
+	maps.Copy(values, extra)
 	return "?" + values.Encode()
 }
 

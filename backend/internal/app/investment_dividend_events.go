@@ -148,8 +148,7 @@ func (s *PricingService) processDividendEvents(ctx context.Context, logger *slog
 		stateErr = s.repository.FailBackgroundWork(ctx, item.ID, workerID, now.Format(time.RFC3339), workErr.Error())
 	} else {
 		delay := retryDelay(item.Attempts, item.ID)
-		var providerErr *marketdata.QuoteError
-		if errors.As(workErr, &providerErr) {
+		if providerErr, ok := errors.AsType[*marketdata.QuoteError](workErr); ok {
 			delay = max(delay, providerErr.RetryAfter)
 		}
 		stateErr = s.repository.RetryBackgroundWork(ctx, item.ID, workerID, now.Add(delay).Format(time.RFC3339), now.Format(time.RFC3339), workErr.Error())

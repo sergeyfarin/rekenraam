@@ -252,8 +252,7 @@ func toInternalTransferPlan(result db.InternalTransferResult) InternalTransferPl
 func mapInternalTransferError(err error) error {
 	// A backdated transfer names the later decision it makes impossible, as a
 	// backdated sale does (#167).
-	var dependency *db.InvestmentReplayDependencyError
-	if errors.As(err, &dependency) {
+	if dependency, ok := errors.AsType[*db.InvestmentReplayDependencyError](err); ok {
 		return InvestmentSaleDependencyError{OperationID: dependency.OperationID, DecisionID: dependency.DecisionID}
 	}
 	switch {

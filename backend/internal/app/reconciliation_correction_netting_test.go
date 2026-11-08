@@ -140,8 +140,8 @@ func TestCorrectionMovingSettlementAcrossBoundaryInvalidates(t *testing.T) {
 		OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
 		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
 		CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
-		QuantityValue: exact.New(10), GrossAmountValue: tradeMoney(-100000), GrossAmountScale: 2,
-		NetSettlementValue: tradeMoney(-100000), NetSettlementScale: 2, SettlementDate: "2026-01-03",
+		QuantityValue: exact.New(10), GrossAmountValue: new(int64(-100000)), GrossAmountScale: 2,
+		NetSettlementValue: new(int64(-100000)), NetSettlementScale: 2, SettlementDate: "2026-01-03",
 	})
 	require.NoError(t, err)
 	early := reconcileAccount(t, f, f.cashAccountID, f.eurCommodityID, "2026-01-04", -1000)
@@ -154,8 +154,8 @@ func TestCorrectionMovingSettlementAcrossBoundaryInvalidates(t *testing.T) {
 			TransactionDate: "2026-01-01", CommodityID: f.stockCommodityID,
 			HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
 			CashCommodityID: f.eurCommodityID, QuantityValue: exact.New(10),
-			GrossAmountValue: tradeMoney(-100000), GrossAmountScale: 2,
-			NetSettlementValue: tradeMoney(-100000), NetSettlementScale: 2, SettlementDate: "2026-01-05",
+			GrossAmountValue: new(int64(-100000)), GrossAmountScale: 2,
+			NetSettlementValue: new(int64(-100000)), NetSettlementScale: 2, SettlementDate: "2026-01-05",
 		},
 	}
 
@@ -240,8 +240,8 @@ func TestCorrectionMovingSeparatelyPaidFeeNetsPerBoundary(t *testing.T) {
 		return InvestmentTradeInput{OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
 			CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
 			CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
-			QuantityValue: exact.New(10), GrossAmountValue: tradeMoney(-100000), GrossAmountScale: 2,
-			NetSettlementValue: tradeMoney(-100000), NetSettlementScale: 2,
+			QuantityValue: exact.New(10), GrossAmountValue: new(int64(-100000)), GrossAmountScale: 2,
+			NetSettlementValue: new(int64(-100000)), NetSettlementScale: 2,
 			Charges: []InvestmentTradeChargeInput{{Kind: "commission", AmountValue: -500, AmountScale: 2,
 				CommodityID: f.eurCommodityID, ChargeAccountID: &feeAccount, CashAccountID: &f.cashAccountID, PaidOn: feePaidOn,
 				Treatment: "separately_expensed"}}}

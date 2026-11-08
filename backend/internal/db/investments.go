@@ -3206,10 +3206,7 @@ func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot
 	// the *lot's* scale, which is what this used to insist on (T-97). Widen both
 	// to whichever carries more precision; neither side ever narrows, so no
 	// quantity is rounded away to make the arithmetic line up.
-	commonScale := quantityScale
-	if lot.RemainingQuantityScale > commonScale {
-		commonScale = lot.RemainingQuantityScale
-	}
+	commonScale := max(lot.RemainingQuantityScale, quantityScale)
 	disposedAtCommon, err := rescaleQuantity(quantityValue, quantityScale, commonScale)
 	if err != nil {
 		return LotDisposalRecord{}, err

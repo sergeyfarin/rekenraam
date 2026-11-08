@@ -145,8 +145,7 @@ func runRecoverOwner(ctx context.Context, cfg config.Config, args []string, stdi
 	}
 	held, err := lockfile.Acquire(databasePath)
 	if err != nil {
-		var locked lockfile.ErrLocked
-		if errors.As(err, &locked) {
+		if locked, ok := errors.AsType[lockfile.ErrLocked](err); ok {
 			fmt.Fprintf(stderr, "the database is in use (%v). Stop the server before recovering the owner.\n", locked)
 			return 1
 		}

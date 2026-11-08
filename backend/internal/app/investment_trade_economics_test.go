@@ -10,8 +10,6 @@ import (
 	"rekenraam/backend/internal/exact"
 )
 
-func tradeMoney(value int64) *int64 { return &value }
-
 func TestTradeComponentLinksToItsOwnClearingLegWhenAmountsCollide(t *testing.T) {
 	t.Parallel()
 	f := newInvestmentsTestFixture(t)
@@ -21,8 +19,8 @@ func TestTradeComponentLinksToItsOwnClearingLegWhenAmountsCollide(t *testing.T) 
 		OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01", SettlementDate: "2026-01-03",
 		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
 		CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
-		QuantityValue: exact.New(1), GrossAmountValue: tradeMoney(-200), GrossAmountScale: 2,
-		NetSettlementValue: tradeMoney(-200), NetSettlementScale: 2,
+		QuantityValue: exact.New(1), GrossAmountValue: new(int64(-200)), GrossAmountScale: 2,
+		NetSettlementValue: new(int64(-200)), NetSettlementScale: 2,
 		Charges: []InvestmentTradeChargeInput{{Kind: "commission", AmountValue: -200,
 			AmountScale: 2, CommodityID: f.eurCommodityID, CashAccountID: &feeCashAccount,
 			Treatment: "clearing_included", PaidOn: "2026-01-03"}},
@@ -123,9 +121,9 @@ func TestExactTradeEconomicsFeeTreatmentAndGrossPrice(t *testing.T) {
 				SettlementDate: "2026-01-03"}
 			buy := base
 			buy.TransactionDate = "2026-01-01"
-			buy.GrossAmountValue = tradeMoney(-10000)
+			buy.GrossAmountValue = new(int64(-10000))
 			buy.GrossAmountScale = 2
-			buy.NetSettlementValue = tradeMoney(-10200)
+			buy.NetSettlementValue = new(int64(-10200))
 			buy.NetSettlementScale = 2
 			buy.Charges = []InvestmentTradeChargeInput{{Kind: "commission", AmountValue: -200,
 				AmountScale: 2, CommodityID: f.eurCommodityID, Treatment: test.treatment, ChargeAccountID: accountID}}
@@ -145,9 +143,9 @@ func TestExactTradeEconomicsFeeTreatmentAndGrossPrice(t *testing.T) {
 			sell := base
 			sell.TransactionDate = "2026-02-01"
 			sell.SettlementDate = "2026-02-03"
-			sell.GrossAmountValue = tradeMoney(12000)
+			sell.GrossAmountValue = new(int64(12000))
 			sell.GrossAmountScale = 2
-			sell.NetSettlementValue = tradeMoney(11800)
+			sell.NetSettlementValue = new(int64(11800))
 			sell.NetSettlementScale = 2
 			sell.Charges = buy.Charges
 			preview, err := f.investmentService.PreviewSell(ctx, sell)
@@ -189,8 +187,8 @@ func negativeProceedsSale(f *investmentsTestFixture, date string) InvestmentTrad
 		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
 		CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
 		CostBasisMethod: "fifo",
-		QuantityValue:   exact.New(1), GrossAmountValue: tradeMoney(50), GrossAmountScale: 2,
-		NetSettlementValue: tradeMoney(-50), NetSettlementScale: 2,
+		QuantityValue:   exact.New(1), GrossAmountValue: new(int64(50)), GrossAmountScale: 2,
+		NetSettlementValue: new(int64(-50)), NetSettlementScale: 2,
 		Charges: []InvestmentTradeChargeInput{{Kind: "commission", AmountValue: -100,
 			AmountScale: 2, CommodityID: f.eurCommodityID, Treatment: "clearing_included"}},
 	}
@@ -371,8 +369,8 @@ func TestManualAndGrossPricesOutrankLaterApproximateTradeOnSameDate(t *testing.T
 		TransactionDate: "2026-01-02", CommodityID: f.stockCommodityID,
 		HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
 		CashCommodityID: f.eurCommodityID, QuantityValue: exact.New(1),
-		GrossAmountValue: tradeMoney(-12000), GrossAmountScale: 2,
-		NetSettlementValue: tradeMoney(-12000), NetSettlementScale: 2})
+		GrossAmountValue: new(int64(-12000)), GrossAmountScale: 2,
+		NetSettlementValue: new(int64(-12000)), NetSettlementScale: 2})
 	require.NoError(t, err)
 	_, err = f.investmentService.Buy(ctx, InvestmentTradeInput{OwnerUserID: f.ownerUserID,
 		TransactionDate: "2026-01-02", CommodityID: f.stockCommodityID,
@@ -392,8 +390,8 @@ func TestExactTradeEconomicsRejectsUnbalancedNet(t *testing.T) {
 	input := InvestmentTradeInput{OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
 		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
 		CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
-		QuantityValue: exact.New(1), GrossAmountValue: tradeMoney(-10000), GrossAmountScale: 2,
-		NetSettlementValue: tradeMoney(-10100), NetSettlementScale: 2,
+		QuantityValue: exact.New(1), GrossAmountValue: new(int64(-10000)), GrossAmountScale: 2,
+		NetSettlementValue: new(int64(-10100)), NetSettlementScale: 2,
 		Charges: []InvestmentTradeChargeInput{{Kind: "commission", AmountValue: -200, AmountScale: 2, CommodityID: f.eurCommodityID}}}
 	_, err := f.investmentService.Buy(context.Background(), input)
 	require.ErrorContains(t, err, "gross plus charges does not equal net settlement")
@@ -415,8 +413,8 @@ func TestForeignTradeFeeKeepsCostCurrencyBasisAndPostsOwnCashLegs(t *testing.T) 
 	input := InvestmentTradeInput{OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
 		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
 		CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
-		QuantityValue: exact.New(1), GrossAmountValue: tradeMoney(-10000), GrossAmountScale: 2,
-		NetSettlementValue: tradeMoney(-10000), NetSettlementScale: 2,
+		QuantityValue: exact.New(1), GrossAmountValue: new(int64(-10000)), GrossAmountScale: 2,
+		NetSettlementValue: new(int64(-10000)), NetSettlementScale: 2,
 		Charges: []InvestmentTradeChargeInput{{Kind: "commission", AmountValue: -500, AmountScale: 2,
 			CommodityID: usdID, ChargeAccountID: &feeAccount, CashAccountID: &foreignCash, PaidOn: "2026-01-04"}}}
 	trade, err := f.investmentService.Buy(ctx, input)
@@ -475,8 +473,8 @@ func TestSeparatelyPaidSameCurrencyCommissionPostsOnPaymentDate(t *testing.T) {
 				OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01", CommodityID: f.stockCommodityID,
 				HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
 				CashCommodityID: f.eurCommodityID, QuantityValue: exact.New(1),
-				GrossAmountValue: tradeMoney(-10000), GrossAmountScale: 2,
-				NetSettlementValue: tradeMoney(-10000), NetSettlementScale: 2,
+				GrossAmountValue: new(int64(-10000)), GrossAmountScale: 2,
+				NetSettlementValue: new(int64(-10000)), NetSettlementScale: 2,
 				Charges: []InvestmentTradeChargeInput{{Kind: "commission", AmountValue: -200,
 					AmountScale: 2, CommodityID: f.eurCommodityID, Treatment: test.treatment,
 					ChargeAccountID: accountID, CashAccountID: &f.cashAccountID, PaidOn: "2026-01-03"}},
@@ -514,8 +512,8 @@ func TestTradeFeePolicySnapshotsAccountVersionAndOldTradeDoesNotChange(t *testin
 		TransactionDate: "2026-01-02", CommodityID: f.stockCommodityID,
 		HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
 		CashCommodityID: f.eurCommodityID, QuantityValue: exact.New(1),
-		GrossAmountValue: tradeMoney(-10000), GrossAmountScale: 2,
-		NetSettlementValue: tradeMoney(-10200), NetSettlementScale: 2,
+		GrossAmountValue: new(int64(-10000)), GrossAmountScale: 2,
+		NetSettlementValue: new(int64(-10200)), NetSettlementScale: 2,
 		Charges: []InvestmentTradeChargeInput{{Kind: "commission", AmountValue: -200, AmountScale: 2, CommodityID: f.eurCommodityID}}})
 	require.NoError(t, err)
 	var treatment, tier string

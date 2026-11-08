@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -320,17 +321,17 @@ func (p *YahooFinanceProvider) FetchPrices(ctx context.Context, request PriceReq
 	}
 	now := time.Now()
 	closes := result.Indicators.Quote[0].Close
-	for i := len(result.Timestamp) - 1; i >= 0; i-- {
+	for i, stamp := range slices.Backward(result.Timestamp) {
 		if i >= len(closes) || closes[i] == "" {
 			continue
 		}
-		barDate := time.Unix(result.Timestamp[i], 0).In(location).Format(time.DateOnly)
+		barDate := time.Unix(stamp, 0).In(location).Format(time.DateOnly)
 		today := now.In(location).Format(time.DateOnly)
 		if barDate > today || (barDate == today && (result.Meta.CurrentTradingPeriod.Regular.End <= 0 || now.Unix() < result.Meta.CurrentTradingPeriod.Regular.End)) {
 			continue
 		}
 		for _, split := range result.Events.Splits {
-			if split.Date > result.Timestamp[i] {
+			if split.Date > stamp {
 				return nil, errors.New("unofficial close crosses a split; use another source or a manual quote")
 			}
 		}
@@ -338,7 +339,7 @@ func (p *YahooFinanceProvider) FetchPrices(ctx context.Context, request PriceReq
 		if err != nil {
 			return nil, err
 		}
-		stamp := result.Timestamp[i]
+
 		if stamp <= 0 {
 			return nil, errors.New("quote provider returned an invalid timestamp")
 		}

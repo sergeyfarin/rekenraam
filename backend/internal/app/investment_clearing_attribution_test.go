@@ -101,8 +101,8 @@ func TestDisposalClearingAttributionHandlesDatedFees(t *testing.T) {
 			buyOn(t, f, "2026-01-01", 2, 2000)
 			input := sellInput(f, "2026-02-01", 1)
 			input.CashAmountValue = 0
-			input.GrossAmountValue, input.GrossAmountScale = tradeMoney(10000), 2
-			input.NetSettlementValue, input.NetSettlementScale = tradeMoney(10000), 2
+			input.GrossAmountValue, input.GrossAmountScale = new(int64(10000)), 2
+			input.NetSettlementValue, input.NetSettlementScale = new(int64(10000)), 2
 			input.SettlementDate = "2026-02-03"
 			var chargeAccount *int64
 			if treatment == "separately_expensed" {

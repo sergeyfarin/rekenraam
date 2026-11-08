@@ -1191,7 +1191,7 @@ func TestDividend_WithholdingLegOnlyPresentWhenConfigured(t *testing.T) {
 		CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
 		IncomeAccountID: &f.incomeAccountID,
 		AmountValue:     10000, AmountScale: 2,
-		WithholdingValue:     ptrInt64(1500),
+		WithholdingValue:     new(int64(1500)),
 		WithholdingAccountID: &withholdingAccountID,
 	})
 	require.NoError(t, err)
@@ -1391,7 +1391,7 @@ func TestCleanDividendDefaultSpec_RejectsInvalidInputs(t *testing.T) {
 		{"invalid status", func(i *DividendDefaultInput) { i.Status = "deleted" }},
 		{"effective_to before effective_from", func(i *DividendDefaultInput) { i.EffectiveTo = "2025-01-01" }},
 		{"tax country wrong length", func(i *DividendDefaultInput) { i.TaxCountryCode = "N" }},
-		{"withholding rate out of range", func(i *DividendDefaultInput) { i.WithholdingRateBPS = ptrInt64(10001) }},
+		{"withholding rate out of range", func(i *DividendDefaultInput) { i.WithholdingRateBPS = new(int64(10001)) }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

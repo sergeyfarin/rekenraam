@@ -52,14 +52,14 @@ func TestPersonalAccessTokenManagementRechecksSessionAndPasswordAndConcurrentLim
 	require.ErrorIs(t, err, db.ErrNotFound, "a session revoked after verification cannot mint a token")
 	_, err = database.Exec(`UPDATE auth_sessions SET revoked_at=NULL WHERE id=1`)
 	require.NoError(t, err)
-	for i := 0; i < 49; i++ {
+	for i := range 49 {
 		_, err = database.Exec(`INSERT INTO personal_access_tokens(user_id,name,token_hash,scopes_json,created_at,expires_at) VALUES(1,'synthetic client',?,'["ledger:read"]',?,?)`, fmt.Sprintf("%064d", i), p.CreatedAt, p.ExpiresAt)
 		require.NoError(t, err)
 	}
 	start := make(chan struct{})
 	results := make(chan error, 2)
 	var wg sync.WaitGroup
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()

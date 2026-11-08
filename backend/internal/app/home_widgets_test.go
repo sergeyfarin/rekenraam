@@ -94,8 +94,8 @@ func (f homeWidgetFixture) spend(t *testing.T, date string, accountID, categoryI
 func (f homeWidgetFixture) target(t *testing.T, categoryID, commodityID, cents int64) {
 	t.Helper()
 	_, err := f.budgets.SetTarget(context.Background(), SetBudgetTargetInput{
-		BudgetMutationContext: BudgetMutationContext{OwnerUserID: 1, OriginType: "internal", Reason: "Home fixture"},
-		CategoryID:            categoryID, CommodityID: commodityID, PeriodStart: "2026-10-01",
+		OwnerUserID: 1, OriginType: "internal", Reason: "Home fixture",
+		CategoryID: categoryID, CommodityID: commodityID, PeriodStart: "2026-10-01",
 		QuantityValue: exact.New(cents), QuantityScale: 2})
 	require.NoError(t, err)
 }
@@ -292,8 +292,8 @@ func TestHomeRecurringWidgetListsTheNextDueActiveSchedules(t *testing.T) {
 			{AccountID: f.cashAccountID, CommodityID: f.eurCommodityID, QuantityValue: exact.New(-cents), QuantityScale: 2},
 		}
 		template, err := f.recurring.CreateTemplate(context.Background(), WriteRecurringTemplateInput{OwnerUserID: 1, Patch: RecurringTemplatePatch{
-			Name: recurringTestPtr(name), Frequency: recurringTestPtr("monthly"), StartsOn: recurringTestPtr(startsOn),
-			DayOfMonth: NullablePatch[int]{Set: true, Value: recurringTestPtr(day)}, Postings: &postings}})
+			Name: new(name), Frequency: new("monthly"), StartsOn: new(startsOn),
+			DayOfMonth: NullablePatch[int]{Set: true, Value: new(day)}, Postings: &postings}})
 		require.NoError(t, err)
 		return template
 	}
@@ -303,7 +303,7 @@ func TestHomeRecurringWidgetListsTheNextDueActiveSchedules(t *testing.T) {
 	schedule("Gym", 28, "2026-10-16", 3000)
 	paused := schedule("Paused", 17, "2026-10-16", 1000)
 	_, err := f.recurring.UpdateTemplate(context.Background(), WriteRecurringTemplateInput{OwnerUserID: 1, TemplateID: paused.ID,
-		Patch: RecurringTemplatePatch{Enabled: recurringTestPtr(false)}})
+		Patch: RecurringTemplatePatch{Enabled: new(false)}})
 	require.NoError(t, err)
 	archived := schedule("Archived", 18, "2026-10-16", 1000)
 	_, err = f.recurring.ArchiveTemplate(context.Background(), WriteRecurringTemplateInput{OwnerUserID: 1, TemplateID: archived.ID})

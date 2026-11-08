@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 	"strconv"
 	"testing"
@@ -45,15 +46,13 @@ func TestPaymentAttributionAPIEntryOmissionNullAndReplacementPresence(t *testing
 		holding, instrument bool
 		date                *string
 	}{
-		{"assign", map[string]any{"holding_account_id": holding.ID, "commodity_id": instrument.CommodityID, "ex_date": "2026-03-01"}, true, true, stringPointer("2026-03-01")},
-		{"omit preserves", nil, true, true, stringPointer("2026-03-01")},
-		{"null clears instrument", map[string]any{"commodity_id": nil}, true, false, stringPointer("2026-03-01")},
+		{"assign", map[string]any{"holding_account_id": holding.ID, "commodity_id": instrument.CommodityID, "ex_date": "2026-03-01"}, true, true, new("2026-03-01")},
+		{"omit preserves", nil, true, true, new("2026-03-01")},
+		{"null clears instrument", map[string]any{"commodity_id": nil}, true, false, new("2026-03-01")},
 		{"clear all", map[string]any{"holding_account_id": nil, "ex_date": nil}, false, false, nil},
 	} {
 		body := financial()
-		for key, value := range step.fields {
-			body[key] = value
-		}
+		maps.Copy(body, step.fields)
 		res := post("/api/v1/investments/transactions/"+strconv.FormatInt(current, 10)+"/replace-payment-in-lieu", map[string]any{"reason": step.name, "replacement": body}, http.StatusCreated)
 		var replacement investmentDividendReplacementResponse
 		require.NoError(t, json.NewDecoder(res.Body).Decode(&replacement))
@@ -69,5 +68,3 @@ func TestPaymentAttributionAPIEntryOmissionNullAndReplacementPresence(t *testing
 		post("/api/v1/investments/payment-in-lieu", bad, http.StatusBadRequest)
 	}
 }
-
-func stringPointer(value string) *string { return &value }

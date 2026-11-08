@@ -527,14 +527,12 @@ func (s *TransactionService) setTransactionDeleted(ctx context.Context, input Tr
 		operation = "transaction.soft_delete"
 	}
 	record, err := s.repository.SetTransactionDeleted(ctx, db.SetTransactionDeletedParams{
-		TransactionLifecycleParams: db.TransactionLifecycleParams{
-			BookID: BookID, TransactionID: input.TransactionID, ActorUserID: input.OwnerUserID,
-			AuthSessionID: input.AuthSessionID, RequestID: input.RequestID, OriginType: input.OriginType,
-			Operation: operation, RecordedAt: now, ChangeReason: changeReason,
-			CheckpointCandidates: candidates, ReconciliationOverride: input.ReconciliationOverride,
-			ReviewedCheckpointIDs:      input.ReconciliationOverrideCheckpointIDs,
-			InvalidateCheckpointReason: changeReason, ExpectedVersionID: current.VersionID,
-		}, Deleted: deleted,
+		BookID: BookID, TransactionID: input.TransactionID, ActorUserID: input.OwnerUserID,
+		AuthSessionID: input.AuthSessionID, RequestID: input.RequestID, OriginType: input.OriginType,
+		Operation: operation, RecordedAt: now, ChangeReason: changeReason,
+		CheckpointCandidates: candidates, ReconciliationOverride: input.ReconciliationOverride,
+		ReviewedCheckpointIDs:      input.ReconciliationOverrideCheckpointIDs,
+		InvalidateCheckpointReason: changeReason, ExpectedVersionID: current.VersionID, Deleted: deleted,
 	})
 	if err != nil {
 		return Transaction{}, mapTransactionDBError(err)

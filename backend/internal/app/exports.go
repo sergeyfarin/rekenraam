@@ -6,7 +6,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -271,7 +271,7 @@ func expandAccountDescendants(accounts []db.ExportAccountRecord, accountIDs []in
 	for accountID := range selected {
 		expanded = append(expanded, accountID)
 	}
-	sort.Slice(expanded, func(i, j int) bool { return expanded[i] < expanded[j] })
+	slices.Sort(expanded)
 	return expanded
 }
 

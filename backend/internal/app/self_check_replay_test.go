@@ -196,9 +196,9 @@ func TestMeasureReplaySelfCheckRuntime(t *testing.T) {
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	for p := 0; p < positions; p++ {
+	for range positions {
 		account := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
-		for trade := 0; trade < tradesPerPosition; trade++ {
+		for trade := range tradesPerPosition {
 			date := start.AddDate(0, 0, trade).Format("2006-01-02")
 			if trade%5 == 4 {
 				sale := tradeOn(f, account, date, 1, 2500)

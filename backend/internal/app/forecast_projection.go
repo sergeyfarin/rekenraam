@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"time"
 
@@ -168,7 +169,7 @@ func (b *forecastBuild) addDrafts() error {
 	for id := range transactions {
 		ids = append(ids, id)
 	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	slices.Sort(ids)
 	for _, id := range ids {
 		if err := b.ctx.Err(); err != nil {
 			return err
@@ -182,7 +183,7 @@ func (b *forecastBuild) addDrafts() error {
 		for entryID := range transaction.Entries {
 			entryIDs = append(entryIDs, entryID)
 		}
-		sort.Slice(entryIDs, func(i, j int) bool { return entryIDs[i] < entryIDs[j] })
+		slices.Sort(entryIDs)
 		for _, entryID := range entryIDs {
 			entry := transaction.Entries[entryID]
 			projectionDate := max(entry.Date, b.bounds.First)
@@ -386,7 +387,7 @@ func (b *forecastBuild) finish(input forecastNormalizedInput, computedAt string)
 		}
 		optionIDs = append(optionIDs, id)
 	}
-	sort.Slice(optionIDs, func(i, j int) bool { return optionIDs[i] < optionIDs[j] })
+	slices.Sort(optionIDs)
 	for _, id := range optionIDs {
 		result.AccountOptions = append(result.AccountOptions, forecastAccount(options[id]))
 	}
@@ -397,7 +398,7 @@ func (b *forecastBuild) finish(input forecastNormalizedInput, computedAt string)
 			allCurrencyIDs = append(allCurrencyIDs, id)
 		}
 	}
-	sort.Slice(allCurrencyIDs, func(i, j int) bool { return allCurrencyIDs[i] < allCurrencyIDs[j] })
+	slices.Sort(allCurrencyIDs)
 	for _, id := range allCurrencyIDs {
 		commodity := commodityRules[id]
 		result.CurrencyOptions = append(result.CurrencyOptions, ForecastCommodity{ID: id, Code: commodity.Code, StandardScale: commodity.StandardScale})
@@ -411,7 +412,7 @@ func (b *forecastBuild) finish(input forecastNormalizedInput, computedAt string)
 	for id := range commoditySet {
 		commodityIDs = append(commodityIDs, id)
 	}
-	sort.Slice(commodityIDs, func(i, j int) bool { return commodityIDs[i] < commodityIDs[j] })
+	slices.Sort(commodityIDs)
 	for _, id := range commodityIDs {
 		c := commodityRules[id]
 		result.Commodities = append(result.Commodities, ForecastCommodity{ID: id, Code: c.Code, StandardScale: c.StandardScale})

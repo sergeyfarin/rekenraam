@@ -1,5 +1,5 @@
 <script lang="ts">
-  import AlertTriangle from '@lucide/svelte/icons/alert-triangle';
+  import TriangleExclamationPoint from '@lucide/svelte/icons/triangle-exclamation-point';
   import { m } from '#lib/paraglide/messages.js';
   import type { ReconciliationImpactResponse } from '#lib/api/investments.ts';
   import type { GainImpactRow } from '#lib/investments/gain-impact.ts';
@@ -37,7 +37,7 @@
 -->
 <ModalDialog role="alertdialog" labelledby={titleID} {pending} {onCancel} class="max-w-lg">
   <div class="flex items-start gap-3 border-b border-border px-4 py-3">
-    <AlertTriangle size={18} class="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
+    <TriangleExclamationPoint size={18} class="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
     <div class="min-w-0">
       <h3 id={titleID} class="text-sm font-semibold text-foreground">
         {hasCheckpoints ? m.transactions_reconciliation_warning_title() : m.investments_gain_impact_title()}
@@ -84,7 +84,7 @@
       onclick={onConfirm}
       disabled={pending}
     >
-      <AlertTriangle size={14} aria-hidden="true" />
+      <TriangleExclamationPoint size={14} aria-hidden="true" />
       {#if hasCheckpoints && hasGains}
         {m.investments_gain_impact_confirm_with_reconciliation()}
       {:else if hasGains}

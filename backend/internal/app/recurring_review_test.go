@@ -173,10 +173,10 @@ func TestRecurringDuePaginationUsesCurrentDraftAmountsAndKeepsArchivedDrafts(t *
 	t.Parallel()
 	f, s, input := recurringFixture(t)
 	ctx := context.Background()
-	input.Patch.Frequency = recurringTestPtr("daily")
+	input.Patch.Frequency = new("daily")
 	input.Patch.DayOfMonth = NullablePatch[int]{}
-	input.Patch.LeadDays = recurringTestPtr(2)
-	input.Patch.PayeeName = recurringTestPtr("Original employer")
+	input.Patch.LeadDays = new(2)
+	input.Patch.PayeeName = new("Original employer")
 	template, err := s.CreateTemplate(ctx, input)
 	require.NoError(t, err)
 	_, err = s.GenerateDue(ctx, GenerateRecurringInput{OwnerUserID: input.OwnerUserID})
@@ -230,7 +230,7 @@ func TestRecurringOccurrenceRangeKeepsSkippedDatesAcrossScheduleEdits(t *testing
 	template, err := s.CreateTemplate(ctx, input)
 	require.NoError(t, err)
 	require.NoError(t, s.SkipOccurrence(ctx, ReviewRecurringInput{OwnerUserID: input.OwnerUserID, TemplateID: template.ID, OccurrenceDate: "2026-09-01", Reason: "skip"}))
-	_, err = s.UpdateTemplate(ctx, WriteRecurringTemplateInput{OwnerUserID: input.OwnerUserID, TemplateID: template.ID, Patch: RecurringTemplatePatch{DayOfMonth: NullablePatch[int]{Set: true, Value: recurringTestPtr(2)}}})
+	_, err = s.UpdateTemplate(ctx, WriteRecurringTemplateInput{OwnerUserID: input.OwnerUserID, TemplateID: template.ID, Patch: RecurringTemplatePatch{DayOfMonth: NullablePatch[int]{Set: true, Value: new(2)}}})
 	require.NoError(t, err)
 	before := recurringCounts(t, f.database)
 	items, err := s.Occurrences(ctx, input.OwnerUserID, template.ID, "2026-08-01", "2026-10-31")
@@ -306,9 +306,9 @@ func TestRecurringDuePreservesMoreThanOnePage(t *testing.T) {
 	t.Parallel()
 	_, s, input := recurringFixture(t)
 	ctx := context.Background()
-	input.Patch.Frequency = recurringTestPtr("daily")
+	input.Patch.Frequency = new("daily")
 	input.Patch.DayOfMonth = NullablePatch[int]{}
-	input.Patch.LeadDays = recurringTestPtr(0)
+	input.Patch.LeadDays = new(0)
 	_, err := s.CreateTemplate(ctx, input)
 	require.NoError(t, err)
 	s.now = func() time.Time { return time.Date(2027, 4, 1, 12, 0, 0, 0, time.UTC) }
@@ -418,21 +418,21 @@ func TestUnsavedSchedulePreviewUsesCalendarRulesWithoutWrites(t *testing.T) {
 	t.Parallel()
 	f, s, input := recurringFixture(t)
 	before := recurringCounts(t, f.database)
-	patch := RecurringTemplatePatch{Frequency: recurringTestPtr("monthly"), StartsOn: recurringTestPtr("2026-08-31"), DayOfMonth: NullablePatch[int]{Set: true, Value: recurringTestPtr(31)}}
+	patch := RecurringTemplatePatch{Frequency: new("monthly"), StartsOn: new("2026-08-31"), DayOfMonth: NullablePatch[int]{Set: true, Value: new(31)}}
 	dates, err := s.PreviewSchedule(context.Background(), input.OwnerUserID, patch)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"2026-08-31", "2026-09-30", "2026-10-31", "2026-11-30", "2026-12-31"}, dates)
-	patch.Frequency = recurringTestPtr("yearly")
-	patch.MonthOfYear = NullablePatch[int]{Set: true, Value: recurringTestPtr(2)}
-	patch.DayOfMonth.Value = recurringTestPtr(29)
+	patch.Frequency = new("yearly")
+	patch.MonthOfYear = NullablePatch[int]{Set: true, Value: new(2)}
+	patch.DayOfMonth.Value = new(29)
 	dates, err = s.PreviewSchedule(context.Background(), input.OwnerUserID, patch)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"2027-02-28", "2028-02-29", "2029-02-28", "2030-02-28", "2031-02-28"}, dates)
-	patch.MaxOccurrences = NullablePatch[int]{Set: true, Value: recurringTestPtr(2)}
+	patch.MaxOccurrences = NullablePatch[int]{Set: true, Value: new(2)}
 	dates, err = s.PreviewSchedule(context.Background(), input.OwnerUserID, patch)
 	require.NoError(t, err)
 	assert.Len(t, dates, 2)
-	patch.ByWeekday = NullablePatch[int]{Set: true, Value: recurringTestPtr(1)}
+	patch.ByWeekday = NullablePatch[int]{Set: true, Value: new(1)}
 	_, err = s.PreviewSchedule(context.Background(), input.OwnerUserID, patch)
 	require.ErrorIs(t, err, ErrRecurringScheduleInvalid)
 	assert.Equal(t, before, recurringCounts(t, f.database))
