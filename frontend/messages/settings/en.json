@@ -1365,6 +1365,8 @@
   "investments_exchange_select_instrument": "Select the new instrument",
   "investments_exchange_no_instruments": "There is no other instrument to exchange into. Add the new instrument first.",
   "investments_exchange_destination": "Receive the new units in",
+  "investments_exchange_destination_unavailable": "The holding chosen earlier cannot receive these new units. Choose another one.",
+  "investments_exchange_destination_unavailable_option": "Earlier choice, cannot receive these units",
   "investments_exchange_select_destination": "Select a holding account",
   "investments_exchange_same_holding": "The same holding ({name})",
   "investments_exchange_destination_hint": "A holding account tied to the old instrument cannot hold the new one. Choose the new instrument's own holding.",

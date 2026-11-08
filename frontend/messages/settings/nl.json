@@ -1336,6 +1336,8 @@
   "investments_exchange_select_instrument": "Kies het nieuwe instrument",
   "investments_exchange_no_instruments": "Er is geen ander instrument om naar om te wisselen. Voeg eerst het nieuwe instrument toe.",
   "investments_exchange_destination": "Nieuwe eenheden ontvangen op",
+  "investments_exchange_destination_unavailable": "De eerder gekozen positie kan deze nieuwe eenheden niet ontvangen. Kies een andere.",
+  "investments_exchange_destination_unavailable_option": "Eerdere keuze, kan deze eenheden niet ontvangen",
   "investments_exchange_select_destination": "Kies een effectenrekening",
   "investments_exchange_same_holding": "Dezelfde rekening ({name})",
   "investments_exchange_destination_hint": "Een effectenrekening die aan het oude instrument gekoppeld is, kan het nieuwe niet bevatten. Kies de eigen rekening van het nieuwe instrument.",

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { receivingHolding } from '#lib/investments/receiving-holding.ts';
   import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
   import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
   import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
@@ -71,9 +72,7 @@
   let newCommodityID = $state(initialTerms ? String(initialTerms.destination_commodity_id) : '');
   // Null follows the suggested destination; a choice the user makes sticks
   // until the holding or the new instrument changes.
-  let chosenDestination = $state<string | null>(!initialTerms ? null
-    : initialTerms.destination_holding_account_id === initialTerms.holding_account_id
-      ? 'same' : String(initialTerms.destination_holding_account_id));
+  let chosenDestination = $state<string | null>(initialTerms ? String(initialTerms.destination_holding_account_id) : null);
   let newUnits = $state(initialTerms ? String(initialTerms.plan.ratio_numerator) : '');
   let oldUnits = $state(initialTerms ? String(initialTerms.plan.ratio_denominator) : '');
   let reason = $state('');
@@ -140,17 +139,8 @@
     : holdings.find((holding) => holding.key === holdingKey));
   const newInstruments = $derived(instruments.filter((instrument) => instrument.commodity_id !== selectedHolding?.commodityID));
   const newID = $derived(Number(newCommodityID) || 0);
-  // A holding account tied to one instrument cannot hold another, so the new
-  // units go to an account that is untied or tied to the new instrument.
-  const canHoldNew = (account: { default_commodity_id?: number | null }) =>
-    account.default_commodity_id == null || account.default_commodity_id === newID;
-  const sourceAccount = $derived(accounts.find((account) => account.id === selectedHolding?.accountID));
-  const sameHoldingAllowed = $derived(!!sourceAccount && newID > 0 && canHoldNew(sourceAccount));
-  const otherDestinations = $derived(newID > 0
-    ? accounts.filter((account) => account.id !== selectedHolding?.accountID && canHoldNew(account)) : []);
-  const suggestedDestination = $derived(sameHoldingAllowed ? 'same'
-    : String(otherDestinations.find((account) => account.default_commodity_id === newID)?.id ?? ''));
-  const destination = $derived(chosenDestination ?? suggestedDestination);
+  const receiving = $derived(receivingHolding(accounts, selectedHolding?.accountID, newID, chosenDestination));
+  const destination = $derived(receiving.value);
   const currenciesByID = $derived(new Map<number, CurrencyResponse>(
     (currenciesQuery.data?.currencies ?? []).map((currency) => [currency.id, currency])));
   const instrumentLabel = (commodityID: number) => {
@@ -162,7 +152,7 @@
   const loadError = $derived(accountsQuery.isError || positionsQuery.isError ||
     instrumentsQuery.isError || currenciesQuery.isError);
   const canPreview = $derived(!loading && !loadError && !!effectiveOn && !!selectedHolding && newID > 0 &&
-    !!destination && !!newUnits.trim() && !!oldUnits.trim() && (!correction || !!reason.trim()));
+    !!destination && !receiving.unavailable && !!newUnits.trim() && !!oldUnits.trim() && (!correction || !!reason.trim()));
   const modalGainRows = $derived(preview?.gainImpact
     ? gainImpactRows(preview.gainImpact.changes, gainImpactCurrency(currenciesByID), locale)
     : []);
@@ -173,10 +163,6 @@
     formError = undefined;
   }
 
-  function resetDestination() {
-    chosenDestination = null;
-    discardPreview();
-  }
 
   function replacementRequest(payload: ExchangePayload): ShareExchangeReplacementRequest {
     return {
@@ -214,7 +200,7 @@
       await runPreview({
         effective_on: effectiveOn,
         holding_account_id: selectedHolding.accountID,
-        ...(destination !== 'same' ? { destination_holding_account_id: Number(destination) } : {}),
+        ...(receiving.destinationID !== undefined ? { destination_holding_account_id: receiving.destinationID } : {}),
         commodity_id: selectedHolding.commodityID,
         destination_commodity_id: newID,
         ratio_numerator: ratio.numerator,
@@ -290,7 +276,7 @@
           · {instrumentLabel(correction.terms.commodity_id)}
         </p>
       {:else}
-      <select id="exchange-holding" aria-describedby="exchange-holding-hint" bind:value={holdingKey} required onchange={resetDestination}
+      <select id="exchange-holding" aria-describedby="exchange-holding-hint" bind:value={holdingKey} required onchange={discardPreview}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         <option value="">{m.investments_exchange_select_holding()}</option>
         {#if holdingKey && !holdings.some((item) => item.key === holdingKey)}<option value={holdingKey} disabled>{m.investments_activity_position_unavailable_option()}</option>{/if}
@@ -306,7 +292,7 @@
     </div>
     <div>
       <label for="exchange-new-instrument" class="mb-1 block text-sm font-medium text-foreground">{m.investments_exchange_new_instrument()}</label>
-      <select id="exchange-new-instrument" bind:value={newCommodityID} required onchange={resetDestination}
+      <select id="exchange-new-instrument" bind:value={newCommodityID} required onchange={discardPreview}
         aria-describedby={newInstruments.length === 0 ? 'exchange-no-instruments' : undefined}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         <option value="">{m.investments_exchange_select_instrument()}</option>
@@ -321,19 +307,19 @@
     {#if selectedHolding && newID > 0}
       <div>
         <label for="exchange-destination" class="mb-1 block text-sm font-medium text-foreground">{m.investments_exchange_destination()}</label>
-        <select id="exchange-destination" aria-describedby="exchange-destination-hint" value={destination} required
+        <select id="exchange-destination" aria-describedby="exchange-destination-hint{receiving.unavailable ? ' exchange-destination-unavailable' : ''}" value={destination} required
+          aria-invalid={receiving.unavailable || undefined}
           onchange={(event) => { chosenDestination = event.currentTarget.value; discardPreview(); }}
           class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
-          <option value="" disabled={sameHoldingAllowed || otherDestinations.length > 0}>{m.investments_exchange_select_destination()}</option>
-          {#if sameHoldingAllowed}
-            <option value="same">{m.investments_exchange_same_holding({ name: sourceAccount?.name ?? '' })}</option>
-          {/if}
-          {#each otherDestinations as account (account.id)}
-            <option value={String(account.id)}>{account.name}</option>
+          <option value="" disabled={receiving.options.length > 0}>{m.investments_exchange_select_destination()}</option>
+          {#if receiving.unavailable}<option value={destination} disabled>{m.investments_exchange_destination_unavailable_option()}</option>{/if}
+          {#each receiving.options as option (option.id)}
+            <option value={String(option.id)}>{option.source ? m.investments_exchange_same_holding({ name: option.name }) : option.name}</option>
           {/each}
         </select>
+        {#if receiving.unavailable}<p id="exchange-destination-unavailable" role="alert" class="mt-1 text-sm text-danger">{m.investments_exchange_destination_unavailable()}</p>{/if}
         <p id="exchange-destination-hint" class="mt-1 text-xs text-muted">
-          {sameHoldingAllowed || otherDestinations.length > 0 ? m.investments_exchange_destination_hint() : m.investments_exchange_no_destination()}
+          {receiving.options.length > 0 ? m.investments_exchange_destination_hint() : m.investments_exchange_no_destination()}
         </p>
       </div>
     {/if}

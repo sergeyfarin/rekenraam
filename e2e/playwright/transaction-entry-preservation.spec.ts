@@ -808,3 +808,90 @@ test('(#521 fifth review) the default merger currency follows the holding until 
   await expect(form.locator('#merger-currency')).toHaveValue(String(s.currencyID));
   await expect(form.locator('#merger-currency-unavailable')).toContainText('USD');
 });
+
+async function addHolding(page: Page, s: Awaited<ReturnType<typeof setup>>, instrumentID: number, name: string) {
+  return apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/holding-accounts', s.csrfToken, {
+    instrument_id: instrumentID, name: `${name} ${s.suffix}`, parent_account_id: s.broker.id,
+    opened_on: daysFromTodayISO(-10), effective_from: daysFromTodayISO(-10)
+  });
+}
+async function addBuy(page: Page, s: Awaited<ReturnType<typeof setup>>, holdingID: number, cashID: number, currencyID: number) {
+  return apiJSON(page, 'POST', '/api/v1/investments/buy', s.csrfToken, {
+    transaction_date: daysFromTodayISO(-5), commodity_id: s.instrument.commodity_id, holding_account_id: holdingID,
+    cash_account_id: cashID, quantity_value: '2', quantity_scale: 0,
+    cash_amount_value: '2000', cash_amount_scale: 2, cash_commodity_id: currencyID
+  });
+}
+async function targetInstrument(page: Page, s: Awaited<ReturnType<typeof setup>>) {
+  return apiJSON<{ id: number; commodity_id: number }>(page, 'POST', '/api/v1/investments/instruments', s.csrfToken, {
+    commodity_code: `NEW${s.suffix}`, instrument_type: 'stock', display_name: `Target ${s.suffix}`,
+    quantity_scale: 0, price_scale: 2, quote_commodity_id: s.currencyID, effective_from: daysFromTodayISO(-10)
+  });
+}
+
+test('(#521 sixth review) a restored merger amount keeps the currency it was entered in', async ({ page }) => {
+  const s = await setup(page);
+  await position(s, page);
+  const eur = await ensureCurrency(page, s.csrfToken, 'EUR', 'Euro');
+  const eurHolding = await addHolding(page, s, s.instrument.id, 'Euro holding');
+  const eurCash = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/accounts', s.csrfToken, {
+    name: `Euro cash ${s.suffix}`, account_class: 'asset', account_kind: 'brokerage_cash', parent_account_id: s.broker.id,
+    default_commodity_id: eur, allows_postings: true, opened_on: daysFromTodayISO(-10), effective_from: daysFromTodayISO(-10)
+  });
+  await addBuy(page, s, eurHolding.id, eurCash.id, eur);
+  const target = await targetInstrument(page, s);
+  await addHolding(page, s, target.id, 'Target holding');
+  await start(page, s.holding.id);
+  await openInvestmentActivity(page, 'Cash-and-stock merger');
+  const form = page.getByRole('dialog').filter({ has: page.locator('#merger-new-instrument') });
+  await form.locator('#merger-new-instrument').selectOption(String(target.commodity_id));
+  await expect(form.locator('#merger-currency')).toHaveValue(String(s.currencyID));
+  await form.locator('#merger-cash').fill('10');
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await openInvestmentActivity(page, 'Shares out');
+  const outgoing = page.getByRole('dialog').filter({ has: page.locator('#external-transfer-out-source') });
+  await outgoing.locator('#external-transfer-out-source').selectOption(`${eurHolding.id}:${s.instrument.commodity_id}:${eur}`);
+  await outgoing.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await openInvestmentActivity(page, 'Cash-and-stock merger');
+  await expect(form.locator('#merger-holding')).toHaveValue(`${eurHolding.id}:${s.instrument.commodity_id}`);
+  // Keep the old money's unit identified, or ask for the amount again.
+  await expect(form.locator('#merger-cash')).toHaveValue('10');
+  await expect(form.locator('#merger-currency')).toHaveValue(String(s.currencyID));
+  await expect(form.locator('#merger-currency-unavailable')).toContainText('USD');
+});
+
+test('(#521 sixth review) a chosen receiving holding survives a source change and is checked, never replaced', async ({ page }) => {
+  const s = await setup(page);
+  await position(s, page);
+  const other = await addHolding(page, s, s.instrument.id, 'Other USD holding');
+  await addBuy(page, s, other.id, s.cash.id, s.currencyID);
+  const target = await targetInstrument(page, s);
+  await addHolding(page, s, target.id, 'Target A');
+  await addHolding(page, s, target.id, 'Target B');
+  await start(page, s.holding.id);
+  await openInvestmentActivity(page, 'Cash-and-stock merger');
+  const form = page.getByRole('dialog').filter({ has: page.locator('#merger-new-instrument') });
+  await form.locator('#merger-new-instrument').selectOption(String(target.commodity_id));
+  const destination = form.locator('#merger-destination');
+  const initial = await destination.inputValue();
+  const chosen = await destination.locator('option').evaluateAll((options, current) => options.map(o => (o as HTMLOptionElement).value).find(v => v !== '' && v !== 'same' && v !== current)!, initial);
+  expect(chosen).toBeTruthy();
+  await destination.selectOption(chosen);
+  await form.locator('#merger-holding').selectOption(`${other.id}:${s.instrument.commodity_id}`);
+  await expect(destination).toHaveValue(chosen);
+  await expect(form.locator('#merger-destination-unavailable')).toHaveCount(0);
+
+  // A new instrument the chosen holding cannot hold leaves it named, not replaced.
+  const alternative = await apiJSON<{ commodity_id: number }>(page, 'POST', '/api/v1/investments/instruments', s.csrfToken, {
+    commodity_code: `ALT${s.suffix}`, instrument_type: 'stock', display_name: `Alternative ${s.suffix}`,
+    quantity_scale: 0, price_scale: 2, quote_commodity_id: s.currencyID, effective_from: daysFromTodayISO(-10)
+  });
+  await start(page, s.holding.id);
+  await openInvestmentActivity(page, 'Cash-and-stock merger');
+  await form.locator('#merger-new-instrument').selectOption(String(target.commodity_id));
+  await destination.selectOption(chosen);
+  await form.locator('#merger-new-instrument').selectOption(String(alternative.commodity_id));
+  await expect(destination).toHaveValue(chosen);
+  await expect(form.locator('#merger-destination-unavailable')).toBeVisible();
+  await expect(form.getByRole('button', { name: 'Preview merger', exact: true })).toBeDisabled();
+});

@@ -1336,6 +1336,8 @@
   "investments_exchange_select_instrument": "Выберите новый инструмент",
   "investments_exchange_no_instruments": "Нет другого инструмента для обмена. Сначала добавьте новый инструмент.",
   "investments_exchange_destination": "Зачислить новые бумаги на",
+  "investments_exchange_destination_unavailable": "Выбранный ранее счёт не может принять эти новые бумаги. Выберите другой.",
+  "investments_exchange_destination_unavailable_option": "Прежний выбор, не может принять эти бумаги",
   "investments_exchange_select_destination": "Выберите счёт ценных бумаг",
   "investments_exchange_same_holding": "Тот же счёт ({name})",
   "investments_exchange_destination_hint": "Счёт ценных бумаг, привязанный к старому инструменту, не может хранить новый. Выберите собственный счёт нового инструмента.",
