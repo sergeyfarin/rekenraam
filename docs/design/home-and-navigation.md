@@ -87,7 +87,10 @@ header on every page.
   [review](../reviews/navigation-and-pages-options-2026-10-29.md#d2-section-menus)).
   The current section is a tab in the pages-row tint, joined to the row
   under it (as MS Money did), so a section visibly opens into its pages; the
-  current page has a green underline. Green otherwise marks only count
+  current page has a green underline. Home, Settings and Review have no
+  pages row, so their tab takes the page tint and opens into the page
+  (#489). On phones the menu button is the current section's tab. Green is
+  the chosen accent palette's colour, through the `nav-marker` token. Green otherwise marks only count
   badges and selected chips.
   A page that needs attention shows a number badge on its tab (*Import 1*),
   with the full sentence for screen readers. A section is navigation only: it
@@ -1144,7 +1147,7 @@ Sequencing belongs in the roadmap; acceptance in the issues.
 | Search depth: payee actions with prefilled editor and last-used category, full-text transaction search | #439 |
 | Widget depth: lazy expanded returns, allocation and forecast charts; further widgets | #440 |
 | Density: compact and comfortable rows | #451 |
-| Shell look: olive two-tint rows, joined section tab, green place markers, card contrast | #489 |
+| Shell look: olive two-tint rows, joined section tab, green place markers, card contrast (delivered 2026-11-08) | #489 |
 | Search button with centred search dialog | #490 |
 | One transaction entry: shell and ordinary modes (#506, delivered), Investment mode (#507, delivered), preservation (#508, delivered) | #491, closed 2026-11-08 |
 | Move to account for posted transactions | #509 |

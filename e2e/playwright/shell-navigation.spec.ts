@@ -79,6 +79,16 @@ for (const theme of ['light', 'dark'] as const) {
         await expect(phone).toBeFocused();
         await expect(phone).toHaveAttribute('aria-expanded', 'false');
       }
+      // Search opens over the tinted rows: its field, scopes and results (#489).
+      await page.keyboard.press('Control+k');
+      const search = page.getByRole('combobox', { name: 'Search', exact: true });
+      await expect(search).toBeFocused();
+      await search.fill('Prices');
+      await expect(page.getByRole('option').first()).toBeVisible();
+      await expectNoAccessibilityViolations(page, `search ${theme} ${width}`);
+      await page.keyboard.press('Escape');
+      if (width < 768) await expect(page.getByRole('dialog', { name: 'Search', exact: true })).toBeHidden();
+      else await expect(search).toHaveAttribute('aria-expanded', 'false');
       const settings = page.getByRole('button', { name: 'Settings', exact: true });
       await settings.click();
       await expectNoAccessibilityViolations(page, `settings menu ${theme} ${width}`);
@@ -150,8 +160,63 @@ test('header, first tab and heading align and shell heights stay fixed', async (
   }
   const media = await page.context().newCDPSession(page);
   await media.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'reduce' }] });
-  await expect(page.locator('.shell-bar')).toHaveCSS('backdrop-filter', 'none');
+  for (const row of ['.shell-sections-row', '.shell-pages-row']) {
+    await expect(page.locator(row)).toHaveCSS('backdrop-filter', 'none');
+    expect(await page.locator(row).evaluate((element) => getComputedStyle(element).backgroundColor), row).not.toMatch(/\/ 0\.|rgba/);
+  }
   await media.detach();
+});
+
+test('the current section is a tab joined to what it opens into, also in forced colours (#489)', async ({ page }) => {
+  await ensureBrowserSession(page);
+  const media = await page.context().newCDPSession(page);
+  // Solid rows, so the joined tint compares exactly.
+  await media.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'reduce' }] });
+  const fill = (locator: ReturnType<typeof page.locator>) => locator.evaluate((element) => getComputedStyle(element).backgroundColor);
+  const sections = page.getByRole('navigation', { name: 'Sections', exact: true });
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/app/investments/prices');
+    const tab = width >= 1024
+      ? sections.getByRole('link', { name: 'Investments', exact: true })
+      : page.getByRole('button', { name: 'Menu: Investments', exact: true });
+    const pagesRow = page.locator('.shell-pages-row');
+    expect(await fill(tab), `section tab at ${width}px`).toBe(await fill(pagesRow));
+    const tabBox = (await tab.boundingBox())!;
+    const rowBox = (await pagesRow.boundingBox())!;
+    expect(Math.abs(tabBox.y + tabBox.height - rowBox.y), 'the tab meets its pages row').toBeLessThanOrEqual(0.5);
+    const underline = await page.getByRole('navigation', { name: 'Investments pages', exact: true })
+      .locator('a[aria-current="page"]').evaluate((element) => getComputedStyle(element, '::after').backgroundColor);
+    expect(underline).not.toBe('rgba(0, 0, 0, 0)');
+
+    // Home has no pages row: its tab opens into the page, over the bar's border.
+    await page.goto('/app');
+    const home = width >= 1024
+      ? sections.getByRole('link', { name: 'Home', exact: true })
+      : page.getByRole('button', { name: 'Menu: Home', exact: true });
+    const pageFill = await page.locator('html').evaluate((element) => getComputedStyle(element).backgroundColor);
+    expect(await fill(home), `Home tab at ${width}px`).toBe(pageFill);
+    const bar = (await page.locator('.shell-bar').boundingBox())!;
+    const homeBox = (await home.boundingBox())!;
+    expect(homeBox.y + homeBox.height).toBeGreaterThanOrEqual(bar.y + bar.height - 0.5);
+  }
+  await media.detach();
+
+  // Forced colours drop fills: the tab keeps an outline and the page its underline.
+  await page.emulateMedia({ forcedColors: 'active' });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/app/investments/prices');
+  const current = sections.getByRole('link', { name: 'Investments', exact: true });
+  await expect(current).toHaveCSS('border-top-width', '1px');
+  await expect(sections.getByRole('link', { name: 'Ledger', exact: true })).toHaveCSS('border-top-width', '0px');
+  const forcedUnderline = await page.getByRole('navigation', { name: 'Investments pages', exact: true })
+    .locator('a[aria-current="page"]').evaluate((element) => {
+      const after = getComputedStyle(element, '::after');
+      return { fill: after.backgroundColor, height: after.height };
+    });
+  expect(forcedUnderline.height).toBe('3px');
+  expect(forcedUnderline.fill).not.toBe('rgba(0, 0, 0, 0)');
+  await page.emulateMedia({ forcedColors: 'none' });
 });
 
 test('the current tab stays visible when a desktop page narrows to phone width', async ({ page }) => {

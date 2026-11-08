@@ -17,9 +17,17 @@ const css = readFileSync(new URL('../app.css', import.meta.url), 'utf8');
 
 type RGB = [number, number, number];
 
+type OKLab = [number, number, number];
+
+function oklchToOKLab(L: number, C: number, h: number): OKLab {
+  return [L, C * Math.cos((h * Math.PI) / 180), C * Math.sin((h * Math.PI) / 180)];
+}
+
 function oklchToSRGB(L: number, C: number, h: number): RGB {
-  const a = C * Math.cos((h * Math.PI) / 180);
-  const b = C * Math.sin((h * Math.PI) / 180);
+  return oklabToSRGB(oklchToOKLab(L, C, h));
+}
+
+function oklabToSRGB([L, a, b]: OKLab): RGB {
   const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
   const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
   const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
@@ -51,20 +59,47 @@ function over(tint: RGB, alpha: number, backdrop: RGB): RGB {
 }
 
 
-function tokenBlocks(): Map<string, Record<string, RGB>> {
-  const blocks = new Map<string, Record<string, RGB>>();
+// A token is a literal OKLCH colour, an alias of another token
+// (`var(--color-accent)`), or that token mixed with white in OKLab, as the
+// dark focus ring is. Aliases resolve after the palette's layers merge, so a
+// palette's own accent flows into the place markers and focus ring.
+type Token = { oklab: OKLab } | { alias: string; white: number };
+
+function tokenBlocks(): Map<string, Record<string, Token>> {
+  const blocks = new Map<string, Record<string, Token>>();
   for (const [, selector, body] of css.matchAll(/(:root[^{]*)\{([^}]*)\}/g)) {
     const tokens = blocks.get(selector.trim()) ?? {};
     for (const [, name, L, C, h] of body.matchAll(/--color-([a-z-]+):\s*oklch\(([\d.]+) ([\d.]+) ([\d.]+)\)/g)) {
-      tokens[name] = oklchToSRGB(Number(L), Number(C), Number(h));
+      tokens[name] = { oklab: oklchToOKLab(Number(L), Number(C), Number(h)) };
+    }
+    for (const [, name, alias] of body.matchAll(/--color-([a-z-]+):\s*var\(--color-([a-z-]+)\);/g)) {
+      tokens[name] = { alias, white: 0 };
+    }
+    for (const [, name, alias, share] of body.matchAll(/--color-([a-z-]+):\s*color-mix\(in oklab, var\(--color-([a-z-]+)\) (\d+)%, white\);/g)) {
+      tokens[name] = { alias, white: 1 - Number(share) / 100 };
     }
     blocks.set(selector.trim(), tokens);
   }
   return blocks;
 }
 
+function resolve(tokens: Record<string, Token>): Record<string, RGB> {
+  const white = oklchToOKLab(1, 0, 0);
+  const lab = (name: string, seen: string[] = []): OKLab => {
+    const token = tokens[name];
+    if (!token) throw new Error(`no --color-${name} for ${seen.at(-1) ?? name}`);
+    if ('oklab' in token) return token.oklab;
+    if (seen.includes(name)) throw new Error(`--color-${name} aliases itself`);
+    const base = lab(token.alias, [...seen, name]);
+    return base.map((c, i) => c * (1 - token.white) + white[i] * token.white) as OKLab;
+  };
+  return Object.fromEntries(Object.keys(tokens).map((name) => [name, oklabToSRGB(lab(name))]));
+}
+
 const blocks = tokenBlocks();
-const shellTint = Number(/\.shell-bar\s*\{[^}]*var\(--color-background\) (\d+)%/.exec(css)?.[1]) / 100;
+const rowTint = (row: string) => Number(new RegExp(`\\.shell-${row}-row\\s*\\{[^}]*var\\(--color-shell-${row}\\) (\\d+)%`).exec(css)?.[1]) / 100;
+const sectionsTint = rowTint('sections');
+const pagesTint = rowTint('pages');
 const accentTint = Number(/\.status-accent-soft\s*\{[^}]*var\(--color-accent\) (\d+)%/.exec(css)?.[1]) / 100;
 const surfaces = ['background', 'surface', 'surface-strong', 'toolbar', 'control', 'row-hover'];
 
@@ -79,11 +114,11 @@ function palette(theme: 'light' | 'dark', base: string, accent: string): Record<
     layers.push(`:root[data-accent-color='${accent}']`);
     if (theme === 'dark') layers.push(`:root[data-theme='dark'][data-accent-color='${accent}']`);
   }
-  return Object.assign({}, ...layers.map((layer) => {
+  return resolve(Object.assign({}, ...layers.map((layer) => {
     const tokens = blocks.get(layer);
     if (!tokens) throw new Error(`app.css has no ${layer} block`);
     return tokens;
-  }));
+  })));
 }
 
 const combinations = (['light', 'dark'] as const).flatMap((theme) =>
@@ -95,7 +130,8 @@ const combinations = (['light', 'dark'] as const).flatMap((theme) =>
 describe('theme contrast', () => {
   it('reads the accent tint from app.css', () => {
     expect(accentTint).toBeGreaterThan(0);
-    expect(shellTint).toBeGreaterThan(0);
+    expect(sectionsTint).toBeGreaterThan(0);
+    expect(pagesTint).toBeGreaterThan(0);
     expect(combinations).toHaveLength(30);
   });
 
@@ -125,16 +161,50 @@ describe('theme contrast', () => {
           [`accent text on ${surface}`, contrast(p['accent'], p[surface])]
         ])
       ];
-      // The sticky shell bar is translucent: page content scrolls beneath it,
-      // so its muted tab text must hold AA over any opaque token fill there
-      // (#501: a bg-foreground control under an 84% tint read 4.41:1).
+      // The sticky shell rows are translucent: page content scrolls beneath
+      // them, so their muted tab text must hold AA over any opaque token fill
+      // there (#501: a bg-foreground control under an 84% tint read 4.41:1).
       for (const [name, backdrop] of Object.entries(p)) {
-        pairs.push([`muted shell text over ${name}`, contrast(p['muted'], over(p['background'], shellTint, backdrop))]);
+        pairs.push([`muted section text over ${name}`, contrast(p['muted'], over(p['shell-sections'], sectionsTint, backdrop))]);
+        pairs.push([`muted page tab text over ${name}`, contrast(p['muted'], over(p['shell-pages'], pagesTint, backdrop))]);
       }
+      // The current section's tab is solid, in the tint it joins (#489).
+      pairs.push(['current section on pages tint', contrast(p['foreground'], p['shell-pages'])]);
+      pairs.push(['current section on page tint', contrast(p['foreground'], p['background'])]);
+      pairs.push(['shell count badge', contrast(p['nav-marker-foreground'], p['nav-marker'])]);
       const failing = pairs.filter(([, ratio]) => ratio < AA).map(([name, ratio]) => `${name} ${ratio.toFixed(2)}:1`);
       expect(failing).toEqual([]);
     });
   }
+});
+
+/**
+ * Non-text marks in the shell and the focus ring (#489): the current page's
+ * underline on the pages row, and the focus ring on every surface a control
+ * can sit on, the two shell rows included, at 3:1 (WCAG 1.4.11).
+ */
+describe('shell place markers and focus ring', () => {
+  for (const { theme, base, accent } of combinations) {
+    it(`${theme} / ${base} / ${accent} keeps the page underline and focus ring at 3:1`, () => {
+      const p = palette(theme, base, accent);
+      const pairs: [string, number][] = [
+        ['page underline on pages row', contrast(p['nav-marker'], p['shell-pages'])],
+        ...['background', 'surface', 'surface-strong', 'control', 'shell-sections', 'shell-pages'].map((surface): [string, number] =>
+          [`focus ring on ${surface}`, contrast(p['focus-ring'], p[surface])])
+      ];
+      const failing = pairs.filter(([, ratio]) => ratio < 3).map(([name, ratio]) => `${name} ${ratio.toFixed(2)}:1`);
+      expect(failing).toEqual([]);
+    });
+  }
+
+  it('defines both shell rows for every theme and base colour', () => {
+    // Every block that sets a page background sets the rows drawn over it.
+    const checked = [...blocks].filter(([, tokens]) => 'background' in tokens);
+    expect(checked.length).toBeGreaterThanOrEqual(7);
+    for (const [selector, tokens] of checked) {
+      expect(Object.keys(tokens), selector).toEqual(expect.arrayContaining(['shell-pages', 'shell-sections']));
+    }
+  });
 });
 
 /**
