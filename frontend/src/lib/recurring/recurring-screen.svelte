@@ -142,38 +142,23 @@
     switch (status) { case 'generated': return m.recurring_generated(); case 'blocked': return m.recurring_blocked(); case 'skipped': return m.recurring_skipped_label(); default: return m.recurring_scheduled(); }
   }
   const button = 'min-h-10 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground hover:bg-control-hover focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50';
-  const toggleButton = 'min-h-10 rounded-(--radius-control) border border-border px-3 py-2 text-sm font-semibold transition hover:bg-control-hover focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50';
+  // Due / Templates view toggle. Only the unselected view takes the hover
+  // fill: on the selected one it would replace bg-selected under
+  // text-selected-foreground (1.16:1 light, 1.78:1 dark). The underline keeps
+  // the selection visible in forced-colours mode, where fills are dropped.
+  function toggleButton(selected: boolean) {
+    const base = 'min-h-10 rounded-(--radius-control) border border-border px-3 py-2 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50';
+    return selected
+      ? `${base} bg-selected text-selected-foreground underline underline-offset-4`
+      : `${base} bg-control text-foreground hover:bg-control-hover`;
+  }
 </script>
 
 <div class="space-y-5">
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div class="flex gap-2" role="group" aria-label={m.recurring_views()}>
-      <button
-        class={toggleButton}
-        class:bg-selected={tab === 'due'}
-        class:text-selected-foreground={tab === 'due'}
-        class:underline={tab === 'due'}
-        class:underline-offset-4={tab === 'due'}
-        class:bg-control={tab !== 'due'}
-        class:text-foreground={tab !== 'due'}
-        aria-pressed={tab === 'due'}
-        onclick={() => selectTab('due')}
-      >
-        {m.recurring_due()}
-      </button>
-      <button
-        class={toggleButton}
-        class:bg-selected={tab === 'templates'}
-        class:text-selected-foreground={tab === 'templates'}
-        class:underline={tab === 'templates'}
-        class:underline-offset-4={tab === 'templates'}
-        class:bg-control={tab !== 'templates'}
-        class:text-foreground={tab !== 'templates'}
-        aria-pressed={tab === 'templates'}
-        onclick={() => selectTab('templates')}
-      >
-        {m.recurring_templates()}
-      </button>
+      <button class={toggleButton(tab === 'due')} aria-pressed={tab === 'due'} onclick={() => selectTab('due')}>{m.recurring_due()}</button>
+      <button class={toggleButton(tab === 'templates')} aria-pressed={tab === 'templates'} onclick={() => selectTab('templates')}>{m.recurring_templates()}</button>
     </div>
     <div class="flex gap-2">
       <button class={button} disabled={pending} onclick={() => action(async () => { await refresh(); })}>{m.recurring_refresh()}</button>
