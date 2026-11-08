@@ -70,11 +70,16 @@ test('[acceptance] edited recurring draft replaces the template assumption', asy
   const categories = await apiJSON<{ categories: Array<{ id: number; category_type: string; allows_postings: boolean }> }>(page, 'GET', '/api/v1/categories');
   const expense = categories.categories.find((item) => item.category_type === 'expense' && item.allows_postings);
   if (!expense) throw new Error('expected seeded expense category');
+  // The e2e app runs the once-a-minute recurring scheduler, which would turn a
+  // template due today into a draft before the forecast is read (#544). Start
+  // tomorrow with no lead days so no tick can generate it, assert the template
+  // assumption, then make it due by raising lead_days.
+  const { today } = await apiJSON<{ today: string }>(page, 'GET', '/api/v1/recurring/summary');
   const template = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/recurring/templates', csrfToken, {
     name,
     enabled: true,
     frequency: 'daily',
-    starts_on: todayISO(),
+    starts_on: daysFromTodayISO(1, new Date(`${today}T12:00:00`)),
     max_occurrences: 1,
     lead_days: 0,
     description: name,
@@ -91,6 +96,7 @@ test('[acceptance] edited recurring draft replaces the template assumption', asy
     await plannedRow.getByRole('button').click();
     await expect(page.getByText('Recurring template', { exact: true })).toBeVisible();
     await expect(page.getByText(name, { exact: true })).toBeVisible();
+    await apiJSON(page, 'PATCH', `/api/v1/recurring/templates/${template.id}`, await csrfTokenFor(page), { lead_days: 1 });
     await page.getByRole('region', { name: /Movements on/ }).getByRole('link', { name: 'Review recurring entries' }).click();
 
     await page.getByRole('button', { name: 'Templates', exact: true }).click();
