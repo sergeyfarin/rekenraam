@@ -144,7 +144,7 @@
 </script>
 
 <div>
-  <PageHeader title={m.nav_overview()}>
+  <PageHeader title={m.investments_nav()}>
     {#snippet actions()}
       <button type="button" onclick={() => addTransaction({ tab: 'investment' })} class="min-h-11 rounded-(--radius-control) bg-foreground px-4 py-2 text-sm font-semibold text-background">{m.transactions_form_create_title()}</button>
     {/snippet}
