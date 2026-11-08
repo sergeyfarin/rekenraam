@@ -24,6 +24,13 @@ const fxCoverageWorkKind = "pricing.fx_coverage"
 // items surface in pricing source health and can be re-enqueued manually.
 const maxFXCoverageAttempts = 8
 
+// fxHoldingWakeupReason marks FX coverage work the holding posting outbox
+// enqueues (migration 0010, #532). Its start_date only coalesces outbox work:
+// the trigger reads every instrument version, so the date may belong to a
+// quote currency the holding no longer demands, and the sweep takes the start
+// from FXDemand instead.
+const fxHoldingWakeupReason = "holding_entered"
+
 type fxCoverageWorkPayload struct {
 	Reason      string            `json:"reason"`
 	StartDate   string            `json:"start_date"`

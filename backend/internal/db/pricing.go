@@ -322,9 +322,38 @@ func NewPricingRepository(database *sql.DB) *PricingRepository {
 // neither a coverage date nor a refresh target. Drafts, deleted and superseded
 // transaction versions are absent because the current posted ledger is the
 // only posted-demand owner.
+//
+// A non-currency commodity in the current posted ledger (a held security or
+// crypto) also demands each currency it is valued through (#532): its
+// instrument's current quote currency, which names the leg before any quote
+// arrives, and every currency a non-voided observation prices it in, which is
+// exactly what valuation chains through (security → quote currency → default
+// currency, #281). The required date is the holding's first posted entry
+// date, and a holding sold later keeps that historical obligation like any
+// other posted demand. The posted ledger is read once for both sources.
 func (r *PricingRepository) FXDemand(ctx context.Context, bookID int64) ([]PricingCurrencyDemandRecord, error) {
 	rows, err := r.database.QueryContext(ctx, `
-		WITH demanded AS (
+		WITH posted AS (
+			SELECT pv.commodity_id, c.kind, MIN(je.entry_date) AS required_date
+			FROM current_transaction_versions tv
+			JOIN transactions t ON t.id = tv.transaction_id AND t.deleted_at IS NULL
+			JOIN journal_entries je ON je.transaction_version_id = tv.id
+			JOIN posting_versions pv ON pv.journal_entry_id = je.id
+			JOIN commodities c ON c.id = pv.commodity_id
+			WHERE tv.book_id = ? AND tv.status = 'posted'
+			GROUP BY pv.commodity_id, c.kind
+		),
+		quoted AS (
+			SELECT ii.commodity_id AS held_commodity_id, iv.quote_commodity_id AS commodity_id
+			FROM investment_instruments ii
+			JOIN `+CurrentReferenceVersions(ctx, "investment_instrument")+` iv ON iv.instrument_id = ii.id
+			WHERE ii.book_id = ? AND iv.quote_commodity_id IS NOT NULL
+			UNION
+			SELECT DISTINCT po.base_commodity_id, po.quote_commodity_id
+			FROM price_observations po
+			WHERE po.book_id = ? AND po.voided_at IS NULL
+		),
+		demanded AS (
 			SELECT av.default_commodity_id AS commodity_id, av.opened_on AS required_date
 			FROM accounts a
 			JOIN `+CurrentReferenceVersions(ctx, "account")+` av ON av.account_id = a.id
@@ -336,13 +365,12 @@ func (r *PricingRepository) FXDemand(ctx context.Context, bookID int64) ([]Prici
 				AND c.kind = 'currency'
 				AND cv.status = 'active'
 			UNION ALL
-			SELECT pv.commodity_id, je.entry_date
-			FROM current_transaction_versions tv
-			JOIN transactions t ON t.id = tv.transaction_id AND t.deleted_at IS NULL
-			JOIN journal_entries je ON je.transaction_version_id = tv.id
-			JOIN posting_versions pv ON pv.journal_entry_id = je.id
-			JOIN commodities c ON c.id = pv.commodity_id
-			WHERE tv.book_id = ? AND tv.status = 'posted' AND c.kind = 'currency'
+			SELECT commodity_id, required_date FROM posted WHERE kind = 'currency'
+			UNION ALL
+			SELECT q.commodity_id, p.required_date
+			FROM posted p
+			JOIN quoted q ON q.held_commodity_id = p.commodity_id
+			WHERE p.kind <> 'currency'
 		)
 		SELECT d.commodity_id, c.code, MIN(d.required_date)
 		FROM demanded d
@@ -350,7 +378,7 @@ func (r *PricingRepository) FXDemand(ctx context.Context, bookID int64) ([]Prici
 		WHERE c.book_id = ?
 		GROUP BY d.commodity_id, c.code
 		ORDER BY c.code, d.commodity_id
-	`, bookID, bookID, bookID)
+	`, bookID, bookID, bookID, bookID, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("list FX demand: %w", err)
 	}

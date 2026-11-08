@@ -99,7 +99,9 @@ scan:
 		}
 		// A deferred date is a wakeup hint, not historical demand. Re-read the
 		// current posting/account state so cancellation or edits cannot revive it.
-		if payload.Reason != "deferred" && payload.StartDate != "" && (start == "" || payload.StartDate < start) {
+		// A holding wakeup's date is likewise only a hint (#532 review).
+		if payload.Reason != "deferred" && payload.Reason != fxHoldingWakeupReason &&
+			payload.StartDate != "" && (start == "" || payload.StartDate < start) {
 			start = payload.StartDate
 		}
 		if payload.Next != nil && target.Base.ID == payload.Next.BaseID && target.Quote.ID == payload.Next.QuoteID && start < payload.Next.Date {
@@ -131,6 +133,11 @@ scan:
 			}
 			if remaining == 0 {
 				continuation := payload
+				// A continuation's start date overrides demand, so a holding
+				// wakeup hands on no date: it was only ever a hint (#532).
+				if payload.Reason == fxHoldingWakeupReason {
+					continuation.StartDate = ""
+				}
 				continuation.Reason, continuation.ThroughDate = "continuation", through
 				continuation.Next = &fxCoverageCursor{BaseID: target.Base.ID, QuoteID: target.Quote.ID, Date: date}
 				encoded, err := json.Marshal(continuation)
