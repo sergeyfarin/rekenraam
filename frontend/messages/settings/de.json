@@ -399,7 +399,6 @@
   "currencies_last_run": "Letzter Lauf {status} am {time}",
   "currencies_loading_copy": "Aktive Währungen, Standardeinstellung und zuletzt beobachtete Kurse werden gelesen.",
   "currencies_loading_title": "Währungen werden geladen",
-  "currencies_policy_base_label": "Basiswährung für Kurse",
   "currencies_policy_hops_hint": "Zwischenwährungen, über die ein abgeleiteter Kurs laufen darf, wenn kein direkter Kurs vorliegt. 0 schaltet abgeleitete Kurse ab.",
   "currencies_policy_hops_label": "Zwischenschritte",
   "currencies_policy_hour_label": "Stunde",

@@ -35,9 +35,7 @@ func TestFXRefreshTargetsIncludePostedOnlyCurrency(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, demand, db.PricingCurrencyDemandRecord{CommodityID: f.foreign, Code: "USD", StartDate: "2026-06-12"})
 
-	policy, err := f.pricing.pricingPolicyOrDefault(ctx)
-	require.NoError(t, err)
-	targets, err := f.pricing.fxRefreshTargets(ctx, policy, demand)
+	targets, err := f.pricing.fxRefreshTargets(ctx, demand)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"EUR/USD", "USD/EUR"}, fxTargetCodes(targets),
 		"the dated demand owner and the target planner must agree on posted currencies")
@@ -113,9 +111,7 @@ func TestFXDemandCoverageAndTargetsShareAccountDefaultScope(t *testing.T) {
 
 			demand, err := f.pricing.fxDemand(ctx)
 			require.NoError(t, err)
-			policy, err := f.pricing.pricingPolicyOrDefault(ctx)
-			require.NoError(t, err)
-			targets, err := f.pricing.fxRefreshTargets(ctx, policy, demand)
+			targets, err := f.pricing.fxRefreshTargets(ctx, demand)
 			require.NoError(t, err)
 
 			demandIDs := make([]int64, 0, len(demand))
@@ -260,9 +256,7 @@ func TestFXRefreshPostedCurrencyDemandScope(t *testing.T) {
 			ctx := context.Background()
 			demand, err := f.pricing.fxDemand(ctx)
 			require.NoError(t, err)
-			policy, err := f.pricing.pricingPolicyOrDefault(ctx)
-			require.NoError(t, err)
-			targets, err := f.pricing.fxRefreshTargets(ctx, policy, demand)
+			targets, err := f.pricing.fxRefreshTargets(ctx, demand)
 			require.NoError(t, err)
 			want := []string{}
 			if test.want {
@@ -283,9 +277,7 @@ func TestFXRefreshFuturePostedCurrencyDoesNotFetchBeforeItsDate(t *testing.T) {
 
 	demand, err := f.pricing.fxDemand(ctx)
 	require.NoError(t, err)
-	policy, err := f.pricing.pricingPolicyOrDefault(ctx)
-	require.NoError(t, err)
-	targets, err := f.pricing.fxRefreshTargets(ctx, policy, demand)
+	targets, err := f.pricing.fxRefreshTargets(ctx, demand)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"EUR/USD", "USD/EUR"}, fxTargetCodes(targets))
 

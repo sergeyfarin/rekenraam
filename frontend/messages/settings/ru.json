@@ -399,7 +399,6 @@
   "currencies_last_run": "Последний запуск: {status}, {time}",
   "currencies_loading_copy": "Читаем активные валюты, значение по умолчанию и последние зафиксированные курсы.",
   "currencies_loading_title": "Загрузка валют",
-  "currencies_policy_base_label": "Базовая валюта курсов",
   "currencies_policy_hops_hint": "Промежуточные валюты, через которые может строиться производный курс при отсутствии прямого. Значение 0 отключает производные курсы.",
   "currencies_policy_hops_label": "Промежуточные звенья",
   "currencies_policy_hour_label": "Час",

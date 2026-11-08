@@ -12,9 +12,9 @@ remains in [the roadmap](../roadmap.md).
 
 The operator workspace composes current commodity/source choices and price-pair
 coverage in one response. Pairs include configured instruments, current open
-lot cost currencies, active account default currencies relative to the configured
-FX base, nonzero posted currency balances on asset/liability accounts, and
-existing series. A deliberate additional pair can be inspected and
+lot cost currencies, active account default currencies relative to the book's
+default currency, nonzero posted currency balances on asset/liability accounts,
+and existing series. A deliberate additional pair can be inspected and
 entered even without a configured series. History pages sort by descending
 observation ID (recording order), with an opaque keyset cursor bound to filters;
 valuation and recorded dates remain separate, visible fields. Voided rows are
@@ -38,12 +38,26 @@ selection and explicit date/knowledge ceilings, with seven-day stale warnings
 on retained holdings/settings values. The [R18 policy](investment-reporting-plan.md)
 records the consumer differences and remaining reproducible-profile boundary.
 
+### One valuation base (#480)
+
+The book's default currency is the only base for price and FX coverage, the
+currency Home and the reports value in unless a request names another
+reporting currency. Prices coverage, the
+attention `prices`/`rates` sources, FX refresh targets, the FX coverage
+triggers, the Net worth report and Home all judge pairs against it, so Home
+never names a pair Prices does not list. The pricing policy has no base field:
+migration 0009 dropped `pricing_policies.base_commodity_id`, the policy API
+rejects the field, and Settings → Currencies no longer offers it. Changing the
+default currency moves every consumer together (ADR 0010, 2026-11-08
+amendment). `TestHomePricingAndNetWorthShareTheDefaultCurrencyBase` and
+`TestSavePricingPolicy_RefusesAValuationBase` hold the contract.
+
 ### Posted currency discovery (#464)
 
 The same workspace supplies attention's current missing/stale price and FX
 counts. In addition to configured pairs, it discovers each currency with a
 nonzero exact posted balance on an asset or liability account, paired with the
-configured FX base (or book default). This includes currencies on accounts
+book's default currency. This includes currencies on accounts
 without a default commodity. It folds current, undeleted, posted transaction
 versions through the selected journal-entry date, with account classification
 effective on that date. Omitted dates use owner-local today. Drafts, voids,

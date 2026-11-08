@@ -399,7 +399,6 @@
   "currencies_last_run": "Laatste uitvoering {status} op {time}",
   "currencies_loading_copy": "Actieve valuta's, standaardvoorkeur en laatst waargenomen koersen worden gelezen.",
   "currencies_loading_title": "Valuta's laden",
-  "currencies_policy_base_label": "Basisvaluta voor koersen",
   "currencies_policy_hops_hint": "Tussenliggende valuta's waarlangs een afgeleide koers mag lopen als er geen directe koers is. Met 0 staan afgeleide koersen uit.",
   "currencies_policy_hops_label": "Tussenstappen",
   "currencies_policy_hour_label": "Uur",

@@ -100,7 +100,7 @@ func (s *PricingService) runFXRefresh(ctx context.Context, ownerUserID int64, so
 		counters.LastError = demandErr.Error()
 		return s.finishFXRefreshRun(ctx, runRecord.ID, counters)
 	}
-	targets, targetErr := s.fxRefreshTargets(ctx, policy, demand)
+	targets, targetErr := s.fxRefreshTargets(ctx, demand)
 	if targetErr != nil {
 		counters.LastError = targetErr.Error()
 		return s.finishFXRefreshRun(ctx, runRecord.ID, counters)
@@ -218,28 +218,20 @@ func (s *PricingService) fxDemand(ctx context.Context) ([]db.PricingCurrencyDema
 	return s.repository.FXDemand(ctx, BookID)
 }
 
-func (s *PricingService) fxRefreshTargets(ctx context.Context, policy PricingPolicy, demand []db.PricingCurrencyDemandRecord) ([]fxRefreshTarget, error) {
+// fxRefreshTargets pairs every demanded currency with the book's default
+// currency, the one valuation base Net worth and Home also use (#480).
+func (s *PricingService) fxRefreshTargets(ctx context.Context, demand []db.PricingCurrencyDemandRecord) ([]fxRefreshTarget, error) {
 	ctx, referenceErr := s.settings.referenceContext(ctx, s.now())
 	if referenceErr != nil {
 		return nil, referenceErr
 	}
 
-	defaultCurrency, err := s.repository.DefaultCurrency(ctx, BookID)
+	base, err := s.repository.DefaultCurrency(ctx, BookID)
 	if err != nil {
 		return nil, fmt.Errorf("default currency is required before FX refresh")
 	}
-	base := defaultCurrency
-	if policy.BaseCommodityID != nil {
-		base, err = s.repository.CurrencyByID(ctx, BookID, *policy.BaseCommodityID)
-		if err != nil {
-			return nil, fmt.Errorf("read FX base currency: %w", err)
-		}
-	}
 
-	currencyByID := map[int64]db.PricingCurrencyRecord{
-		base.ID:            base,
-		defaultCurrency.ID: defaultCurrency,
-	}
+	currencyByID := map[int64]db.PricingCurrencyRecord{base.ID: base}
 	starts := make(map[int64]string, len(demand))
 	for _, record := range demand {
 		currencyByID[record.CommodityID] = db.PricingCurrencyRecord{ID: record.CommodityID, Code: record.Code}

@@ -1239,7 +1239,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 
 	version, err := EmbeddedMigrationVersion()
 	require.NoError(t, err)
-	assert.Equal(t, int64(8), version, "the unused v0.1 baseline, #417 category guard, #481 transfer sides, #485 posting links/history/evidence and #411 allocation revisions/reference guards")
+	assert.Equal(t, int64(9), version, "the unused v0.1 baseline, #417 category guard, #481 transfer sides, #485 posting links/history/evidence, #411 allocation revisions/reference guards and #480 retired policy base")
 
 	ctx := context.Background()
 	database, err := Open(ctx, SQLiteFileURL(filepath.Join(t.TempDir(), "schema.sqlite")))
@@ -1273,6 +1273,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 		"trigger": 176,
 		"view":    17,
 	}, objectCounts, "the migrated head must retain every schema object")
+	assert.NotContains(t, readTableColumns(t, database, "pricing_policies"), "base_commodity_id", "#480: the default currency is the one valuation base")
 	assert.Equal(t, "table", objects["investment_allocation_revisions"])
 	assert.Equal(t, "trigger", objects["investment_allocation_revisions_no_update"])
 	assert.Equal(t, "trigger", objects["investment_allocation_revisions_no_delete"])

@@ -11,7 +11,7 @@ test('posted non-default currency exposes missing FX in pricing and Review, then
   const { sources } = await apiJSON<{ sources: Array<{ id: number; code: string }> }>(page, 'GET', '/api/v1/pricing/sources');
   const manual = sources.find(source => source.code === 'manual')!;
   await apiJSON(page, 'PUT', '/api/v1/pricing/policy', csrfToken, {
-    base_commodity_id: currencyID, default_source_id: manual.id, refresh_enabled: false,
+    default_source_id: manual.id, refresh_enabled: false,
     change_reason: 'Synthetic manual-only coverage fixture'
   });
   const foreignCode = currencyID === (await ensureCurrency(page, csrfToken, 'USD', 'US Dollar')) ? 'EUR' : 'USD';

@@ -211,7 +211,10 @@ Home, decides that. Prices never calls usable a price valuation refuses: it
 applies the shorter of the two limits (and returns both), judges a recent
 quote with the report's rate table (a quote across conflicting splits is
 `missing`), and lists a balance in an instrument nothing prices yet, so the
-`?status=unusable` link always shows what Home named.
+`?status=unusable` link always shows what Home named. The book's default
+currency is the one base for all of them: the pricing policy has no
+base of its own (#480), so Prices, attention, FX coverage, the report and Home
+always judge the same pairs.
 Cash is open checking, savings, cash and other money accounts; brokerage cash
 stays with its brokerage. `account_count` counts open asset and liability
 accounts without system or per-instrument holding accounts. Closed accounts

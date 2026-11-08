@@ -30807,8 +30807,6 @@ export interface components {
             /** Format: int64 */
             book_id: number;
             /** Format: int64 */
-            base_commodity_id?: number;
-            /** Format: int64 */
             default_source_id?: number;
             refresh_enabled: boolean;
             refresh_hour_utc: number;
@@ -30829,9 +30827,8 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        /** @description The policy has no base currency of its own: price and FX coverage are judged against the book's default currency, the one Home and the reports value in unless a request names another reporting currency (#480). Unknown fields, including the retired base_commodity_id, are rejected. */
         PricingPolicyRequest: {
-            /** Format: int64 */
-            base_commodity_id?: number;
             /** Format: int64 */
             default_source_id?: number;
             refresh_enabled?: boolean;

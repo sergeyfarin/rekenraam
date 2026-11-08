@@ -6,7 +6,7 @@ Accepted
 
 ## Date
 
-2026-06-20; amended 2026-08-31 at R9 acceptance and clarified 2026-10-30 for future-only demand (#471).
+2026-06-20; amended 2026-08-31 at R9 acceptance, clarified 2026-10-30 for future-only demand (#471) and amended 2026-11-08 for the single valuation base (#480).
 
 ## Context
 
@@ -65,7 +65,7 @@ FX coverage is demand-driven:
 - Import preview rows belong in dedicated import staging, not in the transaction
   ledger as drafts. Previewing an import does not enqueue FX work; committing
   selected rows creates transactions and does enqueue it.
-- For each active currency relative to the configured FX base, required coverage
+- For each active currency relative to the book's default currency (the one coverage base; see the 2026-11-08 amendment), required coverage
   begins at the earliest of the active account's opening date and any durable
   posted journal-entry date using that currency, and extends through
   today in the book owner's time zone.
@@ -117,3 +117,25 @@ same rule (T-83), so a manual or scheduled refresh cannot indirectly introduce
 draft demand. Active-account demand is unchanged. Any future converted draft
 review must explicitly revisit this decision. See
 `docs/reviews/r9-acceptance-review-2026-08-31.md`.
+
+## Amendment — single valuation base, 2026-11-08
+
+The pricing policy used to carry its own `base_commodity_id`, falling back to
+the book's default currency only when it was empty. Prices coverage, the
+attention `prices`/`rates` sources, FX refresh targets and both FX coverage
+triggers judged pairs against that base, while the Net worth report and Home
+always value in the default currency. An API client could set the two apart
+(the Settings → Currencies page also offered it), and Home would then name a
+pair Prices did not list (#480).
+
+The book's default currency is now the only base for price and FX coverage,
+the currency Home and the reports value in unless a request names another
+reporting currency. It does not become a book base currency in the
+product-requirements sense: per-request reporting currencies are unchanged.
+Migration `0009_retire_pricing_policy_base.sql` drops the policy column and
+recreates `fx_work_after_posting_version_insert` and
+`fx_work_after_account_version_insert` against
+`books.default_currency_commodity_id`. The policy API rejects the retired
+field instead of ignoring it. Changing the default currency moves every
+consumer together; a second base needs a new decision and must show coverage
+for both bases.

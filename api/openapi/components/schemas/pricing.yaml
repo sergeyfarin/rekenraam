@@ -226,9 +226,6 @@ PricingPolicyResponse:
     book_id:
       type: integer
       format: int64
-    base_commodity_id:
-      type: integer
-      format: int64
     default_source_id:
       type: integer
       format: int64
@@ -289,10 +286,12 @@ PricingPolicyResponse:
 
 PricingPolicyRequest:
   type: object
+  description: >-
+    The policy has no base currency of its own: price and FX coverage are
+    judged against the book's default currency, the one Home and the reports
+    value in unless a request names another reporting currency (#480).
+    Unknown fields, including the retired base_commodity_id, are rejected.
   properties:
-    base_commodity_id:
-      type: integer
-      format: int64
     default_source_id:
       type: integer
       format: int64
