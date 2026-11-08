@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
   import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
   import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
   import { autofocus } from '#lib/components/autofocus.ts';
@@ -29,6 +30,7 @@
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { usePrefilledPosition } from '#lib/investments/investment-prefill.svelte.ts';
+  import { restoredPositionKey } from '#lib/investments/investment-prefill.ts';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
 
   const ownerToday = useOwnerToday();
@@ -50,7 +52,8 @@
   // Pre-select the holding the screen names (#186); a correction keeps its own.
   usePrefilledPosition(untrack(() => correction ? undefined : prefill),
     () => holdings.map((holding) => ({ account_id: holding.accountID, commodity_id: holding.commodityID, key: holding.key })),
-    (holding) => holding.key, () => holdingKey, (key) => { holdingKey = key; });
+    (holding) => holding.key, () => holdingKey, (key) => { holdingKey = key; },
+    restoredPositionKey(untrack(() => correction ? undefined : prefill), false));
 
   const queryClient = useQueryClient();
 
@@ -73,6 +76,22 @@
   let pending = $state(false);
   const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(effectiveOn || ownerToday()));
   let formError = $state<unknown>(undefined);
+  // New transaction's working copy and shared context (#508).
+  const workingCopy = useEntryActivity('split', {
+    correction: !!initialTerms,
+    values: () => ({ newUnits, oldUnits }),
+    date: () => effectiveOn,
+    memo: () => memo,
+    reference: () => sourceReference,
+    holding: () => selectedHolding?.accountID,
+    instrument: () => selectedHolding?.commodityID,
+    pending: () => pending
+  });
+  if (workingCopy) untrack(() => {
+    newUnits = workingCopy.newUnits ?? newUnits;
+    oldUnits = workingCopy.oldUnits ?? oldUnits;
+  });
+  untrack(() => { if (!initialTerms && prefill?.reference) sourceReference = prefill.reference; });
   // The reviewed preview. Editing any field discards it, so the user always
   // records exactly the plan they saw.
   let preview = $state<{
@@ -219,6 +238,8 @@
 {/if}
 
 <form onsubmit={handlePreview} class="space-y-4" aria-busy={pending}>
+  <!-- Nothing in the form changes while its save is in flight (#508). -->
+  <fieldset disabled={pending} class="min-w-0 space-y-4">
   <h2 id="split-title" class="text-base font-semibold text-foreground">
     {correction ? m.transactions_investment_replace_split_title() : m.investments_split_title()}
   </h2>
@@ -242,12 +263,14 @@
       <select id="split-holding" aria-describedby="split-holding-hint" bind:value={holdingKey} required onchange={discardPreview}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         <option value="">{m.investments_split_select_holding()}</option>
+        {#if holdingKey && !holdings.some((item) => item.key === holdingKey)}<option value={holdingKey} disabled>{m.investments_activity_position_unavailable_option()}</option>{/if}
         {#each holdings as holding (holding.key)}
           <option value={holding.key}>
             {accounts.find((account) => account.id === holding.accountID)?.name} · {instrumentLabel(holding.commodityID)}
           </option>
         {/each}
       </select>
+      {#if positionsQuery.data && holdingKey && !holdings.some((item) => item.key === holdingKey)}<p role="alert" class="mt-1 text-sm text-danger">{m.investments_activity_position_unavailable()}</p>{/if}
       <p id="split-holding-hint" class="mt-1 text-xs text-muted">{m.investments_split_holding_hint()}</p>
       {/if}
     </div>
@@ -331,4 +354,5 @@
       </button>
     {/if}
   </div>
+  </fieldset>
 </form>

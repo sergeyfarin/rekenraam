@@ -1,4 +1,7 @@
 <script lang="ts">
+  import UnavailableAllocations from '#lib/investments/unavailable-allocations.svelte';
+  import { unavailableAllocations, withoutAllocations } from '#lib/investments/lot-allocations.ts';
+  import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
   import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
   import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
   import { autofocus } from '#lib/components/autofocus.ts';
@@ -28,6 +31,7 @@
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { usePrefilledPosition } from '#lib/investments/investment-prefill.svelte.ts';
+  import { restoredPositionKey } from '#lib/investments/investment-prefill.ts';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
 
   const ownerToday = useOwnerToday();
@@ -46,7 +50,8 @@
 
   // Pre-select the position the screen names (#186).
   usePrefilledPosition(untrack(() => prefill), () => positions,
-    (position) => `${position.account_id}:${position.commodity_id}:${position.cost_commodity_id}`, () => sourceKey, (key) => { sourceKey = key; });
+    (position) => `${position.account_id}:${position.commodity_id}:${position.cost_commodity_id}`, () => sourceKey, (key) => { sourceKey = key; },
+    restoredPositionKey(untrack(() => prefill), true));
 
   const queryClient = useQueryClient();
 
@@ -66,6 +71,24 @@
   let pending = $state(false);
   const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(effectiveOn || ownerToday()));
   let formError = $state<unknown>(undefined);
+  // New transaction's working copy and shared context (#508).
+  const workingCopy = useEntryActivity('external-transfer-out', {
+    values: () => ({ quantities, pooledQuantity, brokerBasis }),
+    date: () => effectiveOn,
+    memo: () => memo,
+    reference: () => sourceReference,
+    holding: () => sourcePosition?.account_id,
+    instrument: () => sourcePosition?.commodity_id,
+    // A position is its holding, instrument and cost currency (#508 review).
+    currency: () => sourcePosition?.cost_commodity_id,
+    pending: () => pending
+  });
+  if (workingCopy) untrack(() => {
+    quantities = workingCopy.quantities ?? quantities;
+    pooledQuantity = workingCopy.pooledQuantity ?? pooledQuantity;
+    brokerBasis = workingCopy.brokerBasis ?? brokerBasis;
+  });
+  untrack(() => { if (prefill?.reference) sourceReference = prefill.reference; });
   // The reviewed preview. Editing any field discards it, so the user always
   // records exactly the basis they saw leave the book.
   let preview = $state<{
@@ -105,8 +128,11 @@
   const quantityEntered = $derived(pooled
     ? !!pooledQuantity.trim()
     : lots.some((lot) => !!quantities[String(lot.id)]?.trim()));
+  // Restored quantities on lots not held on this date (#521 review).
+  const unavailableLots = $derived(!loading && !pooled && !!sourcePosition ? unavailableAllocations(quantities, lots.map((lot) => lot.id)) : []);
   const canPreview = $derived(!loading && !loadError && !!effectiveOn && !!sourcePosition &&
-    !!selectedInstrument && quantityEntered);
+    !!selectedInstrument && quantityEntered &&
+    unavailableLots.length === 0);
   const modalGainRows = $derived(preview?.gainImpact
     ? gainImpactRows(preview.gainImpact.changes, gainImpactCurrency(currenciesByID), locale)
     : []);
@@ -223,6 +249,8 @@
 {/if}
 
 <form onsubmit={handlePreview} class="space-y-4" aria-busy={pending}>
+  <!-- Nothing in the form changes while its save is in flight (#508). -->
+  <fieldset disabled={pending} class="min-w-0 space-y-4">
   <h2 id="external-transfer-out-title" class="text-base font-semibold text-foreground">{m.investments_transfer_out_title()}</h2>
   <p class="text-sm text-muted">{m.investments_transfer_out_help()}</p>
   {#if loading}
@@ -244,6 +272,7 @@
         onchange={() => { quantities = {}; pooledQuantity = ''; discardPreview(); }}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         <option value="">{m.investments_transfer_internal_select_source()}</option>
+        {#if sourceKey && !positions.some((item) => `${item.account_id}:${item.commodity_id}:${item.cost_commodity_id}` === sourceKey)}<option value={sourceKey} disabled>{m.investments_activity_position_unavailable_option()}</option>{/if}
         {#each positions as position (`${position.account_id}:${position.commodity_id}:${position.cost_commodity_id}`)}
           {@const account = accounts.find((item) => item.id === position.account_id)}
           {@const instrument = (instrumentsQuery.data?.instruments ?? []).find((item) => item.commodity_id === position.commodity_id)}
@@ -253,6 +282,7 @@
           </option>
         {/each}
       </select>
+      {#if positionsQuery.data && sourceKey && !positions.some((item) => `${item.account_id}:${item.commodity_id}:${item.cost_commodity_id}` === sourceKey)}<p role="alert" class="mt-1 text-sm text-danger">{m.investments_activity_position_unavailable()}</p>{/if}
       <p id="external-transfer-out-source-hint" class="mt-1 text-xs text-muted">{m.investments_dated_holdings_hint()}</p>
     </div>
     {#if sourcePosition}
@@ -341,6 +371,7 @@
       </section>
     {/if}
   {/if}
+  {#if unavailableLots.length > 0}<UnavailableAllocations onRemove={() => { quantities = withoutAllocations(quantities, unavailableLots); }} />{/if}
   <APIFormError error={formError} id="external-transfer-out-form-error" />
   <div class="flex flex-wrap justify-end gap-3">
     <button type="button" onclick={onCancel}
@@ -359,4 +390,5 @@
       </button>
     {/if}
   </div>
+  </fieldset>
 </form>

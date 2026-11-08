@@ -17,6 +17,8 @@
   import type { ReviewGuards } from '#lib/investments/preview-review.ts';
   import { parseTradeAmounts, type AmountFieldError } from '#lib/investments/form-amounts.ts';
   import TradeEconomicsFields from '#lib/investments/trade-economics-fields.svelte';
+  import TradeUnitPrice from '#lib/investments/trade-unit-price.svelte';
+  import { useEntryActivity, useMoneyCurrency, useTradePair } from '#lib/transactions/entry-context.svelte.ts';
   import { correctionTradeDraft, exactTradeFields, type TradeChargeDraft } from '#lib/investments/trade-economics.ts';
   import type { AccountResponse } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
@@ -114,6 +116,41 @@
   const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(transactionDate || ownerToday()));
   const cashAccountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(settlementDate || transactionDate || ownerToday()));
   let formError = $state<unknown>(undefined);
+
+  // New transaction's working copy (#508): this trade's own fields, the
+  // quantity and unit price shared with its pair, and the shared context.
+  let unitPriceStr = $state('');
+  type TradeWorkingCopy = { quantity: string; unitPrice: string; cashAmount: string; gross: string; cashCommodityID?: number;
+    exactMode: boolean; settlementDate: string; charges: TradeChargeDraft[] };
+  const workingCopy = useEntryActivity<TradeWorkingCopy>('buy', {
+    correction: !!initialCorrection,
+    values: () => ({ quantity: quantityStr, unitPrice: unitPriceStr, cashAmount: cashAmountStr, gross: grossAmountStr, cashCommodityID: money.currencyID,
+      exactMode, settlementDate, charges }),
+    date: () => transactionDate,
+    memo: () => memo,
+    holding: () => Number(holdingAccountID) || undefined,
+    instrument: () => commodityID,
+    pending: () => pending
+  });
+  const opening = useTradePair('buy', !!initialCorrection, workingCopy,
+    () => ({ quantity: quantityStr, unitPrice: unitPriceStr, currencyID: money.currencyID }));
+  if (opening) {
+    quantityStr = opening.quantity;
+    unitPriceStr = opening.unitPrice;
+    cashAmountStr = opening.cashAmount;
+    grossAmountStr = opening.gross;
+    exactMode = workingCopy?.exactMode ?? false;
+    settlementDate = workingCopy?.settlementDate ?? '';
+    charges = workingCopy?.charges ?? [];
+  }
+  /** The pair's quantity or price changed elsewhere, so this trade's typed total was dropped. */
+  const totalDropped = opening?.recalculate ?? false;
+  // Typed money keeps the cash currency it was typed in (#508): another
+  // settlement currency clears it with a note, never relabels it.
+  const money = useMoneyCurrency(opening?.cashCommodityID, () => cashCommodityID, {
+    present: () => !!(unitPriceStr.trim() || cashAmountStr.trim() || grossAmountStr.trim()),
+    clear: () => { unitPriceStr = ''; cashAmountStr = ''; grossAmountStr = ''; }
+  });
 
 
   // A backdated buy can land inside a reconciled period. Rather than letting
@@ -285,6 +322,8 @@
 {/if}
 
 <form onsubmit={handleSubmit} aria-busy={pending} class="space-y-4">
+  <!-- Nothing in the form changes while its save is in flight (#508). -->
+  <fieldset disabled={pending} class="min-w-0 space-y-4">
   <h2 id="buy-title" class="text-base font-semibold text-foreground">
     {correction ? m.transactions_investment_replace_buy_title() : m.investments_buy_title()}
   </h2>
@@ -426,6 +465,10 @@
     {/if}
   </div>
 
+  <TradeUnitPrice idPrefix="buy" side="buy" bind:unitPrice={unitPriceStr} bind:cashAmount={cashAmountStr}
+    bind:gross={grossAmountStr} quantity={quantityStr} {exactMode} {charges} {cashCommodityID}
+    scale={cashCommodityID ? currenciesByID.get(cashCommodityID)?.standard_scale : undefined} currencyCode={cashCurrencyCode} />
+
   <!-- Total cost -->
   <div>
     <label for="buy-cash-amount" class="mb-1 block text-sm font-medium text-foreground">
@@ -439,13 +482,18 @@
       type="text"
       inputmode="decimal"
       bind:value={cashAmountStr}
+      readonly={unitPriceStr.trim() !== ''}
+      aria-describedby={(totalDropped || money.dropped) && cashAmountStr === '' && unitPriceStr.trim() === '' ? 'buy-total-dropped' : undefined}
       placeholder={formatEditableAmount('0', 2)}
       class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted"
       required
     />
+    {#if (totalDropped || money.dropped) && cashAmountStr === '' && unitPriceStr.trim() === ''}
+      <p id="buy-total-dropped" class="mt-1 text-xs text-muted">{money.dropped ? m.investments_trade_amounts_currency_changed() : m.investments_trade_total_reenter()}</p>
+    {/if}
   </div>
 
-  <TradeEconomicsFields side="buy" cashCommodityID={cashCommodityID}
+  <TradeEconomicsFields side="buy" cashCommodityID={cashCommodityID} grossDerived={unitPriceStr.trim() !== ''}
     accounts={accountsQuery.data?.accounts ?? []} currencies={currenciesQuery.data?.currencies ?? []}
     bind:exactMode bind:gross={grossAmountStr} bind:settlementDate bind:charges />
 
@@ -480,4 +528,5 @@
       {pending ? m.investments_buy_pending() : correction ? m.transactions_investment_replace_submit() : m.investments_buy_submit()}
     </button>
   </div>
+  </fieldset>
 </form>

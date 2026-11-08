@@ -8,7 +8,7 @@ The model permits direct brokerage_cash children of a brokerage but does not req
 
 One composed dated account read shares the investment command role predicate and supplies eligibility and versioned currency/hierarchy metadata. No per-account requests. Status notifications reach both observers when holding and settlement share one query, including failures with no data; the retry path is covered in the browser. Writes still revalidate their dependencies. General account-catalog pagination and direct-register context beyond the legacy 2,000-account cap are tracked separately in #518.
 
-Carry the ordinary entry’s date and memo into the chosen activity, never its amount. No-cash activities expose no settlement picker; reinvestment chooses its cost currency directly. Successful investment saves close the entry and retain a visible, announced confirmation on the containing screen. A write-off retains its specific confirmation. Full restoration and semantic carry between activities remains #508.
+Carry the ordinary entry’s date and memo into the chosen activity, never its amount. No-cash activities expose no settlement picker; reinvestment chooses its cost currency directly. Successful investment saves close the entry and retain a visible, announced confirmation on the containing screen. A write-off retains its specific confirmation. Full restoration and semantic carry between activities was delivered by #508 (see the design’s “Delivered by #508”).
 
 ## Validation
 

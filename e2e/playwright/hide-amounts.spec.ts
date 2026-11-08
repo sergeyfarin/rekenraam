@@ -20,6 +20,7 @@ test('hide amounts persists across reloads and tabs while editable inputs stay e
   await expect(form.getByLabel('Amount', { exact: true })).toHaveValue('1234.56');
   await other.close();
   await form.getByRole('button', { name: 'Cancel', exact: true }).last().click();
+  await page.getByRole('alertdialog', { name: 'Discard this transaction?' }).getByRole('button', { name: 'Discard', exact: true }).click();
   await toggle.click();
   await expectNoAccessibilityViolations(page, 'hide amounts');
 });

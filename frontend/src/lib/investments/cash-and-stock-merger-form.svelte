@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { receivingHolding } from '#lib/investments/receiving-holding.ts';
+  import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
   import EntryAccountStatus from '#lib/investments/entry-account-status.svelte';
   import { useSettlementCandidates } from '#lib/investments/settlement-candidates.svelte.ts';
   import { isSettlementAccount } from '#lib/investments/settlement-accounts.ts';
@@ -33,6 +35,7 @@
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { usePrefilledPosition } from '#lib/investments/investment-prefill.svelte.ts';
+  import { restoredPositionKey } from '#lib/investments/investment-prefill.ts';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
 
   const ownerToday = useOwnerToday();
@@ -61,7 +64,8 @@
   // Pre-select the holding the screen names (#186); a correction keeps its own.
   usePrefilledPosition(untrack(() => correction ? undefined : prefill),
     () => holdings.map((holding) => ({ account_id: holding.accountID, commodity_id: holding.commodityID, key: holding.key })),
-    (holding) => holding.key, () => holdingKey, (key) => { holdingKey = key; });
+    (holding) => holding.key, () => holdingKey, (key) => { holdingKey = key; },
+    restoredPositionKey(untrack(() => correction ? undefined : prefill), false));
 
   const queryClient = useQueryClient();
 
@@ -78,9 +82,7 @@
   let newCommodityID = $state(initialTerms ? String(initialTerms.destination_commodity_id) : '');
   // Null follows the suggested destination; a choice the user makes sticks
   // until the holding or the new instrument changes.
-  let chosenDestination = $state<string | null>(!initialTerms ? null
-    : initialTerms.destination_holding_account_id === initialTerms.holding_account_id
-      ? 'same' : String(initialTerms.destination_holding_account_id));
+  let chosenDestination = $state<string | null>(initialTerms ? String(initialTerms.destination_holding_account_id) : null);
   let newUnits = $state(initialTerms ? String(initialTerms.plan.ratio_numerator) : '');
   let oldUnits = $state(initialTerms ? String(initialTerms.plan.ratio_denominator) : '');
   let cashAccountID = $state(initialTerms ? String(initialTerms.cash_account_id) : '');
@@ -97,6 +99,47 @@
   const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(effectiveOn || ownerToday()));
   const cashAccountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(payableOn || effectiveOn || ownerToday()));
   let formError = $state<unknown>(undefined);
+  // New transaction's working copy and shared context (#508).
+  const workingCopy = useEntryActivity('cash-and-stock-merger', {
+    correction: !!initialTerms,
+    // The amount keeps the currency it was entered in (#521 review).
+    values: () => ({ payableOn, newCommodityID, chosenDestination, newUnits, oldUnits, cashAmount,
+      cashCurrencyID: cashAmount.trim() ? currencyID : undefined, electionPercent }),
+    date: () => effectiveOn,
+    memo: () => memo,
+    reference: () => sourceReference,
+    holding: () => selectedHolding?.accountID,
+    instrument: () => selectedHolding?.commodityID,
+    // The merger's cash currency is the position's cost currency (#521 review).
+    currency: () => chosenCurrencyID ? Number(chosenCurrencyID) : undefined,
+    pending: () => pending
+  });
+  if (workingCopy) untrack(() => {
+    payableOn = workingCopy.payableOn ?? payableOn;
+    newCommodityID = workingCopy.newCommodityID ?? newCommodityID;
+    chosenDestination = workingCopy.chosenDestination ?? chosenDestination;
+    newUnits = workingCopy.newUnits ?? newUnits;
+    oldUnits = workingCopy.oldUnits ?? oldUnits;
+    cashAmount = workingCopy.cashAmount ?? cashAmount;
+    // Restored with the currency it was typed in, never relabelled by the
+    // shared currency: a mismatch with the holding is then named.
+    if (cashAmount.trim() && workingCopy.cashCurrencyID) chosenCurrencyID = workingCopy.cashCurrencyID;
+    electionPercent = workingCopy.electionPercent ?? electionPercent;
+  });
+  untrack(() => { if (!initialTerms && prefill?.reference) sourceReference = prefill.reference; });
+  // The entry's cost currency, applied once the holding is known (unless a
+  // restored amount already fixed it). A currency
+  // the holding carries no lots in stays chosen and named (#508): the writer
+  // refuses it, so the owner corrects it rather than the form replacing it.
+  const sharedCurrencyID = untrack(() => initialTerms ? undefined : prefill?.currencyID);
+  let sharedCurrencyPending = $state(untrack(() => sharedCurrencyID !== undefined));
+  $effect(() => {
+    if (!sharedCurrencyPending || !selectedHolding) return;
+    untrack(() => {
+      sharedCurrencyPending = false;
+      if (chosenCurrencyID === null) chosenCurrencyID = String(sharedCurrencyID);
+    });
+  });
   // The reviewed preview. Editing any field discards it, so the user always
   // records exactly the plan they saw.
   let preview = $state<{
@@ -138,21 +181,13 @@
     : holdings.find((holding) => holding.key === holdingKey));
   const newInstruments = $derived(instruments.filter((instrument) => instrument.commodity_id !== selectedHolding?.commodityID));
   const newID = $derived(Number(newCommodityID) || 0);
-  // A holding account tied to one instrument cannot hold another, so the new
-  // units go to an account that is untied or tied to the new instrument.
-  const canHoldNew = (account: { default_commodity_id?: number | null }) =>
-    account.default_commodity_id == null || account.default_commodity_id === newID;
-  const sourceAccount = $derived(accounts.find((account) => account.id === selectedHolding?.accountID));
-  const sameHoldingAllowed = $derived(!!sourceAccount && newID > 0 && canHoldNew(sourceAccount));
-  const otherDestinations = $derived(newID > 0
-    ? accounts.filter((account) => account.id !== selectedHolding?.accountID && canHoldNew(account)) : []);
-  const suggestedDestination = $derived(sameHoldingAllowed ? 'same'
-    : String(otherDestinations.find((account) => account.default_commodity_id === newID)?.id ?? ''));
-  const destination = $derived(chosenDestination ?? suggestedDestination);
+  const receiving = $derived(receivingHolding(accounts, selectedHolding?.accountID, newID, chosenDestination));
+  const destination = $derived(receiving.value);
   const currencies = $derived(currenciesQuery.data?.currencies ?? []);
   const currenciesByID = $derived(new Map<number, CurrencyResponse>(currencies.map((currency) => [currency.id, currency])));
   const currencyID = $derived(chosenCurrencyID ?? String(selectedHolding?.costCurrencyIDs[0] ?? ''));
   const currency = $derived(currenciesByID.get(Number(currencyID)));
+  const currencyNotCarried = $derived(!!selectedHolding && !!currencyID && !selectedHolding.costCurrencyIDs.includes(Number(currencyID)));
   const instrumentLabel = (commodityID: number) => {
     const instrument = (instrumentsQuery.data?.instruments ?? []).find((item) => item.commodity_id === commodityID);
     return instrument?.display_name ?? instrument?.commodity_code ?? `#${commodityID}`;
@@ -162,7 +197,7 @@
   const loadError = $derived(accountsQuery.isError || positionsQuery.isError ||
     instrumentsQuery.isError || currenciesQuery.isError);
   const canPreview = $derived(!cashAccountsQuery.isFetching && !cashAccountsQuery.isError && !loading && !loadError && !!effectiveOn && !!payableOn && !!selectedHolding && newID > 0 &&
-    !!destination && !!newUnits.trim() && !!oldUnits.trim() && cashAccounts.some((account) => String(account.id) === cashAccountID) && !!currency && !!cashAmount.trim() &&
+    !!destination && !receiving.unavailable && !!newUnits.trim() && !!oldUnits.trim() && cashAccounts.some((account) => String(account.id) === cashAccountID) && !!currency && !currencyNotCarried && !!cashAmount.trim() &&
     !!electionPercent.trim() && (!correction || !!reason.trim()));
   const modalGainRows = $derived(preview?.gainImpact
     ? gainImpactRows(preview.gainImpact.changes, gainImpactCurrency(currenciesByID), locale)
@@ -174,14 +209,21 @@
     formError = undefined;
   }
 
-  function resetDestination() {
-    chosenDestination = null;
+
+  // A new holding never relabels the cash (#508): a chosen currency stays,
+  // and so does the default the amount was entered in. A currency the new
+  // holding has no lots in is then named and must be corrected
+  // (currencyNotCarried). With nothing entered, the default follows.
+  function selectHolding(key: string) {
+    holdingKey = key;
     discardPreview();
   }
 
-  function selectHolding() {
-    chosenDestination = null;
-    chosenCurrencyID = null;
+  // An amount means the currency shown when it was typed. Pinning that
+  // currency keeps a later holding or date change from relabelling it; a
+  // currency the holding no longer carries is then named (currencyNotCarried).
+  function enterCash() {
+    if (chosenCurrencyID === null && cashAmount.trim() && currencyID) chosenCurrencyID = currencyID;
     discardPreview();
   }
 
@@ -214,7 +256,7 @@
       effective_on: effectiveOn,
       payable_on: payableOn,
       holding_account_id: selectedHolding.accountID,
-      ...(destination !== 'same' ? { destination_holding_account_id: Number(destination) } : {}),
+      ...(receiving.destinationID !== undefined ? { destination_holding_account_id: receiving.destinationID } : {}),
       commodity_id: selectedHolding.commodityID,
       destination_commodity_id: newID,
       ratio_numerator: ratio.numerator,
@@ -301,6 +343,8 @@
 {/if}
 
 <form onsubmit={handlePreview} class="space-y-4" aria-busy={pending}>
+  <!-- Nothing in the form changes while its save is in flight (#508). -->
+  <fieldset disabled={pending} class="min-w-0 space-y-4">
   <h2 id="merger-title" class="text-base font-semibold text-foreground">
     {correction ? m.transactions_investment_replace_merger_title() : m.investments_merger_title()}
   </h2>
@@ -335,21 +379,23 @@
           · {instrumentLabel(correction.terms.commodity_id)}
         </p>
       {:else}
-        <select id="merger-holding" aria-describedby="merger-holding-hint" bind:value={holdingKey} required onchange={selectHolding}
+        <select id="merger-holding" aria-describedby="merger-holding-hint" value={holdingKey} required onchange={(event) => selectHolding(event.currentTarget.value)}
           class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
           <option value="">{m.investments_exchange_select_holding()}</option>
+        {#if holdingKey && !holdings.some((item) => item.key === holdingKey)}<option value={holdingKey} disabled>{m.investments_activity_position_unavailable_option()}</option>{/if}
           {#each holdings as holding (holding.key)}
             <option value={holding.key}>
               {accounts.find((account) => account.id === holding.accountID)?.name} · {instrumentLabel(holding.commodityID)}
             </option>
           {/each}
         </select>
+      {#if positionsQuery.data && holdingKey && !holdings.some((item) => item.key === holdingKey)}<p role="alert" class="mt-1 text-sm text-danger">{m.investments_activity_position_unavailable()}</p>{/if}
         <p id="merger-holding-hint" class="mt-1 text-xs text-muted">{m.investments_dated_holdings_hint()}</p>
       {/if}
     </div>
     <div>
       <label for="merger-new-instrument" class="mb-1 block text-sm font-medium text-foreground">{m.investments_exchange_new_instrument()}</label>
-      <select id="merger-new-instrument" bind:value={newCommodityID} required onchange={resetDestination}
+      <select id="merger-new-instrument" bind:value={newCommodityID} required onchange={discardPreview}
         aria-describedby={newInstruments.length === 0 ? 'merger-no-instruments' : undefined}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         <option value="">{m.investments_exchange_select_instrument()}</option>
@@ -364,19 +410,19 @@
     {#if selectedHolding && newID > 0}
       <div>
         <label for="merger-destination" class="mb-1 block text-sm font-medium text-foreground">{m.investments_exchange_destination()}</label>
-        <select id="merger-destination" aria-describedby="merger-destination-hint" value={destination} required
+        <select id="merger-destination" aria-describedby="merger-destination-hint{receiving.unavailable ? ' merger-destination-unavailable' : ''}" value={destination} required
+          aria-invalid={receiving.unavailable || undefined}
           onchange={(event) => { chosenDestination = event.currentTarget.value; discardPreview(); }}
           class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
-          <option value="" disabled={sameHoldingAllowed || otherDestinations.length > 0}>{m.investments_exchange_select_destination()}</option>
-          {#if sameHoldingAllowed}
-            <option value="same">{m.investments_exchange_same_holding({ name: sourceAccount?.name ?? '' })}</option>
-          {/if}
-          {#each otherDestinations as account (account.id)}
-            <option value={String(account.id)}>{account.name}</option>
+          <option value="" disabled={receiving.options.length > 0}>{m.investments_exchange_select_destination()}</option>
+          {#if receiving.unavailable}<option value={destination} disabled>{m.investments_exchange_destination_unavailable_option()}</option>{/if}
+          {#each receiving.options as option (option.id)}
+            <option value={String(option.id)}>{option.source ? m.investments_exchange_same_holding({ name: option.name }) : option.name}</option>
           {/each}
         </select>
+        {#if receiving.unavailable}<p id="merger-destination-unavailable" role="alert" class="mt-1 text-sm text-danger">{m.investments_exchange_destination_unavailable()}</p>{/if}
         <p id="merger-destination-hint" class="mt-1 text-xs text-muted">
-          {sameHoldingAllowed || otherDestinations.length > 0 ? m.investments_exchange_destination_hint() : m.investments_exchange_no_destination()}
+          {receiving.options.length > 0 ? m.investments_exchange_destination_hint() : m.investments_exchange_no_destination()}
         </p>
       </div>
     {/if}
@@ -420,7 +466,8 @@
       </div>
       <div>
         <label for="merger-currency" class="mb-1 block text-sm font-medium text-foreground">{m.investments_merger_currency()}</label>
-        <select id="merger-currency" value={currencyID} required aria-describedby="merger-currency-hint"
+        <select id="merger-currency" value={currencyID} required aria-describedby="merger-currency-hint{currencyNotCarried ? ' merger-currency-unavailable' : ''}"
+          aria-invalid={currencyNotCarried || undefined}
           onchange={(event) => { chosenCurrencyID = event.currentTarget.value; discardPreview(); }}
           class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
           <option value="">{m.investments_merger_select_currency()}</option>
@@ -429,12 +476,13 @@
           {/each}
         </select>
         <p id="merger-currency-hint" class="mt-1 text-xs text-muted">{m.investments_merger_currency_hint()}</p>
+        {#if currencyNotCarried}<p id="merger-currency-unavailable" role="alert" class="mt-1 text-sm text-danger">{m.investments_merger_currency_unavailable({ currency: currency?.code ?? currencyID })}</p>{/if}
       </div>
     </div>
     <div>
       <label for="merger-cash" class="mb-1 block text-sm font-medium text-foreground">{m.investments_merger_cash()}</label>
       <input id="merger-cash" type="text" inputmode="decimal" autocomplete="off" bind:value={cashAmount}
-        required oninput={discardPreview} aria-describedby="merger-cash-help"
+        required oninput={enterCash} aria-describedby="merger-cash-help"
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-mono text-foreground" />
       <p id="merger-cash-help" class="mt-1 text-xs text-muted">{m.investments_merger_cash_help()}</p>
     </div>
@@ -491,4 +539,5 @@
       </button>
     {/if}
   </div>
+  </fieldset>
 </form>

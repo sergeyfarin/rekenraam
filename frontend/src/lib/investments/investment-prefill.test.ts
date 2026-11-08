@@ -4,7 +4,8 @@ import {
   holdingAccountPrefill,
   instrumentPrefill,
   prefilledInstrument,
-  prefilledPositionKey
+  prefilledPositionKey,
+  restoredPositionKey
 } from './investment-prefill';
 
 const instruments = [{ commodity_id: 10 }, { commodity_id: 11 }];
@@ -66,6 +67,25 @@ describe('prefilledPositionKey', () => {
     expect(prefilledPositionKey(positions, { holdingAccountID: 9 }, key)).toBe('');
     expect(prefilledPositionKey(positions, undefined, key)).toBe('');
     expect(prefilledPositionKey(positions, {}, key)).toBe('');
+  });
+
+  it('lets the entry’s shared cost currency pick one of a holding’s currency positions (#508)', () => {
+    expect(prefilledPositionKey(positions, { holdingAccountID: 3, currencyID: 101 }, key)).toBe('3:12:101');
+    expect(prefilledPositionKey(positions, { holdingAccountID: 3, currencyID: 100 }, key)).toBe('3:12:100');
+    // A currency the holding does not carry selects nothing rather than another position.
+    expect(prefilledPositionKey(positions, { holdingAccountID: 1, currencyID: 101 }, key)).toBe('');
+    // Holdings without a cost currency (corporate actions) ignore it.
+    const holdings = [{ account_id: 3, commodity_id: 12 }];
+    expect(prefilledPositionKey(holdings, { holdingAccountID: 3, currencyID: 101 }, (h) => `${h.account_id}:${h.commodity_id}`)).toBe('3:12');
+  });
+
+  it('keeps an earlier activity’s position identified only when it is restored and fully known (#521 review)', () => {
+    const restored = { holdingAccountID: 3, commodityID: 12, currencyID: 101, restoredSelection: true };
+    expect(restoredPositionKey(restored, true)).toBe('3:12:101');
+    expect(restoredPositionKey(restored, false)).toBe('3:12');
+    expect(restoredPositionKey({ ...restored, currencyID: undefined }, true)).toBeUndefined();
+    expect(restoredPositionKey({ ...restored, restoredSelection: false }, true)).toBeUndefined();
+    expect(restoredPositionKey(undefined, false)).toBeUndefined();
   });
 
   it('treats duplicate keys as one position', () => {

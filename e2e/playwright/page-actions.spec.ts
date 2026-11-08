@@ -102,6 +102,7 @@ test('N and ? work from the keyboard and never while typing', async ({ page }) =
   await page.keyboard.press('n');
   await expect(description).toHaveValue('n?');
   await form.getByRole('button', { name: 'Cancel', exact: true }).first().click();
+  await page.getByRole('alertdialog', { name: 'Discard this transaction?' }).getByRole('button', { name: 'Discard', exact: true }).click();
 
   // ? lists the shortcuts; Escape closes and returns focus.
   await page.locator('#main-content').focus();

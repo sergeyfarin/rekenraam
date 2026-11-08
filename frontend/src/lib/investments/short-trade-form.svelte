@@ -16,6 +16,8 @@
   import { m } from '#lib/paraglide/messages.js';
   import { parseTradeAmounts, type AmountFieldError } from '#lib/investments/form-amounts.ts';
   import TradeEconomicsFields from '#lib/investments/trade-economics-fields.svelte';
+  import TradeUnitPrice from '#lib/investments/trade-unit-price.svelte';
+  import { useEntryActivity, useMoneyCurrency, useTradePair } from '#lib/transactions/entry-context.svelte.ts';
   import { correctionTradeDraft, exactTradeFields, type TradeChargeDraft } from '#lib/investments/trade-economics.ts';
   import type { AccountResponse } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
@@ -47,6 +49,7 @@
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { usePrefilledInstrument } from '#lib/investments/investment-prefill.svelte.ts';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
+  import { latestRequest } from '#lib/investments/latest-request.ts';
 
   const ownerToday = useOwnerToday();
 
@@ -137,12 +140,52 @@
   const cashAccountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(settlementDate || transactionDate || ownerToday()));
   let formError = $state<unknown>(undefined);
 
+  // New transaction's working copy (#508): this trade's own fields, the
+  // quantity and unit price shared with its pair, and the shared context.
+  let unitPriceStr = $state('');
+  const activity = untrack(() => mode === 'cover' ? 'short-cover' : 'short-open');
+  type TradeWorkingCopy = { quantity: string; unitPrice: string; cashAmount: string; gross: string; cashCommodityID?: number;
+    exactMode: boolean; settlementDate: string; charges: TradeChargeDraft[]; costBasisMethod: CostBasisMethod };
+  const workingCopy = useEntryActivity<TradeWorkingCopy>(activity, {
+    correction: !!initialCorrection,
+    values: () => ({ quantity: quantityStr, unitPrice: unitPriceStr, cashAmount: cashAmountStr, gross: grossAmountStr, cashCommodityID: money.currencyID,
+      exactMode, settlementDate, charges, costBasisMethod }),
+    date: () => transactionDate,
+    memo: () => memo,
+    holding: () => Number(holdingAccountID) || undefined,
+    instrument: () => commodityID,
+    pending: () => pending
+  });
+  const opening = useTradePair(activity, !!initialCorrection, workingCopy,
+    () => ({ quantity: quantityStr, unitPrice: unitPriceStr, currencyID: money.currencyID }));
+  if (opening) {
+    quantityStr = opening.quantity;
+    unitPriceStr = opening.unitPrice;
+    cashAmountStr = opening.cashAmount;
+    grossAmountStr = opening.gross;
+    exactMode = workingCopy?.exactMode ?? false;
+    settlementDate = workingCopy?.settlementDate ?? '';
+    charges = workingCopy?.charges ?? [];
+    costBasisMethod = untrack(() => workingCopy?.costBasisMethod ?? costBasisMethod);
+  }
+  /** The pair's quantity or price changed elsewhere, so this trade's typed total was dropped. */
+  const totalDropped = opening?.recalculate ?? false;
+  // Typed money keeps the cash currency it was typed in (#508): another
+  // settlement currency clears it with a note, never relabels it.
+  const money = useMoneyCurrency(opening?.cashCommodityID, () => cashCommodityID, {
+    present: () => !!(unitPriceStr.trim() || cashAmountStr.trim() || grossAmountStr.trim()),
+    clear: () => { unitPriceStr = ''; cashAmountStr = ''; grossAmountStr = ''; }
+  });
+  const showTotalDropped = $derived((totalDropped || money.dropped) && cashAmountStr === '' && unitPriceStr.trim() === '');
+
   let reconciliationModal = $state<CommitReviewState<InvestmentTradeRequest> | null>(null);
 
   let preview = $state.raw<SellPreviewResponse | null>(null);
   let previewPending = $state(false);
   let previewError = $state<unknown>(undefined);
   let previewDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+  // A response for inputs the owner has since changed is never shown (#508).
+  const previewRequests = latestRequest();
 
   const holdingAccounts = $derived(
     (accountsQuery.data?.accounts ?? []).filter(
@@ -220,8 +263,10 @@
     // Track every input the preview depends on.
     void [selectedInstrument?.commodity_id, holdingAccountID, cashAccountID, quantityStr, cashAmountStr,
       costBasisMethod, cashCommodityID, transactionDate, exactMode, grossAmountStr, settlementDate, JSON.stringify(charges)];
+    previewRequests.invalidate();
     preview = null;
     previewError = undefined;
+    previewPending = false;
     clearTimeout(previewDebounceTimer);
     if (!fieldsReady) return;
     previewDebounceTimer = setTimeout(() => void triggerPreview(), 400);
@@ -236,14 +281,16 @@
       if (built.reason === 'too_large') previewError = new Error(amountErrorMessage(built.reason));
       return;
     }
+    const current = previewRequests.start();
     previewPending = true;
     previewError = undefined;
     try {
-      preview = await previewShortCover(built.payload);
+      const result = await previewShortCover(built.payload);
+      if (current()) preview = result;
     } catch (err) {
-      previewError = err;
+      if (current()) previewError = err;
     } finally {
-      previewPending = false;
+      if (current()) previewPending = false;
     }
   }
 
@@ -328,6 +375,8 @@
 {/if}
 
 <form onsubmit={handleSubmit} aria-busy={pending} class="space-y-4" aria-labelledby="{idPrefix}-title">
+  <!-- Nothing in the form changes while its save is in flight (#508). -->
+  <fieldset disabled={pending} class="min-w-0 space-y-4">
   <h2 id="{idPrefix}-title" class="text-base font-semibold text-foreground">
     {correction
       ? cover ? m.investments_short_cover_correct_title() : m.investments_short_sale_correct_title()
@@ -421,16 +470,22 @@
     {/if}
   </div>
 
+  <TradeUnitPrice {idPrefix} side={economicsSide} bind:unitPrice={unitPriceStr} bind:cashAmount={cashAmountStr}
+    bind:gross={grossAmountStr} quantity={quantityStr} {exactMode} {charges} {cashCommodityID}
+    scale={cashCommodityID ? currenciesByID.get(cashCommodityID)?.standard_scale : undefined} currencyCode={cashCurrencyCode} />
+
   <div>
     <label for="{idPrefix}-cash-amount" class="mb-1 block text-sm font-medium text-foreground">
       {cover ? m.investments_short_cover_cost() : m.investments_short_sale_proceeds()}
       {#if cashCurrencyCode}<span class="ml-1 text-xs font-normal text-muted">({cashCurrencyCode})</span>{/if}
     </label>
     <input id="{idPrefix}-cash-amount" type="text" inputmode="decimal" bind:value={cashAmountStr} placeholder={formatEditableAmount('0', 2)} required
+      readonly={unitPriceStr.trim() !== ''} aria-describedby={showTotalDropped ? `${idPrefix}-total-dropped` : undefined}
       class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted" />
+    {#if showTotalDropped}<p id="{idPrefix}-total-dropped" class="mt-1 text-xs text-muted">{money.dropped ? m.investments_trade_amounts_currency_changed() : m.investments_trade_total_reenter()}</p>{/if}
   </div>
 
-  <TradeEconomicsFields side={economicsSide} cashCommodityID={cashCommodityID}
+  <TradeEconomicsFields side={economicsSide} cashCommodityID={cashCommodityID} grossDerived={unitPriceStr.trim() !== ''}
     accounts={accountsQuery.data?.accounts ?? []} currencies={currenciesQuery.data?.currencies ?? []}
     bind:exactMode bind:gross={grossAmountStr} bind:settlementDate bind:charges />
 
@@ -502,4 +557,5 @@
         : cover ? m.investments_short_cover_submit() : m.investments_short_sale_submit()}
     </button>
   </div>
+  </fieldset>
 </form>

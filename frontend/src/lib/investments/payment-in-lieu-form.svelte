@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
   import { useSettlementCandidates } from '#lib/investments/settlement-candidates.svelte.ts';
   import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
   import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
@@ -73,6 +74,24 @@
   let pending = $state(false);
   const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(paymentDate || ownerToday()));
   let formError = $state<unknown>(undefined);
+  // New transaction's working copy and shared context (#508).
+  const workingCopy = useEntryActivity('payment-in-lieu', {
+    correction: !!initial,
+    values: () => ({ exDate, expenseAccountID, amountStr, showRecovery, recoveryStr, recoveryAccountID }),
+    date: () => paymentDate,
+    memo: () => memo,
+    holding: () => Number(holdingAccountID) || undefined,
+    instrument: () => Number(commodityID) || undefined,
+    pending: () => pending
+  });
+  if (workingCopy) untrack(() => {
+    exDate = workingCopy.exDate ?? exDate;
+    expenseAccountID = workingCopy.expenseAccountID ?? expenseAccountID;
+    amountStr = workingCopy.amountStr ?? amountStr;
+    showRecovery = workingCopy.showRecovery ?? showRecovery;
+    recoveryStr = workingCopy.recoveryStr ?? recoveryStr;
+    recoveryAccountID = workingCopy.recoveryAccountID ?? recoveryAccountID;
+  });
   let review = $state.raw<CommitReviewState<PaymentInLieuRequest> | null>(null);
 
 
@@ -181,6 +200,8 @@
 {/if}
 
 <form onsubmit={handleSubmit} aria-busy={pending} class="space-y-4" aria-describedby="pil-copy">
+  <!-- Nothing in the form changes while its save is in flight (#508). -->
+  <fieldset disabled={pending} class="min-w-0 space-y-4">
   <h2 id="payment-in-lieu-title" class="text-base font-semibold text-foreground">
     {initial ? m.investments_payment_in_lieu_correct_title() : m.investments_payment_in_lieu_title()}
   </h2>
@@ -306,4 +327,5 @@
       {pending ? m.investments_payment_in_lieu_pending() : initial ? m.investments_payment_in_lieu_correct_submit() : m.investments_payment_in_lieu_submit()}
     </button>
   </div>
+  </fieldset>
 </form>

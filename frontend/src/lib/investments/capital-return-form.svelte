@@ -1,4 +1,7 @@
 <script lang="ts">
+  import UnavailableAllocations from '#lib/investments/unavailable-allocations.svelte';
+  import { unavailableAllocations, withoutAllocations } from '#lib/investments/lot-allocations.ts';
+  import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
   import EntryAccountStatus from '#lib/investments/entry-account-status.svelte';
   import { useSettlementCandidates } from '#lib/investments/settlement-candidates.svelte.ts';
   import { isSettlementAccount } from '#lib/investments/settlement-accounts.ts';
@@ -32,6 +35,7 @@
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { usePrefilledPosition } from '#lib/investments/investment-prefill.svelte.ts';
+  import { restoredPositionKey } from '#lib/investments/investment-prefill.ts';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
 
   const ownerToday = useOwnerToday();
@@ -54,7 +58,8 @@
 
   // Pre-select the position the screen names (#186).
   usePrefilledPosition(untrack(() => correction ? undefined : prefill), () => positions,
-    (position) => `${position.account_id}:${position.commodity_id}:${position.cost_commodity_id}`, () => positionKey, (key) => { positionKey = key; });
+    (position) => `${position.account_id}:${position.commodity_id}:${position.cost_commodity_id}`, () => positionKey, (key) => { positionKey = key; },
+    restoredPositionKey(untrack(() => correction ? undefined : prefill), true));
 
   const queryClient = useQueryClient();
 
@@ -83,6 +88,26 @@
   const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(effectiveOn || ownerToday()));
   const cashAccountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(paymentOn || effectiveOn || ownerToday()));
   let formError = $state<unknown>(undefined);
+  // New transaction's working copy and shared context (#508).
+  const workingCopy = useEntryActivity('capital-return', {
+    correction: !!initial,
+    values: () => ({ paymentOn, amount, explicitEntitlement, quantities }),
+    date: () => effectiveOn,
+    memo: () => memo,
+    reference: () => reference,
+    holding: () => selectedPosition?.account_id,
+    instrument: () => selectedPosition?.commodity_id,
+    // A position is its holding, instrument and cost currency (#508 review).
+    currency: () => selectedPosition?.cost_commodity_id,
+    pending: () => pending
+  });
+  if (workingCopy) untrack(() => {
+    paymentOn = workingCopy.paymentOn ?? paymentOn;
+    amount = workingCopy.amount ?? amount;
+    explicitEntitlement = workingCopy.explicitEntitlement ?? explicitEntitlement;
+    quantities = workingCopy.quantities ?? quantities;
+  });
+  untrack(() => { if (!initial && prefill?.reference) reference = prefill.reference; });
   let preview = $state<{
     effects: CapitalReturnEffect[];
     impacts: ReconciliationImpactResponse['affected_checkpoints'];
@@ -114,8 +139,11 @@
     instrumentsQuery.isPending || currenciesQuery.isPending);
   const loadError = $derived(accountsQuery.isError || positionsQuery.isError ||
     instrumentsQuery.isError || currenciesQuery.isError);
+  // Restored quantities on lots not held on this date (#521 review).
+  const unavailableLots = $derived(explicitEntitlement && eligibleLots.length > 0 ? unavailableAllocations(quantities, eligibleLots.map((lot) => lot.lot_id)) : []);
   const canPreview = $derived(!cashAccountsQuery.isFetching && !cashAccountsQuery.isError && !loading && !loadError && !!position && cashAccounts.some((account) => String(account.id) === cashAccountID) &&
-    !!effectiveOn && !!paymentOn && !!amount.trim() && (!correction || !!reason.trim()));
+    !!effectiveOn && !!paymentOn && !!amount.trim() && (!correction || !!reason.trim()) &&
+    unavailableLots.length === 0);
   const modalGainRows = $derived(preview?.gainImpact
     ? gainImpactRows(preview.gainImpact.changes, gainImpactCurrency(currenciesByID), locale) : []);
 
@@ -252,6 +280,8 @@
 {/if}
 
 <form onsubmit={handlePreview} class="space-y-4" aria-busy={pending}>
+  <!-- Nothing in the form changes while its save is in flight (#508). -->
+  <fieldset disabled={pending} class="min-w-0 space-y-4">
   <h2 id="capital-return-title" class="text-base font-semibold text-foreground">{correction ? m.investments_capital_return_correct() : m.investments_capital_return_title()}</h2>
   <p class="text-sm text-muted">{m.investments_capital_return_help()}</p>
   {#if loading}
@@ -273,6 +303,7 @@
       <select id="capital-return-position" aria-describedby="capital-return-position-hint" {@attach autofocus} bind:value={positionKey} required onchange={() => { discardPreview(); eligibleLots = []; quantities = {}; }}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         <option value="">{m.investments_transfer_internal_select_source()}</option>
+        {#if positionKey && !positions.some((item) => `${item.account_id}:${item.commodity_id}:${item.cost_commodity_id}` === positionKey)}<option value={positionKey} disabled>{m.investments_activity_position_unavailable_option()}</option>{/if}
         {#each positions as item (`${item.account_id}:${item.commodity_id}:${item.cost_commodity_id}`)}
           {@const account = accounts.find((candidate: AccountResponse) => candidate.id === item.account_id)}
           {@const instrument = (instrumentsQuery.data?.instruments ?? []).find((candidate) => candidate.commodity_id === item.commodity_id)}
@@ -281,6 +312,7 @@
           </option>
         {/each}
       </select>
+      {#if positionsQuery.data && positionKey && !positions.some((item) => `${item.account_id}:${item.commodity_id}:${item.cost_commodity_id}` === positionKey)}<p role="alert" class="mt-1 text-sm text-danger">{m.investments_activity_position_unavailable()}</p>{/if}
       <p id="capital-return-position-hint" class="mt-1 text-xs text-muted">{m.investments_dated_holdings_hint()}</p>
       {/if}
     </div>
@@ -379,6 +411,7 @@
     {/if}
     </fieldset>
   {/if}
+  {#if unavailableLots.length > 0}<UnavailableAllocations onRemove={() => { quantities = withoutAllocations(quantities, unavailableLots); }} />{/if}
   <APIFormError error={formError} id="capital-return-form-error" />
   <div class="flex flex-wrap justify-end gap-3">
     <button type="button" onclick={onCancel}
@@ -397,4 +430,5 @@
       </button>
     {/if}
   </div>
+  </fieldset>
 </form>

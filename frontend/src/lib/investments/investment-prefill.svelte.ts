@@ -29,16 +29,29 @@ export function usePrefilledInstrument(
 /**
  * Selects the pre-filled position in a position picker whenever its
  * candidates change (a dated picker reloads them with the date) and nothing
- * is chosen yet.
+ * is chosen yet. A position an earlier activity in the entry chose is kept
+ * as it is (`restoredKey`), available or not: the form explains an
+ * unavailable one rather than leaving the picker blank (#521 review).
  */
-export function usePrefilledPosition<T extends { account_id: number; commodity_id: number }>(
+export function usePrefilledPosition<T extends { account_id: number; commodity_id: number; cost_commodity_id?: number }>(
   prefill: InvestmentPrefill | undefined,
   candidates: () => readonly T[],
   keyOf: (candidate: T) => string,
   current: () => string,
-  apply: (key: string) => void
+  apply: (key: string) => void,
+  restoredKey?: string
 ): void {
   if (!prefill) return;
+  if (restoredKey) {
+    // In an effect: forms call this before declaring the picker's state.
+    let applied = false;
+    $effect(() => {
+      if (applied) return;
+      applied = true;
+      untrack(() => { if (current() === '') apply(restoredKey); });
+    });
+    return;
+  }
   $effect(() => {
     const key = prefilledPositionKey(candidates(), prefill, keyOf);
     if (key && untrack(current) === '') untrack(() => apply(key));

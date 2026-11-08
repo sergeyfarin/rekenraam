@@ -1,4 +1,7 @@
 <script lang="ts">
+  import UnavailableAllocations from '#lib/investments/unavailable-allocations.svelte';
+  import { unavailableAllocations, withoutAllocations } from '#lib/investments/lot-allocations.ts';
+  import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
   import { useOwnerToday } from '#lib/dates/owner-date-context.ts';
   import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
   import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
@@ -35,6 +38,7 @@
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { usePrefilledPosition } from '#lib/investments/investment-prefill.svelte.ts';
+  import { restoredPositionKey } from '#lib/investments/investment-prefill.ts';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
 
   let { csrfToken, onSaved, onCancel, prefill }: {
@@ -45,7 +49,8 @@
 
   // Pre-select the position the screen names (#186).
   usePrefilledPosition(untrack(() => prefill), () => holdings,
-    (position) => `${position.account_id}:${position.commodity_id}:${position.cost_commodity_id}`, () => holdingKey, (key) => { holdingKey = key; });
+    (position) => `${position.account_id}:${position.commodity_id}:${position.cost_commodity_id}`, () => holdingKey, (key) => { holdingKey = key; },
+    restoredPositionKey(untrack(() => prefill), true));
 
   const queryClient = useQueryClient();
 
@@ -62,6 +67,22 @@
   let pending = $state(false);
   const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(transactionDate || ownerToday()));
   let formError = $state<unknown>();
+  // New transaction's working copy and shared context (#508).
+  const workingCopy = useEntryActivity('write-off', {
+    values: () => ({ quantity, method, quantities, reason }),
+    date: () => transactionDate,
+    holding: () => holding?.account_id,
+    instrument: () => holding?.commodity_id,
+    // A position is its holding, instrument and cost currency (#508 review).
+    currency: () => holding?.cost_commodity_id,
+    pending: () => pending
+  });
+  if (workingCopy) untrack(() => {
+    quantity = workingCopy.quantity ?? quantity;
+    method = workingCopy.method ?? method;
+    quantities = workingCopy.quantities ?? quantities;
+    reason = workingCopy.reason ?? reason;
+  });
   let preview = $state<{
     result: SellPreviewResponse; impact: ReconciliationImpactResponse; payload: InvestmentWriteOffRequest;
   } | null>(null);
@@ -83,8 +104,11 @@
     (!!transactionDate && holdingsQuery.isFetching));
   const loadError = $derived(accountsQuery.error ?? instrumentsQuery.error ?? currenciesQuery.error ??
     (transactionDate ? holdingsQuery.error : undefined));
+  // Restored quantities on lots not held on this date (#521 review).
+  const unavailableLots = $derived(!loading && !!holding && method === 'specific_lot' ? unavailableAllocations(quantities, lots.map((lot) => lot.lot_id)) : []);
   const canPreview = $derived(!loading && !loadError && !!transactionDate && !!holding && !!instrument &&
-    !!quantity.trim() && !!reason.trim() && (method !== 'specific_lot' || lots.length > 0));
+    !!quantity.trim() && !!reason.trim() && (method !== 'specific_lot' || lots.length > 0) &&
+    unavailableLots.length === 0);
   const basisCurrency = $derived(currenciesByID.get(preview?.result.disposal_decision.cost_commodity_id ?? holding?.cost_commodity_id ?? 0));
   const gainImpact = $derived(preview && hasGainChanges(preview.impact.gain_impact) ? preview.impact.gain_impact : null);
   const gainRows = $derived(gainImpact ? gainImpactRows(gainImpact.changes, gainImpactCurrency(currenciesByID), locale) : []);
@@ -192,6 +216,8 @@
       onCancel={cancelReview} onConfirm={confirm} />
   {/if}
   <form onsubmit={handlePreview} class="space-y-4" aria-busy={pending}>
+    <!-- Nothing in the form changes while its save is in flight (#508). -->
+    <fieldset disabled={pending} class="min-w-0 space-y-4">
     <h2 id="write-off-title" class="text-base font-semibold">{m.investments_write_off_title()}</h2>
     <p class="text-sm text-muted">{m.investments_write_off_help()}</p>
     <fieldset disabled={pending || reviewing} class="space-y-4">
@@ -206,7 +232,7 @@
         <APIFormError error={loadError} />
       {:else if !transactionDate}
         <p class="text-sm text-muted" role="status">{m.investments_write_off_choose_date()}</p>
-      {:else if holdings.length === 0}
+      {:else if holdings.length === 0 && !holdingKey}
         <p class="text-sm text-muted" role="status">{m.investments_write_off_empty()}</p>
       {:else}
         <div>
@@ -214,12 +240,14 @@
           <select id="write-off-holding" bind:value={holdingKey} required onchange={changeHolding} aria-describedby="write-off-dated-hint"
             class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm">
             <option value="">{m.investments_form_select_account()}</option>
+        {#if holdingKey && !holdings.some((item) => `${item.account_id}:${item.commodity_id}:${item.cost_commodity_id}` === holdingKey)}<option value={holdingKey} disabled>{m.investments_activity_position_unavailable_option()}</option>{/if}
             {#each holdings as item (`${item.account_id}:${item.commodity_id}:${item.cost_commodity_id}`)}
               <option value={`${item.account_id}:${item.commodity_id}:${item.cost_commodity_id}`}>
                 {accounts.find(account => account.id === item.account_id)?.name} · {instruments.find(inst => inst.commodity_id === item.commodity_id)?.display_name ?? `#${item.commodity_id}`} · {currenciesByID.get(item.cost_commodity_id)?.code}
               </option>
             {/each}
           </select>
+      {#if holdingsQuery.data && holdingKey && !holdings.some((item) => `${item.account_id}:${item.commodity_id}:${item.cost_commodity_id}` === holdingKey)}<p role="alert" class="mt-1 text-sm text-danger">{m.investments_activity_position_unavailable()}</p>{/if}
           <p id="write-off-dated-hint" class="mt-1 text-xs text-muted">{m.investments_dated_holdings_hint()}</p>
         </div>
         {#if holding}
@@ -278,6 +306,7 @@
         </section>
       {/if}
     </fieldset>
+    {#if unavailableLots.length > 0}<UnavailableAllocations onRemove={() => { quantities = withoutAllocations(quantities, unavailableLots); }} />{/if}
     <APIFormError error={formError} id="write-off-error" />
     <div class="flex flex-wrap justify-end gap-3">
       <button type="button" onclick={close} disabled={pending || reviewing}
@@ -294,5 +323,6 @@
         </button>
       {/if}
     </div>
+    </fieldset>
   </form>
 </ModalDialog>

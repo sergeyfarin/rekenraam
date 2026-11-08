@@ -78,10 +78,11 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(dialog.getByLabel('Description', { exact: true })).toHaveValue(description);
     await expect(dialog.getByLabel('Amount', { exact: true })).toHaveValue('12.34');
 
-    // Escape discards the working copy, posts nothing and returns focus.
+    // Escape asks before discarding the working copy (#508), posts nothing and returns focus.
     const posts: string[] = [];
     page.on('request', request => { if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/transactions') posts.push(request.url()); });
     await page.keyboard.press('Escape');
+    await page.getByRole('alertdialog', { name: 'Discard this transaction?' }).getByRole('button', { name: 'Discard', exact: true }).click();
     await expect(dialog).toHaveCount(0);
     await expect(addTile(page)).toBeFocused();
     expect(posts).toEqual([]);
@@ -158,6 +159,7 @@ test.describe('on a touch phone', () => {
       await expectNoAccessibilityViolations(page, `phone entry sheet ${theme}`);
       await dialog.getByLabel('Description', { exact: true }).fill('Not kept');
       await dialog.getByRole('button', { name: 'Cancel', exact: true }).last().tap();
+      await page.getByRole('alertdialog', { name: 'Discard this transaction?' }).getByRole('button', { name: 'Discard', exact: true }).tap();
       await expect(dialog).toHaveCount(0);
       await expect(addTile(page)).toBeFocused();
       await addTile(page).tap();
@@ -260,6 +262,7 @@ test('a failed session refresh keeps the unsaved entry, and focus has somewhere 
 
   // Cancelled over the shell error, focus goes to its Retry, not <body>.
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).last().click();
+  await page.getByRole('alertdialog', { name: 'Discard this transaction?' }).getByRole('button', { name: 'Discard', exact: true }).click();
   await expect(dialog).toHaveCount(0);
   const retry = page.getByRole('button', { name: 'Retry shell', exact: true });
   await expect(retry).toBeFocused();
@@ -279,6 +282,7 @@ test('a failed session refresh keeps the unsaved entry, and focus has somewhere 
   await expect(page.getByText('The app shell could not load')).toHaveCount(0);
   await expect(dialog.getByLabel('Description', { exact: true })).toHaveValue(description);
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).last().click();
+  await page.getByRole('alertdialog', { name: 'Discard this transaction?' }).getByRole('button', { name: 'Discard', exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.locator('#main-content')).toBeFocused();
 });

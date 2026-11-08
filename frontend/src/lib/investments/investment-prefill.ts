@@ -13,6 +13,16 @@ export type InvestmentPrefill = {
   startingAccountID?: number;
   transactionDate?: string;
   memo?: string;
+  /** New transaction's shared reference (#508). */
+  reference?: string;
+  /** New transaction's shared currency, where an activity chooses one (#508). */
+  currencyID?: number;
+  /**
+   * The holding and instrument are an earlier activity's choice in this entry,
+   * not the page's. A position picker then keeps that position identified,
+   * even when it is not available on the current date (#521 review).
+   */
+  restoredSelection?: boolean;
   commodityID?: number;
 };
 
@@ -72,9 +82,12 @@ export function prefilledInstrument<T extends PrefillInstrument>(
 /**
  * The position a position picker starts on: the only candidate that matches
  * every pre-filled field. A position also has a cost currency (and a side), so
- * a holding with two cost currencies stays a deliberate choice.
+ * a holding with two cost currencies stays a deliberate choice, unless New
+ * transaction's shared cost currency names one of them (#508 review). A
+ * shared currency the holding does not carry selects nothing: the owner
+ * chooses, and nothing is substituted.
  */
-export function prefilledPositionKey<T extends { account_id: number; commodity_id: number }>(
+export function prefilledPositionKey<T extends { account_id: number; commodity_id: number; cost_commodity_id?: number }>(
   candidates: readonly T[],
   prefill: InvestmentPrefill | undefined,
   keyOf: (candidate: T) => string
@@ -82,7 +95,20 @@ export function prefilledPositionKey<T extends { account_id: number; commodity_i
   if (!hasPrefill(prefill)) return '';
   const matching = candidates.filter((candidate) =>
     (prefill.holdingAccountID === undefined || candidate.account_id === prefill.holdingAccountID) &&
-    (prefill.commodityID === undefined || candidate.commodity_id === prefill.commodityID));
+    (prefill.commodityID === undefined || candidate.commodity_id === prefill.commodityID) &&
+    (prefill.currencyID === undefined || candidate.cost_commodity_id === undefined ||
+      candidate.cost_commodity_id === prefill.currencyID));
   const keys = [...new Set(matching.map(keyOf))];
   return keys.length === 1 ? keys[0] : '';
+}
+
+/**
+ * The position an earlier activity chose, in a picker's key shape: holding,
+ * instrument and cost currency (`withCurrency`), or holding and instrument.
+ * Undefined unless the selection is restored and fully known.
+ */
+export function restoredPositionKey(prefill: InvestmentPrefill | undefined, withCurrency: boolean): string | undefined {
+  if (!prefill?.restoredSelection || prefill.holdingAccountID === undefined || prefill.commodityID === undefined) return undefined;
+  if (!withCurrency) return `${prefill.holdingAccountID}:${prefill.commodityID}`;
+  return prefill.currencyID === undefined ? undefined : `${prefill.holdingAccountID}:${prefill.commodityID}:${prefill.currencyID}`;
 }

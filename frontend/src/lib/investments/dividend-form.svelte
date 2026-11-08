@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
   import EntryAccountStatus from '#lib/investments/entry-account-status.svelte';
   import { useSettlementCandidates } from '#lib/investments/settlement-candidates.svelte.ts';
   import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
@@ -122,6 +123,26 @@
   let pending = $state(false);
   const accountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(transactionDate || ownerToday()));
   let formError = $state<unknown>(undefined);
+  // New transaction's working copy and shared context (#508).
+  const workingCopy = useEntryActivity(untrack(() => mode === 'reinvested' ? 'reinvested' : mode === 'withholding' ? 'withholding' : 'dividend'), {
+    values: () => ({ exDate, incomeAccountID, withholdingAccountID, amountStr, withholdingStr, showWithholding, quantityStr }),
+    date: () => transactionDate,
+    memo: () => memo,
+    holding: () => Number(holdingAccountID) || undefined,
+    instrument: () => selectedInstrument?.commodity_id,
+    currency: () => Number(reinvestmentCurrencyID) || undefined,
+    pending: () => pending
+  });
+  if (workingCopy) untrack(() => {
+    exDate = workingCopy.exDate ?? exDate;
+    incomeAccountID = workingCopy.incomeAccountID ?? incomeAccountID;
+    withholdingAccountID = workingCopy.withholdingAccountID ?? withholdingAccountID;
+    amountStr = workingCopy.amountStr ?? amountStr;
+    withholdingStr = workingCopy.withholdingStr ?? withholdingStr;
+    showWithholding = workingCopy.showWithholding ?? showWithholding;
+    quantityStr = workingCopy.quantityStr ?? quantityStr;
+  });
+  untrack(() => { if (prefill?.currencyID !== undefined && mode === 'reinvested') reinvestmentCurrencyID = String(prefill.currencyID); });
 
   // Both dividend shapes can be backdated into a reconciled period, so both get
   // the same named confirmation as the trade forms (T-53). The pending payload
@@ -397,6 +418,8 @@
 {/if}
 
 <form onsubmit={handleSubmit} aria-busy={pending} class="space-y-4">
+  <!-- Nothing in the form changes while its save is in flight (#508). -->
+  <fieldset disabled={pending} class="min-w-0 space-y-4">
   <h2 id={mode === 'withholding' ? 'withholding-title' : mode === 'cash' ? 'dividend-title' : 'reinvested-dividend-title'} class="text-base font-semibold text-foreground">{title}</h2>
   <EntryAccountStatus pending={accountsQuery.isFetching}
     error={accountsQuery.error}
@@ -689,4 +712,5 @@
       {submitLabel}
     </button>
   </div>
+  </fieldset>
 </form>
