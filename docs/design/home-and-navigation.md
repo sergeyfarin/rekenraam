@@ -712,7 +712,9 @@ themselves (invalid choices stay identified).
   holding does not carry selects nothing. The merger's cash currency is
   different: a shared currency the holding has no
   lots in stays chosen, is named as the mismatch, and blocks the preview
-  until the owner picks one the holding carries. A position chosen in an earlier
+  until the owner picks one the holding carries. Changing the holding
+  never relabels the cash either: a chosen currency, or the default an
+  amount was typed in, stays and is checked against the new holding. A position chosen in an earlier
   activity stays selected when its form reopens. If a new date makes it
   unavailable, it shows as a disabled *earlier choice* with an
   explanation, never a blank picker. Lot quantities entered for lots the
