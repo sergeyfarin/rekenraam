@@ -1429,6 +1429,7 @@
   "investments_merger_currency": "Valuta van de contanten",
   "investments_merger_select_currency": "Kies een valuta",
   "investments_merger_currency_hint": "De valuta van de kostprijs van de positie.",
+  "investments_merger_currency_unavailable": "Deze positie heeft geen lots met een kostprijs in {currency}. Kies een valuta waarin deze positie een kostprijs heeft.",
   "investments_merger_cash": "Totaal ontvangen contanten",
   "investments_merger_cash_help": "Het werkelijke bedrag voor de hele positie, niet het bedrag per aandeel.",
   "investments_merger_cash_error": "Voer de contanten in als positief bedrag met de decimalen van de valuta.",

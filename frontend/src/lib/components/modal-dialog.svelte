@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick, type Snippet } from 'svelte';
+  import { onMount, type Snippet } from 'svelte';
   import { captureOpener, returnFocus, scopeBusy, wrapTab } from './modal-focus.ts';
 
   // The app's one modal dialog (#327). Mount it to open it and unmount it to
@@ -66,16 +66,13 @@
   // Chromium may close a dialog without a cancelable `cancel` when Escape is
   // pressed repeatedly without other user activation. Keep it open unless the
   // owner agrees to close.
+  // The dialog reopens before the owner hears of it, so anything the owner
+  // opens in reply (a discard confirmation, #508) stacks above it and keeps
+  // focus; an owner that agrees unmounts it.
   function closed() {
     if (closing) return;
-    if (busy() || !onCancel) {
-      dialog.showModal();
-      return;
-    }
-    onCancel();
-    // The owner may ask before closing (a discard confirmation, #508); a
-    // dialog that is still mounted then stays open.
-    void tick().then(() => { if (!closing && !dialog.open) dialog.showModal(); });
+    dialog.showModal();
+    if (!busy()) onCancel?.();
   }
 
   function backdropClick(event: MouseEvent) {

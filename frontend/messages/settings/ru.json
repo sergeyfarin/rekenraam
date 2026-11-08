@@ -1429,6 +1429,7 @@
   "investments_merger_currency": "Валюта выплаты",
   "investments_merger_select_currency": "Выберите валюту",
   "investments_merger_currency_hint": "Валюта себестоимости позиции.",
+  "investments_merger_currency_unavailable": "В этой позиции нет лотов со стоимостью приобретения в {currency}. Выберите одну из её валют стоимости.",
   "investments_merger_cash": "Всего получено денег",
   "investments_merger_cash_help": "Фактическая сумма за всю позицию, а не на одну акцию.",
   "investments_merger_cash_error": "Введите положительную сумму с точностью валюты.",

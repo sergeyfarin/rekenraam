@@ -1,8 +1,8 @@
 {
   "counts": {
-    "es": 114,
-    "fr": 114,
-    "de": 114
+    "es": 115,
+    "fr": 115,
+    "de": 115
   },
   "keys": {
     "es": [
@@ -109,6 +109,7 @@
       "investments_activity_trades",
       "investments_activity_withholding",
       "investments_activity_write_off",
+      "investments_merger_currency_unavailable",
       "investments_trade_total_reenter",
       "investments_trade_unit_price",
       "investments_trade_unit_price_charges",
@@ -225,6 +226,7 @@
       "investments_activity_trades",
       "investments_activity_withholding",
       "investments_activity_write_off",
+      "investments_merger_currency_unavailable",
       "investments_trade_total_reenter",
       "investments_trade_unit_price",
       "investments_trade_unit_price_charges",
@@ -341,6 +343,7 @@
       "investments_activity_trades",
       "investments_activity_withholding",
       "investments_activity_write_off",
+      "investments_merger_currency_unavailable",
       "investments_trade_total_reenter",
       "investments_trade_unit_price",
       "investments_trade_unit_price_charges",

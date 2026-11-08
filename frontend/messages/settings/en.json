@@ -1458,6 +1458,7 @@
   "investments_merger_currency": "Cash currency",
   "investments_merger_select_currency": "Select a currency",
   "investments_merger_currency_hint": "The currency of the holding's cost basis.",
+  "investments_merger_currency_unavailable": "This holding has no lots with a cost basis in {currency}. Choose one of its cost currencies.",
   "investments_merger_cash": "Total cash received",
   "investments_merger_cash_help": "The actual amount for the whole holding, not the per-share amount.",
   "investments_merger_cash_error": "Enter the cash as a positive amount in the currency's decimals.",

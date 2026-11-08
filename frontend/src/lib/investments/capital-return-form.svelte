@@ -140,7 +140,7 @@
   const loadError = $derived(accountsQuery.isError || positionsQuery.isError ||
     instrumentsQuery.isError || currenciesQuery.isError);
   // Restored quantities on lots not held on this date (#521 review).
-  const unavailableLots = $derived(eligibleLots.length > 0 ? unavailableAllocations(quantities, eligibleLots.map((lot) => lot.lot_id)) : []);
+  const unavailableLots = $derived(explicitEntitlement && eligibleLots.length > 0 ? unavailableAllocations(quantities, eligibleLots.map((lot) => lot.lot_id)) : []);
   const canPreview = $derived(!cashAccountsQuery.isFetching && !cashAccountsQuery.isError && !loading && !loadError && !!position && cashAccounts.some((account) => String(account.id) === cashAccountID) &&
     !!effectiveOn && !!paymentOn && !!amount.trim() && (!correction || !!reason.trim()) &&
     unavailableLots.length === 0);

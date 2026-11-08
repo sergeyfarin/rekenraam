@@ -123,11 +123,17 @@
     electionPercent = workingCopy.electionPercent ?? electionPercent;
   });
   untrack(() => { if (!initialTerms && prefill?.reference) sourceReference = prefill.reference; });
-  // The entry's cost currency, once the holding shows it carries it.
+  // The entry's cost currency, applied once the holding is known. A currency
+  // the holding carries no lots in stays chosen and named (#508): the writer
+  // refuses it, so the owner corrects it rather than the form replacing it.
   const sharedCurrencyID = untrack(() => initialTerms ? undefined : prefill?.currencyID);
+  let sharedCurrencyPending = $state(untrack(() => sharedCurrencyID !== undefined));
   $effect(() => {
-    if (sharedCurrencyID === undefined || untrack(() => chosenCurrencyID) !== null) return;
-    if (selectedHolding?.costCurrencyIDs.includes(sharedCurrencyID)) untrack(() => { chosenCurrencyID = String(sharedCurrencyID); });
+    if (!sharedCurrencyPending || !selectedHolding) return;
+    untrack(() => {
+      sharedCurrencyPending = false;
+      if (chosenCurrencyID === null) chosenCurrencyID = String(sharedCurrencyID);
+    });
   });
   // The reviewed preview. Editing any field discards it, so the user always
   // records exactly the plan they saw.
@@ -185,6 +191,7 @@
   const currenciesByID = $derived(new Map<number, CurrencyResponse>(currencies.map((currency) => [currency.id, currency])));
   const currencyID = $derived(chosenCurrencyID ?? String(selectedHolding?.costCurrencyIDs[0] ?? ''));
   const currency = $derived(currenciesByID.get(Number(currencyID)));
+  const currencyNotCarried = $derived(!!selectedHolding && !!currencyID && !selectedHolding.costCurrencyIDs.includes(Number(currencyID)));
   const instrumentLabel = (commodityID: number) => {
     const instrument = (instrumentsQuery.data?.instruments ?? []).find((item) => item.commodity_id === commodityID);
     return instrument?.display_name ?? instrument?.commodity_code ?? `#${commodityID}`;
@@ -194,7 +201,7 @@
   const loadError = $derived(accountsQuery.isError || positionsQuery.isError ||
     instrumentsQuery.isError || currenciesQuery.isError);
   const canPreview = $derived(!cashAccountsQuery.isFetching && !cashAccountsQuery.isError && !loading && !loadError && !!effectiveOn && !!payableOn && !!selectedHolding && newID > 0 &&
-    !!destination && !!newUnits.trim() && !!oldUnits.trim() && cashAccounts.some((account) => String(account.id) === cashAccountID) && !!currency && !!cashAmount.trim() &&
+    !!destination && !!newUnits.trim() && !!oldUnits.trim() && cashAccounts.some((account) => String(account.id) === cashAccountID) && !!currency && !currencyNotCarried && !!cashAmount.trim() &&
     !!electionPercent.trim() && (!correction || !!reason.trim()));
   const modalGainRows = $derived(preview?.gainImpact
     ? gainImpactRows(preview.gainImpact.changes, gainImpactCurrency(currenciesByID), locale)
@@ -456,7 +463,8 @@
       </div>
       <div>
         <label for="merger-currency" class="mb-1 block text-sm font-medium text-foreground">{m.investments_merger_currency()}</label>
-        <select id="merger-currency" value={currencyID} required aria-describedby="merger-currency-hint"
+        <select id="merger-currency" value={currencyID} required aria-describedby="merger-currency-hint{currencyNotCarried ? ' merger-currency-unavailable' : ''}"
+          aria-invalid={currencyNotCarried || undefined}
           onchange={(event) => { chosenCurrencyID = event.currentTarget.value; discardPreview(); }}
           class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
           <option value="">{m.investments_merger_select_currency()}</option>
@@ -465,6 +473,7 @@
           {/each}
         </select>
         <p id="merger-currency-hint" class="mt-1 text-xs text-muted">{m.investments_merger_currency_hint()}</p>
+        {#if currencyNotCarried}<p id="merger-currency-unavailable" role="alert" class="mt-1 text-sm text-danger">{m.investments_merger_currency_unavailable({ currency: currency?.code ?? currencyID })}</p>{/if}
       </div>
     </div>
     <div>

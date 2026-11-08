@@ -657,3 +657,94 @@ test('(#521 third review) all eight position pickers reopen safely with an unava
     await form.getByRole('button', { name: 'Cancel', exact: true }).click();
   }
 });
+
+test('(#521 fourth review) a shared cost currency the merger holding lacks stays chosen and blocks preview', async ({ page }) => {
+  const s = await setup(page);
+  await position(s, page);
+  const opened = daysFromTodayISO(-10);
+  const eur = await ensureCurrency(page, s.csrfToken, 'EUR', 'Euro');
+  const target = await apiJSON<{ id: number; commodity_id: number }>(page, 'POST', '/api/v1/investments/instruments', s.csrfToken, {
+    commodity_code: `NEW${s.suffix}`, instrument_type: 'stock', display_name: `Target ${s.suffix}`,
+    quantity_scale: 0, price_scale: 2, quote_commodity_id: s.currencyID, effective_from: opened
+  });
+  await apiJSON(page, 'POST', '/api/v1/investments/holding-accounts', s.csrfToken, {
+    instrument_id: target.id, name: `Target holding ${s.suffix}`, parent_account_id: s.broker.id, opened_on: opened, effective_from: opened
+  });
+  // A cash account in each currency, so only the currency itself can block the preview.
+  const eurCash = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/accounts', s.csrfToken, {
+    name: `Euro cash ${s.suffix}`, account_class: 'asset', account_kind: 'brokerage_cash', parent_account_id: s.broker.id,
+    default_commodity_id: eur, allows_postings: true, opened_on: opened, effective_from: opened
+  });
+  await start(page, s.holding.id);
+  await openInvestmentActivity(page, 'Shares in');
+  const incoming = page.getByRole('dialog').filter({ has: page.locator('#transfer-in-currency') });
+  await incoming.locator('#transfer-in-currency').selectOption(String(eur));
+  await incoming.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await openInvestmentActivity(page, 'Cash-and-stock merger');
+  const form = page.getByRole('dialog').filter({ has: page.locator('#merger-new-instrument') });
+  await form.locator('#merger-date').fill(daysFromTodayISO(-1));
+  await form.locator('#merger-payable').fill(daysFromTodayISO(-1));
+  await form.locator('#merger-new-instrument').selectOption(String(target.commodity_id));
+  await expect(form.locator('#merger-currency')).toHaveValue(String(eur));
+  await expect(form.getByRole('alert')).toContainText('no lots with a cost basis in EUR');
+  await form.locator('#merger-new-units').fill('1');
+  await form.locator('#merger-old-units').fill('2');
+  await form.locator('#merger-cash-account').selectOption(String(eurCash.id));
+  await form.locator('#merger-cash').fill('3.00');
+  await form.locator('#merger-percent').fill('25');
+  const preview = form.getByRole('button', { name: 'Preview merger', exact: true });
+  await expect(preview).toBeDisabled();
+  await form.locator('#merger-currency').selectOption(String(s.currencyID));
+  await expect(form.locator('#merger-currency-unavailable')).toHaveCount(0);
+  await form.locator('#merger-cash-account').selectOption(String(s.cash.id));
+  await expect(preview).toBeEnabled();
+});
+
+test('(#521 fourth review) return of capital ignores restored allocations while specific lots are off', async ({ page }) => {
+  const s = await setup(page);
+  await apiJSON(page, 'POST', '/api/v1/investments/buy', s.csrfToken, {
+    transaction_date: daysFromTodayISO(-8), commodity_id: s.instrument.commodity_id, holding_account_id: s.holding.id,
+    cash_account_id: s.cash.id, quantity_value: '2', quantity_scale: 0,
+    cash_amount_value: '2000', cash_amount_scale: 2, cash_commodity_id: s.currencyID
+  });
+  await position(s, page);
+  await start(page, s.holding.id);
+  await openInvestmentActivity(page, 'Return of capital');
+  const form = page.getByRole('dialog').filter({ has: page.locator('#capital-return-position') });
+  await form.locator('#capital-return-payment').fill(todayISO());
+  await form.locator('#capital-return-amount').fill('1');
+  await form.getByRole('checkbox').check();
+  await form.getByRole('button', { name: 'Preview return', exact: true }).click();
+  const lots = form.locator('input[id^="capital-return-lot-"]');
+  await expect(lots).toHaveCount(2);
+  await lots.nth(0).fill('1');
+  await lots.nth(1).fill('1');
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await openInvestmentActivity(page, 'Buy');
+  const trade = page.getByRole('dialog').filter({ has: page.locator('#buy-quantity') });
+  await trade.locator('#buy-date').fill(daysFromTodayISO(-6));
+  await trade.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await openInvestmentActivity(page, 'Return of capital');
+  await form.getByRole('button', { name: 'Preview return', exact: true }).click();
+  await expect(lots).toHaveCount(1);
+  await expect(form.getByRole('alert')).toBeVisible();
+  await form.getByRole('checkbox').uncheck();
+  await expect(form.getByRole('button', { name: 'Preview return', exact: true })).toBeEnabled();
+});
+
+
+test('(#521 fourth review) a forced close leaves the discard confirmation usable above its parent', async ({ page }) => {
+  await setup(page);
+  await page.goto('/app');
+  await page.getByRole('button', { name: 'New transaction', exact: true }).first().click();
+  const dialog = page.getByRole('dialog', { name: 'New transaction', exact: true });
+  await dialog.getByLabel('Description', { exact: true }).fill('Keep this entry');
+  await dialog.evaluate((el: HTMLDialogElement) => el.close());
+  const discard = page.getByRole('alertdialog', { name: 'Discard this transaction?' });
+  await expect(discard).toBeVisible();
+  await discard.getByRole('button', { name: 'Keep editing', exact: true }).click({ trial: true, timeout: 5000 });
+  await expect(discard.getByRole('button', { name: 'Keep editing', exact: true })).toBeFocused();
+  await discard.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  await expect(discard).toHaveCount(0);
+  await expect(dialog.getByLabel('Description', { exact: true })).toHaveValue('Keep this entry');
+});
