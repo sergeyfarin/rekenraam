@@ -1,5 +1,6 @@
 {
-  "source_revision": "b82e39f5f4179decfa281821c4c960bb9ce3e4f5",
+  "source_revision": "213b5ac5627d763fffca40be90ea7b5645576b08",
+  "source_clean": true,
   "fixture": "fixtures/reference-book.json",
   "language": "en",
   "viewport": {
@@ -17,7 +18,7 @@
     },
     {
       "file": "../../docs/images/reports-spending.png",
-      "route": "/app/reports/spending?start_date=2026-01-01&end_date=2026-03-31",
+      "route": "/app/reports/spending?start_date=2026-01-01&end_date=2026-03-31&commodity_id=2",
       "viewport": {
         "width": 1440,
         "height": 1112
