@@ -709,13 +709,20 @@ themselves (invalid choices stay identified).
   basis, a reinvestment's cost currency and a cash-and-stock merger's cash
   currency. A position picker with the same
   instrument in two cost currencies restores the one chosen; a currency the
-  holding does not carry selects nothing. A position chosen in an earlier
+  holding does not carry selects nothing. The merger's cash currency is
+  different: a shared currency the holding has no
+  lots in stays chosen, is named as the mismatch, and blocks the preview
+  until the owner picks one the holding carries. A position chosen in an earlier
   activity stays selected when its form reopens. If a new date makes it
   unavailable, it shows as a disabled *earlier choice* with an
   explanation, never a blank picker. Lot quantities entered for lots the
   position does not hold on the new date are named. Nothing is previewed
   until the owner removes them, so a transfer never quietly moves fewer
-  units.
+  units. Only allocations the command would use count: with Return of
+  capital's *Specific lot quantities* off, they wait in the working copy.
+- **Stacked dialogs.** When a browser closes the entry dialog without a
+  cancelable Escape, the dialog reopens before asking, so the discard
+  question opens above it and keeps focus.
 
 ## Widgets
 
