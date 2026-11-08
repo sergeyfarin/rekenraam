@@ -135,13 +135,14 @@ written. It reads every instrument version because the owner-local day is not
 known in the trigger, so an obsolete version can name a currency the holding
 no longer demands, at the holding's date. Its work therefore carries reason
 `holding_entered` and is only a wakeup: unlike posted-currency work, the sweep
-never lets its `start_date` reach back before the `FXDemand` start, so an
-obsolete quote currency cannot backdate another source's later demand for the
-same currency or spend provider quota on dates nothing needs
-(`TestFXHoldingWakeupCannotBackdateOtherDemand`). A quote currency first recorded after the last posting of the
-holding (an instrument reclassified later, or the first observation in a new
-currency) has no outbox wakeup and is picked up by the next scheduled or manual
-sweep; that wakeup is
+never lets its `start_date` reach back before the `FXDemand` start, and a
+continuation built from it carries no `start_date`, so no later chunk revives
+the hint for either pair direction. An obsolete quote currency cannot backdate
+another source's later demand for the same currency or spend provider quota on
+dates nothing needs (`TestFXHoldingWakeupCannotBackdateOtherDemand`). A quote
+currency first recorded after the last posting of the holding (an instrument
+reclassified later, or the first observation in a new currency) has no outbox
+wakeup and is picked up by the next scheduled or manual sweep; that wakeup is
 [#540](https://github.com/sergeyfarin/rekenraam/issues/540). Named regressions:
 `TestFXDemandIncludesTheQuoteCurrencyOfAHeldInstrument`,
 `TestFXDemandIncludesAHeldCommodityObservationCurrency`,

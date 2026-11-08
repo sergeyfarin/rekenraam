@@ -133,6 +133,11 @@ scan:
 			}
 			if remaining == 0 {
 				continuation := payload
+				// A continuation's start date overrides demand, so a holding
+				// wakeup hands on no date: it was only ever a hint (#532).
+				if payload.Reason == fxHoldingWakeupReason {
+					continuation.StartDate = ""
+				}
 				continuation.Reason, continuation.ThroughDate = "continuation", through
 				continuation.Next = &fxCoverageCursor{BaseID: target.Base.ID, QuoteID: target.Quote.ID, Date: date}
 				encoded, err := json.Marshal(continuation)

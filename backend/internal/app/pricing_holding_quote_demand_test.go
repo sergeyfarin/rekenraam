@@ -186,9 +186,9 @@ func TestFXDemandKeepsASoldHoldingsQuoteCurrency(t *testing.T) {
 	assert.Equal(t, "2026-09-28", record.StartDate)
 }
 
-// recordingFXProvider answers every EUR/USD request at 1 and records the
-// requested dates, so a test can see how far back a sweep reaches.
-type recordingFXProvider struct{ dates *[]string }
+// recordingFXProvider answers every EUR/USD request at 1 and records each
+// requested pair and date, so a test can see how far back a sweep reaches.
+type recordingFXProvider struct{ requests *[]string }
 
 func (p recordingFXProvider) Code() string { return "frankfurter" }
 func (p recordingFXProvider) Name() string { return "recording" }
@@ -196,7 +196,9 @@ func (p recordingFXProvider) Capabilities() marketdata.ProviderCapabilities {
 	return marketdata.ProviderCapabilities{FXRates: true, HistoricalFXRates: true}
 }
 func (p recordingFXProvider) FetchFXRates(ctx context.Context, request marketdata.FXRateRequest) ([]marketdata.FXRateObservation, error) {
-	*p.dates = append(*p.dates, request.Date)
+	for _, quote := range request.QuoteCodes {
+		*p.requests = append(*p.requests, request.BaseCode+"/"+quote+" "+request.Date)
+	}
 	return fakeFXProvider{code: "frankfurter", rates: map[string]fakeFXRate{"EUR/USD": {value: 1}, "USD/EUR": {value: 1}}}.FetchFXRates(ctx, request)
 }
 
@@ -204,7 +206,8 @@ func (p recordingFXProvider) FetchFXRates(ctx context.Context, request marketdat
 // obsolete version's quote currency still wakes coverage at the holding's
 // date. That wakeup is only a hint: the sweep must take the start date from
 // FXDemand, never reach back to the hint's earlier date for a currency
-// demanded later by something else.
+// demanded later by something else — in the first chunk or in any
+// continuation the chunk budget hands on, for either pair direction.
 func TestFXHoldingWakeupCannotBackdateOtherDemand(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -217,12 +220,12 @@ func TestFXHoldingWakeupCannotBackdateOtherDemand(t *testing.T) {
 			display_name, ?, ?, quantity_scale, price_scale
 		FROM investment_instrument_versions WHERE version_seq = 1`, f.eurCommodityID, f.eurCommodityID)
 	require.NoError(t, err)
-	f.move(t, "2026-10-15", f.cashAccountID, usd, 100)
+	f.move(t, "2026-10-14", f.cashAccountID, usd, 100)
 	f.buyTenWithEUR(t, "2026-09-28")
 
 	demand, found := demandFor(t, f, usd)
 	require.True(t, found)
-	require.Equal(t, "2026-10-15", demand.StartDate, "USD is demanded only by the later USD balance")
+	require.Equal(t, "2026-10-14", demand.StartDate, "USD is demanded only by the later USD balance")
 	var raw string
 	require.NoError(t, f.database.QueryRow(`SELECT payload_json FROM background_work_items
 		WHERE kind = 'pricing.fx_coverage' AND json_extract(payload_json, '$.currency_id') = ?
@@ -231,19 +234,31 @@ func TestFXHoldingWakeupCannotBackdateOtherDemand(t *testing.T) {
 	var payload fxCoverageWorkPayload
 	require.NoError(t, json.Unmarshal([]byte(raw), &payload))
 
-	dates := []string{}
-	service := NewPricingService(db.NewPricingRepository(f.database), marketdata.NewRegistry(recordingFXProvider{dates: &dates}))
+	requests := []string{}
+	service := NewPricingService(db.NewPricingRepository(f.database), marketdata.NewRegistry(recordingFXProvider{requests: &requests}))
 	service.SetNowForTest(func() time.Time { return time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC) })
 	_, err = f.database.Exec(`UPDATE market_data_sources SET status = 'disabled' WHERE kind = 'provider' AND code <> 'frankfurter'`)
 	require.NoError(t, err)
 	source := marketDataSourceIDByCode(t, f.database, "frankfurter")
+	// One provider attempt per chunk: every later date and the second pair
+	// direction are reached only through continuations.
 	_, err = service.SavePolicy(ctx, PricingPolicyInput{OwnerUserID: 1, DefaultSourceID: &source, MaxBackfillDays: 1})
 	require.NoError(t, err)
 
-	_, _, err = service.runFXCoverage(ctx, 1, payload)
-	require.NoError(t, err)
-	require.NotEmpty(t, dates, "the wakeup still covers the demanded dates")
-	for _, date := range dates {
-		assert.GreaterOrEqual(t, date, demand.StartDate, "a holding hint must not extend an unrelated USD obligation")
+	chunks := 0
+	for ; chunks < 20; chunks++ {
+		_, successors, err := service.runFXCoverage(ctx, 1, payload)
+		require.NoError(t, err)
+		if len(successors) == 0 {
+			break
+		}
+		require.Len(t, successors, 1)
+		payload = fxCoverageWorkPayload{}
+		require.NoError(t, json.Unmarshal([]byte(successors[0].PayloadJSON), &payload))
+		assert.Empty(t, payload.StartDate, "a continuation must not carry the hint's date as a start")
 	}
+	require.Less(t, chunks, 20, "the sweep finishes")
+	assert.Greater(t, chunks, 1, "the budget forces continuations")
+	assert.ElementsMatch(t, []string{"EUR/USD 2026-10-14", "EUR/USD 2026-10-15", "USD/EUR 2026-10-14", "USD/EUR 2026-10-15"}, requests,
+		"both directions are covered from the demand date, never from the hint's 2026-09-28")
 }
