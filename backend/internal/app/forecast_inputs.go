@@ -3,6 +3,7 @@ package app
 import (
 	"database/sql"
 	"fmt"
+	"slices"
 	"sort"
 	"time"
 
@@ -78,7 +79,7 @@ func normalizeForecastInput(input ForecastInput) (forecastNormalizedInput, error
 	if len(ids) > forecastMaxRootAccounts {
 		return forecastNormalizedInput{}, ValidationError{Message: "forecast accepts at most 100 root accounts"}
 	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	slices.Sort(ids)
 	if (input.ReportingCurrencyID == nil) != (input.FXMethod == "") {
 		return forecastNormalizedInput{}, ValidationError{Message: "reporting currency and fx method must be supplied together"}
 	}
@@ -136,7 +137,7 @@ func normalizeForecastLearningInput(input ForecastInput, normalized *forecastNor
 	if len(categories) > ForecastLearningMaxCategories {
 		return ValidationError{Message: "forecast accepts at most 20 expense categories"}
 	}
-	sort.Slice(categories, func(i, j int) bool { return categories[i] < categories[j] })
+	slices.Sort(categories)
 	if len(input.ExpensePatterns) > ForecastLearningMaxCategories {
 		return ValidationError{Message: "forecast accepts at most 20 expense pattern overrides"}
 	}
@@ -253,7 +254,7 @@ func resolveForecastScope(versions []db.ForecastAccountVersionRecord, asOf strin
 	if len(ids) > forecastMaxAccounts {
 		return forecastScope{}, ErrForecastTooLarge
 	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	slices.Sort(ids)
 	return forecastScope{AccountIDs: ids, Accounts: accounts}, nil
 }
 

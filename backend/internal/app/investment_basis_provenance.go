@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"maps"
 	"reflect"
 	"strings"
 	"unicode/utf8"
@@ -118,9 +119,7 @@ func mergeBasisResolutionEvidence(previous, declaration string) (string, error) 
 	for _, key := range []string{"kind", "reference", "rationale", "known_on"} {
 		delete(original, key)
 	}
-	for key, value := range replacement {
-		original[key] = value
-	}
+	maps.Copy(original, replacement)
 	merged, err := json.Marshal(original)
 	if err != nil {
 		return "", err

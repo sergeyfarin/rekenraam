@@ -80,7 +80,7 @@ func TestImmutableOpeningAndEventKnowledgeRequiresNullPairs(t *testing.T) {
 		{"investment_lot_events", "investment_lot_events_no_update", "basis_knowledge"},
 	} {
 		for _, knowledge := range []string{"known", "unknown"} {
-			for mask := 0; mask < 4; mask++ {
+			for mask := range 4 {
 				t.Run(table.name+"/"+knowledge+"/"+string(rune('0'+mask)), func(t *testing.T) {
 					tx, err := f.database.BeginTx(context.Background(), nil)
 					require.NoError(t, err)

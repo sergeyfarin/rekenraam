@@ -124,8 +124,8 @@ func createPersonalAccessToken(logger *slog.Logger, auth *app.AuthService, optio
 			expiry = &days
 		}
 		metadata, token, err := auth.CreatePersonalAccessToken(r.Context(), app.CreatePersonalAccessTokenInput{
-			MFAPasswordInput: app.MFAPasswordInput{UserID: owner.ID, SessionID: authenticatedSessionID(r), Password: request.Password,
-				ClientIP: loginClientIP(r, options), RequestID: RequestIDFromContext(r.Context())},
+			UserID: owner.ID, SessionID: authenticatedSessionID(r), Password: request.Password,
+			ClientIP: loginClientIP(r, options), RequestID: RequestIDFromContext(r.Context()),
 			Name: request.Name, Scopes: request.Scopes, ExpiresInDays: expiry,
 		})
 		if err != nil {

@@ -816,8 +816,7 @@ func accountWriteRefusal(err error) (error, bool) {
 	case errors.Is(err, db.ErrAccountParentNotAllowed), errors.Is(err, db.ErrAccountParentCycle):
 		return ErrAccountParentInvalid, true
 	}
-	var backdated db.AccountVersionBackdatedError
-	if errors.As(err, &backdated) {
+	if backdated, ok := errors.AsType[db.AccountVersionBackdatedError](err); ok {
 		return fmt.Errorf("%w: %s", ErrAccountVersionBackdated, backdated.Error()), true
 	}
 	var outside db.AccountPostingsOutsideDatesError

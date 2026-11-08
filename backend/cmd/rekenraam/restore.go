@@ -150,8 +150,7 @@ func runRestoreWith(ctx context.Context, cfg config.Config, args []string, stdou
 	// An availability check alone leaves a race with startup or another restore.
 	held, err := lockfile.Acquire(databasePath)
 	if err != nil {
-		var locked lockfile.ErrLocked
-		if errors.As(err, &locked) {
+		if locked, ok := errors.AsType[lockfile.ErrLocked](err); ok {
 			fmt.Fprintf(stderr, "the database is in use (%v). Stop the server or wait for the other restore to finish.\n", locked)
 			return 1
 		}

@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"math/big"
+	"slices"
 	"sort"
 	"time"
 
@@ -105,10 +106,7 @@ func ForecastLearningRecurringOverlaps(templates []db.ForecastTemplateRecord, te
 		draftDates[posting.TransactionID] = posting.EntryDate
 	}
 	for id, legs := range byDraft {
-		date := draftDates[id]
-		if date > asOf {
-			date = asOf
-		}
+		date := min(draftDates[id], asOf)
 		result = append(result, learningOverlapsForLegs(legs, accountRulesAt(accountVersions, date), "draft", id)...)
 	}
 	sort.Slice(result, func(i, j int) bool {
@@ -177,7 +175,7 @@ func ClassifyForecastLearningEntries(postings []db.ForecastLearningPostingRecord
 		}
 		byEntry[posting.JournalEntryID] = append(byEntry[posting.JournalEntryID], posting)
 	}
-	sort.Slice(entryIDs, func(i, j int) bool { return entryIDs[i] < entryIDs[j] })
+	slices.Sort(entryIDs)
 	for _, entryID := range entryIDs {
 		purchases, reason := classifyForecastLearningEntry(byEntry[entryID], accountVersions, commodityVersions)
 		if reason != "" {
@@ -347,7 +345,7 @@ func ForecastLearningPeriods(purchases []ForecastLearningPurchase, group Forecas
 	}
 	if pattern == ForecastLearningAnnualSeasonal && len(all) >= 36 {
 		blocksWithSpend := 0
-		for block := 0; block < 3; block++ {
+		for block := range 3 {
 			hasSpend := false
 			for _, period := range all[len(all)-12*(block+1) : len(all)-12*block] {
 				hasSpend = hasSpend || period.Spend.Sign() > 0

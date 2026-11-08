@@ -226,8 +226,7 @@ func exportLedgerCSV(logger *slog.Logger, authService *app.AuthService, exportSe
 // here rather than as a 500, because "account filter is invalid" is something
 // the caller can fix.
 func writeExportValidationError(w http.ResponseWriter, err error) bool {
-	var validationErr app.ValidationError
-	if errors.As(err, &validationErr) {
+	if validationErr, ok := errors.AsType[app.ValidationError](err); ok {
 		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationErr.Message)
 		return true
 	}

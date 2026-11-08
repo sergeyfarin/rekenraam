@@ -413,8 +413,7 @@ func (s *TransactionService) enrichCheckpointRefs(ctx context.Context, refs []db
 }
 
 func mapTransactionDBError(err error) error {
-	var impact db.CheckpointImpactError
-	if errors.As(err, &impact) {
+	if impact, ok := errors.AsType[db.CheckpointImpactError](err); ok {
 		// Keep the named set: a reorder's refusal is its only preview (#296).
 		return CheckpointImpactError{Err: mapTransactionDBError(impact.Err), CheckpointIDs: impact.CheckpointIDs}
 	}

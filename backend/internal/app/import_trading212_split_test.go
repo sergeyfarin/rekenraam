@@ -102,15 +102,15 @@ func TestTrading212SplitRowLinksToRecordedSplitWithoutDoublePosting(t *testing.T
 	require.NoError(t, err)
 	assert.Equal(t, "duplicate", retried.DedupeStatus)
 	err = f.importService.LinkTrading212Split(ctx, LinkTrading212SplitInput{
-		Trading212SplitRowInput: Trading212SplitRowInput{OwnerUserID: f.ownerUserID, BatchID: retryBatch, RowID: retryRow},
-		OperationID:             f.splitOpID})
+		OwnerUserID: f.ownerUserID, BatchID: retryBatch, RowID: retryRow,
+		OperationID: f.splitOpID})
 	require.ErrorIs(t, err, ErrImportSplitLinkUnavailable)
 	other := f.splitFill
 	other.FillID = "split-2"
 	otherBatch, otherRow := f.stageOrderFillRow(t, f.connectionID, other)
 	err = f.importService.LinkTrading212Split(ctx, LinkTrading212SplitInput{
-		Trading212SplitRowInput: Trading212SplitRowInput{OwnerUserID: f.ownerUserID, BatchID: otherBatch, RowID: otherRow},
-		OperationID:             f.splitOpID})
+		OwnerUserID: f.ownerUserID, BatchID: otherBatch, RowID: otherRow,
+		OperationID: f.splitOpID})
 	require.ErrorIs(t, err, ErrImportSplitLinkUnavailable)
 	candidates, err = f.importService.Trading212SplitCandidates(ctx,
 		Trading212SplitRowInput{OwnerUserID: f.ownerUserID, BatchID: otherBatch, RowID: otherRow})
@@ -142,8 +142,8 @@ func TestTrading212SplitLinkRefusesOtherSecurityAndNonSplitRows(t *testing.T) {
 	trade.FillType, trade.FillID = "TRADE", "trade-not-split"
 	tradeBatch, tradeRow := f.stageOrderFillRow(t, f.connectionID, trade)
 	err = f.importService.LinkTrading212Split(ctx, LinkTrading212SplitInput{
-		Trading212SplitRowInput: Trading212SplitRowInput{OwnerUserID: f.ownerUserID, BatchID: tradeBatch, RowID: tradeRow},
-		OperationID:             f.splitOpID})
+		OwnerUserID: f.ownerUserID, BatchID: tradeBatch, RowID: tradeRow,
+		OperationID: f.splitOpID})
 	require.ErrorIs(t, err, ErrImportSplitLinkUnavailable)
 	// The fill type alone never posts a split.
 	result, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: batchID})
@@ -224,6 +224,6 @@ func TestTrading212SplitRowLinksJournalFreeOperationAndKeepsDedupe(t *testing.T)
 	otherFill := f.splitFill
 	otherFill.FillID = "unlinked-split-after-reversal"
 	otherBatch, otherRow := f.stageOrderFillRow(t, f.connectionID, otherFill)
-	require.ErrorIs(t, f.importService.LinkTrading212Split(ctx, LinkTrading212SplitInput{Trading212SplitRowInput: Trading212SplitRowInput{
-		OwnerUserID: f.ownerUserID, BatchID: otherBatch, RowID: otherRow}, OperationID: zero.OperationID}), ErrImportSplitLinkUnavailable)
+	require.ErrorIs(t, f.importService.LinkTrading212Split(ctx, LinkTrading212SplitInput{
+		OwnerUserID: f.ownerUserID, BatchID: otherBatch, RowID: otherRow, OperationID: zero.OperationID}), ErrImportSplitLinkUnavailable)
 }

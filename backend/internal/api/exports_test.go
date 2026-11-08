@@ -420,7 +420,7 @@ func TestLedgerExportRowsFollowTheDocumentedTotalOrder(t *testing.T) {
 	// Several transactions sharing one date, and one earlier date arriving
 	// last, so neither insertion order nor the date alone can produce the
 	// documented order by accident.
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		createTransactionForSession(t, handler, f.sessionCookie, f.csrfToken, balancedBody("2026-06-02",
 			posting(f.checking.ID, int64(1000+i), 2, f.usdID),
 			posting(f.groceries.ID, int64(-1000-i), 2, f.usdID),

@@ -2,6 +2,7 @@ package app
 
 import (
 	"math/big"
+	"slices"
 	"sort"
 
 	"rekenraam/backend/internal/db"
@@ -201,6 +202,6 @@ func sortedKeys[V any](values map[int64]V) []int64 {
 	for key := range values {
 		keys = append(keys, key)
 	}
-	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+	slices.Sort(keys)
 	return keys
 }

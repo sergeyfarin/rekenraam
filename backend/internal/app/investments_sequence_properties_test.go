@@ -178,7 +178,7 @@ func TestFinancialTradeSequencesPreserveJournalLotsBasisAndGains(t *testing.T) {
 				}
 				// Reading either report repeatedly is a read, not an operational basis rewrite.
 				before := snapshotFinancialState(t, f)
-				for i := 0; i < 2; i++ {
+				for range 2 {
 					_, err := f.investmentService.ListRealizedGains(ctx, GainsReportParams{})
 					require.NoError(t, err)
 					_, err = f.investmentService.ListUnrealizedGains(ctx)
@@ -195,7 +195,7 @@ func TestFinancialTradeSequencesPreserveJournalLotsBasisAndGains(t *testing.T) {
 func TestFinancialClosedPositionGainIgnoresDecimalRepresentation(t *testing.T) {
 	t.Parallel()
 	for _, method := range []string{"fifo", "lifo", "average_cost", "specific_lot"} {
-		for variant := 0; variant < 4; variant++ {
+		for variant := range 4 {
 			for _, delta := range []int64{-1, 0, 1} {
 				t.Run(fmt.Sprintf("%s/representation_%d/gain_cents_%d", method, variant, delta), func(t *testing.T) {
 					t.Parallel()

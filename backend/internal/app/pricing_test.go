@@ -590,7 +590,7 @@ func TestSavePolicy_RoundTripsAndComputesUTCFromOwnerTimeZone(t *testing.T) {
 
 	saved, err := service.SavePolicy(ctx, PricingPolicyInput{
 		OwnerUserID: 1, RefreshEnabled: true,
-		RefreshHourLocal: testIntPtr(9), RefreshMinuteLocal: testIntPtr(0),
+		RefreshHourLocal: new(9), RefreshMinuteLocal: new(0),
 		TriangulationMaxHops: 1, RoundingMode: "half_up", WeekendPolicy: "skip",
 	})
 	require.NoError(t, err)
@@ -617,8 +617,8 @@ func TestCleanPricingPolicySpec_RejectsInvalidInputs(t *testing.T) {
 	}{
 		{"hour UTC out of range", func(i *PricingPolicyInput) { i.RefreshHourUTC = 24 }},
 		{"minute UTC out of range", func(i *PricingPolicyInput) { i.RefreshMinuteUTC = 60 }},
-		{"hour local out of range", func(i *PricingPolicyInput) { i.RefreshHourLocal = testIntPtr(-1) }},
-		{"minute local out of range", func(i *PricingPolicyInput) { i.RefreshMinuteLocal = testIntPtr(60) }},
+		{"hour local out of range", func(i *PricingPolicyInput) { i.RefreshHourLocal = new(-1) }},
+		{"minute local out of range", func(i *PricingPolicyInput) { i.RefreshMinuteLocal = new(60) }},
 		{"triangulation hops too high", func(i *PricingPolicyInput) { i.TriangulationMaxHops = 5 }},
 		{"triangulation hops negative", func(i *PricingPolicyInput) { i.TriangulationMaxHops = -1 }},
 		{"invalid rounding mode", func(i *PricingPolicyInput) { i.RoundingMode = "banker" }},
@@ -1024,10 +1024,6 @@ func fxCoverageWorkStatus(t *testing.T, database *sql.DB, id int64) string {
 
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
-}
-
-func testIntPtr(v int) *int {
-	return &v
 }
 
 func setOwnerTimeZone(t *testing.T, database *sql.DB, timeZone string) {

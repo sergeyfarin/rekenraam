@@ -179,8 +179,8 @@ func TestInvestmentCorrectionOverrideIsBoundAcrossItsJournals(t *testing.T) {
 
 	replacement := tradeRequestBody(f, holding.ID, instrument.CommodityID, "8", 80000)
 	replacement.TransactionDate = "2026-01-01"
-	request := investmentBuyReplacementRequest{Reason: "broker corrected the fill", Replacement: replacement}
-	request.ReconciliationOverride = true
+	request := investmentBuyReplacementRequest{Reason: "broker corrected the fill", Replacement: replacement,
+		ReconciliationOverride: true}
 	path := "/api/v1/investments/transactions/" + strconvFormatInt(bought.Transaction.ID) + "/replace-buy"
 
 	// Reviewed against no checkpoint, the correction may not invalidate one.

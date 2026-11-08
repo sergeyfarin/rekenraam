@@ -99,7 +99,7 @@ func TestDisposalBasisKnowledgeRequiresCompleteAmountPair(t *testing.T) {
 		{"investment_disposal_revision_allocations", "cost_basis_value", "cost_basis_scale"},
 	} {
 		for _, knowledge := range []string{"known", "unknown"} {
-			for mask := 0; mask < 4; mask++ {
+			for mask := range 4 {
 				t.Run(table.name+"/"+knowledge+"/"+string(rune('0'+mask)), func(t *testing.T) {
 					tx, err := f.database.BeginTx(context.Background(), nil)
 					require.NoError(t, err)

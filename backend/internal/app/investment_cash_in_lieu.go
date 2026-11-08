@@ -121,14 +121,14 @@ func cashInLieuPreviewResult(allocations []db.LotDisposalRecord, record db.Dispo
 	decision := toDisposalDecision(record)
 	gain := exact.ScaledIntFromInt64(decision.ProceedsValue, decision.ProceedsScale)
 	if decision.BasisKnowledge == db.InvestmentBasisUnknown {
-		return CashInLieuPreviewResult{InvestmentTradeResult: InvestmentTradeResult{Allocations: toInvestmentLotDisposals(allocations), DisposalDecision: &decision}}, nil
+		return CashInLieuPreviewResult{Allocations: toInvestmentLotDisposals(allocations), DisposalDecision: &decision}, nil
 	}
 	gain.SubScaled(exact.ScaledIntFromCoefficient(decision.DisposedBasisValue, decision.DisposedBasisScale))
 	value, err := gain.Coefficient()
 	if err != nil {
 		return CashInLieuPreviewResult{}, LedgerOverflowError{CommodityID: decision.CostCommodityID}
 	}
-	return CashInLieuPreviewResult{InvestmentTradeResult: InvestmentTradeResult{Allocations: toInvestmentLotDisposals(allocations), DisposalDecision: &decision}, RealizedGainValue: value, RealizedGainScale: gain.Scale()}, nil
+	return CashInLieuPreviewResult{Allocations: toInvestmentLotDisposals(allocations), DisposalDecision: &decision, RealizedGainValue: value, RealizedGainScale: gain.Scale()}, nil
 }
 
 func (s *InvestmentService) PreviewCashInLieu(ctx context.Context, input CashInLieuInput) (CashInLieuPreviewResult, ReconciliationImpact, error) {

@@ -133,7 +133,7 @@ func TestFractionalSalesDrainALotExactly(t *testing.T) {
 
 	buyAtScale(t, f, "2026-01-01", 1, 0, 10000)
 
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		_, err := f.investmentService.Sell(ctx, InvestmentTradeInput{
 			OwnerUserID: f.ownerUserID, TransactionDate: "2026-02-01", CommodityID: f.stockCommodityID,
 			HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,

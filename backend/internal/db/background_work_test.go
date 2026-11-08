@@ -25,7 +25,7 @@ func TestClaimHandsOneItemToOneWorker(t *testing.T) {
 	ctx := context.Background()
 
 	const items = 8
-	for i := 0; i < items; i++ {
+	for i := range items {
 		_, err := repository.EnqueueBackgroundWork(ctx, 1, "probe",
 			`{"n":`+strconv.Itoa(i)+`}`, "2026-06-12T08:00:00Z")
 		require.NoError(t, err)
@@ -55,7 +55,7 @@ func TestClaimHandsOneItemToOneWorker(t *testing.T) {
 		done    sync.WaitGroup
 	)
 	start.Add(1)
-	for worker := 0; worker < workers; worker++ {
+	for worker := range workers {
 		done.Add(1)
 		go func(worker int) {
 			defer done.Done()

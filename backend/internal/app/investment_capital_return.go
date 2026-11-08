@@ -214,8 +214,7 @@ func toCapitalReturnEffects(effects []db.CapitalReturnEffect) []CapitalReturnEff
 }
 
 func mapCapitalReturnError(err error) error {
-	var dependency *db.InvestmentReplayDependencyError
-	if errors.As(err, &dependency) {
+	if dependency, ok := errors.AsType[*db.InvestmentReplayDependencyError](err); ok {
 		return fmt.Errorf("%w: operation #%d", ErrInvestmentCapitalReturnDependency, dependency.OperationID)
 	}
 	switch {

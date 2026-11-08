@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -38,9 +39,7 @@ func captureContractAudit(t *testing.T, handler http.Handler) http.Handler {
 		_, err = file.Write(raw)
 		require.NoError(t, err)
 		require.NoError(t, file.Close())
-		for key, values := range response.Header() {
-			w.Header()[key] = values
-		}
+		maps.Copy(w.Header(), response.Header())
 		w.WriteHeader(response.Code)
 		if response.Body.Len() > 0 {
 			_, err = w.Write(response.Body.Bytes())

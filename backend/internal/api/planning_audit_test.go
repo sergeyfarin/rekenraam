@@ -170,9 +170,7 @@ func TestPlanningAuditConcurrentBudgetTargetUpsertsLeaveOneFact(t *testing.T) {
 	var group sync.WaitGroup
 	statuses := make(chan int, 8)
 	for i := range 8 {
-		group.Add(1)
-		go func() {
-			defer group.Done()
+		group.Go(func() {
 			body := `{"period_start":"2028-02-01","quantity_value":"` + strconvFormatInt(int64(100+i)) + `","quantity_scale":2,"change_reason":"race"}`
 			req := httptest.NewRequest(http.MethodPut, path, strings.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
@@ -182,7 +180,7 @@ func TestPlanningAuditConcurrentBudgetTargetUpsertsLeaveOneFact(t *testing.T) {
 			res := httptest.NewRecorder()
 			handler.ServeHTTP(res, req)
 			statuses <- res.Code
-		}()
+		})
 	}
 	group.Wait()
 	close(statuses)
@@ -341,13 +339,11 @@ func TestPlanningAuditForecastFixtureAThroughRealConsumers(t *testing.T) {
 	// leaves the forecast byte-identical apart from computed_at.
 	var group sync.WaitGroup
 	for range 4 {
-		group.Add(1)
-		go func() {
-			defer group.Done()
+		group.Go(func() {
 			result, err := recurring.GenerateDue(context.Background(), app.GenerateRecurringInput{OwnerUserID: ownerID})
 			assert.NoError(t, err)
 			assert.Zero(t, result.Generated)
-		}()
+		})
 	}
 	group.Wait()
 	var drafts int

@@ -48,7 +48,7 @@ func qifRecords(t *testing.T, content []byte) []map[string][]string {
 
 	var records []map[string][]string
 	current := map[string][]string{}
-	for _, line := range strings.Split(string(content), "\n") {
+	for line := range strings.SplitSeq(string(content), "\n") {
 		line = strings.TrimRight(line, "\r")
 		if line == "" {
 			continue

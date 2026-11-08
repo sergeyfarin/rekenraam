@@ -175,9 +175,7 @@ func startResourceProbe() *resourceProbe {
 		stop:       make(chan struct{}),
 	}
 	probe.peakHeap = probe.startHeap
-	probe.done.Add(1)
-	go func() {
-		defer probe.done.Done()
+	probe.done.Go(func() {
 		ticker := time.NewTicker(2 * time.Millisecond)
 		defer ticker.Stop()
 		for {
@@ -188,7 +186,7 @@ func startResourceProbe() *resourceProbe {
 				probe.peakHeap = max(probe.peakHeap, liveHeapBytes())
 			}
 		}
-	}()
+	})
 	return probe
 }
 

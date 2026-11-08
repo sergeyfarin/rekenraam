@@ -1302,8 +1302,7 @@ func (s *InvestmentService) buy(ctx context.Context, input InvestmentTradeInput,
 }
 
 func mapInvestmentOpeningWriteError(err error, kind string) error {
-	var dependency *db.InvestmentReplayDependencyError
-	if errors.As(err, &dependency) {
+	if dependency, ok := errors.AsType[*db.InvestmentReplayDependencyError](err); ok {
 		return InvestmentBuyDependencyError{OperationID: dependency.OperationID, DecisionID: dependency.DecisionID}
 	}
 	if errors.Is(err, db.ErrOutOfOrderPositionEvent) || errors.Is(err, db.ErrGainImpactAcknowledgementRequired) ||

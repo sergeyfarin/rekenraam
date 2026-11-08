@@ -149,8 +149,7 @@ func TestTwoProcessHelper(t *testing.T) {
 			path, err := db.ResolveSQLiteFilePath(cfg.DatabaseURL)
 			require.NoError(t, err)
 			held, err = lockfile.Acquire(path)
-			var locked lockfile.ErrLocked
-			if errors.As(err, &locked) {
+			if _, ok := errors.AsType[lockfile.ErrLocked](err); ok {
 				result.Status = "locked"
 			} else {
 				require.NoError(t, err)
@@ -255,7 +254,7 @@ func TestTwoProcessRestoreOwnsLockThroughoutReplacement(t *testing.T) {
 func TestTwoProcessLockHandoffsKeepOneFileIdentity(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "handoff.sqlite")
 	databaseURL := db.SQLiteFileURL(path)
-	for round := 0; round < 8; round++ {
+	for round := range 8 {
 		t.Run(fmt.Sprintf("handoff_%02d", round), func(t *testing.T) {
 			first, err := lockfile.Acquire(path)
 			require.NoError(t, err)
@@ -363,7 +362,7 @@ func TestTwoProcessWorkClaims(t *testing.T) {
 	pair := [2]*testProcess{startTestProcess(t, cfg), startTestProcess(t, cfg)}
 	require.NotEqual(t, pair[0].pid, pair[1].pid)
 	ctx := context.Background()
-	for round := 0; round < 12; round++ {
+	for round := range 12 {
 		t.Run(fmt.Sprintf("pending_item_%02d", round), func(t *testing.T) {
 			item, err := work.EnqueueBackgroundWork(ctx, 1, "two_process_probe", fmt.Sprintf(`{"round":%d}`, round), processNow)
 			require.NoError(t, err)

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -215,7 +215,7 @@ func (s *BudgetService) Month(ctx context.Context, periodStart string) (BudgetMo
 		for id := range seen {
 			ids = append(ids, id)
 		}
-		sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+		slices.Sort(ids)
 		for _, id := range ids {
 			a, e := amountFor(key{v.ID, id})
 			if e != nil {

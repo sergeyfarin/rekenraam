@@ -173,8 +173,8 @@ func TestSelfCheckMultipleDisposalsShareClearingOnce(t *testing.T) {
 			if test.separateFee {
 				feeCashAccount := seedTestAccount(t, f.database, "active", true)
 				input.CashAmountValue = 0
-				input.GrossAmountValue, input.GrossAmountScale = tradeMoney(10000), 2
-				input.NetSettlementValue, input.NetSettlementScale = tradeMoney(10000), 2
+				input.GrossAmountValue, input.GrossAmountScale = new(int64(10000)), 2
+				input.NetSettlementValue, input.NetSettlementScale = new(int64(10000)), 2
 				input.Charges = []InvestmentTradeChargeInput{{Kind: "commission", AmountValue: -200,
 					AmountScale: 2, CommodityID: f.eurCommodityID, CashAccountID: &feeCashAccount,
 					Treatment: "clearing_included", PaidOn: "2026-02-01"}}

@@ -715,7 +715,7 @@ func TestBuildTransactionSpec_OnlineRowResolvesCurrencyAndIsNeedsReview(t *testi
 	resolution := ImportRowResolution{
 		AccountID:   3,
 		CommodityID: 7,
-		CategoryID:  ptrInt64(9),
+		CategoryID:  new(int64(9)),
 	}
 
 	spec, err := buildTransactionSpec(row, resolution)

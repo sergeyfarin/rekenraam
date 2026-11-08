@@ -345,8 +345,7 @@ func spinOffPlanOf(numerator, denominator int64, fractionValue exact.Coefficient
 }
 
 func mapSpinOffError(err error) error {
-	var dependency *db.InvestmentReplayDependencyError
-	if errors.As(err, &dependency) {
+	if dependency, ok := errors.AsType[*db.InvestmentReplayDependencyError](err); ok {
 		return InvestmentTransferDependencyError{OperationID: dependency.OperationID, DecisionID: dependency.DecisionID}
 	}
 	switch {

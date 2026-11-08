@@ -184,14 +184,12 @@ func TestForecastConcurrentMaterializationKeepsOneBasis(t *testing.T) {
 	errors := make(chan error, 12)
 	var group sync.WaitGroup
 	for range 12 {
-		group.Add(1)
-		go func() {
-			defer group.Done()
+		group.Go(func() {
 			<-start
 			result, readErr := forecast.Balances(ctx, recipe)
 			results <- result
 			errors <- readErr
-		}()
+		})
 	}
 	close(start)
 	_, err = recurring.GenerateDue(ctx, GenerateRecurringInput{OwnerUserID: f.ownerUserID})
@@ -426,7 +424,7 @@ func TestForecastFlatSeriesAndMinimumTieDates(t *testing.T) {
 func TestForecastDiagnosticsDoNotHideExclusions(t *testing.T) {
 	t.Parallel()
 	s := forecastTestSnapshot()
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		s.Occurrences = append(s.Occurrences, db.ForecastOccurrenceRecord{ID: int64(i + 1), TemplateID: 10, OccurrenceDate: "2026-09-01", Status: "blocked"})
 	}
 	r := forecastTestBuild(t, s, 1)

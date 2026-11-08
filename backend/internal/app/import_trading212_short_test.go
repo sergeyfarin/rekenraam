@@ -393,9 +393,7 @@ func TestTrading212ShortLinkConcurrentRowsLinkOnce(t *testing.T) {
 	var wg sync.WaitGroup
 	start := make(chan struct{})
 	for i := range inputs {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			<-start
 			for {
 				errs[i] = f.importService.LinkTrading212Short(ctx, inputs[i])
@@ -404,7 +402,7 @@ func TestTrading212ShortLinkConcurrentRowsLinkOnce(t *testing.T) {
 				}
 				time.Sleep(time.Millisecond)
 			}
-		}()
+		})
 	}
 	close(start)
 	wg.Wait()

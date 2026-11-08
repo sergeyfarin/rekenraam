@@ -12,8 +12,6 @@ import (
 	"rekenraam/backend/internal/exact"
 )
 
-func recurringTestPtr[T any](value T) *T { return &value }
-
 func recurringFixture(t *testing.T) (*investmentsTestFixture, *RecurringService, WriteRecurringTemplateInput) {
 	t.Helper()
 	f := newInvestmentsTestFixture(t)
@@ -24,8 +22,8 @@ func recurringFixture(t *testing.T) (*investmentsTestFixture, *RecurringService,
 		{AccountID: f.incomeAccountID, CommodityID: f.eurCommodityID, QuantityValue: exact.New(-1250), QuantityScale: 1},
 	}
 	return f, s, WriteRecurringTemplateInput{OwnerUserID: f.ownerUserID, Patch: RecurringTemplatePatch{
-		Name: recurringTestPtr("Salary"), Frequency: recurringTestPtr("monthly"),
-		StartsOn: recurringTestPtr("2019-01-01"), DayOfMonth: NullablePatch[int]{Set: true, Value: recurringTestPtr(1)},
+		Name: new("Salary"), Frequency: new("monthly"),
+		StartsOn: new("2019-01-01"), DayOfMonth: NullablePatch[int]{Set: true, Value: new(1)},
 		Postings: &postings,
 	}}
 }
@@ -33,16 +31,16 @@ func recurringFixture(t *testing.T) (*investmentsTestFixture, *RecurringService,
 func TestUpdateRecurringTemplateLeavesOmittedFieldsAlone(t *testing.T) {
 	t.Parallel()
 	_, service, input := recurringFixture(t)
-	input.Patch.Enabled = recurringTestPtr(false)
-	input.Patch.LeadDays = recurringTestPtr(0)
-	input.Patch.Description = recurringTestPtr("Keep this description")
-	input.Patch.NoteMarkdown = recurringTestPtr("Keep this note")
-	input.Patch.PayeeName = recurringTestPtr("Example employer")
-	input.Patch.EndsOn = NullablePatch[string]{Set: true, Value: recurringTestPtr("2028-12-31")}
+	input.Patch.Enabled = new(false)
+	input.Patch.LeadDays = new(0)
+	input.Patch.Description = new("Keep this description")
+	input.Patch.NoteMarkdown = new("Keep this note")
+	input.Patch.PayeeName = new("Example employer")
+	input.Patch.EndsOn = NullablePatch[string]{Set: true, Value: new("2028-12-31")}
 	created, err := service.CreateTemplate(context.Background(), input)
 	require.NoError(t, err)
 	updated, err := service.UpdateTemplate(context.Background(), WriteRecurringTemplateInput{
-		OwnerUserID: input.OwnerUserID, TemplateID: created.ID, Patch: RecurringTemplatePatch{Name: recurringTestPtr("Renamed")},
+		OwnerUserID: input.OwnerUserID, TemplateID: created.ID, Patch: RecurringTemplatePatch{Name: new("Renamed")},
 	})
 	require.NoError(t, err)
 	expected := created.Spec
@@ -121,14 +119,14 @@ func TestRecurringTemplateRejectsInvalidSchedules(t *testing.T) {
 		name  string
 		patch func(*RecurringTemplatePatch)
 	}{
-		{"invalid date", func(p *RecurringTemplatePatch) { p.StartsOn = recurringTestPtr("2026-02-30") }},
-		{"wrong frequency fields", func(p *RecurringTemplatePatch) { p.Frequency = recurringTestPtr("daily") }},
-		{"day and last day together", func(p *RecurringTemplatePatch) { p.LastDayOfMonth = recurringTestPtr(true) }},
+		{"invalid date", func(p *RecurringTemplatePatch) { p.StartsOn = new("2026-02-30") }},
+		{"wrong frequency fields", func(p *RecurringTemplatePatch) { p.Frequency = new("daily") }},
+		{"day and last day together", func(p *RecurringTemplatePatch) { p.LastDayOfMonth = new(true) }},
 		{"zero maximum is not unlimited", func(p *RecurringTemplatePatch) {
-			p.MaxOccurrences = NullablePatch[int]{Set: true, Value: recurringTestPtr(0)}
+			p.MaxOccurrences = NullablePatch[int]{Set: true, Value: new(0)}
 		}},
-		{"lead limit", func(p *RecurringTemplatePatch) { p.LeadDays = recurringTestPtr(91) }},
-		{"interval overflow input", func(p *RecurringTemplatePatch) { p.IntervalCount = recurringTestPtr(10001) }},
+		{"lead limit", func(p *RecurringTemplatePatch) { p.LeadDays = new(91) }},
+		{"interval overflow input", func(p *RecurringTemplatePatch) { p.IntervalCount = new(10001) }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			_, service, input := recurringFixture(t)
@@ -165,7 +163,7 @@ func TestRecurringTemplateScheduleEditPreservesMaterializedOccurrences(t *testin
 	require.NoError(t, err)
 	require.NoError(t, service.repository.AdvanceRecurringGeneration(ctx, BookID, created.ID, created.Revision, "2026-10-01", "2026-08-30T12:00:01Z"))
 	updated, err := service.UpdateTemplate(ctx, WriteRecurringTemplateInput{OwnerUserID: input.OwnerUserID, TemplateID: created.ID,
-		Patch: RecurringTemplatePatch{DayOfMonth: NullablePatch[int]{Set: true, Value: recurringTestPtr(15)}}})
+		Patch: RecurringTemplatePatch{DayOfMonth: NullablePatch[int]{Set: true, Value: new(15)}}})
 	require.NoError(t, err)
 	assert.Equal(t, "2026-08-30", updated.Spec.GenerateFrom)
 	assert.Equal(t, "2026-09-15", updated.NextDueOn)
@@ -210,7 +208,7 @@ func TestRecurringTemplateAllowsCurrencyClearingWithoutInvestmentEffects(t *test
 	f, service, input := recurringFixture(t)
 	tradingID, err := db.NewInvestmentRepository(f.database).CommodityTradingAccountID(context.Background(), BookID)
 	require.NoError(t, err)
-	input.Patch.TransactionKind = recurringTestPtr("transfer")
+	input.Patch.TransactionKind = new("transfer")
 	(*input.Patch.Postings)[1].AccountID = tradingID
 	_, err = service.CreateTemplate(context.Background(), input)
 	require.NoError(t, err, "currency exchange clearing is not an investment lot effect")
@@ -232,21 +230,21 @@ func TestRecurringTemplateWithArchivedAccountCanBePausedAndRenamedButNotEnabled(
 		return service.UpdateTemplate(ctx, WriteRecurringTemplateInput{OwnerUserID: input.OwnerUserID, TemplateID: created.ID, Patch: p})
 	}
 
-	paused, err := patch(RecurringTemplatePatch{Enabled: recurringTestPtr(false)})
+	paused, err := patch(RecurringTemplatePatch{Enabled: new(false)})
 	require.NoError(t, err)
 	assert.False(t, paused.Spec.Enabled)
-	renamed, err := patch(RecurringTemplatePatch{Name: recurringTestPtr("  Old salary  ")})
+	renamed, err := patch(RecurringTemplatePatch{Name: new("  Old salary  ")})
 	require.NoError(t, err)
 	expected := created.Spec
 	expected.Name, expected.Enabled = "Old salary", false
 	assert.Equal(t, expected, renamed.Spec)
-	_, err = patch(RecurringTemplatePatch{Name: recurringTestPtr("   ")})
+	_, err = patch(RecurringTemplatePatch{Name: new("   ")})
 	require.ErrorContains(t, err, "template name is required")
 
 	// Enabling, or any change beyond name and pausing, still validates postings.
-	_, err = patch(RecurringTemplatePatch{Enabled: recurringTestPtr(true)})
+	_, err = patch(RecurringTemplatePatch{Enabled: new(true)})
 	require.ErrorContains(t, err, "posting account is not active for postings")
-	_, err = patch(RecurringTemplatePatch{Enabled: recurringTestPtr(false), Description: recurringTestPtr("x")})
+	_, err = patch(RecurringTemplatePatch{Enabled: new(false), Description: new("x")})
 	require.ErrorContains(t, err, "posting account is not active for postings")
 	unchanged, err := service.Template(ctx, input.OwnerUserID, created.ID)
 	require.NoError(t, err)

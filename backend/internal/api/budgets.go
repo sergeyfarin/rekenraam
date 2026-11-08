@@ -135,7 +135,7 @@ func setBudgetTarget(logger *slog.Logger, auth *app.AuthService, service *app.Bu
 			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "quantity_value and quantity_scale are required")
 			return
 		}
-		v, err := service.SetTarget(r.Context(), app.SetBudgetTargetInput{BudgetMutationContext: app.BudgetMutationContext{OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()), OriginType: "browser_api", Reason: req.ChangeReason}, CategoryID: categoryID, CommodityID: commodityID, PeriodStart: req.PeriodStart, QuantityValue: *req.QuantityValue, QuantityScale: *req.QuantityScale})
+		v, err := service.SetTarget(r.Context(), app.SetBudgetTargetInput{OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()), OriginType: "browser_api", Reason: req.ChangeReason, CategoryID: categoryID, CommodityID: commodityID, PeriodStart: req.PeriodStart, QuantityValue: *req.QuantityValue, QuantityScale: *req.QuantityScale})
 		if err != nil {
 			writeBudgetError(w, r, logger, "set budget target", err)
 			return
@@ -166,7 +166,7 @@ func setBudgetTreatment(logger *slog.Logger, auth *app.AuthService, service *app
 			writeDecodeError(w, err)
 			return
 		}
-		v, err := service.SetTreatment(r.Context(), app.SetBudgetTreatmentInput{BudgetMutationContext: app.BudgetMutationContext{OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()), OriginType: "browser_api", Reason: req.ChangeReason}, AccountID: accountID, EffectiveFrom: req.EffectiveFrom, Treatment: req.Treatment})
+		v, err := service.SetTreatment(r.Context(), app.SetBudgetTreatmentInput{OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()), OriginType: "browser_api", Reason: req.ChangeReason, AccountID: accountID, EffectiveFrom: req.EffectiveFrom, Treatment: req.Treatment})
 		if err != nil {
 			writeBudgetError(w, r, logger, "set budget treatment", err)
 			return

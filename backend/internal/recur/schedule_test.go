@@ -10,7 +10,7 @@ import (
 	"rekenraam/backend/internal/recur"
 )
 
-func weekday(day time.Weekday) *time.Weekday { return &day }
+func weekday(day time.Weekday) *time.Weekday { return new(day) }
 
 // The clamping regression this package exists for: a nominal day past the end
 // of a short month clamps to that month's last day, and the series re-anchors
@@ -90,7 +90,7 @@ func TestWeeklyStartsOnTheFirstMatchingWeekdayOnOrAfterStart(t *testing.T) {
 	spec := recur.ScheduleSpec{
 		Frequency:     recur.Weekly,
 		IntervalCount: 1,
-		ByWeekday:     weekday(time.Friday),
+		ByWeekday:     new(time.Friday),
 		StartsOn:      "2026-08-31",
 	}
 

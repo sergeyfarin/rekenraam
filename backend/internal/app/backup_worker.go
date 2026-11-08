@@ -101,10 +101,7 @@ func (s *BackupService) processBackupWork(ctx context.Context, logger *slog.Logg
 		return
 	}
 
-	backoff := time.Duration(1<<uint(item.Attempts)) * time.Minute
-	if backoff > time.Hour {
-		backoff = time.Hour
-	}
+	backoff := min(time.Duration(1<<uint(item.Attempts))*time.Minute, time.Hour)
 	availableAt := s.now().UTC().Add(backoff).Format(time.RFC3339)
 	if retryErr := s.backgroundWork.RetryBackgroundWork(ctx, item.ID, workerID, availableAt, now, backupErrorSummary(err)); retryErr != nil {
 		logger.WarnContext(ctx, "retry backup work", slog.Int64("work_id", item.ID), slog.Any("err", retryErr))

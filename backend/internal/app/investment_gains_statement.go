@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"time"
 
 	"rekenraam/backend/internal/db"
@@ -211,7 +211,7 @@ func (s *InvestmentService) GainsStatement(ctx context.Context, from, to string)
 	for id := range byCurrency {
 		commodityIDs = append(commodityIDs, id)
 	}
-	sort.Slice(commodityIDs, func(i, j int) bool { return commodityIDs[i] < commodityIDs[j] })
+	slices.Sort(commodityIDs)
 	rows := make([]GainsStatementRow, 0, len(commodityIDs))
 	for _, id := range commodityIDs {
 		acc := byCurrency[id]

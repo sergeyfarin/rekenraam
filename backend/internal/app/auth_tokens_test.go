@@ -22,8 +22,8 @@ func tokenTestService(t *testing.T) (*sql.DB, *AuthService, CreatePersonalAccess
 	database, service := newAuthEventTestService(t, time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC))
 	sessionID, _ := signedInSession(t, service, "198.51.100.7")
 	return database, service, CreatePersonalAccessTokenInput{
-		MFAPasswordInput: MFAPasswordInput{UserID: 1, SessionID: sessionID, Password: "correct-horse-battery", ClientIP: "198.51.100.7", RequestID: "token-create"},
-		Name:             "Synthetic test client", Scopes: []string{TokenScopeLedgerRead},
+		UserID: 1, SessionID: sessionID, Password: "correct-horse-battery", ClientIP: "198.51.100.7", RequestID: "token-create",
+		Name: "Synthetic test client", Scopes: []string{TokenScopeLedgerRead},
 	}
 }
 
@@ -182,7 +182,7 @@ func TestPersonalAccessTokenListConsumesHistoryAndActiveLimit(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	database, service, input := tokenTestService(t)
-	for i := 0; i < 51; i++ {
+	for i := range 51 {
 		_, err := database.Exec(`INSERT INTO personal_access_tokens(user_id,name,token_hash,scopes_json,created_at,expires_at,revoked_at) VALUES(1,'history',?,'["ledger:read"]','2026-10-01T00:00:00Z','2026-11-01T00:00:00Z','2026-10-02T00:00:00Z')`, fmt.Sprintf("%064d", i))
 		require.NoError(t, err)
 	}
