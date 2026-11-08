@@ -3,7 +3,7 @@
   import { systemLabelText } from '#lib/transactions/system-label.ts';
   import { onMount } from 'svelte';
   import X from '@lucide/svelte/icons/x';
-  import AlertTriangle from '@lucide/svelte/icons/triangle-alert';
+  import TriangleExclamationPoint from '@lucide/svelte/icons/triangle-exclamation-point';
   import ModalDialog from '#lib/components/modal-dialog.svelte';
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
@@ -259,7 +259,7 @@
 {#if reconciliationModal.open}
   <ModalDialog role="alertdialog" labelledby="recon-modal-title" pending={actionPending} onCancel={cancelReconciliationOverride} class="max-w-lg">
     <div class="flex items-start gap-3 border-b border-border px-4 py-3">
-      <AlertTriangle size={18} class="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
+      <TriangleExclamationPoint size={18} class="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
       <div class="min-w-0">
         <h3 id="recon-modal-title" class="text-sm font-semibold text-foreground">
           {m.transactions_reconciliation_warning_title()}
@@ -298,7 +298,7 @@
         onclick={confirmReconciliationOverride}
         disabled={actionPending}
       >
-        <AlertTriangle size={14} aria-hidden="true" />
+        <TriangleExclamationPoint size={14} aria-hidden="true" />
         {m.transactions_reconciliation_confirm()}
       </button>
     </div>

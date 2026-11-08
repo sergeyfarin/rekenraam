@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-  import AlertTriangle from '@lucide/svelte/icons/alert-triangle';
+  import TriangleExclamationPoint from '@lucide/svelte/icons/triangle-exclamation-point';
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import Panel from '#lib/components/panel.svelte';
@@ -214,7 +214,7 @@
     pending={voidPending} onCancel={cancelVoid} class="max-w-md">
     <form onsubmit={confirmVoid}>
       <div class="flex items-start gap-3 border-b border-border px-4 py-3">
-        <AlertTriangle size={18} class="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
+        <TriangleExclamationPoint size={18} class="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
         <div class="min-w-0">
           <h3 id="checkpoint-void-title" class="text-sm font-semibold text-foreground">
             {m.reconcile_checkpoint_void_title()}

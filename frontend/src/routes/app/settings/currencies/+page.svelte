@@ -2,7 +2,7 @@
   import ObservationStatus from '#lib/valuation/observation-status.svelte';
   import { useOwnerToday } from '#lib/dates/owner-date-context.ts';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-  import AlertTriangle from '@lucide/svelte/icons/alert-triangle';
+  import TriangleExclamationPoint from '@lucide/svelte/icons/triangle-exclamation-point';
   import Plus from '@lucide/svelte/icons/plus';
   import RefreshCw from '@lucide/svelte/icons/refresh-cw';
   import Save from '@lucide/svelte/icons/save';
@@ -575,7 +575,7 @@
     {#if failedBackgroundWork.length > 0}
       <Panel>
         <div class="flex items-start gap-3">
-          <AlertTriangle size={18} class="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
+          <TriangleExclamationPoint size={18} class="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
           <div class="min-w-0 flex-1">
             <h2 class="text-base font-semibold text-foreground">{m.currencies_failed_work_title()}</h2>
             <p class="mt-1 text-sm text-muted">{m.currencies_failed_work_copy()}</p>
@@ -667,7 +667,7 @@
                           </p>
                           {#if observation?.is_derived}
                             <p class="mt-1 inline-flex items-start gap-1 text-xs font-semibold text-warning">
-                              <AlertTriangle size={14} aria-hidden="true" />
+                              <TriangleExclamationPoint size={14} aria-hidden="true" />
                               {m.currencies_derived_warning()}
                             </p>
                           {/if}
@@ -691,7 +691,7 @@
                           </p>
                           {#if observation?.is_derived}
                             <p class="mt-1 inline-flex items-start gap-1 text-xs font-semibold text-warning">
-                              <AlertTriangle size={14} aria-hidden="true" />
+                              <TriangleExclamationPoint size={14} aria-hidden="true" />
                               {m.currencies_derived_warning()}
                             </p>
                           {/if}

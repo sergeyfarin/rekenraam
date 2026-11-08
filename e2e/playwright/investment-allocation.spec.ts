@@ -8,7 +8,7 @@ import type { AllocationResponse } from '../../frontend/src/lib/api/allocation';
 test.use({ viewport: { width: 390, height: 844 } });
 
 test('[acceptance] investment pool includes deposits, excludes college savings, and preserves targets and revision history on a phone', async ({ page }) => {
-  test.slow(); // This journey covers entry, stale edits, two themes and locale re-entry.
+  test.slow('This journey covers entry, stale edits, two themes and locale re-entry.');
   const { csrfToken, currencyID } = await readyForLedger(page);
   const opened = daysFromTodayISO(-30);
   const start = daysFromTodayISO(-10);

@@ -2,12 +2,12 @@
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { createQuery } from '@tanstack/svelte-query';
   import Archive from '@lucide/svelte/icons/archive';
-  import Edit3 from '@lucide/svelte/icons/edit-3';
+  import PenLine from '@lucide/svelte/icons/pen-line';
   import Plus from '@lucide/svelte/icons/plus';
   import RefreshCw from '@lucide/svelte/icons/refresh-cw';
   import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
   import Tags from '@lucide/svelte/icons/tags';
-  import Trash2 from '@lucide/svelte/icons/trash-2';
+  import Trash from '@lucide/svelte/icons/trash';
   import APIFormError from '#lib/components/api-form-error.svelte';
   import Panel from '#lib/components/panel.svelte';
   import StatePanel from '#lib/components/state-panel.svelte';
@@ -571,7 +571,7 @@
                     aria-label={m.categories_action_edit({ name: categoryDisplayName(category) })}
                     title={m.categories_action_edit({ name: categoryDisplayName(category) })}
                   >
-                    <Edit3 size={15} aria-hidden="true" />
+                    <PenLine size={15} aria-hidden="true" />
                   </button>
 
                   {#if category.status === 'active'}
@@ -606,7 +606,7 @@
                     aria-label={m.categories_action_delete({ name: categoryDisplayName(category) })}
                     title={m.categories_action_delete({ name: categoryDisplayName(category) })}
                   >
-                    <Trash2 size={15} aria-hidden="true" />
+                    <Trash size={15} aria-hidden="true" />
                   </button>
                 </div>
               </article>

@@ -1,10 +1,10 @@
 <script lang="ts">
   import { getLocale } from '#lib/paraglide/runtime.js';
   import Archive from '@lucide/svelte/icons/archive';
-  import Building2 from '@lucide/svelte/icons/building-2';
-  import Edit3 from '@lucide/svelte/icons/edit-3';
+  import BuildingComplex from '@lucide/svelte/icons/building-complex';
+  import PenLine from '@lucide/svelte/icons/pen-line';
   import Lock from '@lucide/svelte/icons/lock';
-  import Trash2 from '@lucide/svelte/icons/trash-2';
+  import Trash from '@lucide/svelte/icons/trash';
   import type { AccountResponse } from '#lib/api/accounts.ts';
   import type { CurrencyResponse } from '#lib/api/currencies.ts';
   import type { InstitutionResponse } from '#lib/api/institutions.ts';
@@ -230,7 +230,7 @@
         >
           <div class="flex min-w-0 items-center gap-2">
             <span class="inline-flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-surface-strong text-foreground">
-              <Building2 size={16} aria-hidden="true" />
+              <BuildingComplex size={16} aria-hidden="true" />
             </span>
             <p class="min-w-0 truncate text-sm font-semibold text-foreground">{root.label}</p>
           </div>
@@ -275,7 +275,7 @@
               aria-label={m.institutions_action_edit({ name: root.institution.name })}
               title={m.institutions_action_edit({ name: root.institution.name })}
             >
-              <Edit3 size={15} aria-hidden="true" />
+              <PenLine size={15} aria-hidden="true" />
             </button>
             <button
               type="button"
@@ -285,7 +285,7 @@
               aria-label={m.institutions_action_delete({ name: root.institution.name })}
               title={m.institutions_action_delete({ name: root.institution.name })}
             >
-              <Trash2 size={15} aria-hidden="true" />
+              <Trash size={15} aria-hidden="true" />
             </button>
           {/if}
         </div>
@@ -366,7 +366,7 @@
                 aria-label={m.accounts_action_edit({ name: accountDisplayName(account) })}
                 title={m.accounts_action_edit({ name: accountDisplayName(account) })}
               >
-                <Edit3 size={15} aria-hidden="true" />
+                <PenLine size={15} aria-hidden="true" />
               </button>
 
               {#if account.status === 'active'}
@@ -401,7 +401,7 @@
                 aria-label={m.accounts_action_delete({ name: accountDisplayName(account) })}
                 title={m.accounts_action_delete({ name: accountDisplayName(account) })}
               >
-                <Trash2 size={15} aria-hidden="true" />
+                <Trash size={15} aria-hidden="true" />
               </button>
             </div>
           </article>
