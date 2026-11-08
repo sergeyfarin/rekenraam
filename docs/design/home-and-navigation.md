@@ -714,7 +714,17 @@ themselves (invalid choices stay identified).
   lots in stays chosen, is named as the mismatch, and blocks the preview
   until the owner picks one the holding carries. Changing the holding
   never relabels the cash either: a chosen currency, or the default an
-  amount was typed in, stays and is checked against the new holding. A position chosen in an earlier
+  amount was typed in, stays and is checked against the new holding. The
+  merger's working copy stores the amount with that currency, so reopening
+  it under another shared currency restores the pair and names the
+  mismatch rather than relabelling the amount.
+- **Receiving holding.** Share exchange, spin-off and cash-and-stock merger
+  record where the new units arrive as an account, never as "the same
+  holding" (which would point elsewhere once the source changes). A chosen
+  account survives a change of source or new instrument; if it can no
+  longer take the new units it stays selected as an *earlier choice*, is
+  explained, and blocks the preview (`receivingHolding` in
+  `#lib/investments/receiving-holding.ts`). A position chosen in an earlier
   activity stays selected when its form reopens. If a new date makes it
   unavailable, it shows as a disabled *earlier choice* with an
   explanation, never a blank picker. Lot quantities entered for lots the
