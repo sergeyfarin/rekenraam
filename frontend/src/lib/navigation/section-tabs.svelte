@@ -62,11 +62,11 @@
         <a
           href={tabHref(tab, entry, search)}
           aria-current={current === tab.route ? 'page' : undefined}
-          class="relative flex items-center gap-1.5 px-2.5 text-sm font-medium text-muted transition hover:text-foreground aria-[current=page]:text-foreground aria-[current=page]:after:absolute aria-[current=page]:after:inset-x-2 aria-[current=page]:after:bottom-0 aria-[current=page]:after:h-0.5 aria-[current=page]:after:rounded-full aria-[current=page]:after:bg-foreground"
+          class="shell-page-tab relative flex items-center gap-1.5 px-2.5"
         >
           {tab.title()}
           {#if badge && badge.text}
-            <span class="rounded-full bg-foreground px-1.5 text-xs font-semibold text-background" aria-hidden="true">
+            <span class="rounded-full bg-nav-marker px-1.5 text-xs font-semibold text-nav-marker-foreground" aria-hidden="true">
               {badge.text}
             </span>
             <span class="sr-only">{badge.label}</span>

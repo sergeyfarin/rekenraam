@@ -45,13 +45,19 @@ review/publish workflow are documented in
 
 ## Screenshot sources
 
-- The spending report is copied from `docs/images/reports-spending.png` during
-  build. It is the same fictional screenshot used by the repository README.
-- `assets/transactions.png` and `assets/investments.png` are captured from an
-  app instance with a new disposable database, replaying
-  `fixtures/reference-book.json` through public APIs. The capture uses no real
-  owner database, credentials or providers. Source revision and viewport are
-  recorded in `assets/capture.json`, which is not published.
+- All three screenshots are captured from an app instance with a new
+  disposable database, replaying `fixtures/reference-book.json` through public
+  APIs without a run suffix. The capture uses no real owner database,
+  credentials or providers. Source revision and viewports are recorded in
+  `assets/capture.json`, which is not published.
+- The spending report shows the book's euro spending (one commodity, so its
+  chart is drawn). It is written to `docs/images/reports-spending.png` at 2x
+  (2880 × 2224, the size `build.mjs` states) and copied during build. It is the
+  same screenshot the repository README shows.
+- Capture after committing the code change, then commit the images:
+  `capture.json` records `source_revision` and `source_clean`, which is true
+  only when nothing but these images differed from that revision.
+- `assets/transactions.png` and `assets/investments.png` are 1440 × 1050.
 
 Refresh deliberately after building the current app binary:
 

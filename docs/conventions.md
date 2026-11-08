@@ -723,6 +723,7 @@ has actual installations, its migration files are immutable.
 - Themes must use semantic design tokens for color, spacing, typography, elevation, and motion.
 - Themes start with light and dark only.
 - Theme names and token roles must stay stable even if visual styling evolves.
+- Shell colours have their own roles (#489): `shell-sections` and `shell-pages` tint the two header rows, and every theme and base colour defines both; `nav-marker` (the accent) is the only colour for "you are here" and shell counts (current-page underline, tab and Review badges); `focus-ring` draws every focus outline. `frontend/src/lib/theme-contrast.test.ts` holds shell text at AA, on the translucent sections row over any token fill and the underline and focus ring at 3:1, for every palette.
 - Define semantic theme tokens as CSS custom properties before the first non-placeholder user-facing screen. Persist theme preference only after a real user-facing theme control exists; until then, respect system preference where practical.
 - Appearance color preferences may be stored as local browser preferences while
   runtime scope remains single-user and no durable user-settings API exists.
