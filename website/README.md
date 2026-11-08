@@ -5,7 +5,7 @@ languages. Product/design decisions are in
 [the website contract](../docs/design/public-website.md); current capabilities
 are in [the feature ledger](../docs/implemented.md).
 
-Node 24 is sufficient; this project has no npm dependencies. Use the root pnpm
+Node 26 is sufficient; this project has no npm dependencies. Use the root pnpm
 commands:
 
 ```sh
