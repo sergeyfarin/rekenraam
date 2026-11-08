@@ -430,6 +430,7 @@ rules remain unchanged. See the
 | Institutions: CRUD, archive/restore, versions | ✅ (API) / 🟦 (UI) | Backend + API client complete; standalone management UI minimal. |
 | Accounts: classes, kinds, full lifecycle (close/reopen, archive/restore), versions | ✅ | `app/accounts.go`; append-only versioned tree. |
 | Account list + account detail UI | ✅ | `routes/app/accounts`. |
+| Complete account catalog above 2,000 accounts | ✅ | [#518](https://github.com/sergeyfarin/rekenraam/issues/518), 2026-11-08: `GET /api/v1/accounts` silently stopped at 2,000 rows. It now pages by keyset cursor (`limit` ≤ 2000, `next_cursor` always present, null on the last page; contract in `docs/design/accounts-system-design.md`). `getAccounts` follows every page, so pickers, filters and lookups see the whole catalog, and a failed page fails the read rather than leaving it partial; the register names its account and seeds New transaction from `GET /accounts/{id}`. Named cases: API `TestListAccountsPagesBeyondFormerCapWithoutDroppingRows`, `TestListAccountsCursorSplitsEqualNamesAndSystemAccounts`, `TestListAccountsRejectsInvalidCursorAndLimit`; vitest `accounts.test.ts`; browser `large-account-catalog.spec.ts`. |
 | Account creation creates no balances | ✅ | Opening balances require posted transactions. |
 
 ## Ledger Transactions (Phase 2) — ✅ Complete

@@ -184,8 +184,8 @@ func TestCurrentReferenceReadsFollowOwnerDay(t *testing.T) {
 			assert.Equal(t, created.VersionID, read.VersionID)
 			listed, err := accounts.ListAccounts(ctx, ListAccountsInput{Query: "Owner today"})
 			require.NoError(t, err)
-			require.Len(t, listed, 1)
-			assert.Equal(t, created.ID, listed[0].ID)
+			require.Len(t, listed.Accounts, 1)
+			assert.Equal(t, created.ID, listed.Accounts[0].ID)
 		})
 	}
 }

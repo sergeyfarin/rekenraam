@@ -892,9 +892,15 @@ Implemented institution surface:
 
 Implemented account surface:
 
-- `GET /api/v1/accounts` returns current accounts without cursor pagination in
-  Phase 1. It accepts `status`, `account_class`, `q`, and `include_archived`
-  query parameters and enforces a hard server cap.
+- `GET /api/v1/accounts` returns current accounts in keyset-cursor pages
+  (#518): class order, then name (system role for an unnamed account), then
+  id. It accepts `status`, `account_class`, `q`, `include_archived`,
+  `include_system`, `limit` (1–2000, default 2000) and `cursor`. Every
+  response carries `next_cursor`, null on the last page, so a bounded page is
+  never mistaken for the whole list; a client resends the same filters with
+  the cursor. The frontend account catalog follows every page into one list
+  and fails the read if any page fails, and an account's register reads its
+  own account through `GET /api/v1/accounts/{account_id}`.
 - `POST /api/v1/accounts`
 - `GET /api/v1/accounts/{account_id}`
 - `PATCH /api/v1/accounts/{account_id}`

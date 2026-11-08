@@ -28,6 +28,23 @@ get:
       schema:
         type: string
       description: Small-set account name, code, role, or kind filter.
+    - in: query
+      name: limit
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 2000
+        default: 2000
+      description: Maximum number of accounts in this page.
+    - in: query
+      name: cursor
+      schema:
+        type: string
+        maxLength: 2048
+      description: >-
+        Opaque `next_cursor` from the previous page. Resend the same filters
+        with it; the next page continues the same order after the last
+        returned account.
   responses:
     "403":
       description: Personal-access token does not grant this scope
@@ -39,14 +56,17 @@ get:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "200":
-      description: Current accounts
+      description: >-
+        One page of current accounts. A non-null `next_cursor` means more
+        accounts follow; clients that need the whole catalog follow it until
+        it is null.
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"
       content:
         application/json:
           schema:
-            $ref: "../openapi.yaml#/components/schemas/AccountsResponse"
+            $ref: "../openapi.yaml#/components/schemas/AccountListResponse"
     "400":
       description: Invalid query
       headers:

@@ -163,6 +163,19 @@ AccountsResponse:
       type: array
       items:
         $ref: "../../openapi.yaml#/components/schemas/AccountResponse"
+AccountListResponse:
+  type: object
+  required:
+    - accounts
+    - next_cursor
+  properties:
+    accounts:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/AccountResponse"
+    next_cursor:
+      type: [string, "null"]
+      description: Cursor for the next page, or null when this is the last page.
 AccountRequest:
   type: object
   required:

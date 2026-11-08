@@ -936,6 +936,8 @@ components:
       $ref: "./components/schemas/search.yaml#/SearchCatalogItem"
     SearchCatalogResponse:
       $ref: "./components/schemas/search.yaml#/SearchCatalogResponse"
+    AccountListResponse:
+      $ref: "./components/schemas/accounts.yaml#/AccountListResponse"
     AccountsResponse:
       $ref: "./components/schemas/accounts.yaml#/AccountsResponse"
     AccountRequest:

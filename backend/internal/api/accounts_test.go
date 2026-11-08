@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -913,7 +914,7 @@ func patchAccount(t *testing.T, handler http.Handler, sessionCookie *http.Cookie
 	return response
 }
 
-func listAccountsForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, suffix string) accountsResponse {
+func listAccountsForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, suffix string) accountListResponse {
 	t.Helper()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/accounts"+suffix, nil)
@@ -924,7 +925,7 @@ func listAccountsForSession(t *testing.T, handler http.Handler, sessionCookie *h
 
 	require.Equal(t, http.StatusOK, res.Code)
 
-	var response accountsResponse
+	var response accountListResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&response))
 
 	return response
@@ -971,4 +972,134 @@ func mutateAccountWithBody(t *testing.T, handler http.Handler, sessionCookie *ht
 	}
 
 	return response
+}
+
+// seedBulkAccounts inserts count active accounts straight into the current
+// book, half asset and half expense, with names that repeat every few rows so
+// pages split inside a run of equal names (#518). Going through the API would
+// cost a request per account for nothing the list path reads.
+func seedBulkAccounts(t *testing.T, database *sql.DB, count int) {
+	t.Helper()
+
+	var bookID, ownerID int64
+	require.NoError(t, database.QueryRow(`SELECT id, owner_user_id FROM books`).Scan(&bookID, &ownerID))
+	var firstID int64
+	require.NoError(t, database.QueryRow(`SELECT COALESCE(MAX(id), 0) + 1 FROM accounts`).Scan(&firstID))
+
+	_, err := database.Exec(`
+		WITH RECURSIVE seq(n) AS (SELECT 0 UNION ALL SELECT n + 1 FROM seq WHERE n < ? - 1)
+		INSERT INTO accounts (id, book_id, created_at, created_by_user_id)
+		SELECT ? + n, ?, '2020-01-01T00:00:00Z', ? FROM seq`, count, firstID, bookID, ownerID)
+	require.NoError(t, err)
+	_, err = database.Exec(`
+		WITH RECURSIVE seq(n) AS (SELECT 0 UNION ALL SELECT n + 1 FROM seq WHERE n < ? - 1)
+		INSERT INTO account_versions (
+			account_id, version_seq, effective_from, recorded_at, changed_by_user_id, change_reason,
+			status, opened_on, name, account_class, account_kind, allows_postings
+		)
+		SELECT ? + n, 1, '2020-01-01', '2020-01-01T00:00:00Z', ?, 'seed', 'active', '2020-01-01',
+			'Bulk ' || printf('%05d', n / 3),
+			CASE WHEN n % 2 = 0 THEN 'asset' ELSE 'expense' END,
+			CASE WHEN n % 2 = 0 THEN 'checking' ELSE 'expense' END,
+			1
+		FROM seq`, count, firstID, ownerID)
+	require.NoError(t, err)
+}
+
+func collectAccountPages(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, filters string) ([]accountResponse, int) {
+	t.Helper()
+
+	var accounts []accountResponse
+	pages := 0
+	cursor := ""
+	for {
+		suffix := filters
+		if cursor != "" {
+			suffix += "&cursor=" + url.QueryEscape(cursor)
+		}
+		page := listAccountsForSession(t, handler, sessionCookie, "?"+strings.TrimPrefix(suffix, "&"))
+		pages++
+		accounts = append(accounts, page.Accounts...)
+		if page.NextCursor == nil {
+			return accounts, pages
+		}
+		require.NotEmpty(t, *page.NextCursor)
+		require.NotEqual(t, cursor, *page.NextCursor, "a cursor must advance")
+		cursor = *page.NextCursor
+		require.Less(t, pages, 100, "account pages must end")
+	}
+}
+
+func TestListAccountsPagesBeyondFormerCapWithoutDroppingRows(t *testing.T) {
+	t.Parallel()
+
+	handler, database := newSetupTestHandler(t)
+	sessionCookie, _, _ := setupAccountAPITest(t, handler)
+	seedBulkAccounts(t, database, 2105)
+
+	var want int
+	require.NoError(t, database.QueryRow(`
+		SELECT COUNT(*) FROM accounts a
+		JOIN account_versions av ON av.account_id = a.id
+		WHERE a.system_role IS NULL AND av.status != 'archived'
+			AND av.version_seq = (SELECT MAX(version_seq) FROM account_versions WHERE account_id = a.id)`).Scan(&want))
+	require.Greater(t, want, 2000)
+
+	first := listAccountsForSession(t, handler, sessionCookie, "")
+	require.Len(t, first.Accounts, 2000, "the default page is the former cap")
+	require.NotNil(t, first.NextCursor, "a bounded page must say more rows follow")
+
+	accounts, pages := collectAccountPages(t, handler, sessionCookie, "")
+	assert.Equal(t, 2, pages)
+	require.Len(t, accounts, want)
+	seen := map[int64]bool{}
+	for _, account := range accounts {
+		require.False(t, seen[account.ID], "account %d repeated across pages", account.ID)
+		seen[account.ID] = true
+	}
+	// Class order holds across the page boundary: every asset precedes every expense.
+	lastAsset, firstExpense := -1, len(accounts)
+	for i, account := range accounts {
+		if account.AccountClass == "asset" {
+			lastAsset = i
+		} else if account.AccountClass == "expense" && i < firstExpense {
+			firstExpense = i
+		}
+	}
+	assert.Less(t, lastAsset, firstExpense)
+}
+
+func TestListAccountsCursorSplitsEqualNamesAndSystemAccounts(t *testing.T) {
+	t.Parallel()
+
+	handler, database := newSetupTestHandler(t)
+	sessionCookie, _, _ := setupAccountAPITest(t, handler)
+	seedBulkAccounts(t, database, 40)
+
+	for _, filters := range []string{"", "include_system=true", "account_class=expense", "q=Bulk%2000004"} {
+		whole := listAccountsForSession(t, handler, sessionCookie, "?"+filters)
+		require.Nil(t, whole.NextCursor, filters)
+		paged, pages := collectAccountPages(t, handler, sessionCookie, "limit=2&"+filters)
+		assert.Equal(t, (len(whole.Accounts)+1)/2, pages, filters)
+		require.Len(t, paged, len(whole.Accounts), filters)
+		for i := range whole.Accounts {
+			assert.Equal(t, whole.Accounts[i].ID, paged[i].ID, "%s row %d keeps the unpaged order", filters, i)
+		}
+	}
+}
+
+func TestListAccountsRejectsInvalidCursorAndLimit(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, _, _ := setupAccountAPITest(t, handler)
+
+	for _, suffix := range []string{"?limit=0", "?limit=2001", "?limit=x", "?cursor=not-a-cursor", "?cursor=e30"} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/accounts"+suffix, nil)
+		req.AddCookie(sessionCookie)
+		res := httptest.NewRecorder()
+		handler.ServeHTTP(res, req)
+		assert.Equal(t, http.StatusBadRequest, res.Code, suffix)
+		assert.Contains(t, res.Body.String(), "VALIDATION_FAILED", suffix)
+	}
 }
