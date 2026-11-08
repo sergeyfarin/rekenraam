@@ -895,3 +895,98 @@ test('(#521 sixth review) a chosen receiving holding survives a source change an
   await expect(form.locator('#merger-destination-unavailable')).toBeVisible();
   await expect(form.getByRole('button', { name: 'Preview merger', exact: true })).toBeDisabled();
 });
+
+async function euroCash(page: Page, s: Awaited<ReturnType<typeof setup>>) {
+  const eur = await ensureCurrency(page, s.csrfToken, 'EUR', 'Euro');
+  const cash = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/accounts', s.csrfToken, {
+    name: `EUR cash ${s.suffix}`, account_class: 'asset', account_kind: 'brokerage_cash', parent_account_id: s.broker.id,
+    default_commodity_id: eur, allows_postings: true, opened_on: daysFromTodayISO(-10), effective_from: daysFromTodayISO(-10)
+  });
+  return { eur, cash };
+}
+async function buyAt(page: Page, s: Awaited<ReturnType<typeof setup>>, date: string, cashID: number, currency: number) {
+  await apiJSON(page, 'POST', '/api/v1/investments/buy', s.csrfToken, {
+    transaction_date: date, commodity_id: s.instrument.commodity_id, holding_account_id: s.holding.id,
+    cash_account_id: cashID, quantity_value: '2', quantity_scale: 0,
+    cash_amount_value: '2000', cash_amount_scale: 2, cash_commodity_id: currency
+  });
+}
+
+test('(#521 seventh review) a merger amount keeps its currency when a date change reprices the holding', async ({ page }) => {
+  const s = await setup(page);
+  const e = await euroCash(page, s);
+  await buyAt(page, s, daysFromTodayISO(-8), s.cash.id, s.currencyID);
+  await apiJSON(page, 'POST', '/api/v1/investments/sell', s.csrfToken, {
+    transaction_date: daysFromTodayISO(-6), commodity_id: s.instrument.commodity_id, holding_account_id: s.holding.id,
+    cash_account_id: s.cash.id, quantity_value: '2', quantity_scale: 0,
+    cash_amount_value: '2000', cash_amount_scale: 2, cash_commodity_id: s.currencyID, cost_basis_method: 'fifo'
+  });
+  await buyAt(page, s, daysFromTodayISO(-5), e.cash.id, e.eur);
+  const target = await apiJSON<{ commodity_id: number }>(page, 'POST', '/api/v1/investments/instruments', s.csrfToken, {
+    commodity_code: `NEW${s.suffix}`, instrument_type: 'stock', display_name: `Target ${s.suffix}`,
+    quantity_scale: 0, price_scale: 2, quote_commodity_id: s.currencyID, effective_from: daysFromTodayISO(-10)
+  });
+  await start(page, s.holding.id);
+  await openInvestmentActivity(page, 'Cash-and-stock merger');
+  const form = page.getByRole('dialog').filter({ has: page.locator('#merger-new-instrument') });
+  await form.locator('#merger-new-instrument').selectOption(String(target.commodity_id));
+  await form.locator('#merger-date').fill(daysFromTodayISO(-7));
+  await expect(form.locator('#merger-currency')).toHaveValue(String(s.currencyID));
+  await form.locator('#merger-cash').fill('10');
+  const response = page.waitForResponse(r => new URL(r.url()).pathname === '/api/v1/investments/dated-holdings' && new URL(r.url()).searchParams.get('as_of') === daysFromTodayISO(1));
+  await form.locator('#merger-date').fill(daysFromTodayISO(1));
+  const loaded = await response;
+  expect(loaded.ok()).toBe(true);
+  const body = await loaded.json();
+  expect(body.holdings.some((h: { account_id: number; cost_commodity_id: number; quantity_value: string }) => h.account_id === s.holding.id && h.cost_commodity_id === e.eur && BigInt(h.quantity_value) > 0n)).toBe(true);
+  await expect(form.locator('#merger-currency-unavailable')).toContainText('USD');
+  await expect(form.locator('#merger-cash')).toHaveValue('10');
+  await expect(form.locator('#merger-currency')).toHaveValue(String(s.currencyID));
+});
+
+test('(#521 seventh review) a trade total is cleared, not relabelled, when restored under another cash currency', async ({ page }) => {
+  const s = await setup(page);
+  const e = await euroCash(page, s);
+  await start(page, s.holding.id);
+  await openInvestmentActivity(page, 'Buy');
+  const buy = page.getByRole('dialog').filter({ has: page.locator('#buy-quantity') });
+  await buy.locator('#buy-cash-account').selectOption(String(s.cash.id));
+  await buy.locator('#buy-quantity').fill('1');
+  await buy.locator('#buy-cash-amount').fill('10');
+  await buy.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await openInvestmentActivity(page, 'Sell');
+  const sell = page.getByRole('dialog').filter({ has: page.locator('#sell-quantity') });
+  await sell.locator('#sell-cash-account').selectOption(String(e.cash.id));
+  await sell.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await openInvestmentActivity(page, 'Buy');
+  await expect(buy.locator('#buy-cash-account')).toHaveValue(String(e.cash.id));
+  await expect(buy.locator('#buy-cash-amount')).toHaveValue('');
+  await expect(buy.getByText('The cash account’s currency changed')).toBeVisible();
+
+  // Inside the form too: a total typed for one account is cleared when another currency is chosen.
+  await buy.locator('#buy-cash-amount').fill('12');
+  await buy.locator('#buy-cash-account').selectOption(String(s.cash.id));
+  await expect(buy.locator('#buy-cash-amount')).toHaveValue('');
+  await buy.locator('#buy-cash-amount').fill('12');
+  await expect(buy.getByText('The cash account’s currency changed')).toBeHidden();
+});
+
+test('(#521 seventh review) a unit price carried to the pair is cleared under another cash currency', async ({ page }) => {
+  const s = await setup(page);
+  const e = await euroCash(page, s);
+  await start(page, s.holding.id);
+  await openInvestmentActivity(page, 'Buy');
+  const buy = page.getByRole('dialog').filter({ has: page.locator('#buy-quantity') });
+  await buy.locator('#buy-cash-account').selectOption(String(s.cash.id));
+  await buy.locator('#buy-quantity').fill('1');
+  await buy.locator('#buy-unit-price').fill('5');
+  await expect(buy.locator('#buy-cash-amount')).toHaveValue('5.00');
+  await buy.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await openInvestmentActivity(page, 'Sell');
+  const sell = page.getByRole('dialog').filter({ has: page.locator('#sell-quantity') });
+  await expect(sell.locator('#sell-unit-price')).toHaveValue('5');
+  await sell.locator('#sell-cash-account').selectOption(String(e.cash.id));
+  await expect(sell.locator('#sell-unit-price')).toHaveValue('');
+  await expect(sell.locator('#sell-quantity')).toHaveValue('1');
+  await expect(sell.getByText('The cash account’s currency changed')).toBeVisible();
+});

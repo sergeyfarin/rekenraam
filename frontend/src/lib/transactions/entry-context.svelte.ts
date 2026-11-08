@@ -1,6 +1,6 @@
 import { getContext, setContext, untrack } from 'svelte';
 import type { InvestmentActivity } from '#lib/investments/activities.ts';
-import { EntryWorkingCopies, restoreTradeCopy, type SharedEntrySelections, type TradeCopy, type WorkingCopyValues } from './entry-working-copies.ts';
+import { EntryWorkingCopies, moneyCurrencyStep, restoreTradeCopy, type SharedEntrySelections, type TradeCopy, type WorkingCopyValues } from './entry-working-copies.ts';
 
 /**
  * One open New transaction's shared context (#508). The editor provides it in
@@ -148,14 +148,45 @@ export function useTradePair(
   activity: InvestmentActivity,
   correction: boolean,
   copy: Partial<TradeCopy> | undefined,
-  current: () => { quantity: string; unitPrice: string }
+  current: () => { quantity: string; unitPrice: string; currencyID: number | undefined }
 ): (TradeCopy & { recalculate: boolean }) | undefined {
   const context = correction ? undefined : entryContext();
   if (!context) return undefined;
   const opening = restoreTradeCopy(copy, context.copies.pairOf(activity));
   $effect(() => {
-    const { quantity, unitPrice } = current();
-    untrack(() => context.copies.setPair(activity, { quantity, unitPrice }));
+    const { quantity, unitPrice, currencyID } = current();
+    // A currency belongs to a price, so an empty price records none.
+    untrack(() => context.copies.setPair(activity, { quantity, unitPrice, currencyID: unitPrice.trim() ? currencyID : undefined }));
   });
   return opening;
+}
+
+/**
+ * Keeps a trade's typed money (unit price, total, gross) bound to the cash
+ * currency it was typed in (#508). When the cash account's currency becomes
+ * known or changes, amounts typed in another currency are cleared and
+ * `dropped` asks the owner to enter them again; they are never relabelled.
+ */
+export function useMoneyCurrency(
+  opening: number | undefined,
+  current: () => number | undefined,
+  amounts: { present: () => boolean; clear: () => void }
+): { readonly currencyID: number | undefined; readonly dropped: boolean } {
+  let entered = $state(opening);
+  let dropped = $state(false);
+  $effect(() => {
+    const now = current();
+    if (now === undefined) return;
+    untrack(() => {
+      if (moneyCurrencyStep(entered, now, amounts.present()).clear) {
+        amounts.clear();
+        dropped = true;
+      }
+      entered = now;
+    });
+  });
+  return {
+    get currencyID() { return entered; },
+    get dropped() { return dropped; }
+  };
 }

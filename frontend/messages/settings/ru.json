@@ -1745,6 +1745,7 @@
   "investments_trade_unit_price_charges": "Сумма сбора указана неверно, поэтому итог нельзя рассчитать.",
   "investments_trade_unit_price_non_positive": "Сборы больше выручки. Проверьте суммы.",
   "investments_trade_total_reenter": "Количество или цена изменились в другой операции, поэтому введите этот итог заново.",
+  "investments_trade_amounts_currency_changed": "Валюта денежного счёта изменилась. Введите цену за единицу или итог заново в новой валюте.",
   "transactions_entry_discard_title": "Отменить эту транзакцию?",
   "transactions_entry_discard_body": "Введённые данные не сохранены и будут потеряны.",
   "transactions_entry_discard_keep": "Продолжить ввод",

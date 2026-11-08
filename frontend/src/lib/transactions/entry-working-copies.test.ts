@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mainDateRole, tradePair } from '#lib/investments/activities.ts';
-import { EntryWorkingCopies, restoreTradeCopy } from './entry-working-copies';
+import { EntryWorkingCopies, moneyCurrencyStep, restoreTradeCopy } from './entry-working-copies';
 
 describe('EntryWorkingCopies (#508)', () => {
   it('restores what an activity was left with, as an independent copy', () => {
@@ -112,5 +112,35 @@ describe('activity roles', () => {
     expect(tradePair('short-open')).toBe(tradePair('short-cover'));
     expect(tradePair('buy')).not.toBe(tradePair('short-open'));
     expect(tradePair('write-off')).toBeUndefined();
+  });
+});
+
+describe('trade money currency (#521 seventh review)', () => {
+  it('drops a total whose pair price was entered in another currency', () => {
+    expect(restoreTradeCopy(
+      { quantity: '10', unitPrice: '5', cashAmount: '50', gross: '', cashCommodityID: 1 },
+      { quantity: '10', unitPrice: '5', currencyID: 2 }))
+      .toEqual({ quantity: '10', unitPrice: '5', cashAmount: '', gross: '', cashCommodityID: 2, recalculate: false });
+  });
+
+  it('keeps a total and reports its currency when nothing changed', () => {
+    expect(restoreTradeCopy(
+      { quantity: '10', unitPrice: '', cashAmount: '50', gross: '', cashCommodityID: 1 },
+      { quantity: '10', unitPrice: '', currencyID: 1 }).cashCommodityID).toBe(1);
+    expect(restoreTradeCopy({ quantity: '10', unitPrice: '', cashAmount: '50', gross: '', cashCommodityID: 1 }, undefined))
+      .toMatchObject({ cashAmount: '50', cashCommodityID: 1 });
+  });
+
+  it('treats an unknown currency as unchanged', () => {
+    expect(restoreTradeCopy(
+      { quantity: '10', unitPrice: '', cashAmount: '50', gross: '' },
+      { quantity: '10', unitPrice: '', currencyID: 2 }).cashAmount).toBe('50');
+  });
+
+  it('clears amounts only when they were typed in a known, different currency', () => {
+    expect(moneyCurrencyStep(1, 2, true).clear).toBe(true);
+    expect(moneyCurrencyStep(1, 1, true).clear).toBe(false);
+    expect(moneyCurrencyStep(undefined, 2, true).clear).toBe(false);
+    expect(moneyCurrencyStep(1, 2, false).clear).toBe(false);
   });
 });

@@ -1745,6 +1745,7 @@
   "investments_trade_unit_price_charges": "A charge amount is not valid, so the total cannot be calculated.",
   "investments_trade_unit_price_non_positive": "The charges are larger than the proceeds. Check the amounts.",
   "investments_trade_total_reenter": "The quantity or unit price changed in the other activity, so enter this total again.",
+  "investments_trade_amounts_currency_changed": "The cash account’s currency changed, so enter the unit price or total again in the new currency.",
   "transactions_entry_discard_title": "Discard this transaction?",
   "transactions_entry_discard_body": "What you entered in this transaction has not been saved and will be lost.",
   "transactions_entry_discard_keep": "Keep editing",

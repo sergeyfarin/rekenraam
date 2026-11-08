@@ -1,8 +1,8 @@
 {
   "counts": {
-    "es": 117,
-    "fr": 117,
-    "de": 117
+    "es": 118,
+    "fr": 118,
+    "de": 118
   },
   "keys": {
     "es": [
@@ -112,6 +112,7 @@
       "investments_exchange_destination_unavailable",
       "investments_exchange_destination_unavailable_option",
       "investments_merger_currency_unavailable",
+      "investments_trade_amounts_currency_changed",
       "investments_trade_total_reenter",
       "investments_trade_unit_price",
       "investments_trade_unit_price_charges",
@@ -231,6 +232,7 @@
       "investments_exchange_destination_unavailable",
       "investments_exchange_destination_unavailable_option",
       "investments_merger_currency_unavailable",
+      "investments_trade_amounts_currency_changed",
       "investments_trade_total_reenter",
       "investments_trade_unit_price",
       "investments_trade_unit_price_charges",
@@ -350,6 +352,7 @@
       "investments_exchange_destination_unavailable",
       "investments_exchange_destination_unavailable_option",
       "investments_merger_currency_unavailable",
+      "investments_trade_amounts_currency_changed",
       "investments_trade_total_reenter",
       "investments_trade_unit_price",
       "investments_trade_unit_price_charges",

@@ -215,8 +215,15 @@
   // holding has no lots in is then named and must be corrected
   // (currencyNotCarried). With nothing entered, the default follows.
   function selectHolding(key: string) {
-    if (chosenCurrencyID === null && cashAmount.trim() && currencyID) chosenCurrencyID = currencyID;
     holdingKey = key;
+    discardPreview();
+  }
+
+  // An amount means the currency shown when it was typed. Pinning that
+  // currency keeps a later holding or date change from relabelling it; a
+  // currency the holding no longer carries is then named (currencyNotCarried).
+  function enterCash() {
+    if (chosenCurrencyID === null && cashAmount.trim() && currencyID) chosenCurrencyID = currencyID;
     discardPreview();
   }
 
@@ -475,7 +482,7 @@
     <div>
       <label for="merger-cash" class="mb-1 block text-sm font-medium text-foreground">{m.investments_merger_cash()}</label>
       <input id="merger-cash" type="text" inputmode="decimal" autocomplete="off" bind:value={cashAmount}
-        required oninput={discardPreview} aria-describedby="merger-cash-help"
+        required oninput={enterCash} aria-describedby="merger-cash-help"
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-mono text-foreground" />
       <p id="merger-cash-help" class="mt-1 text-xs text-muted">{m.investments_merger_cash_help()}</p>
     </div>

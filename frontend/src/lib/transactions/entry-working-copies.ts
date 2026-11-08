@@ -25,10 +25,14 @@ export type SharedEntrySelections = {
 
 export type WorkingCopyValues = Record<string, unknown>;
 
-export type PairedTrade = { quantity: string; unitPrice: string };
+/** `currencyID` is the cash currency the unit price was entered in, when known. */
+export type PairedTrade = { quantity: string; unitPrice: string; currencyID?: number };
 
-/** The trade fields a paired activity keeps in its working copy. */
-export type TradeCopy = PairedTrade & { cashAmount: string; gross: string };
+/**
+ * The trade fields a paired activity keeps in its working copy;
+ * `cashCommodityID` is the cash currency its amounts were entered in.
+ */
+export type TradeCopy = { quantity: string; unitPrice: string; cashAmount: string; gross: string; cashCommodityID?: number };
 
 /**
  * A working copy and, per field, the value it last took by itself (opening,
@@ -126,13 +130,29 @@ export function restoreTradeCopy(
 ): TradeCopy & { recalculate: boolean } {
   const quantity = pair?.quantity ?? copy?.quantity ?? '';
   const unitPrice = pair?.unitPrice ?? copy?.unitPrice ?? '';
-  const changed = !!copy && ((copy.quantity ?? '') !== quantity || (copy.unitPrice ?? '') !== unitPrice);
+  // A price re-entered in another currency is a changed price too.
+  const repriced = pair?.currencyID !== undefined && copy?.cashCommodityID !== undefined &&
+    pair.currencyID !== copy.cashCommodityID;
+  const changed = !!copy && ((copy.quantity ?? '') !== quantity || (copy.unitPrice ?? '') !== unitPrice || repriced);
   const typed = !!(copy?.cashAmount || copy?.gross);
   return {
     quantity,
     unitPrice,
     cashAmount: changed ? '' : copy?.cashAmount ?? '',
     gross: changed ? '' : copy?.gross ?? '',
+    // The currency every restored amount above is in, when known.
+    cashCommodityID: pair?.currencyID ?? copy?.cashCommodityID,
     recalculate: changed && typed && unitPrice.trim() === ''
   };
+}
+
+/**
+ * One step of keeping a form's typed money in the currency it was typed in
+ * (#508): when the live cash currency becomes known or changes, amounts typed
+ * in another currency are cleared rather than relabelled. `entered` is the
+ * currency of the amounts present (undefined when unknown, in which case the
+ * first known currency is adopted).
+ */
+export function moneyCurrencyStep(entered: number | undefined, current: number, hasAmounts: boolean): { clear: boolean } {
+  return { clear: hasAmounts && entered !== undefined && entered !== current };
 }
