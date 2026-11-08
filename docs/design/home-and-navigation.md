@@ -690,6 +690,10 @@ themselves (invalid choices stay identified).
   and unit price; each keeps its own charges, exact-mode choice, settlement
   date and basis method. A total typed by hand is dropped when the pair's
   quantity or price changed elsewhere, with a note to enter it again.
+  Typed money (unit price, total, gross) belongs to the cash currency it
+  was typed in: when the settlement account's currency changes, in the
+  form or by restoring under another shared account, it is cleared with a
+  note to enter it again in the new currency, never relabelled.
 - **Locking and discarding.** While an investment save is in flight, the
   tabs, the Activity selector and the active form's fields are disabled.
   These all ask *Discard this transaction?*:
@@ -717,7 +721,9 @@ themselves (invalid choices stay identified).
   amount was typed in, stays and is checked against the new holding. The
   merger's working copy stores the amount with that currency, so reopening
   it under another shared currency restores the pair and names the
-  mismatch rather than relabelling the amount.
+  mismatch rather than relabelling the amount. The amount's currency is
+  fixed when it is typed, so a date change that reprices the holding does
+  not move it either.
 - **Receiving holding.** Share exchange, spin-off and cash-and-stock merger
   record where the new units arrive as an account, never as "the same
   holding" (which would point elsewhere once the source changes). A chosen
