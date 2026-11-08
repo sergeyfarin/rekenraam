@@ -158,7 +158,7 @@ Deliver incrementally, tracked in #441, in this order:
    account context ([design](design/home-and-navigation.md#transaction-entry)).
    Slices in order: shell, four stable tabs, shared entry context and editable account (#506, delivered 2026-11-05);
    Investment mode and settlement candidates (#507, delivered 2026-11-07); preservation across
-   changes (#508, implemented in PR #521, awaiting merge). *Move to account…* for posted transactions (#509) is
+   changes (#508, delivered 2026-11-08); #491 is closed. *Move to account…* for posted transactions (#509) is
    independent and starts with an audit of the existing edit and correction
    paths.
 4. **Pages in their new places**, in any order after #436: settings in five
