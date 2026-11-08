@@ -1,4 +1,4 @@
-import { expect, test } from './support/fixtures';
+import { expect, test, type Locator, type Page } from './support/fixtures';
 import { ensureBrowserSession, signOut } from './support/session';
 import { expectNoAccessibilityViolations } from './support/a11y';
 
@@ -167,13 +167,43 @@ test('header, first tab and heading align and shell heights stay fixed', async (
   await media.detach();
 });
 
-test('the current section is a tab joined to what it opens into, also in forced colours (#489)', async ({ page }) => {
+// Reads screenshot pixels (CSS px, top-left origin) by decoding the PNG on a
+// blank page, which carries no app CSP and needs no image library.
+async function pixels(page: Page, points: Array<{ x: number; y: number }>): Promise<number[][]> {
+  const png = (await page.screenshot()).toString('base64');
+  const scratch = await page.context().newPage();
+  try {
+    return await scratch.evaluate(async ({ png, points }) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${png}`;
+      await image.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const context = canvas.getContext('2d')!;
+      context.drawImage(image, 0, 0);
+      return points.map(({ x, y }) => [...context.getImageData(Math.round(x), Math.round(y), 1, 1).data.slice(0, 3)]);
+    }, { png, points });
+  } finally {
+    await scratch.close();
+  }
+}
+
+// Dark content under the whole sticky bar, as when a dark control or chart
+// scrolls beneath it. CSSOM styles are allowed under the app's CSP.
+async function darkenUnderBar(page: Page) {
+  await page.evaluate(() => {
+    const layer = document.createElement('div');
+    layer.setAttribute('data-test-backdrop', '');
+    Object.assign(layer.style, { position: 'fixed', inset: '0 0 auto 0', height: '200px', background: '#000', zIndex: '20', pointerEvents: 'none' });
+    document.body.append(layer);
+  });
+}
+
+test('the current location is a tab joined to what it opens into, also in forced colours (#489)', async ({ page }) => {
   await ensureBrowserSession(page);
-  const media = await page.context().newCDPSession(page);
-  // Solid rows, so the joined tint compares exactly.
-  await media.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'reduce' }] });
-  const fill = (locator: ReturnType<typeof page.locator>) => locator.evaluate((element) => getComputedStyle(element).backgroundColor);
   const sections = page.getByRole('navigation', { name: 'Sections', exact: true });
+  const fill = (locator: Locator) => locator.evaluate((element) => getComputedStyle(element).backgroundColor);
   for (const width of [390, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/app/investments/prices');
@@ -189,6 +219,13 @@ test('the current section is a tab joined to what it opens into, also in forced 
       .locator('a[aria-current="page"]').evaluate((element) => getComputedStyle(element, '::after').backgroundColor);
     expect(underline).not.toBe('rgba(0, 0, 0, 0)');
 
+    // Normal transparency, dark content beneath: the tab and the row it
+    // joins still render as one colour across the edge (#525 review).
+    await darkenUnderBar(page);
+    const x = tabBox.x + 6;
+    const [inTab, inRow] = await pixels(page, [{ x, y: tabBox.y + tabBox.height - 2 }, { x, y: rowBox.y + 2 }]);
+    for (const channel of [0, 1, 2]) expect(Math.abs(inTab[channel] - inRow[channel]), `seam at ${width}px: ${inTab} vs ${inRow}`).toBeLessThanOrEqual(1);
+
     // Home has no pages row: its tab opens into the page, over the bar's border.
     await page.goto('/app');
     const home = width >= 1024
@@ -200,9 +237,30 @@ test('the current section is a tab joined to what it opens into, also in forced 
     const homeBox = (await home.boundingBox())!;
     expect(homeBox.y + homeBox.height).toBeGreaterThanOrEqual(bar.y + bar.height - 0.5);
   }
-  await media.detach();
 
-  // Forced colours drop fills: the tab keeps an outline and the page its underline.
+  // Review and Settings are the current tab on their own desktop pages; on
+  // phones the menu button already is.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const pageFill = await page.locator('html').evaluate((element) => getComputedStyle(element).backgroundColor);
+  for (const [route, control] of [
+    ['/app/review', page.getByRole('banner').getByRole('link', { name: /^Review/ })],
+    ['/app/settings', page.getByRole('banner').getByRole('button', { name: 'Settings', exact: true })]
+  ] as const) {
+    await page.goto(route);
+    await expect(control).toHaveAttribute('data-current', '');
+    expect(await fill(control), route).toBe(pageFill);
+    const bar = (await page.locator('.shell-bar').boundingBox())!;
+    const box = (await control.boundingBox())!;
+    expect(box.y + box.height, `${route} tab reaches the page`).toBeGreaterThanOrEqual(bar.y + bar.height - 0.5);
+    expect(await control.evaluate((element) => getComputedStyle(element).borderBottomLeftRadius), route).toBe('0px');
+    await expectNoAccessibilityViolations(page, `${route} current tab`);
+  }
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto('/app/review');
+  expect(await page.getByRole('banner').getByRole('link', { name: /^Review/ }).evaluate((element) => getComputedStyle(element).borderBottomLeftRadius)).not.toBe('0px');
+  await expect(page.getByRole('button', { name: 'Menu: Review', exact: true })).toBeVisible();
+
+  // Forced colours drop fills: the tabs keep an outline and the page its underline.
   await page.emulateMedia({ forcedColors: 'active' });
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/app/investments/prices');
@@ -216,6 +274,8 @@ test('the current section is a tab joined to what it opens into, also in forced 
     });
   expect(forcedUnderline.height).toBe('3px');
   expect(forcedUnderline.fill).not.toBe('rgba(0, 0, 0, 0)');
+  await page.goto('/app/settings');
+  await expect(page.getByRole('button', { name: 'Settings', exact: true })).toHaveCSS('border-top-width', '1px');
   await page.emulateMedia({ forcedColors: 'none' });
 });
 

@@ -35,6 +35,7 @@
 
   const section = $derived(entry?.section);
   const onHome = $derived(entry?.route === '/app');
+  const onReview = $derived(entry?.route === '/app/review');
   const tabbed = $derived(section !== undefined && section !== 'home' && section !== 'settings' && section !== 'review');
   // The link's name is its visible text (label and badge) so it matches what
   // voice control users say; the status sentence rides along as a description.
@@ -79,6 +80,9 @@
   );
 
   const tabClass = 'shell-section-tab px-3.5';
+  // Review on its own page: a pill on phones (the menu button is the tab
+  // there), the joined tab on desktop, covering the bar's border.
+  const endTabClass = 'max-lg:rounded-full max-lg:hover:bg-control-hover lg:-mb-px lg:h-11 lg:self-end lg:rounded-t-[10px] lg:bg-shell-joined lg:px-3';
   const menuLinkClass =
     'flex min-h-10 items-center rounded-(--radius-control) px-3 text-sm font-medium text-muted transition hover:bg-control-hover hover:text-foreground aria-[current]:bg-surface-strong aria-[current]:text-foreground';
 </script>
@@ -143,8 +147,11 @@
         {/if}
       </div>
 
-      <div class="ml-auto flex min-w-0 items-center gap-1">
-        <a href="/app/review" aria-current={entry?.route === '/app/review' ? 'page' : undefined} aria-describedby={reviewStatusID} class="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-2 text-sm font-semibold text-foreground hover:bg-control-hover">
+      <!-- Stretched so the Review link and Settings button can sit on the
+           row's edge as the current tab (desktop, on their own pages). -->
+      <div class="ml-auto flex min-w-0 items-center gap-1 self-stretch">
+        <a href="/app/review" aria-current={onReview ? 'page' : undefined} data-current={onReview ? '' : undefined} aria-describedby={reviewStatusID}
+          class="shell-end-tab inline-flex min-h-11 shrink-0 items-center gap-1.5 px-2 text-sm font-semibold text-foreground {onReview ? endTabClass : 'rounded-full hover:bg-control-hover'}">
           <ListChecks size={18} class="shrink-0 sm:hidden" aria-hidden="true" /><span class="sr-only sm:not-sr-only">{m.attention_review()}</span> <span class="rounded-full bg-nav-marker px-1.5 text-xs text-nav-marker-foreground">{reviewBadge.text}</span>
         </a>
         <span id={reviewStatusID} hidden>{reviewBadge.label}</span>

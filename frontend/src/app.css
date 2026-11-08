@@ -345,6 +345,8 @@
   --color-toolbar: var(--color-toolbar);
   --color-shell-pages: var(--color-shell-pages);
   --color-shell-sections: var(--color-shell-sections);
+  /* The tint the current shell tab joins: set per row by data-joined. */
+  --color-shell-joined: var(--shell-joined-tint, var(--color-shell-pages));
   --color-nav-marker: var(--color-nav-marker);
   --color-nav-marker-foreground: var(--color-nav-marker-foreground);
   --color-focus-ring: var(--color-focus-ring);
@@ -488,19 +490,16 @@
     backdrop-filter: blur(12px);
   }
 
+  /* Solid: the current section's tab joins it, and a translucent row
+     picked up dark content scrolling under it while the tab, over the
+     sections row, did not, leaving a seam (#525 review). */
   .shell-pages-row {
-    background-color: color-mix(in oklab, var(--color-shell-pages) 94%, transparent);
-    backdrop-filter: blur(12px);
+    background-color: var(--color-shell-pages);
   }
 
   @media (prefers-reduced-transparency: reduce) {
     .shell-sections-row {
       background-color: var(--color-shell-sections);
-      backdrop-filter: none;
-    }
-
-    .shell-pages-row {
-      background-color: var(--color-shell-pages);
       backdrop-filter: none;
     }
   }
@@ -509,7 +508,11 @@
    * The current section is a tab in the tint of what it opens into, joined
    * to it as in MS Money: the pages row under a section, the page itself on
    * Home, Settings and Review, which have no pages row. The phone menu
-   * button is the same tab. The shape (rounded top, open bottom) marks it as
+   * button is the same tab; on desktop the Review link and the Settings
+   * button become it on their pages (`shell-end-tab`, drawn with the
+   * `shell-joined` utility).
+   * Both the tab and what it joins are opaque, so they meet without a seam
+   * whatever scrolls beneath. The shape (rounded top, open bottom) marks it as
    * well as the tint; forced colours outline it, since they drop the fill.
    */
   .shell-section-tab {
@@ -576,6 +579,13 @@
     .shell-page-tab[aria-current='page']::after {
       forced-color-adjust: none;
       background-color: CanvasText;
+    }
+  }
+
+  @media (forced-colors: active) and (width >= 64rem) {
+    .shell-end-tab[data-current] {
+      border: 1px solid CanvasText;
+      border-bottom: 0;
     }
   }
 

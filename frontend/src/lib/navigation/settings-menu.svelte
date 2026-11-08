@@ -23,6 +23,7 @@
   let open = $state(false);
   let button = $state<HTMLButtonElement>();
   const pages = sectionTabs('settings');
+  const onSettings = $derived(currentRoute?.startsWith('/app/settings') ?? false);
 
   function close(restoreFocus: boolean) {
     open = false;
@@ -34,7 +35,9 @@
   });
 </script>
 
-<div class="relative" {@attach dismissible(() => open, close)}>
+<!-- Stretched to the row so the button can sit on its edge as the current
+     tab on desktop settings pages (app-header.svelte). -->
+<div class="relative flex items-center self-stretch" {@attach dismissible(() => open, close)}>
   <button
     bind:this={button}
     type="button"
@@ -43,7 +46,10 @@
     aria-label={m.settings_title()}
     title={m.settings_title()}
     onclick={() => (open = !open)}
-    class="inline-flex size-10 items-center justify-center rounded-(--radius-control) text-muted transition hover:bg-control-hover hover:text-foreground aria-expanded:bg-surface-strong aria-expanded:text-foreground {currentRoute?.startsWith('/app/settings') ? 'text-foreground' : ''}"
+    data-current={onSettings ? '' : undefined}
+    class="shell-end-tab inline-flex size-10 items-center justify-center rounded-(--radius-control) transition {onSettings
+      ? 'text-foreground max-lg:hover:bg-control-hover max-lg:aria-expanded:bg-surface-strong lg:-mb-px lg:size-11 lg:self-end lg:rounded-b-none lg:rounded-t-[10px] lg:bg-shell-joined'
+      : 'text-muted hover:bg-control-hover hover:text-foreground aria-expanded:bg-surface-strong aria-expanded:text-foreground'}"
   >
     <Settings size={18} aria-hidden="true" />
   </button>

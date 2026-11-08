@@ -99,7 +99,6 @@ function resolve(tokens: Record<string, Token>): Record<string, RGB> {
 const blocks = tokenBlocks();
 const rowTint = (row: string) => Number(new RegExp(`\\.shell-${row}-row\\s*\\{[^}]*var\\(--color-shell-${row}\\) (\\d+)%`).exec(css)?.[1]) / 100;
 const sectionsTint = rowTint('sections');
-const pagesTint = rowTint('pages');
 const accentTint = Number(/\.status-accent-soft\s*\{[^}]*var\(--color-accent\) (\d+)%/.exec(css)?.[1]) / 100;
 const surfaces = ['background', 'surface', 'surface-strong', 'toolbar', 'control', 'row-hover'];
 
@@ -131,7 +130,8 @@ describe('theme contrast', () => {
   it('reads the accent tint from app.css', () => {
     expect(accentTint).toBeGreaterThan(0);
     expect(sectionsTint).toBeGreaterThan(0);
-    expect(pagesTint).toBeGreaterThan(0);
+    // The pages row is solid so the current tab joins it without a seam.
+    expect(css).toMatch(/\.shell-pages-row\s*\{\s*background-color: var\(--color-shell-pages\);\s*\}/);
     expect(combinations).toHaveLength(30);
   });
 
@@ -161,13 +161,13 @@ describe('theme contrast', () => {
           [`accent text on ${surface}`, contrast(p['accent'], p[surface])]
         ])
       ];
-      // The sticky shell rows are translucent: page content scrolls beneath
-      // them, so their muted tab text must hold AA over any opaque token fill
-      // there (#501: a bg-foreground control under an 84% tint read 4.41:1).
+      // The sticky sections row is translucent: page content scrolls beneath
+      // it, so its muted text must hold AA over any opaque token fill there
+      // (#501: a bg-foreground control under an 84% tint read 4.41:1).
       for (const [name, backdrop] of Object.entries(p)) {
         pairs.push([`muted section text over ${name}`, contrast(p['muted'], over(p['shell-sections'], sectionsTint, backdrop))]);
-        pairs.push([`muted page tab text over ${name}`, contrast(p['muted'], over(p['shell-pages'], pagesTint, backdrop))]);
       }
+      pairs.push(['muted page tab text on pages row', contrast(p['muted'], p['shell-pages'])]);
       // The current section's tab is solid, in the tint it joins (#489).
       pairs.push(['current section on pages tint', contrast(p['foreground'], p['shell-pages'])]);
       pairs.push(['current section on page tint', contrast(p['foreground'], p['background'])]);

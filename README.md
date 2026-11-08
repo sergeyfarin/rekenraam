@@ -26,7 +26,7 @@ cloud account.
 
 *Rekenraam* is Dutch for abacus.
 
-![Spending report in Rekenraam, showing a quarter of categorized expenses from the synthetic reference book](docs/images/reports-spending.png)
+![Spending report in Rekenraam, showing a quarter of categorized euro expenses and their chart, from the synthetic reference book](docs/images/reports-spending.png)
 
 ## What it does
 

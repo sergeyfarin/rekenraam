@@ -89,7 +89,9 @@ header on every page.
   under it (as MS Money did), so a section visibly opens into its pages; the
   current page has a green underline. Home, Settings and Review have no
   pages row, so their tab takes the page tint and opens into the page
-  (#489). On phones the menu button is the current section's tab. Green is
+  (#489): Home's section link, and on desktop the Review link and the
+  Settings button on their own pages. On phones the menu button is the
+  current location's tab. Green is
   the chosen accent palette's colour, through the `nav-marker` token. Green otherwise marks only count
   badges and selected chips.
   A page that needs attention shows a number badge on its tab (*Import 1*),
@@ -121,6 +123,9 @@ header on every page.
   slightly translucent in its own tint, solid under
   `prefers-reduced-transparency`. Content (cards, widgets, menus, dialogs) is
   never translucent. Cards stand clearly whiter than the page.
+  The sections row stays slightly translucent; the pages row is solid
+  (#489 review): the current tab joins it, and a translucent row took on
+  dark content scrolling under it while the tab did not, leaving a seam.
 - **Right side:** a *Review* button with the count of items needing action
   (the total behind Home's status line, `!` when the check failed), hide
   amounts (eye), Customize (Home only), and a settings
