@@ -1239,7 +1239,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 
 	version, err := EmbeddedMigrationVersion()
 	require.NoError(t, err)
-	assert.Equal(t, int64(9), version, "the unused v0.1 baseline, #417 category guard, #481 transfer sides, #485 posting links/history/evidence, #411 allocation revisions/reference guards and #480 retired policy base")
+	assert.Equal(t, int64(10), version, "the unused v0.1 baseline, #417 category guard, #481 transfer sides, #485 posting links/history/evidence, #411 allocation revisions/reference guards, #480 retired policy base and #532 holding FX wakeup")
 
 	ctx := context.Background()
 	database, err := Open(ctx, SQLiteFileURL(filepath.Join(t.TempDir(), "schema.sqlite")))
@@ -1270,10 +1270,11 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 	assert.Equal(t, map[string]int{
 		"index":   109,
 		"table":   119,
-		"trigger": 176,
+		"trigger": 177,
 		"view":    17,
 	}, objectCounts, "the migrated head must retain every schema object")
 	assert.NotContains(t, readTableColumns(t, database, "pricing_policies"), "base_commodity_id", "#480: the default currency is the one valuation base")
+	assert.Equal(t, "trigger", objects["fx_work_after_holding_posting_version_insert"], "#532: a posted holding wakes FX coverage for its quote currencies")
 	assert.Equal(t, "table", objects["investment_allocation_revisions"])
 	assert.Equal(t, "trigger", objects["investment_allocation_revisions_no_update"])
 	assert.Equal(t, "trigger", objects["investment_allocation_revisions_no_delete"])
