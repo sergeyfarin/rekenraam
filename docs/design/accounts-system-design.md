@@ -424,7 +424,11 @@ own scales, so the reduction affects future entry and display, not recorded
 facts. A backdated instrument update is a full snapshot: a caller changing one
 descriptive field must copy the other descriptive fields from the version in
 effect on that date. Blank `identifiers_json` and `metadata_json` objects are
-merged from that version; the remaining text fields are taken as sent.
+merged from that version; the remaining text fields are taken as sent. A
+backdated update carrying `quote_identifiers` merges that sparse edit onto the
+**current** identifiers object, not the as-of object; a caller needing
+historical identifiers must send the full as-of `identifiers` object. The
+instrument UI never backdates today.
 Recording a listing/currency change late is also accepted only from the
 latest version's date forward, because versions are never voided or reordered;
 the app does not rewrite the already-recorded window. Identifier changes are

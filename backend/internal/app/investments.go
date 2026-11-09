@@ -839,14 +839,8 @@ func (s *InvestmentService) CreateInstrument(ctx context.Context, input Investme
 	}
 
 	now := s.now().UTC()
-	today, err := s.settings.OwnerTodayAt(ctx, input.OwnerUserID, now)
-	if err != nil {
-		return InvestmentInstrument{}, err
-	}
-	_, err = cleanEffectiveFrom(input.EffectiveFrom, today)
-	if err != nil {
-		return InvestmentInstrument{}, err
-	}
+	// Creation always dates v1 at the commodity genesis; effective_from is an
+	// update-only field and is deliberately not validated here.
 	changeReason, err := cleanChangeReason(input.ChangeReason, "created investment instrument")
 	if err != nil {
 		return InvestmentInstrument{}, err

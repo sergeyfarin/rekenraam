@@ -50,7 +50,8 @@
         price_scale: selected?.price_scale ?? 12, quote_commodity_id: quote || undefined, mic,
         quote_identifiers: { coingecko_id: coingecko.trim(), yahoo_symbol: yahoo.trim(), twelve_data_symbol: twelve.trim() },
         exchange_code: selected?.exchange_code, issuer: selected?.issuer, country_code: selected?.country_code,
-        trading_commodity_id: selected?.trading_commodity_id, effective_from: ownerToday()
+        trading_commodity_id: selected?.trading_commodity_id,
+        ...(selected?.id ? { effective_from: ownerToday() } : {})
       }, csrfToken);
       await invalidateInvestmentReads(client); success = true;
     } catch (err) { error = err; } finally { pending = false; }

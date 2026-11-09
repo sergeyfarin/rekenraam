@@ -32410,7 +32410,7 @@ export interface components {
             trading_commodity_id?: number;
             quantity_scale: number;
             price_scale: number;
-            /** @description Merge these provider identities on the server, preserving other identifiers as exact JSON. An empty string clears the named identity. Omitted identifiers and metadata are preserved on PATCH; explicit objects replace them. */
+            /** @description Merge these provider identities on the server, preserving other identifiers as exact JSON. An empty string clears the named identity. Omitted identifiers and metadata are preserved on PATCH; explicit objects replace them. On a backdated PATCH, omitted identifiers/metadata keep the version in effect on that date, while quote_identifiers edits merge onto the current identifiers object. */
             quote_identifiers?: {
                 coingecko_id?: string;
                 yahoo_symbol?: string;
@@ -32422,7 +32422,10 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             };
-            /** Format: date */
+            /**
+             * Format: date
+             * @description Effective date for an instrument update. Instrument creation always dates the first version at the commodity genesis, so this value is ignored on create.
+             */
             effective_from?: string;
             change_reason?: string;
         };
