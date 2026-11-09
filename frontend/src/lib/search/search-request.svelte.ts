@@ -5,15 +5,18 @@ type Select = (item: SearchResult) => void | Promise<void>;
 
 /**
  * Which scope the shared search shows and who handles a chosen result (#490).
- * An openSearch request owns the interaction from its opening until it is
- * dismissed or its selection succeeds: its handler applies only while its own
- * scope is shown, so leaving for All restores ordinary selection, and a failed
- * selection keeps the request for a retry unless a newer interaction has
- * taken over.
+ * Every opening is an interaction, ordinary or an openSearch request, and
+ * lasts until it is dismissed, reset or its selection succeeds. A request's
+ * handler applies only while its own scope is shown, so leaving for All
+ * restores ordinary selection. A failed selection reopens search, request and
+ * all, only while its interaction is still the current one: never after a
+ * reset, a dismissal or a newer opening.
  */
 export class SearchRequestState {
   scope = $state<SearchScope>('all');
   request = $state<{ scope: SearchScope; onSelect?: Select }>();
+  // Which interaction is current; a pending selection compares against it.
+  private interaction = 0;
 
   constructor(private readonly base: () => SearchScope, private readonly fallback: () => Select | undefined) {
     this.scope = base();
@@ -21,18 +24,25 @@ export class SearchRequestState {
 
   /** Back to the mounted scope with no request (mount, prop change, leaving a page). */
   reset() {
+    this.interaction += 1;
     this.request = undefined;
     this.scope = this.base();
   }
 
+  /** An openSearch request: a new interaction with its scope and handler. */
   start(next: SearchRequest) {
+    this.interaction += 1;
     this.request = { scope: next.scope ?? this.base(), onSelect: next.onSelect };
     this.scope = this.request.scope;
   }
 
-  /** Ends the request, if any; ordinary search keeps its chosen scope. */
+  /**
+   * Ends the current interaction (dismissal, or before an ordinary opening).
+   * A request goes with it; ordinary search keeps its chosen scope.
+   */
   dispose() {
     if (this.request) this.reset();
+    else this.interaction += 1;
   }
 
   setScope(value: SearchScope) {
@@ -55,16 +65,16 @@ export class SearchRequestState {
     act: (select: Select | undefined, item: SearchResult) => void | Promise<void>;
     failed: () => void | Promise<void>;
   }): Promise<boolean> {
-    const owner = this.request;
+    const owner = this.interaction;
     const select = this.handler();
     steps.release();
     try {
       await steps.act(select, item);
     } catch {
-      if (this.request === owner) await steps.failed();
+      if (this.interaction === owner) await steps.failed();
       return false;
     }
-    if (owner && this.request === owner) this.reset();
+    if (this.interaction === owner) this.dispose();
     return true;
   }
 }

@@ -89,6 +89,37 @@ describe('search request ownership (#490)', () => {
     expect(state.scope).toBe('category');
   });
 
+  it('never reopens a stale ordinary search after a reset or a fresh opening', async () => {
+    for (const interrupt of ['reset', 'reopen'] as const) {
+      const state = new SearchRequestState(() => 'all', () => undefined);
+      let fail: (reason: Error) => void = () => {};
+      const failed = vi.fn();
+      const pending = state.choose(spending, {
+        release: () => {},
+        act: () => new Promise<void>((_, reject) => { fail = reject; }),
+        failed
+      });
+      // Leaving the page resets; the button or a shortcut ends the old interaction.
+      if (interrupt === 'reset') state.reset();
+      else state.dispose();
+      fail(new Error('nav'));
+      expect(await pending).toBe(false);
+      expect(failed).not.toHaveBeenCalled();
+    }
+  });
+
+  it('never ends a newer request when an older ordinary selection completes', async () => {
+    const state = new SearchRequestState(() => 'all', () => undefined);
+    let done: () => void = () => {};
+    const pending = state.choose(spending, { release: () => {}, act: () => new Promise<void>(resolve => { done = resolve; }), failed: vi.fn() });
+    const onSelect = vi.fn();
+    state.start({ scope: 'account', onSelect });
+    done();
+    expect(await pending).toBe(true);
+    expect(state.request?.onSelect).toBe(onSelect);
+    expect(state.scope).toBe('account');
+  });
+
   it('reopens ordinary search after a failed default action, and keeps its scope', async () => {
     const state = new SearchRequestState(() => 'all', () => undefined);
     state.setScope('account');

@@ -310,9 +310,11 @@ button when nothing else had focus). Other UI opens the shortcut owner's
 search with `openSearch({ scope, onSelect })` (`search-launcher.ts`): the scope
 shows as the pressed *narrow to* chip. Its handler applies only while that
 scope is shown, so choosing *All* restores ordinary selection; the request
-ends when search is dismissed or its selection succeeds. A failed selection
-reopens search with the request, scope and handler kept for a retry, unless
-a newer interaction (the button, a shortcut, another request) has taken over
+ends when search is dismissed or its selection succeeds. Every opening,
+ordinary or requested, is its own interaction: a failed selection reopens
+search (a request with its scope and handler, for a retry) only while that
+interaction is still current, never after a reset, a dismissal or a newer
+opening by the button, a shortcut or another request
 (`search-request.svelte.ts`). Ctrl/⌘ K from an ordinary field still opens
 search, but neither the shortcuts, the button nor `openSearch` open it over a
 dialog or an open editor, modal or beside the page: choosing a result

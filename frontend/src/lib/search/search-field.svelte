@@ -123,10 +123,10 @@
       event.preventDefault(); openPlain();
     }
   }
-  // The button and shortcuts open ordinary search, ending a request left
-  // waiting on a selection.
+  // The button and shortcuts start a new ordinary interaction, ending any
+  // earlier one (a request included) still waiting on its selection.
   function openPlain() {
-    if (!open) session.dispose();
+    if (!open && !blocked()) session.dispose();
     void focusSearch();
   }
   function request(next: SearchRequest): boolean {
