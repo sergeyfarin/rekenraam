@@ -275,6 +275,25 @@ func TestCreateInstrumentValidatesIgnoredEffectiveFrom(t *testing.T) {
 	}
 }
 
+// #550 review: a valid past date supplied on create is ignored; v1 is still
+// dated at the commodity genesis.
+func TestCreateInstrumentIgnoresAValidEffectiveFrom(t *testing.T) {
+	t.Parallel()
+	f := newReferenceVersionFixture(t)
+	instrument, err := f.investmentService.CreateInstrument(context.Background(), InvestmentInstrumentInput{
+		OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "investment.instrument.create",
+		CommodityCode: "PAST-DATE", InstrumentType: "stock", DisplayName: "Past date",
+		QuantityScale: 6, PriceScale: 4, EffectiveFrom: "2025-01-01",
+	})
+	require.NoError(t, err)
+	var effectiveFrom string
+	require.NoError(t, f.database.QueryRow(`
+		SELECT effective_from FROM investment_instrument_versions
+		WHERE instrument_id = ? AND version_seq = 1
+	`, instrument.ID).Scan(&effectiveFrom))
+	assert.Equal(t, db.CommodityGenesisDate, effectiveFrom, "create still starts at the book's history")
+}
+
 // #550 review: omitted JSON objects in a backdated correction keep the value
 // of the version in effect on that date, not today's value.
 func TestInstrumentBackdatedCorrectionKeepsAsOfJSON(t *testing.T) {
