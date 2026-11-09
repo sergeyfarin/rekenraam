@@ -182,6 +182,26 @@ describe('theme contrast', () => {
 });
 
 /**
+ * The data plane must be the easiest place to read, in both themes: cards are
+ * lighter than the page in light mode, and darker than the page in dark mode,
+ * so foreground text always has at least the contrast it has on the page.
+ */
+describe('surface hierarchy', () => {
+  for (const { theme, base, accent } of combinations) {
+    it(`${theme} / ${base} / ${accent} keeps the data plane ahead of the page`, () => {
+      const p = palette(theme, base, accent);
+      const surface = luminance(p['surface']);
+      const background = luminance(p['background']);
+      if (theme === 'light') expect(surface).toBeGreaterThan(background);
+      else expect(surface).toBeLessThan(background);
+      expect(contrast(p['foreground'], p['surface'])).toBeGreaterThanOrEqual(
+        contrast(p['foreground'], p['background'])
+      );
+    });
+  }
+});
+
+/**
  * Non-text marks in the shell and the focus ring (#489): the current page's
  * underline on the pages row, and the focus ring on every surface a control
  * can sit on, the two shell rows included, at 3:1 (WCAG 1.4.11).

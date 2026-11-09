@@ -105,20 +105,24 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --color-background: oklch(0.195 0.018 108);
+  /* Content is the darkest plane in the dark theme, not the lightest: light
+     text gains contrast where the data is, mirroring the light theme's rule
+     that the card is the easiest place to read. Controls, chips and hovered
+     rows stay a step lighter so they remain visible on the recessed card. */
+  --color-background: oklch(0.225 0.018 108);
   --color-foreground: oklch(0.93 0.018 108);
-  --color-surface: oklch(0.27 0.02 108);
-  --color-surface-strong: oklch(0.31 0.024 108);
-  --color-sidebar: oklch(0.225 0.02 108);
-  --color-toolbar: oklch(0.28 0.02 108);
-  --color-shell-pages: oklch(0.23 0.02 108);
-  --color-shell-sections: oklch(0.275 0.024 108);
-  --color-control: oklch(0.315 0.022 108);
-  --color-control-hover: oklch(0.365 0.026 108);
+  --color-surface: oklch(0.18 0.02 108);
+  --color-surface-strong: oklch(0.25 0.024 108);
+  --color-sidebar: oklch(0.235 0.02 108);
+  --color-toolbar: oklch(0.195 0.02 108);
+  --color-shell-pages: oklch(0.215 0.02 108);
+  --color-shell-sections: oklch(0.255 0.024 108);
+  --color-control: oklch(0.25 0.022 108);
+  --color-control-hover: oklch(0.30 0.026 108);
   --color-selected: oklch(0.68 0.13 154);
   --color-selected-foreground: oklch(0.13 0.022 154);
-  --color-row-hover: oklch(0.315 0.022 108);
-  --color-border: oklch(0.39 0.026 108);
+  --color-row-hover: oklch(0.22 0.022 108);
+  --color-border: oklch(0.36 0.026 108);
   --color-muted: oklch(0.73 0.026 108);
   --color-accent: oklch(0.705 0.13 154);
   --color-accent-foreground: oklch(0.13 0.022 154);
@@ -149,20 +153,20 @@
   :root:not([data-theme='light']) {
     color-scheme: dark;
 
-    --color-background: oklch(0.195 0.018 108);
+    --color-background: oklch(0.225 0.018 108);
     --color-foreground: oklch(0.93 0.018 108);
-    --color-surface: oklch(0.27 0.02 108);
-    --color-surface-strong: oklch(0.31 0.024 108);
-    --color-sidebar: oklch(0.225 0.02 108);
-    --color-toolbar: oklch(0.28 0.02 108);
-    --color-shell-pages: oklch(0.23 0.02 108);
-    --color-shell-sections: oklch(0.275 0.024 108);
-    --color-control: oklch(0.315 0.022 108);
-    --color-control-hover: oklch(0.365 0.026 108);
+    --color-surface: oklch(0.18 0.02 108);
+    --color-surface-strong: oklch(0.25 0.024 108);
+    --color-sidebar: oklch(0.235 0.02 108);
+    --color-toolbar: oklch(0.195 0.02 108);
+    --color-shell-pages: oklch(0.215 0.02 108);
+    --color-shell-sections: oklch(0.255 0.024 108);
+    --color-control: oklch(0.25 0.022 108);
+    --color-control-hover: oklch(0.30 0.026 108);
     --color-selected: oklch(0.68 0.13 154);
     --color-selected-foreground: oklch(0.13 0.022 154);
-    --color-row-hover: oklch(0.315 0.022 108);
-    --color-border: oklch(0.39 0.026 108);
+    --color-row-hover: oklch(0.22 0.022 108);
+    --color-border: oklch(0.36 0.026 108);
     --color-muted: oklch(0.73 0.026 108);
     --color-accent: oklch(0.705 0.13 154);
     --color-accent-foreground: oklch(0.13 0.022 154);
@@ -226,34 +230,34 @@
 }
 
 :root[data-theme='dark'][data-base-color='slate'] {
-  --color-background: oklch(0.195 0.014 255);
+  --color-background: oklch(0.225 0.014 255);
   --color-foreground: oklch(0.93 0.012 250);
-  --color-surface: oklch(0.27 0.016 255);
-  --color-surface-strong: oklch(0.31 0.018 255);
-  --color-sidebar: oklch(0.225 0.016 255);
-  --color-toolbar: oklch(0.28 0.016 255);
-  --color-shell-pages: oklch(0.23 0.016 255);
-  --color-shell-sections: oklch(0.275 0.018 255);
-  --color-control: oklch(0.315 0.018 255);
-  --color-control-hover: oklch(0.365 0.02 255);
-  --color-row-hover: oklch(0.315 0.018 255);
-  --color-border: oklch(0.39 0.018 255);
+  --color-surface: oklch(0.18 0.016 255);
+  --color-surface-strong: oklch(0.25 0.018 255);
+  --color-sidebar: oklch(0.235 0.016 255);
+  --color-toolbar: oklch(0.195 0.016 255);
+  --color-shell-pages: oklch(0.215 0.016 255);
+  --color-shell-sections: oklch(0.255 0.018 255);
+  --color-control: oklch(0.25 0.018 255);
+  --color-control-hover: oklch(0.30 0.02 255);
+  --color-row-hover: oklch(0.22 0.018 255);
+  --color-border: oklch(0.36 0.018 255);
   --color-muted: oklch(0.73 0.018 255);
 }
 
 :root[data-theme='dark'][data-base-color='zinc'] {
-  --color-background: oklch(0.195 0.01 286);
+  --color-background: oklch(0.225 0.01 286);
   --color-foreground: oklch(0.93 0.01 286);
-  --color-surface: oklch(0.27 0.012 286);
-  --color-surface-strong: oklch(0.31 0.014 286);
-  --color-sidebar: oklch(0.225 0.012 286);
-  --color-toolbar: oklch(0.28 0.012 286);
-  --color-shell-pages: oklch(0.23 0.012 286);
-  --color-shell-sections: oklch(0.275 0.014 286);
-  --color-control: oklch(0.315 0.014 286);
-  --color-control-hover: oklch(0.365 0.016 286);
-  --color-row-hover: oklch(0.315 0.014 286);
-  --color-border: oklch(0.39 0.014 286);
+  --color-surface: oklch(0.18 0.012 286);
+  --color-surface-strong: oklch(0.25 0.014 286);
+  --color-sidebar: oklch(0.235 0.012 286);
+  --color-toolbar: oklch(0.195 0.012 286);
+  --color-shell-pages: oklch(0.215 0.012 286);
+  --color-shell-sections: oklch(0.255 0.014 286);
+  --color-control: oklch(0.25 0.014 286);
+  --color-control-hover: oklch(0.30 0.016 286);
+  --color-row-hover: oklch(0.22 0.014 286);
+  --color-border: oklch(0.36 0.014 286);
   --color-muted: oklch(0.73 0.014 286);
 }
 
