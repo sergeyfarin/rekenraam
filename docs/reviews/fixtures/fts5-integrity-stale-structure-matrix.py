@@ -8,16 +8,20 @@ amalgamation, and against a copy of each with the candidate engine patch
 - the base probe in both journal modes, with and without `refresh`;
 - invalid arguments, which must exit 2;
 - injected failures, which must exit 2: each is a source mutation of the probe
-  that breaks one control, opening step or statement.
+  that breaks one control, opening step or statement, or simulates an engine
+  that rewords the damage-control message.
 
-Writes every run, with its expected and actual exit status, to OUTPUT.json and
-exits 1 if any run differs from its expectation. Run it with `python3 -I`. It
+Writes every run (expected and actual exit status, plus the probe's full
+stdout) and the provenance of every input to OUTPUT.json, and exits 1 if any
+run differs from its expectation. Run it with `python3 -I`. It
 needs `cc`, and the amalgamations must be authenticated beforehand (see the
 review). Each run uses its own empty directory under a temporary root.
 """
+import datetime
 import hashlib
 import json
 from pathlib import Path
+import platform
 import subprocess
 import sys
 import tempfile
@@ -63,6 +67,14 @@ MUTATIONS = {
     "writer INSERT between checks fails": [
         ("INSERT INTO t(x) VALUES('gamma delta %d')", "INSERT INTO nope(x) VALUES('gamma delta %d')"),
     ],
+    # A future engine might quote the table differently; the probe must then
+    # refuse to interpret the run rather than pass or fail it.
+    "damage-control message reworded (simulated)": [
+        ('else if (!strstr(got, "malformed inverted index for FTS5 table main.t"))',
+         'else if (!strstr(got, "malformed inverted index for FTS5 table \\"main\\".\\"t\\""))'),
+        ('if (!strstr(got, "malformed inverted index for FTS5 table main.t") &&',
+         'if (!strstr(got, "malformed inverted index for FTS5 table \\"main\\".\\"t\\"") &&'),
+    ],
     "fresh connection cannot open": [
         ('SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, 0);',
          'SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,'
@@ -83,6 +95,27 @@ def sha3(path):
     return hashlib.sha3_256(Path(path).read_bytes()).hexdigest()
 
 
+def sha256(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def parse_engines(args):
+    engines, names = [], set()
+    for arg in args:
+        name, sep, directory = arg.partition("=")
+        if not sep or not name or not directory:
+            raise SystemExit(f"expected NAME=AMALGAMATION_DIR, got {arg!r}")
+        if name in names or "/" in name:
+            raise SystemExit(f"engine name {name!r} is repeated or contains '/'")
+        path = Path(directory).resolve()
+        for required in ("sqlite3.c", "sqlite3.h"):
+            if not (path / required).is_file():
+                raise SystemExit(f"{name}: {path / required} is missing")
+        names.add(name)
+        engines.append((name, path))
+    return engines
+
+
 def compile_engine(source_dir, work, name):
     obj = work / f"sqlite3-{name}.o"
     subprocess.run(["cc", *CFLAGS, "-I", str(source_dir), "-c", str(source_dir / "sqlite3.c"),
@@ -91,7 +124,7 @@ def compile_engine(source_dir, work, name):
 
 
 def link_probe(source, include_dir, engine_obj, out):
-    c_file = out.with_suffix(".c")
+    c_file = out.with_name(out.name + ".c")  # names contain dots: no with_suffix
     c_file.write_text(source)
     subprocess.run(["cc", *CFLAGS, "-Wall", "-Wextra", "-Werror", "-I", str(include_dir),
                     str(c_file), str(engine_obj), "-o", str(out), *LIBS], check=True)
@@ -101,9 +134,11 @@ def link_probe(source, include_dir, engine_obj, out):
 def run(binary, args, root):
     cwd = Path(tempfile.mkdtemp(dir=root))
     proc = subprocess.run([str(binary), *args], cwd=cwd, capture_output=True, text=True, timeout=60)
-    lines = proc.stdout.splitlines()
+    # The usage line echoes argv[0]; keep machine-local paths out of the evidence.
+    lines = proc.stdout.replace(str(root), "<work>").splitlines()
     return {
         "exit": proc.returncode,
+        "stdout": lines,
         "verdict": lines[-1] if lines else "",
         "invalid": next((line for line in lines if line.startswith("INVALID:")), None),
         "engine_version": lines[0] if lines and lines[0].startswith("sqlite ") else None,
@@ -115,11 +150,9 @@ def main():
         raise SystemExit(__doc__)
     probe = Path(sys.argv[1]).resolve()
     output = Path(sys.argv[2]).resolve()
-    engines = []
-    for arg in sys.argv[3:]:
-        name, _, directory = arg.partition("=")
-        engines.append((name, Path(directory).resolve()))
+    engines = parse_engines(sys.argv[3:])
     probe_source = probe.read_text()
+    engine_provenance = {}
 
     runs = []
     failed = False
@@ -127,14 +160,20 @@ def main():
         work = Path(tmp)
         built = []
         for name, directory in engines:
-            built.append((name, directory, sha3(directory / "sqlite3.c"), False))
+            official = sha3(directory / "sqlite3.c")
+            engine_provenance[name] = {"official_sqlite3_c_sha3_256": official}
+            built.append((name, directory, official, False))
             patched_dir = work / f"{name}+patch"
             patched_dir.mkdir()
             (patched_dir / "sqlite3.h").write_bytes((directory / "sqlite3.h").read_bytes())
             amalgamation = (directory / "sqlite3.c").read_text(errors="surrogateescape")
             (patched_dir / "sqlite3.c").write_text(
                 replace_once(amalgamation, PATCH_OLD, PATCH_NEW, f"{name} patch"), errors="surrogateescape")
-            built.append((f"{name}+patch", patched_dir, sha3(directory / "sqlite3.c"), True))
+            engine_provenance[f"{name}+patch"] = {
+                "official_sqlite3_c_sha3_256": official,
+                "patched_sqlite3_c_sha3_256": sha3(patched_dir / "sqlite3.c"),
+            }
+            built.append((f"{name}+patch", patched_dir, official, True))
 
         for name, directory, source_sha3, patched in built:
             print(name, flush=True)
@@ -162,9 +201,15 @@ def main():
                              "expected_exit": expected, **result, "as_expected": ok})
                 print(f"  {'ok ' if ok else 'BAD'} {case} {args} exit={result['exit']}", flush=True)
 
+    compiler = subprocess.run(["cc", "--version"], capture_output=True, text=True, check=True)
     output.write_text(json.dumps({
-        "probe_sha256": hashlib.sha256(probe.read_bytes()).hexdigest(),
+        "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+        "probe_sha256": sha256(probe),
+        "matrix_sha256": sha256(__file__),
+        "compiler": compiler.stdout.splitlines()[0],
+        "platform": platform.platform(),
         "cflags": CFLAGS,
+        "engines": engine_provenance,
         "runs": runs,
         "all_as_expected": not failed,
     }, indent=2) + "\n")

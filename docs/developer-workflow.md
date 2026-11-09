@@ -74,10 +74,14 @@ supplies the probe and its evidence.
   candidate review establishes. Do not include the driver's binding files
   directly: they carry its wrapper.
 - Run the probe as `probe wal` (no `refresh`) and record its exit status in
-  the admission review. **1** means the workaround is still needed. **0**
-  means the engine looks fixed. **2** means the run is invalid, for example
-  because a control failed or an engine message was reworded. Repair the
-  probe and rerun; never read exit 2 as either result.
+  the admission review, with the printed finding.
+  - **1** means the workaround is still needed. Any non-`ok` result on the
+    undamaged file gives exit 1, so confirm that the finding is the FTS5
+    `checksum mismatch`. A different finding is a new defect to investigate.
+  - **0** means the engine looks fixed.
+  - **2** means the run is invalid, for example because a control failed or
+    a damage-control message no longer matches. Repair the probe and rerun;
+    never read exit 2 as either result.
 - Keep the workaround until an admitted driver bundles a fixed engine. Exit
   0 alone does not remove it. Removing it also needs the upstream fix to be
   identified, and the bare-pragma canary in

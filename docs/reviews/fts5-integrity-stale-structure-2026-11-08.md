@@ -49,7 +49,7 @@ The journal mode does not matter: WAL and rollback (`delete`) behave the same.
 | [`fixtures/fts5-integrity-stale-structure-probe.c.txt`](fixtures/fts5-integrity-stale-structure-probe.c.txt) | Self-checking C probe. Two connections run three `integrity_check` checks, with a write on the other connection between each. Then come three controls: a fresh-connection check, the FTS5 `'integrity-check'` command, and real damage (a deleted `t_docsize` row) that both a fresh connection and the reader must report as an FTS5 corruption finding for `t`. The optional `refresh` argument applies the application's workaround in one read transaction. Exit status: **0** pass, **1** false finding (bug present, controls passed), **2** invalid run, including invalid arguments. |
 | [`fixtures/fts5-integrity-stale-structure-probe.sql`](fixtures/fts5-integrity-stale-structure-probe.sql) | Shell-only version for the `sqlite3` CLI (`.connection`, 3.37+). `.open --new` makes it rerunnable in place. This is the form used in the upstream report. |
 | [`fixtures/fts5-integrity-stale-structure-matrix.py`](fixtures/fts5-integrity-stale-structure-matrix.py) | Matrix driver. It builds the probe against each given amalgamation and against a copy with the candidate patch applied. It runs the base grid, invalid arguments and every injected failure as a source mutation, and writes expected and actual exit codes to JSON. |
-| [`fixtures/fts5-integrity-stale-structure-2026-11-09.json`](fixtures/fts5-integrity-stale-structure-2026-11-09.json) | That driver's output for 3.53.4 and 3.54.1: 96 runs, all as expected. |
+| [`fixtures/fts5-integrity-stale-structure-2026-11-09.json`](fixtures/fts5-integrity-stale-structure-2026-11-09.json) | That driver's output for 3.53.4 and 3.54.1: 104 runs, all as expected. It also records every run's full probe stdout, including the run 2–3 findings, and the provenance of each input: the probe and driver hashes, the official and patched `sqlite3.c` hashes, the compiler and a timestamp. |
 
 ## Results
 
@@ -96,12 +96,24 @@ argument lists (`wal refesh`, `wal refresh extra`, `wl`, `wal ''`):
 | Damage `DELETE` fails | the statement and its error |
 | A writer `INSERT` between checks fails | the statement and its error |
 | The fresh connection cannot open | `open fresh connection: no such vfs` |
+| Damage-control message reworded (simulated: expected text uses `"main"."t"` quoting) | `fresh-connection damage control: no FTS5 corruption finding for t` |
 
-The findings are matched as exact English engine messages. SQLite has no
-stable code for an `integrity_check` row, and no shorter prefix is any more
-stable than the full text. A future engine that rewords them makes the probe
-exit 2 and print the new text. That is safe but noisy: read the text, update
-the strings, and rerun.
+**Message matching is asymmetric, on purpose.**
+
+- **The undamaged file.** Any result other than `ok` counts as the false
+  finding (exit 1), whatever its wording. That keeps the admission signal
+  conservative, but exit 1 alone does not prove this defect caused it. The
+  admission rule therefore also requires reading the printed finding.
+- **The damage controls.** These match exact English engine messages, because
+  SQLite has no code for an `integrity_check` row. A damage message that no
+  longer matches makes the probe exit 2 and print the new text. The matrix
+  covers this path with a simulated rewording: the expected text is changed
+  to `"main"."t"` quoting, and the run exits 2.
+
+Exact matching is a strictness choice, not the only reasonable one. A prefix
+such as `malformed inverted index for FTS5 table` would survive cosmetic
+changes like that quoting change. The cost of exact matching is a noisy
+exit 2 after such a change, never a wrong 0 or 1.
 
 The candidate patch is one logical change in `fts5IntegrityMethod`: call
 `fts5NewTransaction()` before the check, as `fts5BeginMethod` does.
@@ -209,4 +221,5 @@ python3 -I docs/reviews/fixtures/fts5-integrity-stale-structure-matrix.py \
   -run 'TestRepeatedSelfCheckRunsPassAfterNewEntries|TestSQLiteIntegrityOnAReusedReaderAfterSearchWrites' -count=3
 ```
 
-The Go tests pass on the admitted v1.14.52 / 3.53.4 (2026-11-08, three runs).
+The Go tests pass on the admitted v1.14.52 / 3.53.4 (2026-11-08, rerun
+2026-11-09, three runs each).

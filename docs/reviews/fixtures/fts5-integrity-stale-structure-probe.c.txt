@@ -22,12 +22,21 @@
  *             finding for t, or the arguments were invalid. Treat this as
  *             neither fixed nor broken.
  *
- * The findings are matched as exact English engine messages
- * ("malformed inverted index for FTS5 table main.t" and
- * "fts5: checksum mismatch for table \"t\""). SQLite exposes no stable
- * code for an integrity_check row, so these strings are version-sensitive. If
- * a future engine rewords them, the probe exits 2 and prints the new text.
- * Update the strings after reading that text; never read exit 2 as a result.
+ * Message matching is deliberately asymmetric:
+ * - On the undamaged file, any result other than "ok" counts as the false
+ *   finding (exit 1). That keeps the admission signal conservative: a
+ *   reworded or different false finding still says "workaround needed". It
+ *   also means exit 1 alone does not prove that this defect is the cause.
+ *   Read the printed finding; for #403 it is
+ *   "fts5: checksum mismatch for table \"t\"".
+ * - The damage controls match exact English engine messages:
+ *   "malformed inverted index for FTS5 table main.t", plus the checksum
+ *   message as the stale reader's fallback. SQLite has no code for an
+ *   integrity_check row. These strings can change between versions, even in
+ *   cosmetic ways such as how the table is quoted. A damage message that no
+ *   longer matches makes the probe exit 2 and print the new text. Update the
+ *   strings after reading it; never read exit 2 as a result. A looser prefix
+ *   would survive cosmetic changes; exact matching is a strictness choice.
  *
  * Results on 2026-11-08, rerun 2026-11-09 (official amalgamations, both
  * journal modes):
