@@ -95,16 +95,20 @@ MUTATIONS = {
     "reader damage-control expected text changed (simulated)": ([
         (READER_DAMAGE_MATCH, READER_DAMAGE_MATCH.replace("main.t", QUOTED_TABLE)),
     ], 2, "INVALID: reader damage control: no FTS5 corruption finding for t"),
-    # The FTS5 command is replaced by a bare reader integrity_check that only
-    # prints, so the reader's cache is still stale at the damage check, and the
-    # printed mismatch proves it. FTS5 checks docsize before it compares
-    # checksums, so the stale reader still reports the corruption itself; the
-    # exit status matches the base probe.
-    "FTS5 command skipped (reader cache stale at damage check)": ([
+    # The FTS5 command is replaced by a bare reader integrity_check. It prints
+    # its result, and its return code still feeds the FTS5-command control.
+    # On the unpatched engines it prints checksum mismatch: the reader is stale
+    # just before the damage check. Without `refresh`, the damage check runs
+    # in autocommit and the reader stays stale through that pragma. FTS5 checks
+    # docsize before it compares checksums, so the stale reader still reports
+    # the corruption itself, and the exit status matches the base probe. With
+    # `refresh`, reader_check refreshes first, so those rows only show that
+    # the bare check was stale beforehand.
+    "FTS5 command replaced by a bare reader check (reader stale just before the damage check)": ([
         ("  rc = sqlite3_exec(r, \"INSERT INTO t(t) VALUES('integrity-check')\", 0, 0, 0);\n"
          "  printf(\"reader FTS5 'integrity-check' command: %s\\n\", rc == SQLITE_OK ? \"ok\" : sqlite3_errmsg(r));",
          "  rc = query(r, \"PRAGMA integrity_check\", got, sizeof got);\n"
-         "  printf(\"reader FTS5 'integrity-check' command: skipped (mutation)\\n\");\n"
+         "  printf(\"reader FTS5 'integrity-check' command: replaced by a bare reader check (mutation)\\n\");\n"
          "  printf(\"reader bare integrity_check before damage: %s\\n\", got);"),
     ], None, lambda defect: (
         ['reader bare integrity_check before damage: fts5: checksum mismatch for table "t"',

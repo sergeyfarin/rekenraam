@@ -1,6 +1,6 @@
 {
-  "probe_sha256": "8bc16e9db576424e05125d50d86bd89a629f942c80a581ad6e7409f2060b5f2b",
-  "matrix_sha256": "c9df0f97e98c9666c5d5d71da46a947dc7d79ecac1b8ef5950680649946d7f3e",
+  "probe_sha256": "1d2f0bfdc96f2ed4784ae15e3add5154248ed38d8de05445aa0fd27a0acdd276",
+  "matrix_sha256": "83897f25849490a1b9e02ed05766d31746b38e003621ffe5aff01f1d44629f08",
   "cflags": [
     "-O1",
     "-DSQLITE_THREADSAFE=1",
@@ -835,7 +835,7 @@
       "engine": "3.53.4",
       "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
       "candidate_patch": false,
-      "case": "FTS5 command skipped (reader cache stale at damage check)",
+      "case": "FTS5 command replaced by a bare reader check (reader stale just before the damage check)",
       "args": [
         "wal"
       ],
@@ -851,7 +851,7 @@
         "reader integrity_check run 2: fts5: checksum mismatch for table \"t\"",
         "reader integrity_check run 3: fts5: checksum mismatch for table \"t\"",
         "fresh connection integrity_check: ok",
-        "reader FTS5 'integrity-check' command: skipped (mutation)",
+        "reader FTS5 'integrity-check' command: replaced by a bare reader check (mutation)",
         "reader bare integrity_check before damage: fts5: checksum mismatch for table \"t\"",
         "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
         "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
@@ -866,7 +866,7 @@
       "engine": "3.53.4",
       "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
       "candidate_patch": false,
-      "case": "FTS5 command skipped (reader cache stale at damage check)",
+      "case": "FTS5 command replaced by a bare reader check (reader stale just before the damage check)",
       "args": [
         "wal",
         "refresh"
@@ -883,7 +883,7 @@
         "reader integrity_check run 2: ok",
         "reader integrity_check run 3: ok",
         "fresh connection integrity_check: ok",
-        "reader FTS5 'integrity-check' command: skipped (mutation)",
+        "reader FTS5 'integrity-check' command: replaced by a bare reader check (mutation)",
         "reader bare integrity_check before damage: fts5: checksum mismatch for table \"t\"",
         "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
         "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
@@ -1706,7 +1706,7 @@
       "engine": "3.53.4+patch",
       "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
       "candidate_patch": true,
-      "case": "FTS5 command skipped (reader cache stale at damage check)",
+      "case": "FTS5 command replaced by a bare reader check (reader stale just before the damage check)",
       "args": [
         "wal"
       ],
@@ -1721,7 +1721,7 @@
         "reader integrity_check run 2: ok",
         "reader integrity_check run 3: ok",
         "fresh connection integrity_check: ok",
-        "reader FTS5 'integrity-check' command: skipped (mutation)",
+        "reader FTS5 'integrity-check' command: replaced by a bare reader check (mutation)",
         "reader bare integrity_check before damage: ok",
         "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
         "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
@@ -1736,7 +1736,7 @@
       "engine": "3.53.4+patch",
       "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
       "candidate_patch": true,
-      "case": "FTS5 command skipped (reader cache stale at damage check)",
+      "case": "FTS5 command replaced by a bare reader check (reader stale just before the damage check)",
       "args": [
         "wal",
         "refresh"
@@ -1752,7 +1752,7 @@
         "reader integrity_check run 2: ok",
         "reader integrity_check run 3: ok",
         "fresh connection integrity_check: ok",
-        "reader FTS5 'integrity-check' command: skipped (mutation)",
+        "reader FTS5 'integrity-check' command: replaced by a bare reader check (mutation)",
         "reader bare integrity_check before damage: ok",
         "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
         "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
@@ -2575,7 +2575,7 @@
       "engine": "3.54.1",
       "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
       "candidate_patch": false,
-      "case": "FTS5 command skipped (reader cache stale at damage check)",
+      "case": "FTS5 command replaced by a bare reader check (reader stale just before the damage check)",
       "args": [
         "wal"
       ],
@@ -2591,7 +2591,7 @@
         "reader integrity_check run 2: fts5: checksum mismatch for table \"t\"",
         "reader integrity_check run 3: fts5: checksum mismatch for table \"t\"",
         "fresh connection integrity_check: ok",
-        "reader FTS5 'integrity-check' command: skipped (mutation)",
+        "reader FTS5 'integrity-check' command: replaced by a bare reader check (mutation)",
         "reader bare integrity_check before damage: fts5: checksum mismatch for table \"t\"",
         "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
         "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
@@ -2606,7 +2606,7 @@
       "engine": "3.54.1",
       "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
       "candidate_patch": false,
-      "case": "FTS5 command skipped (reader cache stale at damage check)",
+      "case": "FTS5 command replaced by a bare reader check (reader stale just before the damage check)",
       "args": [
         "wal",
         "refresh"
@@ -2623,7 +2623,7 @@
         "reader integrity_check run 2: ok",
         "reader integrity_check run 3: ok",
         "fresh connection integrity_check: ok",
-        "reader FTS5 'integrity-check' command: skipped (mutation)",
+        "reader FTS5 'integrity-check' command: replaced by a bare reader check (mutation)",
         "reader bare integrity_check before damage: fts5: checksum mismatch for table \"t\"",
         "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
         "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
@@ -3446,7 +3446,7 @@
       "engine": "3.54.1+patch",
       "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
       "candidate_patch": true,
-      "case": "FTS5 command skipped (reader cache stale at damage check)",
+      "case": "FTS5 command replaced by a bare reader check (reader stale just before the damage check)",
       "args": [
         "wal"
       ],
@@ -3461,7 +3461,7 @@
         "reader integrity_check run 2: ok",
         "reader integrity_check run 3: ok",
         "fresh connection integrity_check: ok",
-        "reader FTS5 'integrity-check' command: skipped (mutation)",
+        "reader FTS5 'integrity-check' command: replaced by a bare reader check (mutation)",
         "reader bare integrity_check before damage: ok",
         "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
         "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
@@ -3476,7 +3476,7 @@
       "engine": "3.54.1+patch",
       "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
       "candidate_patch": true,
-      "case": "FTS5 command skipped (reader cache stale at damage check)",
+      "case": "FTS5 command replaced by a bare reader check (reader stale just before the damage check)",
       "args": [
         "wal",
         "refresh"
@@ -3492,7 +3492,7 @@
         "reader integrity_check run 2: ok",
         "reader integrity_check run 3: ok",
         "fresh connection integrity_check: ok",
-        "reader FTS5 'integrity-check' command: skipped (mutation)",
+        "reader FTS5 'integrity-check' command: replaced by a bare reader check (mutation)",
         "reader bare integrity_check before damage: ok",
         "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
         "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",

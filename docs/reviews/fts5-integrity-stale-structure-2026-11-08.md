@@ -106,16 +106,25 @@ message. They stand in for an engine that rewords its finding, and exercise
 each exact-match branch on its own.
 
 **A stale reader still reports real damage.** One more mutation replaces the
-FTS5 `'integrity-check'` command with a bare reader `integrity_check` that
-only prints. On the unpatched engines that check prints `checksum mismatch`,
-so the reader's cache is provably stale when the damage is checked. The
-reader still reports `malformed inverted index for FTS5 table main.t`,
-because FTS5 checks docsize before it compares checksums. The exit status
-matches the base probe in all 8 runs. An earlier version of the probe also
-accepted `checksum mismatch` from a reader that had shown the defect. This
-case shows that branch could not be reached with this kind of damage, so it
-was removed. The reader must now report the same corruption as the fresh
-connection.
+FTS5 `'integrity-check'` command with a bare reader `integrity_check`. That
+check prints its result, and its return code still feeds the FTS5-command
+control.
+
+- **Unpatched engines:** the bare check prints `checksum mismatch`, so the
+  reader is stale just before the damage check.
+- **Without `refresh`:** the damage check runs in autocommit, so the reader
+  stays stale through that pragma. It still reports `malformed inverted index
+  for FTS5 table main.t`, because FTS5 checks docsize before it compares
+  checksums.
+- **With `refresh`:** `reader_check` refreshes the cache before the pragma.
+  These rows show only that the bare check was stale beforehand, not that the
+  damage check itself was.
+
+The exit status matches the base probe in all 8 runs. An earlier version of
+the probe also accepted `checksum mismatch` from a reader that had shown the
+defect. The no-refresh rows of this case show that branch could not be
+reached with this kind of damage, so it was removed. The reader must now
+report the same corruption as the fresh connection.
 
 **Message matching is asymmetric, on purpose.**
 
