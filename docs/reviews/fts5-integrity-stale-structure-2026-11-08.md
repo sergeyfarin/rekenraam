@@ -124,8 +124,8 @@ automatically. Whoever posts the report should search the forum for
 Status: **draft approved by the owner on 2026-11-08; the owner is posting
 it** (#541). On 2026-11-09, after the PR #546 review, the paragraph after the
 code sample was revised. It now presents the patch as a sketch and says the
-refresh read happens inside the same read transaction. Post the revised
-text. Once it is posted, the thread link goes on #541 and in this
+refresh read happens inside the same read transaction. The owner approved
+the revised text on 2026-11-09 and is posting it. Once it is posted, the thread link goes on #541 and in this
 section.
 
 Draft for the [SQLite forum](https://sqlite.org/forum/forum):
