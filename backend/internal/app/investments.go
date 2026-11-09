@@ -22,12 +22,13 @@ const (
 )
 
 var (
-	ErrInvestmentInstrumentNotFound = errors.New("investment instrument not found")
-	ErrInvestmentInstrumentExists   = errors.New("investment instrument already exists")
-	ErrCostBasisProfileNotFound     = errors.New("cost basis profile not found")
-	ErrCostBasisProfileExists       = errors.New("cost basis profile already exists")
-	ErrDividendDefaultNotFound      = errors.New("dividend default not found")
-	ErrInvestmentLotsInsufficient   = errors.New("insufficient investment lots")
+	ErrInvestmentInstrumentNotFound         = errors.New("investment instrument not found")
+	ErrInvestmentInstrumentExists           = errors.New("investment instrument already exists")
+	ErrInvestmentInstrumentVersionBackdated = errors.New("investment instrument change is dated before the instrument's latest version")
+	ErrCostBasisProfileNotFound             = errors.New("cost basis profile not found")
+	ErrCostBasisProfileExists               = errors.New("cost basis profile already exists")
+	ErrDividendDefaultNotFound              = errors.New("dividend default not found")
+	ErrInvestmentLotsInsufficient           = errors.New("insufficient investment lots")
 	// ErrInvestmentEventOutOfOrder reports a trade dated before something that
 	// has already rewritten the position's cost-basis projection. It is the
 	// repository's sentinel under this package's own name, so the API can key
@@ -1042,6 +1043,9 @@ func (s *InvestmentService) UpdateInstrument(ctx context.Context, input Investme
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
 			return InvestmentInstrument{}, ErrInvestmentInstrumentNotFound
+		}
+		if backdated, ok := errors.AsType[db.InvestmentInstrumentVersionBackdatedError](err); ok {
+			return InvestmentInstrument{}, fmt.Errorf("%w: %s", ErrInvestmentInstrumentVersionBackdated, backdated.Error())
 		}
 		return InvestmentInstrument{}, fmt.Errorf("persist investment instrument update: %w", err)
 	}

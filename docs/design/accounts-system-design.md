@@ -365,7 +365,9 @@ accepted design change.
 Version ordering rules:
 
 - `version_seq` is assigned by the application service inside the same database
-  transaction as the insert.
+  transaction as the insert. The next number is `MAX(version_seq) + 1` for the
+  identity row, never the in-effect version's sequence plus one: a backdated
+  version must not make the next append collide on the unique key (#549).
 - It must be positive and unique per identity row:
   `(commodity_id, version_seq)`, `(account_id, version_seq)`, or
   `(institution_id, version_seq)`.
@@ -403,6 +405,19 @@ therefore enforces this contract inside its transaction:
   status, and walks the ancestry as of the version's date and every later date
   on which any account version changes, refusing a cycle
   (`400 VALIDATION_FAILED`, "account parent is invalid").
+
+Earlier-dated instrument versions (#549). Instruments follow the same
+backdating contract: a version dated before the instrument's latest version may
+correct descriptive fields only (`display_name`, `symbol`, `exchange_code`,
+`mic`, `issuer`, `country_code`, `identifiers_json`, `metadata_json`).
+`instrument_type`, `quote_commodity_id`, `trading_commodity_id`,
+`quantity_scale` and `price_scale` are structural and must take effect on or
+after the latest version's `effective_from`; a same-date version is allowed and
+supersedes by `version_seq`. A backdated structural change is refused with
+`409 INVESTMENT_INSTRUMENT_VERSION_BACKDATED`, naming the earliest allowed
+date. A listing or quote-currency change that happened now is a forward-dated
+instrument version; a genuine security-identity change uses the real corporate
+action/transfer workflow, not instrument master-data mutation.
 
 SQLite triggers should reject `UPDATE` and `DELETE` on version tables once this
 is implemented. Corrections create a new version with a clear reason.

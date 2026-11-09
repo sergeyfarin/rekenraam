@@ -1023,6 +1023,28 @@ func TestUpdateInvestmentInstrument_HTTP(t *testing.T) {
 	assert.Equal(t, "Vanguard FTSE All-World UCITS ETF", updated.DisplayName)
 }
 
+func TestUpdateInvestmentInstrument_BackdatedStructuralChangeReturnsCodedConflict(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "BACKDATED")
+
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPatch, "/api/v1/investments/instruments/"+strconv.FormatInt(instrument.ID, 10), investmentInstrumentRequest{
+		CommodityCode: "BACKDATED", InstrumentType: "etf", DisplayName: "Forward rename",
+		QuantityScale: 6, PriceScale: 4, EffectiveFrom: "2026-06-01",
+		Identifiers: json.RawMessage(`{}`), Metadata: json.RawMessage(`{}`),
+	}, http.StatusOK)
+
+	res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPatch, "/api/v1/investments/instruments/"+strconv.FormatInt(instrument.ID, 10), investmentInstrumentRequest{
+		CommodityCode: "BACKDATED", InstrumentType: "etf", DisplayName: "Backdated quote currency",
+		QuoteCommodityID: &f.commodityID, QuantityScale: 6, PriceScale: 4, EffectiveFrom: "2026-03-01",
+		Identifiers: json.RawMessage(`{}`), Metadata: json.RawMessage(`{}`),
+	}, http.StatusConflict)
+	var body errorResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, "INVESTMENT_INSTRUMENT_VERSION_BACKDATED", body.Error.Code)
+}
+
 func TestCostBasisProfiles_ListAndSave_HTTP(t *testing.T) {
 	t.Parallel()
 	handler, _ := newSetupTestHandler(t)

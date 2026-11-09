@@ -208,24 +208,24 @@ func TestFXBackdatedInstrumentVersionStillWakesTheCurrentCurrency(t *testing.T) 
 	_, err := f.database.Exec(`DELETE FROM background_work_items WHERE kind = 'pricing.fx_coverage'`)
 	require.NoError(t, err)
 
-	updateTestInstrumentQuote(t, f, instrumentID, gbp, "2026-03-01")
+	// The service refuses a structural version backdated before the instrument's
+	// first version (#549), so v2 is a deliberately durable raw row that is not
+	// in effect. v3 is then a normal forward-dated update through the service.
+	_, err = f.database.Exec(`INSERT INTO investment_instrument_versions (instrument_id, version_seq, effective_from, recorded_at,
+		changed_by_user_id, change_reason, status, instrument_type, display_name, symbol, exchange_code, mic, issuer, country_code,
+		quote_commodity_id, trading_commodity_id, quantity_scale, price_scale, identifiers_json, metadata_json)
+		SELECT instrument_id, 2, '2026-03-01', '2026-03-01T00:00:00Z', 1, 'test fixture', status, instrument_type, display_name,
+			symbol, exchange_code, mic, issuer, country_code, ?,
+			trading_commodity_id, quantity_scale, price_scale, identifiers_json, metadata_json
+		FROM investment_instrument_versions WHERE instrument_id = ? AND version_seq = 1`, gbp, instrumentID)
+	require.NoError(t, err)
 	_, found := demandFor(t, f, gbp)
 	require.False(t, found, "the backdated version is not in effect")
 	_, err = f.database.Exec(`UPDATE background_work_items SET status = 'completed', completed_at = updated_at
 		WHERE kind = 'pricing.fx_coverage' AND json_extract(payload_json, '$.currency_id') = ?`, gbp)
 	require.NoError(t, err)
 
-	// Insert v3 directly: UpdateInstrument currently derives the next
-	// version_seq from the effective version (still v1), so this trigger test
-	// must reach the durable row without that unrelated allocation path.
-	_, err = f.database.Exec(`INSERT INTO investment_instrument_versions (instrument_id, version_seq, effective_from, recorded_at,
-		changed_by_user_id, change_reason, status, instrument_type, display_name, symbol, exchange_code, mic, issuer, country_code,
-		quote_commodity_id, trading_commodity_id, quantity_scale, price_scale, identifiers_json, metadata_json)
-		SELECT instrument_id, 3, '2026-10-04', '2026-10-04T00:00:00Z', 1, 'test fixture', status, instrument_type, display_name,
-			symbol, exchange_code, mic, issuer, country_code, quote_commodity_id, trading_commodity_id, quantity_scale, price_scale,
-			identifiers_json, metadata_json
-		FROM investment_instrument_versions WHERE instrument_id = ? AND version_seq = 2`, instrumentID)
-	require.NoError(t, err)
+	updateTestInstrumentQuote(t, f, instrumentID, gbp, "2026-10-04")
 	record, found := demandFor(t, f, gbp)
 	require.True(t, found, "the effective version now demands GBP")
 	assert.Equal(t, "2026-09-28", record.StartDate)
