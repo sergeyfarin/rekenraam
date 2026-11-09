@@ -87,8 +87,7 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(page.getByRole('option').first()).toBeVisible();
       await expectNoAccessibilityViolations(page, `search ${theme} ${width}`);
       await page.keyboard.press('Escape');
-      if (width < 768) await expect(page.getByRole('dialog', { name: 'Search', exact: true })).toBeHidden();
-      else await expect(search).toHaveAttribute('aria-expanded', 'false');
+      await expect(page.getByRole('dialog', { name: 'Search', exact: true })).toBeHidden();
       const settings = page.getByRole('button', { name: 'Settings', exact: true });
       await settings.click();
       await expectNoAccessibilityViolations(page, `settings menu ${theme} ${width}`);

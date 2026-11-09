@@ -1021,6 +1021,7 @@
   "search_show_amounts": "Bedragen tonen",
   "search_switch_theme": "Wissel licht/donker thema",
   "search_navigation_error": "Dit resultaat kon niet worden geopend. Probeer opnieuw.",
+  "search_editor_open": "Sluit de open editor om te zoeken",
   "attention_review": "Controleren",
   "attention_count": "Te controleren items: {count}",
   "attention_failed": "{count} bekende items · een controle is mislukt",

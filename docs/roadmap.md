@@ -151,8 +151,8 @@ Deliver incrementally, tracked in #441, in this order:
    and entered values in the briefing with #454.
 3. **Shell look (owner, 2026-11-01), next:** olive two-tint header rows
    with the current section as a joined tab (#489, delivered 2026-11-08) and
-   a *Search Ctrl K* button opening the centred search (#490); small and
-   independent. The
+   a *Search Ctrl K* button opening the centred search (#490, delivered
+   2026-11-08). The
    task rail was withdrawn on 2026-11-05: where a right-hand panel earns its
    place is under [side panels](design/home-and-navigation.md#side-panels),
    and report filters (#492) moved to *Deliberately later*.

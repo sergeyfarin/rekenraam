@@ -155,8 +155,9 @@
           <ListChecks size={18} class="shrink-0 sm:hidden" aria-hidden="true" /><span class="sr-only sm:not-sr-only">{m.attention_review()}</span> <span class="rounded-full bg-nav-marker px-1.5 text-xs text-nav-marker-foreground">{reviewBadge.text}</span>
         </a>
         <span id={reviewStatusID} hidden>{reviewBadge.label}</span>
-        <!-- Home places the same search large and centred instead (#477). -->
-        {#if !onHome}<div class="min-w-0 md:w-48 xl:w-60"><SearchField /></div>{/if}
+        <!-- A Search Ctrl K button opening the centred search (#490); Home
+             places the same search as its command bar instead (#477). -->
+        {#if !onHome}<SearchField />{/if}
         <button type="button" aria-label={m.nav_hide_amounts()} title={m.nav_hide_amounts()}
           aria-pressed={amountPrivacy.hidden} onclick={() => setAmountsHidden(!amountPrivacy.hidden)}
           class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-muted transition hover:bg-control-hover hover:text-foreground">

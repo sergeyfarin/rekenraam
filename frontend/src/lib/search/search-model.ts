@@ -60,3 +60,13 @@ export function searchShortcut(event: KeyboardEvent): boolean {
   if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === 'k') return true;
   return event.key === '/' && !event.ctrlKey && !event.metaKey && !isEditableTarget(event.target);
 }
+
+/** Apple keyboards say ⌘ where others say Ctrl; both shortcuts work everywhere. */
+export function applePlatform(platform: string): boolean {
+  return /mac|iphone|ipad|ipod/i.test(platform);
+}
+
+/** The header button's shortcut hint and its aria-keyshortcuts value. */
+export function searchShortcutHint(apple: boolean, ctrl: string): { label: string; keys: string } {
+  return apple ? { label: '⌘ K', keys: 'Meta+K' } : { label: `${ctrl} K`, keys: 'Control+K' };
+}

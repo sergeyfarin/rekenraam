@@ -79,7 +79,11 @@ description: SvelteKit frontend rules for Rekenraam - static adapter constraints
   pricing policy's staleness, the word Prices and Review use; a link to a
   filtered destination must list what Home named (`?status=unusable|stale`).
 - Global search is `#lib/search/search-field.svelte` (#457). Mount one shortcut
-  owner; reuse `scope`/`onSelect` and `variant="home"` for placement. Keep page
+  owner; `variant="home"` is Home's bar, the default is the header's *Search
+  Ctrl K* button opening a centred dialog (#490). Other UI (#442's switcher)
+  calls `openSearch({ scope, onSelect })` from `#lib/search/search-launcher.ts`.
+  Search never opens over a modal or an open editor; an inline editor without
+  a navigation discard check attaches `editorHold` (`#lib/components/editor-hold.svelte.ts`). Keep page
   filters independent, derive page hits from the route registry and consume every
   catalog cursor before claiming complete search coverage. Search resets when
   leaving a pathname, never on navigation completion or same-page URL repair;

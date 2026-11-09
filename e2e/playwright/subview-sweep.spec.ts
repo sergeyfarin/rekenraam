@@ -166,6 +166,18 @@ const subViews: SubView[] = [
     close: async (c) => { await c.page.keyboard.press('Escape'); }
   },
   {
+    // Outside Home the header button opens it as a dialog (#490).
+    name: 'header search', group: 'dialog', path: () => '/app/ledger/accounts',
+    open: async (c) => {
+      await c.page.locator('.shell-bar').getByRole('button', { name: c.t('search_label', true) }).click();
+      const view = openDialog(c.page);
+      await expect(view).toBeVisible();
+      await waitForPageReady(c.page);
+      return view;
+    },
+    close: async (c) => { await c.page.keyboard.press('Escape'); }
+  },
+  {
     name: 'keyboard help', group: 'dialog', path: () => '/app',
     open: async (c) => {
       await c.page.locator('#main-content').focus();
