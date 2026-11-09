@@ -54,7 +54,8 @@ below is execution order, not a chain of hard dependencies.
 ### Current focus
 
 The [UI overhaul](#current-product-initiative--ui-overhaul) is the current
-product initiative (owner decision 2026-10-29), starting with #436. The items
+product initiative (owner decision 2026-10-29); its shell #436 closed on
+2026-11-09. The items
 below continue alongside it and do not block it.
 
 1. **Resolve the remaining owner/release gates in parallel with maintenance.**
@@ -106,14 +107,14 @@ Implement the owner-approved [Home and navigation design](design/home-and-naviga
 recorded in [commit `457dd74`](https://github.com/sergeyfarin/rekenraam/commit/457dd74a8344caa962bfdf29fe8dd18a69254102),
 with its [v3 mockup](design/home-mockup/README.md). The design is approved;
 its header, registry, tab-route, hide-amounts, shared-search and attention slices
-#455–#459 and section-owned paths #460 are delivered, and Home #437 is delivered and closed; the remaining shell work (#436) and the pages below are not delivered. The owner made it the current
+#455–#459 and section-owned paths #460 are delivered, and Home #437 is delivered and closed; the shell #436 closed on 2026-11-09. The pages, object navigation and depth items below are not delivered. The owner made it the current
 initiative on 2026-10-29, after the remaining maintenance items (#414, #416)
 were judged not to block it; they, owner-dependent readiness and release
-evidence continue in parallel. Implementation starts with #436.
+evidence continue in parallel.
 
 Deliver incrementally, tracked in #441, in this order:
 
-1. **Shell and search (#436):** replace the sidebar and duplicate top bar with
+1. **Shell and search (#436, closed 2026-11-09):** replace the sidebar and duplicate top bar with
    a light header (Home, section links that open each section's Overview, a
    Review button, settings menu), a tab row of real page routes driven by one
    route registry, hide amounts, compact shared search and one attention read
@@ -128,6 +129,8 @@ Deliver incrementally, tracked in #441, in this order:
    redirects; #448 still replaces the temporary Accounts list with Ledger
    Overview. Page actions, widths and `?` help #459 are delivered and closed;
    the shared Home → register → reconciliation journey is #442's acceptance.
+   The last acceptance item, menus and search passing axe in every locale,
+   closed #436 on 2026-11-09.
 2. **Home (#437):** two-line briefing, central command bar, shortcut tiles led
    by Add transaction, compact default My Home and real-size More to explore
    widgets, backed by a composed Home read and a shared transaction-entry
@@ -149,10 +152,11 @@ Deliver incrementally, tracked in #441, in this order:
    account-list state and Home widget (#482, configurable window, default 60
    days). Pinned accounts on the Accounts widget arrive with #442
    and entered values in the briefing with #454.
-3. **Shell look (owner, 2026-11-01), next:** olive two-tint header rows
+3. **Shell look (owner, 2026-11-01):** olive two-tint header rows
    with the current section as a joined tab (#489, delivered 2026-11-08) and
    a *Search Ctrl K* button opening the centred search (#490, delivered
-   2026-11-08). The
+   2026-11-08). One selected style for chips and view toggles (#523), found
+   while delivering #489, waits for the owner's choice of style. The
    task rail was withdrawn on 2026-11-05: where a right-hand panel earns its
    place is under [side panels](design/home-and-navigation.md#side-panels),
    and report filters (#492) moved to *Deliberately later*.

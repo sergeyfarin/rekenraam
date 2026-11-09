@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from './support/fixtures';
 import { ensureBrowserSession, signOut } from './support/session';
 import { expectNoAccessibilityViolations } from './support/a11y';
+import { allLocales } from './support/locales';
 
 const range = 'start_date=2026-01-01&end_date=2026-03-31&bucket=month';
 
@@ -100,6 +101,67 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(pages).toBeHidden();
     });
   }
+}
+
+// #436: the test above names controls in English. Longer translations are what
+// overflow a phone menu or break a label, so open the same three surfaces in
+// every other locale, located by structure rather than by English name.
+for (const locale of allLocales.filter((name) => name !== 'en')) {
+  test(`shell menus and search pass axe and fit in ${locale}`, async ({ page }) => {
+    await ensureBrowserSession(page);
+    const fits = (locator: Locator) => locator.evaluate((node) => {
+      const bounds = node.getBoundingClientRect();
+      return bounds.left >= 0 && bounds.right <= innerWidth;
+    });
+    for (const theme of ['light', 'dark'] as const) {
+      for (const width of [320, 390, 1280]) {
+        await test.step(`${theme} at ${width}px`, async () => {
+          await page.evaluate(([name, value]) => {
+            localStorage.setItem('PARAGLIDE_LOCALE', name);
+            localStorage.setItem('rekenraam-theme', value);
+          }, [locale, theme]);
+          await page.setViewportSize({ width, height: 900 });
+          await page.goto('/app/investments/prices');
+          await expect(page.locator('html')).toHaveAttribute('lang', locale);
+          await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+          const heading = (await page.locator('main h1').innerText()).trim();
+          expect(heading).not.toBe('');
+          const label = `${locale} ${theme} ${width}`;
+
+          if (width < 768) {
+            const phone = page.locator('button[aria-controls="shell-phone-menu"]');
+            await phone.click();
+            const menu = page.locator('#shell-phone-menu');
+            await expect(menu.locator('a[aria-current]')).toHaveCount(1);
+            expect(await fits(menu)).toBe(true);
+            await expectNoAccessibilityViolations(page, `phone menu ${label}`);
+            await page.keyboard.press('Escape');
+            await expect(phone).toBeFocused();
+            await expect(menu).toBeHidden();
+          }
+
+          await page.keyboard.press('Control+k');
+          const search = page.getByRole('dialog').getByRole('combobox');
+          await expect(search).toBeFocused();
+          await search.fill(heading);
+          await expect(page.getByRole('option').first()).toBeVisible();
+          await expectNoAccessibilityViolations(page, `search ${label}`);
+          await page.keyboard.press('Escape');
+          await expect(search).toBeHidden();
+
+          const settingsButton = page.locator('button[aria-controls="shell-settings-menu"]');
+          await settingsButton.click();
+          const settings = page.locator('#shell-settings-menu');
+          await expect(settings).toBeVisible();
+          expect(await fits(settings)).toBe(true);
+          await expectNoAccessibilityViolations(page, `settings menu ${label}`);
+          expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
+          await page.keyboard.press('Escape');
+          await expect(settingsButton).toBeFocused();
+        });
+      }
+    }
+  });
 }
 
 test('settings theme choice follows system changes, persists a fixed choice and signs out', async ({ page }) => {
