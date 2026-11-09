@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { createSearchIndex, searchResults, normalizeSearch, searchShortcut, type SearchResult } from './search-model.ts';
+import { describe, expect, it, vi } from 'vitest';
+import { applePlatform, createSearchIndex, searchResults, normalizeSearch, searchShortcut, searchShortcutHint, type SearchResult } from './search-model.ts';
 
 const items: SearchResult[] = [
   { id: 'a2', group: 'account', title: 'Café savings' },
@@ -23,6 +23,30 @@ describe('shared search ranking and grouping', () => {
       expect(searchShortcut(event(overrides))).toBe(false);
     }
     expect(searchShortcut(event({ key: 'k', ctrlKey: true, shiftKey: true }))).toBe(false);
+  });
+
+  it('ignores single-key slash while typing, but Ctrl/⌘ K works from ordinary fields', () => {
+    class FakeElement {
+      isContentEditable = false;
+      closest() { return this; }
+    }
+    vi.stubGlobal('HTMLElement', FakeElement);
+    try {
+      const field = new FakeElement();
+      expect(searchShortcut({ key: '/', target: field } as unknown as KeyboardEvent)).toBe(false);
+      expect(searchShortcut({ key: 'k', ctrlKey: true, target: field } as unknown as KeyboardEvent)).toBe(true);
+      expect(searchShortcut({ key: 'K', metaKey: true, target: field } as unknown as KeyboardEvent)).toBe(true);
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it('shows the header shortcut per platform with a localized Ctrl', () => {
+    expect(applePlatform('MacIntel')).toBe(true);
+    expect(applePlatform('macOS')).toBe(true);
+    expect(applePlatform('iPad')).toBe(true);
+    expect(applePlatform('Win32')).toBe(false);
+    expect(applePlatform('Linux x86_64')).toBe(false);
+    expect(searchShortcutHint(true, 'Strg')).toEqual({ label: '⌘ K', keys: 'Meta+K' });
+    expect(searchShortcutHint(false, 'Strg')).toEqual({ label: 'Strg K', keys: 'Control+K' });
   });
 
   it('uses fixed groups and exact names before prefix/keyword matches', () => {

@@ -55,6 +55,7 @@
   import EntryTabs from './entry-tabs.svelte';
   import { EntryContext, provideEntryContext } from './entry-context.svelte.ts';
   import { beforeNavigate, goto } from '$app/navigation';
+  import { editorHold } from '#lib/components/editor-hold.svelte.ts';
   import type { InvestmentSaveKind } from '#lib/transactions/add-transaction.svelte.ts';
   import InvestmentEntry from '#lib/investments/investment-entry.svelte';
   import { getLocale } from '#lib/paraglide/runtime.js';
@@ -1586,7 +1587,8 @@
 
 <!-- A region named by its heading: the entry's header and tabs sit outside
      its form, which the Investment tab hides (#506). -->
-<section class="space-y-4" aria-labelledby={`${uid}-title`}>
+<!-- editorHold: global search stays closed while this is open (#490). -->
+<section class="space-y-4" aria-labelledby={`${uid}-title`} {@attach editorHold}>
   <!-- Header -->
   <div class="flex items-start justify-between gap-3">
     <div class="min-w-0">

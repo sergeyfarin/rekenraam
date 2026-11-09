@@ -299,6 +299,30 @@ and shortcuts show in every briefing state, including the empty book and a
 failed Home read, because neither needs Home data.
 Searching account, category or instrument notes is later work.
 
+Delivered in #490 (2026-11-08): outside Home the header shows a rounded
+*Search* button with its shortcut (Ctrl K, ⌘ K on Apple platforms, Ctrl
+localized), whose accessible name is its visible text. The button, `/` and
+Ctrl/⌘ K open the same component as a modal dialog: from md up centred
+across the page at Home's bar width (45rem) and a fixed 12% from the top, so
+the field does not move while results load; on phones full screen as before.
+Escape or a backdrop click closes it and focus returns to the opener (the
+button when nothing else had focus). Other UI opens the shortcut owner's
+search with `openSearch({ scope, onSelect })` (`search-launcher.ts`): the scope
+shows as the pressed *narrow to* chip. Its handler applies only while that
+scope is shown, so choosing *All* restores ordinary selection; the request
+ends when search is dismissed or its selection succeeds. Every opening,
+ordinary or requested, is its own interaction: a failed selection reopens
+search (a request with its scope and handler, for a retry) only while that
+interaction is still current, never after a reset, a dismissal or a newer
+opening by the button, a shortcut or another request
+(`search-request.svelte.ts`). Ctrl/⌘ K from an ordinary field still opens
+search, but neither the shortcuts, the button nor `openSearch` open it over a
+dialog or an open editor, modal or beside the page: choosing a result
+navigates away, and an edit or correction has no discard check on navigation.
+The transaction editor holds search closed while mounted (`editorHold`,
+`#lib/components/editor-hold.svelte.ts`); the header button is then
+`aria-disabled` and its title says to close the editor.
+
 ### Shared search foundation (#457)
 
 The search is one reusable combobox (delivered as a compact header field;
@@ -1158,7 +1182,7 @@ Sequencing belongs in the roadmap; acceptance in the issues.
 | Widget depth: lazy expanded returns, allocation and forecast charts; further widgets | #440 |
 | Density: compact and comfortable rows | #451 |
 | Shell look: olive two-tint rows, joined section tab, green place markers, card contrast (delivered 2026-11-08) | #489 |
-| Search button with centred search dialog | #490 |
+| Search button with centred search dialog (delivered 2026-11-08) | #490 |
 | One transaction entry: shell and ordinary modes (#506, delivered), Investment mode (#507, delivered), preservation (#508, delivered) | #491, closed 2026-11-08 |
 | Move to account for posted transactions | #509 |
 | Report filters take less space above the figures (later: filter bar or side panel, after a task check) | #492 |

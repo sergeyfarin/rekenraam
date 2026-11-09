@@ -760,7 +760,15 @@ has actual installations, its migration files are immutable.
   Source counting units and retained screen scope live in the
   [attention contract](design/home-and-navigation.md#attention-foundation-458).
 - Shared global search is `#lib/search/search-field.svelte`: mount one shortcut
-  owner per page, use `scope`/`onSelect` for reuse, and keep page filters separate.
+  owner per page and keep page filters separate. Outside Home the header renders
+  it as a *Search Ctrl K* button opening a centred dialog (full screen on
+  phones), never a second field (#490). Other UI opens that owner's search with
+  `openSearch({ scope, onSelect })` (`#lib/search/search-launcher.ts`) rather
+  than mounting another instance; the request's handler applies only in its own
+  scope and survives a failed selection (`search-request.svelte.ts`). Search
+  never opens over a modal or an open editor: an editor beside the page that
+  has no navigation discard check attaches `editorHold`
+  (`#lib/components/editor-hold.svelte.ts`), as the transaction editor does.
   Reset at the start of a pathname change, never when earlier navigation
   completes; same-page query/fragment updates preserve a new search (#472).
   Release its focus scope before choosing a destination, without a late close

@@ -1,8 +1,8 @@
 {
   "counts": {
-    "es": 118,
-    "fr": 118,
-    "de": 118
+    "es": 119,
+    "fr": 119,
+    "de": 119
   },
   "keys": {
     "es": [
@@ -120,6 +120,7 @@
       "investments_trade_unit_price_hint",
       "investments_trade_unit_price_non_positive",
       "investments_trade_unit_price_precision",
+      "search_editor_open",
       "transactions_entry_discard_body",
       "transactions_entry_discard_confirm",
       "transactions_entry_discard_keep",
@@ -240,6 +241,7 @@
       "investments_trade_unit_price_hint",
       "investments_trade_unit_price_non_positive",
       "investments_trade_unit_price_precision",
+      "search_editor_open",
       "transactions_entry_discard_body",
       "transactions_entry_discard_confirm",
       "transactions_entry_discard_keep",
@@ -360,6 +362,7 @@
       "investments_trade_unit_price_hint",
       "investments_trade_unit_price_non_positive",
       "investments_trade_unit_price_precision",
+      "search_editor_open",
       "transactions_entry_discard_body",
       "transactions_entry_discard_confirm",
       "transactions_entry_discard_keep",
