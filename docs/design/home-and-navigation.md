@@ -308,10 +308,18 @@ the field does not move while results load; on phones full screen as before.
 Escape or a backdrop click closes it and focus returns to the opener (the
 button when nothing else had focus). Other UI opens the shortcut owner's
 search with `openSearch({ scope, onSelect })` (`search-launcher.ts`): the scope
-shows as the pressed *narrow to* chip and the request ends when search closes.
-It refuses while a modal owns the keyboard, like the shortcuts. Ctrl/⌘ K from
-an ordinary field still opens search; an editor or dialog that is modal keeps
-the keyboard.
+shows as the pressed *narrow to* chip. Its handler applies only while that
+scope is shown, so choosing *All* restores ordinary selection; the request
+ends when search is dismissed or its selection succeeds. A failed selection
+reopens search with the request, scope and handler kept for a retry, unless
+a newer interaction (the button, a shortcut, another request) has taken over
+(`search-request.svelte.ts`). Ctrl/⌘ K from an ordinary field still opens
+search, but neither the shortcuts, the button nor `openSearch` open it over a
+dialog or an open editor, modal or beside the page: choosing a result
+navigates away, and an edit or correction has no discard check on navigation.
+The transaction editor holds search closed while mounted (`editorHold`,
+`#lib/components/editor-hold.svelte.ts`); the header button is then
+`aria-disabled` and its title says to close the editor.
 
 ### Shared search foundation (#457)
 

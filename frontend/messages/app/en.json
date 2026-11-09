@@ -1021,6 +1021,7 @@
   "search_show_amounts": "Show amounts",
   "search_switch_theme": "Switch light/dark theme",
   "search_navigation_error": "Could not open this result. Try again.",
+  "search_editor_open": "Close the open editor to search",
   "attention_review": "Review",
   "attention_count": "Items to review: {count}",
   "attention_failed": "{count} known items · a check failed",

@@ -7,6 +7,7 @@
   import X from '@lucide/svelte/icons/x';
   import ModalDialog from '#lib/components/modal-dialog.svelte';
   import { modalOpen } from '#lib/components/modal-focus.ts';
+  import { editorOpen } from '#lib/components/editor-hold.svelte.ts';
   import { getSearchCatalog, searchCatalogQueryKey } from '#lib/api/search.ts';
   import { getAPIClientErrorMessage } from '#lib/api-error-messages.ts';
   import { dismissible } from '#lib/navigation/disclosure.ts';
@@ -17,6 +18,7 @@
   import { addTransaction, addTransfer } from '#lib/transactions/add-transaction.svelte.ts';
   import { searchItems } from './search-items.ts';
   import { registerSearchOwner, type SearchRequest } from './search-launcher.ts';
+  import { SearchRequestState } from './search-request.svelte.ts';
   import { applePlatform, createSearchIndex, searchGroups, searchResults, searchShortcut, searchShortcutHint, type SearchResult, type SearchScope } from './search-model.ts';
 
   // The owner mounts one global search. The header renders it as a *Search
@@ -43,10 +45,9 @@
   let trigger = $state<HTMLButtonElement>();
   let apple = $state(false);
   const hint = $derived(searchShortcutHint(apple, m.keyboard_key_ctrl()));
-  // A request from openSearch: its scope chip and selection, until closed.
-  let requested = $state<SearchRequest>();
+  // The shown scope and an openSearch request's scope chip and selection.
+  const session = new SearchRequestState(() => scope, () => onSelect);
   let query = $state('');
-  let currentScope = $state<SearchScope>('all');
   let inactive = $state(false);
   let limit = $state(6);
   let activeID = $state<string>();
@@ -66,7 +67,7 @@
   const objects = $derived(catalog.data?.pages.flatMap(page => page.items) ?? []);
   const items = $derived(searchItems(objects, amountPrivacy.hidden));
   const index = $derived(createSearchIndex(items));
-  const matches = $derived(searchResults(items, index, query, currentScope, inactive, getLocale()));
+  const matches = $derived(searchResults(items, index, query, session.scope, inactive, getLocale()));
   const groups = $derived(searchGroups.map(group => ({ group, items: matches.filter(item => item.group === group).slice(0, limit) })));
   const visible = $derived(groups.flatMap(group => group.items));
   const active = $derived(visible.find(item => item.id === activeID) ?? visible[0]);
@@ -76,7 +77,7 @@
   $effect(() => {
     if (open && catalog.hasNextPage && !catalog.isFetching && !catalog.isError) void catalog.fetchNextPage();
   });
-  $effect(() => { currentScope = scope; });
+  $effect(() => { session.reset(); });
 
   function label(group: SearchScope): string {
     switch (group) {
@@ -88,10 +89,14 @@
       case 'command': return m.search_commands();
     }
   }
-  function close(restore: boolean) {
+  // Closes without ending a request: choosing releases focus this way.
+  function release() {
     open = false;
     activeID = undefined;
-    if (requested) { requested = undefined; currentScope = scope; }
+  }
+  function close(restore: boolean) {
+    release();
+    session.dispose();
     // A dialog hands focus back to its opener itself.
     if (restore && !modal) {
       restoringFocus = true;
@@ -100,10 +105,12 @@
     }
   }
   function resetSelection() { activeID = undefined; limit = 6; navigationError = false; }
-  function changeScope(value: SearchScope) { currentScope = value; resetSelection(); input?.focus(); }
+  function changeScope(value: SearchScope) { session.setScope(value); resetSelection(); input?.focus(); }
+  // A modal, or an editor open beside the page, owns the keyboard: search
+  // never opens over it, since choosing a result would leave its work.
+  const blocked = () => modalOpen() || editorOpen();
   async function focusSearch() {
-    // Never steal focus out of another modal or phone editor.
-    if (modalOpen() && !open) return;
+    if (blocked() && !open) return;
     phone = window.matchMedia('(max-width: 767px)').matches;
     // A shortcut pressed with nothing focused returns focus to the button.
     if (!open && modal && (!document.activeElement || document.activeElement === document.body)) trigger?.focus();
@@ -112,14 +119,19 @@
     input?.focus();
   }
   function shortcut(event: KeyboardEvent) {
-    if (shortcuts && searchShortcut(event) && (!modalOpen() || open)) {
-      event.preventDefault(); void focusSearch();
+    if (shortcuts && searchShortcut(event) && (!blocked() || open)) {
+      event.preventDefault(); openPlain();
     }
   }
+  // The button and shortcuts open ordinary search, ending a request left
+  // waiting on a selection.
+  function openPlain() {
+    if (!open) session.dispose();
+    void focusSearch();
+  }
   function request(next: SearchRequest): boolean {
-    if (modalOpen() && !open) return false;
-    requested = next;
-    currentScope = next.scope ?? scope;
+    if (blocked() && !open) return false;
+    session.start(next);
     resetSelection();
     void focusSearch();
     return true;
@@ -145,24 +157,26 @@
   // stays on the same page and must not erase an independent search (#472).
   beforeNavigate(({ from, to }) => {
     if (from?.url.pathname === to?.url.pathname) return;
-    close(false); query = ''; currentScope = scope; inactive = false; resetSelection();
+    close(false); query = ''; session.reset(); inactive = false; resetSelection();
   });
 
   async function choose(item: SearchResult) {
     navigationError = false;
-    const select = requested?.onSelect ?? onSelect;
-    try {
-      // Release the phone modal before another workflow opens its own focus
-      // scope. Completion must not close a later search opened by the user.
-      close(false);
-      await tick();
-      if (select) await select(item);
-      else if (item.command === 'hide-amounts') setAmountsHidden(!amountPrivacy.hidden);
-      else if (item.command === 'theme') setTheme(themeState.name === 'dark' ? 'light' : 'dark');
-      else if (item.command === 'add-transaction') await addTransaction();
-      else if (item.command === 'add-transfer') addTransfer();
-      else if (item.href) await goto(item.href);
-    } catch { open = true; navigationError = true; await tick(); input?.focus(); }
+    await session.choose(item, {
+      // Release the modal before another workflow opens its own focus scope.
+      // Completion must not close a later search opened by the user.
+      release: () => { release(); },
+      act: async (select, chosen) => {
+        await tick();
+        if (select) await select(chosen);
+        else if (chosen.command === 'hide-amounts') setAmountsHidden(!amountPrivacy.hidden);
+        else if (chosen.command === 'theme') setTheme(themeState.name === 'dark' ? 'light' : 'dark');
+        else if (chosen.command === 'add-transaction') await addTransaction();
+        else if (chosen.command === 'add-transfer') addTransfer();
+        else if (chosen.href) await goto(chosen.href);
+      },
+      failed: async () => { open = true; navigationError = true; await tick(); input?.focus(); }
+    });
   }
   async function keydown(event: KeyboardEvent) {
     if (event.isComposing) return;
@@ -202,7 +216,7 @@
   <div class="flex flex-wrap gap-1 border-b border-border p-2" aria-label={m.search_scope_label()}>
     {#each ['all', 'account', 'category', 'instrument'] as choice}
       {@const value = choice as SearchScope}
-      <button type="button" aria-pressed={currentScope === value} onclick={() => changeScope(value)}
+      <button type="button" aria-pressed={session.scope === value} onclick={() => changeScope(value)}
         class="min-h-11 rounded-(--radius-control) px-2 text-xs text-muted hover:bg-control-hover aria-pressed:bg-surface-strong aria-pressed:text-foreground">{label(value)}</button>
     {/each}
   </div>
@@ -240,7 +254,9 @@
     <!-- Home's phone trigger looks like the field it opens; the header's is
          an icon on phones and a Search Ctrl K button from md up. -->
     <button bind:this={trigger} type="button" aria-label={phone ? (home ? m.search_placeholder() : m.search_label()) : undefined}
-      aria-haspopup="dialog" aria-keyshortcuts={phone ? undefined : hint.keys} onclick={() => { void focusSearch(); }}
+      aria-haspopup="dialog" aria-keyshortcuts={phone ? undefined : hint.keys}
+      aria-disabled={editorOpen() && !open ? 'true' : undefined} title={editorOpen() ? m.search_editor_open() : undefined}
+      onclick={openPlain}
       class={home
         ? 'flex min-h-13 w-full items-center gap-3 rounded-full border border-border bg-control px-5 text-left text-muted shadow-(--shadow-panel) hover:bg-control-hover'
         : phone

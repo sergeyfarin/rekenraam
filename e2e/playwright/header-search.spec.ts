@@ -2,7 +2,9 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, repoRoot, test, type Page } from './support/fixtures';
 import { expectFocusTrapped, expectNoAccessibilityViolations } from './support/a11y';
-import { readyForLedger } from './support/ledger';
+import { apiJSON } from './support/api';
+import { todayISO } from './support/dates';
+import { createCashAccount, readyForLedger } from './support/ledger';
 
 // #490: outside Home the header shows a rounded Search Ctrl K button, never a
 // field. It opens the shared search centred over the page (full screen on
@@ -96,6 +98,51 @@ test('slash and Ctrl/⌘ K open the centred search from any page, select and clo
   await expect(searchDialog(page)).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(help).toHaveCount(0);
+  await page.keyboard.press('Control+k');
+  await expect(combobox(page)).toBeFocused();
+  await page.keyboard.press('Escape');
+});
+
+test('search never opens over an open transaction editor, so an unsaved edit is not left behind', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const suffix = Date.now();
+  const description = `Search guard lunch ${suffix}`;
+  const account = await createCashAccount(page, csrfToken, `Search guard wallet ${suffix}`, currencyID);
+  const category = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/categories', csrfToken, { name: `Search guard meals ${suffix}`, category_type: 'expense' });
+  const today = todayISO();
+  await apiJSON(page, 'POST', '/api/v1/transactions', csrfToken, {
+    transaction_date: today, status: 'posted', description,
+    journal_entries: [{ entry_date: today, postings: [
+      { account_id: account.id, commodity_id: currencyID, quantity_value: '-1250', quantity_scale: 2 },
+      { account_id: category.id, commodity_id: currencyID, quantity_value: '1250', quantity_scale: 2 }
+    ] }]
+  });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/app/ledger/transactions');
+  await page.getByRole('row').filter({ hasText: description }).getByRole('button', { name: 'Edit', exact: true }).click();
+  const panel = page.getByRole('complementary', { name: 'Actions' });
+  await expect(panel.getByRole('heading', { name: 'Edit transaction' })).toBeVisible();
+  const field = panel.getByLabel('Description');
+  await field.fill(`${description} edited`);
+
+  // Not from the field, not from the page, not from the button.
+  await field.press('Control+k');
+  await page.locator('#main-content').focus();
+  await page.keyboard.press('/');
+  await page.keyboard.press('Meta+k');
+  const button = headerButton(page);
+  await expect(button).toHaveAttribute('aria-disabled', 'true');
+  await expect(button).toHaveAttribute('title', 'Close the open editor to search');
+  // aria-disabled stops Playwright's own click; a forced one must do nothing.
+  await button.click({ force: true });
+  await expect(searchDialog(page)).toHaveCount(0);
+  await expect(field).toHaveValue(`${description} edited`);
+  await expect(page).toHaveURL(url => url.pathname === '/app/ledger/transactions');
+
+  // Closing the editor gives search back.
+  await panel.getByRole('button', { name: 'Cancel', exact: true }).last().click();
+  await expect(panel.getByRole('heading', { name: 'Edit transaction' })).toHaveCount(0);
+  await expect(button).not.toHaveAttribute('aria-disabled', 'true');
   await page.keyboard.press('Control+k');
   await expect(combobox(page)).toBeFocused();
   await page.keyboard.press('Escape');

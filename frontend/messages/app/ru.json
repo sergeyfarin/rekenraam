@@ -1023,6 +1023,7 @@
   "search_show_amounts": "Показать суммы",
   "search_switch_theme": "Переключить светлую/тёмную тему",
   "search_navigation_error": "Не удалось открыть этот результат. Попробуйте ещё раз.",
+  "search_editor_open": "Закройте открытый редактор, чтобы искать",
   "attention_review": "Проверить",
   "attention_count": "Элементов для проверки: {count}",
   "attention_failed": "Известных элементов: {count} · ошибка проверки",
