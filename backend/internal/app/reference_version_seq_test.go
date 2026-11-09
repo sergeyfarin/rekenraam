@@ -193,7 +193,7 @@ func TestReferenceVersionSequenceFollowsTheNewestRowAfterBackdating(t *testing.T
 	instrument, err := f.investmentService.CreateInstrument(ctx, InvestmentInstrumentInput{
 		OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "investment.instrument.create",
 		CommodityCode: "VERSIONED", InstrumentType: "stock", DisplayName: "Versioned instrument",
-		QuantityScale: 6, PriceScale: 4, EffectiveFrom: "2026-01-01",
+		QuantityScale: 6, PriceScale: 4,
 	})
 	require.NoError(t, err)
 	updateInstrumentVersion(t, f, instrument.ID, "Instrument forward", "2026-06-01")
@@ -249,23 +249,30 @@ func TestInstrumentBackdatedStructureUsesTheVersionInEffectOnItsDate(t *testing.
 	requireLatestVersionSeq(t, f, "investment_instrument_versions", "instrument_id", instrument.ID, 4)
 }
 
-// #550 review: create dates v1 at the commodity genesis and ignores the
-// update-only effective_from field.
-func TestCreateInstrumentIgnoresEffectiveFrom(t *testing.T) {
+// #550 review: create ignores effective_from after validating its shape and
+// future-date bound, so malformed or future input is not silently accepted.
+func TestCreateInstrumentValidatesIgnoredEffectiveFrom(t *testing.T) {
 	t.Parallel()
-	f := newReferenceVersionFixture(t)
-	instrument, err := f.investmentService.CreateInstrument(context.Background(), InvestmentInstrumentInput{
-		OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "investment.instrument.create",
-		CommodityCode: "IGNORED-DATE", InstrumentType: "stock", DisplayName: "Ignored date",
-		QuantityScale: 6, PriceScale: 4, EffectiveFrom: "2027-01-01",
-	})
-	require.NoError(t, err)
-	var effectiveFrom string
-	require.NoError(t, f.database.QueryRow(`
-		SELECT effective_from FROM investment_instrument_versions
-		WHERE instrument_id = ? AND version_seq = 1
-	`, instrument.ID).Scan(&effectiveFrom))
-	assert.Equal(t, db.CommodityGenesisDate, effectiveFrom)
+	for _, tc := range []struct {
+		name, value, message, code string
+	}{
+		{"malformed", "not-a-date", "effective date must use YYYY-MM-DD", "VALIDATEDMALFORMED"},
+		{"future", "2027-01-01", "effective date must not be in the future", "VALIDATEDFUTURE"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			f := newReferenceVersionFixture(t)
+			_, err := f.investmentService.CreateInstrument(context.Background(), InvestmentInstrumentInput{
+				OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "investment.instrument.create",
+				CommodityCode: tc.code, InstrumentType: "stock", DisplayName: "Validated date",
+				QuantityScale: 6, PriceScale: 4, EffectiveFrom: tc.value,
+			})
+			require.ErrorContains(t, err, tc.message)
+			var count int
+			require.NoError(t, f.database.QueryRow(`SELECT COUNT(*) FROM investment_instruments WHERE commodity_id IN (SELECT id FROM commodities WHERE code = ?)`, tc.code).Scan(&count))
+			assert.Zero(t, count, "the refused create writes nothing")
+		})
+	}
 }
 
 // #550 review: omitted JSON objects in a backdated correction keep the value
@@ -307,7 +314,7 @@ func TestInstrumentBackdatedStructuralChangeIsRefused(t *testing.T) {
 	instrument, err := f.investmentService.CreateInstrument(ctx, InvestmentInstrumentInput{
 		OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "investment.instrument.create",
 		CommodityCode: "STRUCTURAL", InstrumentType: "stock", DisplayName: "Structural instrument",
-		QuantityScale: 6, PriceScale: 4, EffectiveFrom: "2026-01-01",
+		QuantityScale: 6, PriceScale: 4,
 	})
 	require.NoError(t, err)
 	updateInstrumentVersion(t, f, instrument.ID, "Structural instrument renamed", "2026-06-01")

@@ -839,8 +839,16 @@ func (s *InvestmentService) CreateInstrument(ctx context.Context, input Investme
 	}
 
 	now := s.now().UTC()
-	// Creation always dates v1 at the commodity genesis; effective_from is an
-	// update-only field and is deliberately not validated here.
+	today, err := s.settings.OwnerTodayAt(ctx, input.OwnerUserID, now)
+	if err != nil {
+		return InvestmentInstrument{}, err
+	}
+	// Creation always dates v1 at the commodity genesis; the field is ignored.
+	// Shape and future-date validation still reject a caller that believes it
+	// controls the first version's date.
+	if _, err := cleanEffectiveFrom(input.EffectiveFrom, today); err != nil {
+		return InvestmentInstrument{}, err
+	}
 	changeReason, err := cleanChangeReason(input.ChangeReason, "created investment instrument")
 	if err != nil {
 		return InvestmentInstrument{}, err

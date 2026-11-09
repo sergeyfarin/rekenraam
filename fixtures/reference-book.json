@@ -127,9 +127,9 @@
       "body": { "base_commodity_id": "@USD", "quote_commodity_id": "@EUR", "valuation_date": "2026-03-31", "price_value": "85", "price_scale": 2, "base_quantity_value": "1", "base_quantity_scale": 0, "reason": "reference book" } },
 
     { "why": "instrument REF: a dollar stock held to four decimal places", "method": "POST", "path": "/api/v1/investments/instruments", "status": 201, "capture": { "ref_instrument": "id", "REF": "commodity_id" },
-      "body": { "commodity_code": "REF{suffix}", "instrument_type": "stock", "display_name": "Reference Corp{suffix}", "symbol": "REF{suffix}", "quote_commodity_id": "@USD", "quantity_scale": 4, "price_scale": 4, "effective_from": "2026-01-01", "identifiers": {}, "metadata": {} } },
+      "body": { "commodity_code": "REF{suffix}", "instrument_type": "stock", "display_name": "Reference Corp{suffix}", "symbol": "REF{suffix}", "quote_commodity_id": "@USD", "quantity_scale": 4, "price_scale": 4, "identifiers": {}, "metadata": {} } },
     { "why": "instrument SHRT: a dollar stock, shorted", "method": "POST", "path": "/api/v1/investments/instruments", "status": 201, "capture": { "shrt_instrument": "id", "SHRT": "commodity_id" },
-      "body": { "commodity_code": "SHRT{suffix}", "instrument_type": "stock", "display_name": "Short Corp{suffix}", "symbol": "SHRT{suffix}", "quote_commodity_id": "@USD", "quantity_scale": 4, "price_scale": 4, "effective_from": "2026-01-01", "identifiers": {}, "metadata": {} } },
+      "body": { "commodity_code": "SHRT{suffix}", "instrument_type": "stock", "display_name": "Short Corp{suffix}", "symbol": "SHRT{suffix}", "quote_commodity_id": "@USD", "quantity_scale": 4, "price_scale": 4, "identifiers": {}, "metadata": {} } },
     { "why": "holding under FIFO", "method": "POST", "path": "/api/v1/investments/holding-accounts", "status": 201, "capture": { "hold_fifo": "id" },
       "body": { "instrument_id": "@ref_instrument", "name": "Ref FIFO holding{suffix}", "opened_on": "2026-01-01", "effective_from": "2026-01-01", "cost_basis_method": "fifo" } },
     { "why": "holding under average cost", "method": "POST", "path": "/api/v1/investments/holding-accounts", "status": 201, "capture": { "hold_avg": "id" },

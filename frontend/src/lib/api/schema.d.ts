@@ -32424,7 +32424,7 @@ export interface components {
             };
             /**
              * Format: date
-             * @description Effective date for an instrument update. Instrument creation always dates the first version at the commodity genesis, so this value is ignored on create.
+             * @description Effective date for an instrument update. Ignored on create: instrument creation always dates the first version at the commodity genesis. A malformed or future value is still rejected with VALIDATION_FAILED.
              */
             effective_from?: string;
             change_reason?: string;

@@ -168,7 +168,10 @@ InvestmentInstrumentRequest:
     effective_from:
       type: string
       format: date
-      description: Effective date for an instrument update. Instrument creation always dates the first version at the commodity genesis, so this value is ignored on create.
+      description: >-
+        Effective date for an instrument update. Ignored on create: instrument
+        creation always dates the first version at the commodity genesis. A
+        malformed or future value is still rejected with VALIDATION_FAILED.
     change_reason:
       type: string
 

@@ -407,7 +407,9 @@ therefore enforces this contract inside its transaction:
   on which any account version changes, refusing a cycle
   (`400 VALIDATION_FAILED`, "account parent is invalid").
 
-Earlier-dated instrument versions (#549). Instruments follow the same
+Earlier-dated instrument versions (#549). Instrument creation always dates v1
+at the commodity genesis; `effective_from` is update-only and is ignored on
+create, after the usual shape and future-date validation. Instruments follow the same
 backdating contract: a version dated before the instrument's latest version may
 correct descriptive fields only (`display_name`, `symbol`, `exchange_code`,
 `mic`, `issuer`, `country_code`, `identifiers_json`, `metadata_json`).
