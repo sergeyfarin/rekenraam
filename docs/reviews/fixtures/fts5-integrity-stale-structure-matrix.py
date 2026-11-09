@@ -7,13 +7,18 @@ amalgamation, and against a copy of each with the candidate engine patch
 
 - the base probe in both journal modes, with and without `refresh`;
 - invalid arguments, which must exit 2;
-- injected failures, which must exit 2: each is a source mutation of the probe
-  that breaks one control, opening step or statement, or simulates an engine
-  that rewords the damage-control message.
+- source mutations of the probe. Most break one control, opening step or
+  statement, and must exit 2. Two change one damage-control expected text,
+  standing in for a reworded engine message, and must exit 2 through that
+  branch. One skips the FTS5 command, so the reader is stale at the damage
+  check, and must match the base probe.
 
-Writes every run (expected and actual exit status, plus the probe's full
-stdout) and the provenance of every input to OUTPUT.json, and exits 1 if any
-run differs from its expectation. Run it with `python3 -I`. It
+Every case also names a line its stdout must contain, which shows which
+branch decided the run. OUTPUT.json holds every run (expected and actual
+exit status, required line, full stdout) and the input hashes, and is
+deterministic for the same inputs. The volatile environment (time, compiler,
+platform) goes to OUTPUT.environment.json. The script exits 1 if any run
+differs from its expectation. Run it with `python3 -I`. It
 needs `cc`, and the amalgamations must be authenticated beforehand (see the
 review). Each run uses its own empty directory under a temporary root.
 """
@@ -41,45 +46,69 @@ OPEN_READER = 'sqlite3 *r = open_db("open reader");'
 READER_DAMAGE = ('    if (reader_check(r, refresh, got, sizeof got) == SQLITE_OK) {\n'
                  '      printf("reader integrity_check after')
 
-# name -> list of (exact text in the probe, replacement)
+FRESH_DAMAGE = 'else if (!strstr(got, "malformed inverted index for FTS5 table main.t"))'
+READER_DAMAGE_MATCH = '\n      if (!strstr(got, "malformed inverted index for FTS5 table main.t"))'
+QUOTED_TABLE = '\\"main\\".\\"t\\"'  # C source text for "main"."t"
+STALE_READER_DAMAGE = ("reader integrity_check after deleting a t_docsize row: "
+                       "malformed inverted index for FTS5 table main.t")
+
+# name -> (list of (exact text in the probe, replacement),
+#          expected exit: 2, or None for "same as the base probe",
+#          required stdout text proving which branch decided the run: a string,
+#          or a function of "does the base probe show the defect" -> list)
 MUTATIONS = {
-    "authorizer denies the reader pragma at the damage check": [
+    "authorizer denies the reader pragma at the damage check": ([
         ("static int invalid;", DENY + "static int invalid;"),
         (OPEN_READER, OPEN_READER + " sqlite3_set_authorizer(r, deny, 0);"),
         (READER_DAMAGE, "    deny_on = 1;\n" + READER_DAMAGE),
-    ],
-    "authorizer denies every reader pragma": [
+    ], 2, "INVALID: reader PRAGMA integrity_check: prepare: not authorized"),
+    "authorizer denies every reader pragma": ([
         ("static int invalid;", DENY + "static int invalid;"),
         (OPEN_READER, OPEN_READER + " sqlite3_set_authorizer(r, deny, 0); deny_on = 1;"),
-    ],
-    "fresh-connection control returns not ok": [
+    ], 2, "INVALID: reader PRAGMA integrity_check: prepare: not authorized"),
+    "fresh-connection control returns not ok": ([
         ('int rc = query(f, "PRAGMA integrity_check"', "int rc = query(f, \"SELECT 'not ok'\""),
-    ],
-    "FTS5 integrity-check command fails": [
+    ], 2, "INVALID: fresh-connection control: not ok"),
+    "FTS5 integrity-check command fails": ([
         ("VALUES('integrity-check')\", 0", "VALUES('integrity-chek')\", 0"),
-    ],
-    "damage DELETE matches no row": [
+    ], 2, "INVALID: FTS5 'integrity-check' control"),
+    "damage DELETE matches no row": ([
         ("t_docsize WHERE id = 2", "t_docsize WHERE id = 99"),
-    ],
-    "damage DELETE fails": [
+    ], 2, "INVALID: damage control: no t_docsize row deleted"),
+    "damage DELETE fails": ([
         ("DELETE FROM t_docsize WHERE id = 2", "DELETE FROM t_docsizzz WHERE id = 2"),
-    ],
-    "writer INSERT between checks fails": [
+    ], 2, "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table"),
+    "writer INSERT between checks fails": ([
         ("INSERT INTO t(x) VALUES('gamma delta %d')", "INSERT INTO nope(x) VALUES('gamma delta %d')"),
-    ],
-    # A future engine might quote the table differently; the probe must then
-    # refuse to interpret the run rather than pass or fail it.
-    "damage-control message reworded (simulated)": [
-        ('else if (!strstr(got, "malformed inverted index for FTS5 table main.t"))',
-         'else if (!strstr(got, "malformed inverted index for FTS5 table \\"main\\".\\"t\\""))'),
-        ('if (!strstr(got, "malformed inverted index for FTS5 table main.t") &&',
-         'if (!strstr(got, "malformed inverted index for FTS5 table \\"main\\".\\"t\\"") &&'),
-    ],
-    "fresh connection cannot open": [
+    ], 2, "INVALID: INSERT INTO nope(x)"),
+    "fresh connection cannot open": ([
         ('SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, 0);',
          'SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,'
          ' strcmp(who, "open fresh connection") ? 0 : "no-such-vfs");'),
-    ],
+    ], 2, "INVALID: open fresh connection: no such vfs"),
+    # These change the probe's expected text, not the engine's message: they
+    # stand in for an engine that words its damage finding differently, and
+    # take the fresh and reader exact-match branches one at a time.
+    "fresh damage-control expected text changed (simulated)": ([
+        (FRESH_DAMAGE, FRESH_DAMAGE.replace("main.t", QUOTED_TABLE)),
+    ], 2, "INVALID: fresh-connection damage control: no FTS5 corruption finding for t"),
+    "reader damage-control expected text changed (simulated)": ([
+        (READER_DAMAGE_MATCH, READER_DAMAGE_MATCH.replace("main.t", QUOTED_TABLE)),
+    ], 2, "INVALID: reader damage control: no FTS5 corruption finding for t"),
+    # The FTS5 command is replaced by a bare reader integrity_check that only
+    # prints, so the reader's cache is still stale at the damage check, and the
+    # printed mismatch proves it. FTS5 checks docsize before it compares
+    # checksums, so the stale reader still reports the corruption itself; the
+    # exit status matches the base probe.
+    "FTS5 command skipped (reader cache stale at damage check)": ([
+        ("  rc = sqlite3_exec(r, \"INSERT INTO t(t) VALUES('integrity-check')\", 0, 0, 0);\n"
+         "  printf(\"reader FTS5 'integrity-check' command: %s\\n\", rc == SQLITE_OK ? \"ok\" : sqlite3_errmsg(r));",
+         "  rc = query(r, \"PRAGMA integrity_check\", got, sizeof got);\n"
+         "  printf(\"reader FTS5 'integrity-check' command: skipped (mutation)\\n\");\n"
+         "  printf(\"reader bare integrity_check before damage: %s\\n\", got);"),
+    ], None, lambda defect: (
+        ['reader bare integrity_check before damage: fts5: checksum mismatch for table "t"',
+         STALE_READER_DAMAGE] if defect else [STALE_READER_DAMAGE])),
 }
 
 BAD_ARGS = [["wal", "refesh"], ["wal", "refresh", "extra"], ["wl"], ["wal", ""]]
@@ -105,8 +134,8 @@ def parse_engines(args):
         name, sep, directory = arg.partition("=")
         if not sep or not name or not directory:
             raise SystemExit(f"expected NAME=AMALGAMATION_DIR, got {arg!r}")
-        if name in names or "/" in name:
-            raise SystemExit(f"engine name {name!r} is repeated or contains '/'")
+        if name in names or "/" in name or name.endswith("+patch"):
+            raise SystemExit(f"engine name {name!r} is repeated, contains '/' or ends in '+patch'")
         path = Path(directory).resolve()
         for required in ("sqlite3.c", "sqlite3.h"):
             if not (path / required).is_file():
@@ -179,35 +208,49 @@ def main():
             print(name, flush=True)
             engine = compile_engine(directory, work, name)
             base = link_probe(probe_source, directory, engine, work / f"probe-{name}")
+            def base_exit(args):
+                return 0 if patched or "refresh" in args else 1
+
+            def base_line(args):
+                if base_exit(args):
+                    return 'reader integrity_check run 2: fts5: checksum mismatch for table "t"'
+                return "reader integrity_check run 2: ok"
+
             cases = []
             for mode in ("wal", "delete"):
-                cases.append(("base", [mode], 0 if patched else 1, base))
-                cases.append(("base", [mode, "refresh"], 0, base))
+                for args in ([mode], [mode, "refresh"]):
+                    cases.append(("base", args, base_exit(args), [base_line(args)], base))
             for args in BAD_ARGS:
-                cases.append(("invalid arguments", args, 2, base))
-            for index, (mutation, replacements) in enumerate(MUTATIONS.items()):
+                cases.append(("invalid arguments", args, 2, ["usage: <work>/probe-"], base))
+            for index, (mutation, (replacements, expected, line)) in enumerate(MUTATIONS.items()):
                 source = probe_source
                 for old, new in replacements:
                     source = replace_once(source, old, new, mutation)
                 binary = link_probe(source, directory, engine, work / f"probe-{name}-m{index}")
                 for args in (["wal"], ["wal", "refresh"]):
-                    cases.append((mutation, args, 2, binary))
-            for case, args, expected, binary in cases:
+                    lines = line(not patched) if callable(line) else [line]
+                    cases.append((mutation, args, base_exit(args) if expected is None else expected,
+                                  lines, binary))
+            for case, args, expected, lines, binary in cases:
                 result = run(binary, args, work)
-                ok = result["exit"] == expected
+                ok = result["exit"] == expected and all(
+                    any(want in out for out in result["stdout"]) for want in lines)
                 failed |= not ok
                 runs.append({"engine": name, "official_sqlite3_c_sha3_256": source_sha3,
                              "candidate_patch": patched, "case": case, "args": args,
-                             "expected_exit": expected, **result, "as_expected": ok})
+                             "expected_exit": expected, "required_lines": lines, **result,
+                             "as_expected": ok})
                 print(f"  {'ok ' if ok else 'BAD'} {case} {args} exit={result['exit']}", flush=True)
 
     compiler = subprocess.run(["cc", "--version"], capture_output=True, text=True, check=True)
-    output.write_text(json.dumps({
+    output.with_name(output.stem + ".environment.json").write_text(json.dumps({
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
-        "probe_sha256": sha256(probe),
-        "matrix_sha256": sha256(__file__),
         "compiler": compiler.stdout.splitlines()[0],
         "platform": platform.platform(),
+    }, indent=2) + "\n")
+    output.write_text(json.dumps({
+        "probe_sha256": sha256(probe),
+        "matrix_sha256": sha256(__file__),
         "cflags": CFLAGS,
         "engines": engine_provenance,
         "runs": runs,

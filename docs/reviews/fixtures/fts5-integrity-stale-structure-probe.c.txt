@@ -29,10 +29,10 @@
  *   also means exit 1 alone does not prove that this defect is the cause.
  *   Read the printed finding; for #403 it is
  *   "fts5: checksum mismatch for table \"t\"".
- * - The damage controls match exact English engine messages:
- *   "malformed inverted index for FTS5 table main.t", plus the checksum
- *   message as the stale reader's fallback. SQLite has no code for an
- *   integrity_check row. These strings can change between versions, even in
+ * - The damage controls match one exact English engine message,
+ *   "malformed inverted index for FTS5 table main.t", on both the fresh
+ *   connection and the reader. SQLite has no code for an integrity_check
+ *   row. These strings can change between versions, even in
  *   cosmetic ways such as how the table is quoted. A damage message that no
  *   longer matches makes the probe exit 2 and print the new text. Update the
  *   strings after reading it; never read exit 2 as a result. A looser prefix
@@ -190,11 +190,10 @@ int main(int argc, char **argv) {
     sqlite3_close(f);
     if (reader_check(r, refresh, got, sizeof got) == SQLITE_OK) {
       printf("reader integrity_check after deleting a t_docsize row: %s\n", got);
-      /* A reader that showed the defect may report the damage through its
-       * stale cache as a checksum mismatch; one that did not must report the
-       * same corruption finding as the fresh connection. */
-      if (!strstr(got, "malformed inverted index for FTS5 table main.t") &&
-          !(bug && strstr(got, "fts5: checksum mismatch for table \"t\"")))
+      /* The reader must report the same corruption finding as the fresh
+       * connection, even when its cache is stale: FTS5 checks docsize before
+       * it compares checksums (the matrix's "FTS5 command skipped" case). */
+      if (!strstr(got, "malformed inverted index for FTS5 table main.t"))
         harness_fail("reader damage control", "no FTS5 corruption finding for t");
     }
   }
