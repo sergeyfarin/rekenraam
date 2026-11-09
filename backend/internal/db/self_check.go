@@ -640,8 +640,9 @@ const SelfCheckSampleLimit = 20
 // transaction_search, a connection that already ran the check reports a
 // checksum mismatch the file does not have (#403). Reading each FTS5 table
 // first in the same transaction refreshes that cache; real FTS5 damage still
-// fails the check. The standalone reproduction and upstream report are in
-// docs/reviews/fts5-integrity-stale-structure-2026-11-08.md (#541).
+// fails the check. The standalone reproduction and draft upstream report are
+// in docs/reviews/fts5-integrity-stale-structure-2026-11-08.md; posting status
+// is tracked in #541.
 func (r *SelfCheckRepository) SQLiteIntegrity(ctx context.Context) (string, error) {
 	transaction, err := r.readOnly.BeginTx(ctx, nil)
 	if err != nil {

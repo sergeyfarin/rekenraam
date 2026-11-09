@@ -1,0 +1,1507 @@
+{
+  "probe_sha256": "a58e3e278157221df0f7ad841d503ea0b1c27999a34867ed0077ad147e7780da",
+  "cflags": [
+    "-O1",
+    "-DSQLITE_THREADSAFE=1",
+    "-DSQLITE_ENABLE_FTS5"
+  ],
+  "runs": [
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "base",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 1,
+      "exit": 1,
+      "verdict": "FAIL (false finding on an undamaged file)",
+      "invalid": null,
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "base",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "base",
+      "args": [
+        "delete"
+      ],
+      "expected_exit": 1,
+      "exit": 1,
+      "verdict": "FAIL (false finding on an undamaged file)",
+      "invalid": null,
+      "engine_version": "sqlite 3.53.4 journal_mode=delete refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "base",
+      "args": [
+        "delete",
+        "refresh"
+      ],
+      "expected_exit": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.53.4 journal_mode=delete refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "invalid arguments",
+      "args": [
+        "wal",
+        "refesh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "invalid arguments",
+      "args": [
+        "wal",
+        "refresh",
+        "extra"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "invalid arguments",
+      "args": [
+        "wl"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "invalid arguments",
+      "args": [
+        "wal",
+        ""
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "authorizer denies the reader pragma at the damage check",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "authorizer denies the reader pragma at the damage check",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "authorizer denies every reader pragma",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "authorizer denies every reader pragma",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "fresh-connection control returns not ok",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: fresh-connection control: not ok",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "fresh-connection control returns not ok",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: fresh-connection control: not ok",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "FTS5 integrity-check command fails",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: FTS5 'integrity-check' control: SQL logic error",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "FTS5 integrity-check command fails",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: FTS5 'integrity-check' control: SQL logic error",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "damage DELETE matches no row",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: damage control: no t_docsize row deleted",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "damage DELETE matches no row",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: damage control: no t_docsize row deleted",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "damage DELETE fails",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table: t_docsizzz",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "damage DELETE fails",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table: t_docsizzz",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "writer INSERT between checks fails",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: INSERT INTO nope(x) VALUES('gamma delta 1'): no such table: nope",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "writer INSERT between checks fails",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: INSERT INTO nope(x) VALUES('gamma delta 1'): no such table: nope",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "fresh connection cannot open",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: open fresh connection: no such vfs: no-such-vfs",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "fresh connection cannot open",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: open fresh connection: no such vfs: no-such-vfs",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "base",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "base",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "base",
+      "args": [
+        "delete"
+      ],
+      "expected_exit": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.53.4 journal_mode=delete refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "base",
+      "args": [
+        "delete",
+        "refresh"
+      ],
+      "expected_exit": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.53.4 journal_mode=delete refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "invalid arguments",
+      "args": [
+        "wal",
+        "refesh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "invalid arguments",
+      "args": [
+        "wal",
+        "refresh",
+        "extra"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "invalid arguments",
+      "args": [
+        "wl"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "invalid arguments",
+      "args": [
+        "wal",
+        ""
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "authorizer denies the reader pragma at the damage check",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "authorizer denies the reader pragma at the damage check",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "authorizer denies every reader pragma",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "authorizer denies every reader pragma",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "fresh-connection control returns not ok",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: fresh-connection control: not ok",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "fresh-connection control returns not ok",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: fresh-connection control: not ok",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "FTS5 integrity-check command fails",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: FTS5 'integrity-check' control: SQL logic error",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "FTS5 integrity-check command fails",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: FTS5 'integrity-check' control: SQL logic error",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "damage DELETE matches no row",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: damage control: no t_docsize row deleted",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "damage DELETE matches no row",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: damage control: no t_docsize row deleted",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "damage DELETE fails",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table: t_docsizzz",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "damage DELETE fails",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table: t_docsizzz",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "writer INSERT between checks fails",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: INSERT INTO nope(x) VALUES('gamma delta 1'): no such table: nope",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "writer INSERT between checks fails",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: INSERT INTO nope(x) VALUES('gamma delta 1'): no such table: nope",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "fresh connection cannot open",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: open fresh connection: no such vfs: no-such-vfs",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "fresh connection cannot open",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: open fresh connection: no such vfs: no-such-vfs",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "base",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 1,
+      "exit": 1,
+      "verdict": "FAIL (false finding on an undamaged file)",
+      "invalid": null,
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "base",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "base",
+      "args": [
+        "delete"
+      ],
+      "expected_exit": 1,
+      "exit": 1,
+      "verdict": "FAIL (false finding on an undamaged file)",
+      "invalid": null,
+      "engine_version": "sqlite 3.54.1 journal_mode=delete refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "base",
+      "args": [
+        "delete",
+        "refresh"
+      ],
+      "expected_exit": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.54.1 journal_mode=delete refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "invalid arguments",
+      "args": [
+        "wal",
+        "refesh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "invalid arguments",
+      "args": [
+        "wal",
+        "refresh",
+        "extra"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "invalid arguments",
+      "args": [
+        "wl"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "invalid arguments",
+      "args": [
+        "wal",
+        ""
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "authorizer denies the reader pragma at the damage check",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "authorizer denies the reader pragma at the damage check",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "authorizer denies every reader pragma",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "authorizer denies every reader pragma",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "fresh-connection control returns not ok",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: fresh-connection control: not ok",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "fresh-connection control returns not ok",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: fresh-connection control: not ok",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "FTS5 integrity-check command fails",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: FTS5 'integrity-check' control: SQL logic error",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "FTS5 integrity-check command fails",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: FTS5 'integrity-check' control: SQL logic error",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "damage DELETE matches no row",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: damage control: no t_docsize row deleted",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "damage DELETE matches no row",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: damage control: no t_docsize row deleted",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "damage DELETE fails",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table: t_docsizzz",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "damage DELETE fails",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table: t_docsizzz",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "writer INSERT between checks fails",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: INSERT INTO nope(x) VALUES('gamma delta 1'): no such table: nope",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "writer INSERT between checks fails",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: INSERT INTO nope(x) VALUES('gamma delta 1'): no such table: nope",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "fresh connection cannot open",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: open fresh connection: no such vfs: no-such-vfs",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "fresh connection cannot open",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: open fresh connection: no such vfs: no-such-vfs",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "base",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "base",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "base",
+      "args": [
+        "delete"
+      ],
+      "expected_exit": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.54.1 journal_mode=delete refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "base",
+      "args": [
+        "delete",
+        "refresh"
+      ],
+      "expected_exit": 0,
+      "exit": 0,
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.54.1 journal_mode=delete refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "invalid arguments",
+      "args": [
+        "wal",
+        "refesh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "invalid arguments",
+      "args": [
+        "wal",
+        "refresh",
+        "extra"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "invalid arguments",
+      "args": [
+        "wl"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "invalid arguments",
+      "args": [
+        "wal",
+        ""
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "authorizer denies the reader pragma at the damage check",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "authorizer denies the reader pragma at the damage check",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "authorizer denies every reader pragma",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "authorizer denies every reader pragma",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "fresh-connection control returns not ok",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: fresh-connection control: not ok",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "fresh-connection control returns not ok",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: fresh-connection control: not ok",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "FTS5 integrity-check command fails",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: FTS5 'integrity-check' control: SQL logic error",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "FTS5 integrity-check command fails",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: FTS5 'integrity-check' control: SQL logic error",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "damage DELETE matches no row",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: damage control: no t_docsize row deleted",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "damage DELETE matches no row",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: damage control: no t_docsize row deleted",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "damage DELETE fails",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table: t_docsizzz",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "damage DELETE fails",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table: t_docsizzz",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "writer INSERT between checks fails",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: INSERT INTO nope(x) VALUES('gamma delta 1'): no such table: nope",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "writer INSERT between checks fails",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: INSERT INTO nope(x) VALUES('gamma delta 1'): no such table: nope",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "fresh connection cannot open",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: open fresh connection: no such vfs: no-such-vfs",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "fresh connection cannot open",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "exit": 2,
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: open fresh connection: no such vfs: no-such-vfs",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    }
+  ],
+  "all_as_expected": true
+}

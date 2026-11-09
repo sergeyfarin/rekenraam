@@ -46,22 +46,27 @@ The journal mode does not matter: WAL and rollback (`delete`) behave the same.
 
 | File | What it is |
 |---|---|
-| [`fixtures/fts5-integrity-stale-structure-probe.c.txt`](fixtures/fts5-integrity-stale-structure-probe.c.txt) | Self-checking C probe. Two connections run three `integrity_check` checks, with a write on the other connection between each. Then come three controls: a fresh-connection check, the FTS5 `'integrity-check'` command, and real damage (a deleted `t_docsize` row) that both a fresh connection and the reader must report as an FTS5 corruption finding for `t`. The optional `refresh` argument applies the application's workaround in one read transaction. Exit status: **0** pass, **1** false finding (bug present, controls passed), **2** invalid run. |
-| [`fixtures/fts5-integrity-stale-structure-probe.sql`](fixtures/fts5-integrity-stale-structure-probe.sql) | Shell-only version for the `sqlite3` CLI (`.connection`, 3.37+). This is the form used in the upstream report. |
+| [`fixtures/fts5-integrity-stale-structure-probe.c.txt`](fixtures/fts5-integrity-stale-structure-probe.c.txt) | Self-checking C probe. Two connections run three `integrity_check` checks, with a write on the other connection between each. Then come three controls: a fresh-connection check, the FTS5 `'integrity-check'` command, and real damage (a deleted `t_docsize` row) that both a fresh connection and the reader must report as an FTS5 corruption finding for `t`. The optional `refresh` argument applies the application's workaround in one read transaction. Exit status: **0** pass, **1** false finding (bug present, controls passed), **2** invalid run, including invalid arguments. |
+| [`fixtures/fts5-integrity-stale-structure-probe.sql`](fixtures/fts5-integrity-stale-structure-probe.sql) | Shell-only version for the `sqlite3` CLI (`.connection`, 3.37+). `.open --new` makes it rerunnable in place. This is the form used in the upstream report. |
+| [`fixtures/fts5-integrity-stale-structure-matrix.py`](fixtures/fts5-integrity-stale-structure-matrix.py) | Matrix driver. It builds the probe against each given amalgamation and against a copy with the candidate patch applied. It runs the base grid, invalid arguments and every injected failure as a source mutation, and writes expected and actual exit codes to JSON. |
+| [`fixtures/fts5-integrity-stale-structure-2026-11-09.json`](fixtures/fts5-integrity-stale-structure-2026-11-09.json) | That driver's output for 3.53.4 and 3.54.1: 96 runs, all as expected. |
 
 ## Results
 
 Official amalgamations, built with
 `cc -O1 -DSQLITE_THREADSAFE=1 -DSQLITE_ENABLE_FTS5`. Each `sqlite3.c`
 SHA3-256 matches its release log:
-[3.53.4](https://sqlite.org/releaselog/3_53_4.html) `67f423e9…5c043a16`,
-[3.54.1](https://sqlite.org/releaselog/3_54_1.html) `e2b869d3…b558ee81`.
+
+| Engine | `sqlite3.c` SHA3-256 |
+|---|---|
+| [3.53.4](https://sqlite.org/releaselog/3_53_4.html) | `67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16` |
+| [3.54.1](https://sqlite.org/releaselog/3_54_1.html) | `e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81` |
 
 | Engine | Mode | No refresh | `refresh` |
 |---|---|---|---|
 | 3.53.4 | wal / delete | **exit 1**: runs 2–3 `checksum mismatch` | exit 0 |
 | 3.54.1 | wal / delete | **exit 1**: runs 2–3 `checksum mismatch` | exit 0 |
-| 3.54.1 + candidate patch | wal / delete | exit 0 | exit 0 |
+| 3.53.4 or 3.54.1 + candidate patch | wal / delete | exit 0 | exit 0 |
 
 In every row, all three controls passed: the fresh connection and the FTS5
 `'integrity-check'` command reported `ok`, and both the fresh connection and
@@ -71,12 +76,15 @@ main.t`. The CLI script prints `ok / checksum mismatch / ok` on 3.53.4 and
 
 **The probe's own failure modes.** The first version of the probe treated any
 non-`ok` damage result as detection, even a failure to run the check, and it
-only printed its two independent controls. Review of PR #546 showed that an
-injected authorization failure and broken controls both still produced exit
-0. The probe now separates execution status from findings, and every open,
-statement and control can fail the run. Each of these injected failures
-returns **exit 2**, on 3.54.1 and on the patched engine, with and without
-`refresh` (28 runs):
+only printed its two independent controls. Review of PR #546 (summarized in
+the PR description) showed that an injected authorization failure and broken
+controls both still produced exit 0, and that a mistyped `refresh` silently
+ran the other experiment. The probe now separates execution status from
+findings, rejects unknown arguments, and lets every open, statement and
+control fail the run. The matrix driver applies each of these failures to all
+four engines (3.53.4 and 3.54.1, with and without the patch), with and
+without `refresh`. Every one returns **exit 2**, and so do four invalid
+argument lists (`wal refesh`, `wal refresh extra`, `wl`, `wal ''`):
 
 | Injected failure | Reported as |
 |---|---|
@@ -87,9 +95,16 @@ returns **exit 2**, on 3.54.1 and on the patched engine, with and without
 | Damage `DELETE` matches no row | `damage control: no t_docsize row deleted` |
 | Damage `DELETE` fails | the statement and its error |
 | A writer `INSERT` between checks fails | the statement and its error |
+| The fresh connection cannot open | `open fresh connection: no such vfs` |
 
-The candidate patch is one line in `fts5IntegrityMethod`, mirroring
-`fts5BeginMethod`:
+The findings are matched as exact English engine messages. SQLite has no
+stable code for an `integrity_check` row, and no shorter prefix is any more
+stable than the full text. A future engine that rewords them makes the probe
+exit 2 and print the new text. That is safe but noisy: read the text, update
+the strings, and rerun.
+
+The candidate patch is one logical change in `fts5IntegrityMethod`: call
+`fts5NewTransaction()` before the check, as `fts5BeginMethod` does.
 
 ```diff
    pTab->p.pConfig->pzErrmsg = pzErr;
@@ -99,8 +114,8 @@ The candidate patch is one line in `fts5IntegrityMethod`, mirroring
 ```
 
 This patch is a hypothesis offered with the report, not a validated fix. The
-only evidence for it is this probe's small matrix: two engines, two journal
-modes, one table and one kind of damage. It has not been run against
+only evidence for it is this probe's small matrix: two engine versions, two
+journal modes, one table and one kind of damage. It has not been run against
 SQLite's own test suite, and it does not show that resetting the cache inside
 `xIntegrity` is safe with open cursors, nested transactions or other schemas.
 Whether and how to fix this is upstream's call. The application never patches
@@ -116,17 +131,13 @@ toolchain, which this review did not run.
 
 **Existing reports.** #403 found none. The SQLite forum and Fossil timeline
 sit behind a browser check, so this review could not search them again
-automatically. Whoever posts the report should search the forum for
-`fts5 checksum mismatch integrity_check` first.
+automatically. The pre-post forum search belongs with the posting record on
+#541.
 
 ## Upstream report
 
-Status: **draft approved by the owner on 2026-11-08; the owner is posting
-it** (#541). On 2026-11-09, after the PR #546 review, the paragraph after the
-code sample was revised. It now presents the patch as a sketch and says the
-refresh read happens inside the same read transaction. The owner approved
-the revised text on 2026-11-09 and is posting it. Once it is posted, the thread link goes on #541 and in this
-section.
+This section keeps the draft as evidence. #541 is the only record of
+approval, the pre-post search, posting and the thread link.
 
 Draft for the [SQLite forum](https://sqlite.org/forum/forum):
 
@@ -139,8 +150,11 @@ Draft for the [SQLite forum](https://sqlite.org/forum/forum):
 > VALUES('integrity-check')` on the same connection. Seen with 3.53.4 and
 > 3.54.1, in WAL and rollback mode.
 >
+> Run in the `sqlite3` shell (3.37+ for `.connection`). It creates or
+> overwrites `probe-cli.db` in the current directory:
+>
 > ```
-> .open probe-cli.db
+> .open --new probe-cli.db
 > CREATE VIRTUAL TABLE t USING fts5(x);
 > INSERT INTO t(x) VALUES('alpha beta');
 > .connection 1
@@ -174,18 +188,10 @@ Draft for the [SQLite forum](https://sqlite.org/forum/forum):
 
 ## Workaround lifecycle
 
-- Keep `refreshFTS5StructuresTx` until an admitted driver bundles an engine
-  with the fix.
-- **On every driver admission review** (#356 and later), build this probe
-  against the candidate's engine source and run it without `refresh`. Record
-  the exit status: **1** means the workaround is still needed, **0** means
-  the engine looks fixed, and **2** means the run proves nothing and must be
-  repaired, not read as either. Also run
-  `TestSQLiteIntegrityOnAReusedReaderAfterSearchWrites`: its bare-pragma
-  canary fails once the engine is fixed. Exit 0 alone is not enough to
-  remove the refresh. Read the upstream fix first, and confirm the Go canary
-  as well. Then decide in that review whether to remove the refresh, and keep
-  or invert the canary.
+`docs/developer-workflow.md` (SQLite driver section) holds the normative
+rule: when the probe runs at a driver admission, how its exit status reads,
+and what removing `refreshFTS5StructuresTx` requires. This review only
+supplies the probe and the evidence.
 
 ## Reproduction
 
@@ -195,6 +201,10 @@ cp docs/reviews/fixtures/fts5-integrity-stale-structure-probe.c.txt /tmp/probe.c
 cc -O1 -DSQLITE_THREADSAFE=1 -DSQLITE_ENABLE_FTS5 -I "$DIR" "$DIR/sqlite3.c" \
   /tmp/probe.c -o /tmp/fts5-probe -lm -lpthread -ldl
 (cd "$(mktemp -d)" && { /tmp/fts5-probe wal; echo "exit=$?"; /tmp/fts5-probe wal refresh; echo "exit=$?"; })
+# Full matrix (both engines, patched copies, invalid arguments, injected failures):
+python3 -I docs/reviews/fixtures/fts5-integrity-stale-structure-matrix.py \
+  docs/reviews/fixtures/fts5-integrity-stale-structure-probe.c.txt /tmp/fts5-matrix.json \
+  3.53.4=sqlite-amalgamation-3530400 3.54.1=sqlite-amalgamation-3540100
 ./scripts/go-backend.sh test ./internal/api ./internal/db \
   -run 'TestRepeatedSelfCheckRunsPassAfterNewEntries|TestSQLiteIntegrityOnAReusedReaderAfterSearchWrites' -count=3
 ```

@@ -5,7 +5,7 @@
  * for a file that a fresh connection, and FTS5's own 'integrity-check'
  * command, report as ok.
  *
- * Usage: probe [wal|delete] [refresh]
+ * Usage: probe [wal|delete] [refresh]   (anything else exits 2)
  *   refresh  run each reader check as the application does: one read
  *            transaction that reads one row of t, then runs the pragma
  *            (refreshFTS5StructuresTx). Without it, each pragma runs in
@@ -19,15 +19,28 @@
  *   2  INVALID  the run cannot be interpreted: an open, statement or setup
  *             call failed, the fresh-connection or FTS5-command control did
  *             not return ok, or the damage control did not produce an FTS5
- *             finding for t. Treat this as neither fixed nor broken.
+ *             finding for t, or the arguments were invalid. Treat this as
+ *             neither fixed nor broken.
+ *
+ * The findings are matched as exact English engine messages
+ * ("malformed inverted index for FTS5 table main.t" and
+ * "fts5: checksum mismatch for table \"t\""). SQLite exposes no stable
+ * code for an integrity_check row, so these strings are version-sensitive. If
+ * a future engine rewords them, the probe exits 2 and prints the new text.
+ * Update the strings after reading that text; never read exit 2 as a result.
  *
  * Results on 2026-11-08, rerun 2026-11-09 (official amalgamations, both
  * journal modes):
  *   3.53.4  no refresh: 1   refresh: 0
  *   3.54.1  no refresh: 1   refresh: 0
- *   3.54.1 + candidate patch (fts5NewTransaction() at the top of
- *          fts5IntegrityMethod, as fts5BeginMethod does): 0 in both modes
+ *   3.54.1 + candidate patch (one logical change: call fts5NewTransaction()
+ *          before the check in fts5IntegrityMethod, as fts5BeginMethod
+ *          does): 0 in both modes
  *
+ * For a driver candidate, build against the authenticated official
+ * amalgamation whose sqlite3.c matches the candidate's bundled
+ * sqlite3-binding.c, as the candidate review establishes; the binding files
+ * themselves carry the driver's wrapper and are not included directly.
  * Compile once per official amalgamation, e.g.
  *   cc -O1 -DSQLITE_THREADSAFE=1 -DSQLITE_ENABLE_FTS5 \
  *     -I DIR DIR/sqlite3.c probe.c -o probe -lm -lpthread -ldl
@@ -111,8 +124,15 @@ static int reader_check(sqlite3 *r, int refresh, char *out, size_t n) {
 }
 
 int main(int argc, char **argv) {
+  /* A mistyped argument must not silently select a different experiment:
+   * "refesh" would otherwise run without the refresh and read as a bug. */
   const char *mode = argc > 1 ? argv[1] : "wal";
-  int refresh = argc > 2 && strcmp(argv[2], "refresh") == 0;
+  if (argc > 3 || (strcmp(mode, "wal") != 0 && strcmp(mode, "delete") != 0) ||
+      (argc == 3 && strcmp(argv[2], "refresh") != 0)) {
+    printf("usage: %s [wal|delete] [refresh]\nFAIL (invalid run)\n", argv[0]);
+    return 2;
+  }
+  int refresh = argc == 3;
   char sql[128], got[4096];
   unlink("probe.db"); unlink("probe.db-wal"); unlink("probe.db-shm"); unlink("probe.db-journal");
   printf("sqlite %s journal_mode=%s refresh=%d\n", sqlite3_libversion(), mode, refresh);
