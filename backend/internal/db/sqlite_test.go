@@ -1239,7 +1239,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 
 	version, err := EmbeddedMigrationVersion()
 	require.NoError(t, err)
-	assert.Equal(t, int64(10), version, "the unused v0.1 baseline, #417 category guard, #481 transfer sides, #485 posting links/history/evidence, #411 allocation revisions/reference guards, #480 retired policy base and #532 holding FX wakeup")
+	assert.Equal(t, int64(11), version, "the unused v0.1 baseline, #417 category guard, #481 transfer sides, #485 posting links/history/evidence, #411 allocation revisions/reference guards, #480 retired policy base, #532 holding FX wakeup and #540 later quote-currency wakeups")
 
 	ctx := context.Background()
 	database, err := Open(ctx, SQLiteFileURL(filepath.Join(t.TempDir(), "schema.sqlite")))
@@ -1268,13 +1268,16 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 		objectCounts[kind]++
 	}
 	assert.Equal(t, map[string]int{
-		"index":   109,
+		"index":   110,
 		"table":   119,
-		"trigger": 177,
+		"trigger": 179,
 		"view":    17,
 	}, objectCounts, "the migrated head must retain every schema object")
 	assert.NotContains(t, readTableColumns(t, database, "pricing_policies"), "base_commodity_id", "#480: the default currency is the one valuation base")
 	assert.Equal(t, "trigger", objects["fx_work_after_holding_posting_version_insert"], "#532: a posted holding wakes FX coverage for its quote currencies")
+	assert.Equal(t, "trigger", objects["fx_work_after_held_instrument_version_insert"], "#540: a later quote currency on a held instrument wakes coverage")
+	assert.Equal(t, "trigger", objects["fx_work_after_held_commodity_observation_insert"], "#540: the first observation in a new currency wakes coverage")
+	assert.Equal(t, "index", objects["posting_versions_commodity_idx"], "#540: holding wakeups look up the ledger by commodity")
 	assert.Equal(t, "table", objects["investment_allocation_revisions"])
 	assert.Equal(t, "trigger", objects["investment_allocation_revisions_no_update"])
 	assert.Equal(t, "trigger", objects["investment_allocation_revisions_no_delete"])

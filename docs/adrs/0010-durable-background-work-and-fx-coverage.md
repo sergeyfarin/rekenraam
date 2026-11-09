@@ -157,3 +157,21 @@ that demand, with the same coalescing as the posted-currency trigger. Its work
 `FXDemand` and never from the hint, because the trigger cannot pick the
 current instrument version. Details
 are in `docs/plans/pricing-management-plan.md` → Posted-only historical demand.
+
+## Amendment — later quote-currency demand, 2026-11-09
+
+A held commodity can gain a demanded currency after its last posting: a later
+instrument version may set or change its quote currency, or the first
+non-voided observation may price it in a new currency (#540). Migration
+`0011_fx_work_after_holding_demand_source.sql` adds
+`fx_work_after_held_instrument_version_insert` and
+`fx_work_after_held_commodity_observation_insert` for those two sources. Both
+enqueue only while the commodity is in the current posted ledger, carry the
+holding's first posted date as the same `holding_entered` hint, and coalesce
+like the posting trigger; the observation trigger fires only for the first
+non-voided observation per commodity/currency, so routine later observations
+enqueue nothing. The version trigger does not compare with the previous
+version: `FXDemand` selects the version in effect on the owner's day, so a
+backdated version must not hide the wakeup for a later version that becomes
+current. Watchlist instruments and commodities held only in drafts, voided
+transactions, superseded versions or previews wake nothing.

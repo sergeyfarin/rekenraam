@@ -22,6 +22,16 @@ import (
 // quoted in the given currency.
 func quoteInstrument(t *testing.T, f homeFixture, quoteCommodityID int64) {
 	t.Helper()
+	createTestInstrument(t, f, &quoteCommodityID)
+}
+
+func createTestInstrument(t *testing.T, f homeFixture, quoteCommodityID *int64) int64 {
+	t.Helper()
+	return createTestInstrumentEffective(t, f, quoteCommodityID, "2026-01-01")
+}
+
+func createTestInstrumentEffective(t *testing.T, f homeFixture, quoteCommodityID *int64, effectiveFrom string) int64 {
+	t.Helper()
 	ctx := context.Background()
 	result, err := f.database.ExecContext(ctx, `INSERT INTO investment_instruments (book_id, commodity_id, created_at, created_by_user_id)
 		VALUES (?, ?, '2026-01-01T00:00:00Z', 1)`, BookID, f.stockCommodityID)
@@ -30,8 +40,20 @@ func quoteInstrument(t *testing.T, f homeFixture, quoteCommodityID int64) {
 	require.NoError(t, err)
 	_, err = f.database.ExecContext(ctx, `INSERT INTO investment_instrument_versions (instrument_id, version_seq, effective_from, recorded_at,
 		changed_by_user_id, change_reason, status, instrument_type, display_name, quote_commodity_id, trading_commodity_id, quantity_scale, price_scale)
-		VALUES (?, 1, '2026-01-01', '2026-01-01T00:00:00Z', 1, 'test fixture', 'active', 'stock', 'Test Security', ?, ?, 0, 2)`,
-		instrumentID, quoteCommodityID, quoteCommodityID)
+		VALUES (?, 1, ?, '2026-01-01T00:00:00Z', 1, 'test fixture', 'active', 'stock', 'Test Security', ?, ?, 0, 2)`,
+		instrumentID, effectiveFrom, quoteCommodityID, quoteCommodityID)
+	require.NoError(t, err)
+	return instrumentID
+}
+
+func updateTestInstrumentQuote(t *testing.T, f homeFixture, instrumentID, quoteCommodityID int64, effectiveFrom string) {
+	t.Helper()
+	_, err := f.investmentService.UpdateInstrument(context.Background(), InvestmentInstrumentInput{
+		OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "investment.instrument.update",
+		InstrumentID: instrumentID, InstrumentType: "stock", DisplayName: "Test Security",
+		QuoteCommodityID: &quoteCommodityID, QuantityScale: 0, PriceScale: 2,
+		EffectiveFrom: effectiveFrom, ChangeReason: "test fixture",
+	})
 	require.NoError(t, err)
 }
 
@@ -121,10 +143,168 @@ func TestFXDemandIncludesAHeldCommodityObservationCurrency(t *testing.T) {
 	record, found := demandFor(t, f, usd)
 	require.True(t, found)
 	assert.Equal(t, "2026-09-28", record.StartDate)
+	assert.Equal(t, []string{"2026-09-28"}, pendingFXCoverageFor(t, f, usd),
+		"the first observation in a new currency wakes coverage from the holding's first posted date")
 
-	// A later posting of the holding wakes coverage for the observed currency.
+	// A later posting of the holding does not duplicate the pending sweep.
 	f.buyTenWithEUR(t, "2026-10-01")
-	assert.Equal(t, []string{"2026-10-01"}, pendingFXCoverageFor(t, f, usd))
+	assert.Equal(t, []string{"2026-09-28"}, pendingFXCoverageFor(t, f, usd))
+}
+
+// #532's posting trigger owns the observation half of the UNION: an
+// observation recorded while the commodity was not held still wakes coverage
+// when the first buy posts it.
+func TestFXPostingWakesACurrencyNamedOnlyByAnEarlierObservation(t *testing.T) {
+	t.Parallel()
+	f := newHomeFixture(t)
+	f.move(t, "2026-09-10", f.cashAccountID, f.eurCommodityID, 100000)
+	usd := seedTestCurrencyCommodity(t, f.database, "USD")
+
+	f.priceIn(t, f.stockCommodityID, usd, "2026-09-01", "60")
+	assert.Empty(t, pendingFXCoverageFor(t, f, usd), "a watchlist observation wakes nothing")
+
+	f.buyTenWithEUR(t, "2026-09-28")
+	assert.Equal(t, []string{"2026-09-28"}, pendingFXCoverageFor(t, f, usd),
+		"the posting trigger wakes the currency named only by the earlier observation")
+}
+
+// #540: a quote currency can arrive after the holding's last posting. Saving
+// it on the instrument must wake FX coverage from the holding's first posted
+// date. Duplicate hints are left to the pending-work coalescing.
+func TestFXSavingAQuoteCurrencyOnAHeldInstrumentWakesCoverage(t *testing.T) {
+	t.Parallel()
+	f := newHomeFixture(t)
+	f.move(t, "2026-09-10", f.cashAccountID, f.eurCommodityID, 100000)
+	usd := seedTestCurrencyCommodity(t, f.database, "USD")
+	gbp := seedTestCurrencyCommodity(t, f.database, "GBP")
+	instrumentID := createTestInstrument(t, f, nil)
+	f.buyTenWithEUR(t, "2026-09-28")
+	assert.Empty(t, pendingFXCoverageFor(t, f, usd), "the instrument has no quote currency yet")
+
+	updateTestInstrumentQuote(t, f, instrumentID, usd, "2026-10-01")
+	assert.Equal(t, []string{"2026-09-28"}, pendingFXCoverageFor(t, f, usd),
+		"the new quote currency wakes coverage from the holding's first posted date")
+
+	f.priceIn(t, f.stockCommodityID, usd, "2026-10-15", "60")
+	assert.Equal(t, []string{"2026-09-28"}, pendingFXCoverageFor(t, f, usd),
+		"the first observation in the same currency coalesces with the pending holding wakeup")
+
+	updateTestInstrumentQuote(t, f, instrumentID, gbp, "2026-10-03")
+	assert.Equal(t, []string{"2026-09-28"}, pendingFXCoverageFor(t, f, gbp),
+		"changing the quote currency wakes the newly demanded currency")
+}
+
+// #540 review: FXDemand selects the version in effect today, not the highest
+// version_seq. A backdated version must not hide the wakeup for a later version
+// that actually becomes current.
+func TestFXBackdatedInstrumentVersionStillWakesTheCurrentCurrency(t *testing.T) {
+	t.Parallel()
+	f := newHomeFixture(t)
+	f.move(t, "2026-09-10", f.cashAccountID, f.eurCommodityID, 100000)
+	usd := seedTestCurrencyCommodity(t, f.database, "USD")
+	gbp := seedTestCurrencyCommodity(t, f.database, "GBP")
+	instrumentID := createTestInstrumentEffective(t, f, &usd, "2026-06-01")
+	f.buyTenWithEUR(t, "2026-09-28")
+	_, err := f.database.Exec(`DELETE FROM background_work_items WHERE kind = 'pricing.fx_coverage'`)
+	require.NoError(t, err)
+
+	updateTestInstrumentQuote(t, f, instrumentID, gbp, "2026-03-01")
+	_, found := demandFor(t, f, gbp)
+	require.False(t, found, "the backdated version is not in effect")
+	_, err = f.database.Exec(`UPDATE background_work_items SET status = 'completed', completed_at = updated_at
+		WHERE kind = 'pricing.fx_coverage' AND json_extract(payload_json, '$.currency_id') = ?`, gbp)
+	require.NoError(t, err)
+
+	// Insert v3 directly: UpdateInstrument currently derives the next
+	// version_seq from the effective version (still v1), so this trigger test
+	// must reach the durable row without that unrelated allocation path.
+	_, err = f.database.Exec(`INSERT INTO investment_instrument_versions (instrument_id, version_seq, effective_from, recorded_at,
+		changed_by_user_id, change_reason, status, instrument_type, display_name, symbol, exchange_code, mic, issuer, country_code,
+		quote_commodity_id, trading_commodity_id, quantity_scale, price_scale, identifiers_json, metadata_json)
+		SELECT instrument_id, 3, '2026-10-04', '2026-10-04T00:00:00Z', 1, 'test fixture', status, instrument_type, display_name,
+			symbol, exchange_code, mic, issuer, country_code, quote_commodity_id, trading_commodity_id, quantity_scale, price_scale,
+			identifiers_json, metadata_json
+		FROM investment_instrument_versions WHERE instrument_id = ? AND version_seq = 2`, instrumentID)
+	require.NoError(t, err)
+	record, found := demandFor(t, f, gbp)
+	require.True(t, found, "the effective version now demands GBP")
+	assert.Equal(t, "2026-09-28", record.StartDate)
+	assert.Equal(t, []string{"2026-09-28"}, pendingFXCoverageFor(t, f, gbp),
+		"the version that becomes current wakes coverage even though its predecessor already named GBP")
+}
+
+// #540: quote refreshes are routine, so only the first non-voided observation
+// of a held commodity in a new currency may enqueue a sweep.
+func TestFXHeldCommodityObservationOnlyWakesANewCurrencyOnce(t *testing.T) {
+	t.Parallel()
+	f := newHomeFixture(t)
+	f.move(t, "2026-09-10", f.cashAccountID, f.eurCommodityID, 100000)
+	usd := seedTestCurrencyCommodity(t, f.database, "USD")
+	f.buyTenWithEUR(t, "2026-09-28")
+
+	f.price(t, f.stockCommodityID, "2026-09-29", "50")
+	assert.Empty(t, pendingFXCoverageFor(t, f, usd), "a quote in the default currency demands no rate")
+
+	f.priceIn(t, f.stockCommodityID, usd, "2026-10-15", "60")
+	assert.Equal(t, []string{"2026-09-28"}, pendingFXCoverageFor(t, f, usd),
+		"the first observation in a new currency wakes coverage from the holding's first posted date")
+
+	f.priceIn(t, f.stockCommodityID, usd, "2026-10-16", "61")
+	assert.Equal(t, []string{"2026-09-28"}, pendingFXCoverageFor(t, f, usd),
+		"later observations while the sweep is pending enqueue nothing new")
+
+	_, err := f.database.Exec(`UPDATE background_work_items SET status = 'completed', completed_at = updated_at
+		WHERE kind = 'pricing.fx_coverage' AND json_extract(payload_json, '$.currency_id') = ?`, usd)
+	require.NoError(t, err)
+	f.priceIn(t, f.stockCommodityID, usd, "2026-10-17", "62")
+	assert.Empty(t, pendingFXCoverageFor(t, f, usd),
+		"a routine observation after the sweep completed does not enqueue another one")
+}
+
+// #540: the new wakeups obey the posted-only rule. A watchlist instrument and
+// a commodity held only in a draft or voided transaction demand nothing.
+func TestFXHoldingQuoteWakeupsIgnoreUnpostedHoldings(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f := newHomeFixture(t)
+	f.move(t, "2026-09-10", f.cashAccountID, f.eurCommodityID, 100000)
+	usd := seedTestCurrencyCommodity(t, f.database, "USD")
+	gbp := seedTestCurrencyCommodity(t, f.database, "GBP")
+	jpy := seedTestCurrencyCommodity(t, f.database, "JPY")
+	cad := seedTestCurrencyCommodity(t, f.database, "CAD")
+	instrumentID := createTestInstrument(t, f, nil)
+
+	updateTestInstrumentQuote(t, f, instrumentID, usd, "2026-10-01")
+	assert.Empty(t, pendingFXCoverageFor(t, f, usd), "a watchlist instrument wakes nothing")
+
+	holdStock := func(status string) Transaction {
+		transaction, err := f.transactionService.CreateTransaction(ctx, CreateTransactionInput{
+			OwnerUserID: 1, OriginType: "internal", Spec: TransactionInput{TransactionDate: "2026-09-20", Status: status,
+				JournalEntries: []JournalEntryInput{{Postings: []PostingInput{
+					{AccountID: f.cashAccountID, CommodityID: f.stockCommodityID, QuantityValue: exact.New(10), QuantityScale: 0},
+					{AccountID: f.equity, CommodityID: f.stockCommodityID, QuantityValue: exact.New(-10), QuantityScale: 0},
+				}}}}})
+		require.NoError(t, err)
+		return transaction
+	}
+	holdStock("draft")
+	updateTestInstrumentQuote(t, f, instrumentID, gbp, "2026-10-02")
+	f.priceIn(t, f.stockCommodityID, usd, "2026-10-15", "60")
+	assert.Empty(t, pendingFXCoverageFor(t, f, gbp), "a draft holding wakes no quote-currency sweep")
+	assert.Empty(t, pendingFXCoverageFor(t, f, usd), "a draft holding wakes no observation-currency sweep")
+
+	posted := holdStock("posted")
+	_, err := f.database.Exec(`DELETE FROM background_work_items WHERE kind = 'pricing.fx_coverage'`)
+	require.NoError(t, err)
+	_, err = f.transactionService.VoidTransaction(ctx, VoidTransactionInput{OwnerUserID: f.ownerUserID,
+		OriginType: "browser_api", TransactionID: posted.ID, ChangeReason: "entered in error"})
+	require.NoError(t, err)
+
+	updateTestInstrumentQuote(t, f, instrumentID, jpy, "2026-10-03")
+	f.priceIn(t, f.stockCommodityID, cad, "2026-10-16", "9000")
+	assert.Empty(t, pendingFXCoverageFor(t, f, jpy), "a voided holding wakes no quote-currency sweep")
+	assert.Empty(t, pendingFXCoverageFor(t, f, cad),
+		"a voided holding wakes no observation-currency sweep, even in a currency no version names")
 }
 
 func TestFXDemandIgnoresDraftAndVoidedHoldings(t *testing.T) {

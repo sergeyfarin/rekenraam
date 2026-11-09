@@ -140,12 +140,27 @@ continuation built from it carries no `start_date`, so no later chunk revives
 the hint for either pair direction. An obsolete quote currency cannot backdate
 another source's later demand for the same currency or spend provider quota on
 dates nothing needs (`TestFXHoldingWakeupCannotBackdateOtherDemand`). A quote
-currency first recorded after the last posting of the holding (an instrument
-reclassified later, or the first observation in a new currency) has no outbox
-wakeup and is picked up by the next scheduled or manual sweep; that wakeup is
-[#540](https://github.com/sergeyfarin/rekenraam/issues/540). Named regressions:
-`TestFXDemandIncludesTheQuoteCurrencyOfAHeldInstrument`,
+currency first recorded after the last posting of the holding now wakes
+coverage too (migration 0011, #540): `fx_work_after_held_instrument_version_insert`
+fires when a new instrument version names a quote currency for a commodity in
+the posted ledger, and `fx_work_after_held_commodity_observation_insert` fires
+for the first non-voided observation of a held commodity in a currency. Both
+carry the holding's first posted date as a `holding_entered` hint and use the
+same coalescing as the posting trigger, so duplicate hints while a matching
+sweep is pending enqueue nothing and routine later observations in the same
+currency do not enqueue repeated sweeps. The version trigger deliberately does
+not compare with the previous version: `FXDemand` selects the version in effect
+on the owner's day, so a backdated version naming a currency must not hide the
+wakeup for a later version that becomes current. A watchlist instrument, or a
+commodity held only in a draft, voided transaction or preview, wakes nothing.
+Named
+regressions: `TestFXDemandIncludesTheQuoteCurrencyOfAHeldInstrument`,
 `TestFXDemandIncludesAHeldCommodityObservationCurrency`,
+`TestFXSavingAQuoteCurrencyOnAHeldInstrumentWakesCoverage`,
+`TestFXBackdatedInstrumentVersionStillWakesTheCurrentCurrency`,
+`TestFXHeldCommodityObservationOnlyWakesANewCurrencyOnce`,
+`TestFXPostingWakesACurrencyNamedOnlyByAnEarlierObservation`,
+`TestFXHoldingQuoteWakeupsIgnoreUnpostedHoldings`,
 `TestFXDemandIgnoresDraftAndVoidedHoldings` and
 `TestFXDemandKeepsASoldHoldingsQuoteCurrency`.
 
