@@ -22,12 +22,13 @@ const (
 )
 
 var (
-	ErrInvestmentInstrumentNotFound = errors.New("investment instrument not found")
-	ErrInvestmentInstrumentExists   = errors.New("investment instrument already exists")
-	ErrCostBasisProfileNotFound     = errors.New("cost basis profile not found")
-	ErrCostBasisProfileExists       = errors.New("cost basis profile already exists")
-	ErrDividendDefaultNotFound      = errors.New("dividend default not found")
-	ErrInvestmentLotsInsufficient   = errors.New("insufficient investment lots")
+	ErrInvestmentInstrumentNotFound         = errors.New("investment instrument not found")
+	ErrInvestmentInstrumentExists           = errors.New("investment instrument already exists")
+	ErrInvestmentInstrumentVersionBackdated = errors.New("investment instrument change is dated before the instrument's latest version")
+	ErrCostBasisProfileNotFound             = errors.New("cost basis profile not found")
+	ErrCostBasisProfileExists               = errors.New("cost basis profile already exists")
+	ErrDividendDefaultNotFound              = errors.New("dividend default not found")
+	ErrInvestmentLotsInsufficient           = errors.New("insufficient investment lots")
 	// ErrInvestmentEventOutOfOrder reports a trade dated before something that
 	// has already rewritten the position's cost-basis projection. It is the
 	// repository's sentinel under this package's own name, so the API can key
@@ -842,8 +843,10 @@ func (s *InvestmentService) CreateInstrument(ctx context.Context, input Investme
 	if err != nil {
 		return InvestmentInstrument{}, err
 	}
-	_, err = cleanEffectiveFrom(input.EffectiveFrom, today)
-	if err != nil {
+	// Creation always dates v1 at the commodity genesis; the field is ignored.
+	// Shape and future-date validation still reject a caller that believes it
+	// controls the first version's date.
+	if _, err := cleanEffectiveFrom(input.EffectiveFrom, today); err != nil {
 		return InvestmentInstrument{}, err
 	}
 	changeReason, err := cleanChangeReason(input.ChangeReason, "created investment instrument")
@@ -994,11 +997,13 @@ func (s *InvestmentService) UpdateInstrument(ctx context.Context, input Investme
 	if err != nil {
 		return InvestmentInstrument{}, fmt.Errorf("read instrument for update: %w", err)
 	}
-	if strings.TrimSpace(input.IdentifiersJSON) == "" {
+	identifiersOmitted := strings.TrimSpace(input.IdentifiersJSON) == ""
+	metadataOmitted := strings.TrimSpace(input.MetadataJSON) == ""
+	if identifiersOmitted && len(input.QuoteIdentifiers) > 0 {
+		// Quote-identifier edits are an explicit sparse edit of the current
+		// object; they need the current keys as their base.
 		input.IdentifiersJSON = current.IdentifiersJSON
-	}
-	if strings.TrimSpace(input.MetadataJSON) == "" {
-		input.MetadataJSON = current.MetadataJSON
+		identifiersOmitted = false
 	}
 
 	spec, err := cleanInvestmentInstrumentSpec(input)
@@ -1027,21 +1032,26 @@ func (s *InvestmentService) UpdateInstrument(ctx context.Context, input Investme
 		return InvestmentInstrument{}, err
 	}
 	record, err := s.repository.UpdateInstrument(ctx, db.UpdateInvestmentInstrumentParams{
-		BookID:          BookID,
-		InstrumentID:    input.InstrumentID,
-		ChangedByUserID: input.OwnerUserID,
-		AuthSessionID:   input.AuthSessionID,
-		RequestID:       input.RequestID,
-		OriginType:      input.OriginType,
-		Operation:       defaultOperation(input.Operation, "investment.instrument.update"),
-		Spec:            spec,
-		RecordedAt:      now.Format(time.RFC3339),
-		EffectiveFrom:   effectiveFrom,
-		ChangeReason:    changeReason,
+		BookID:             BookID,
+		InstrumentID:       input.InstrumentID,
+		ChangedByUserID:    input.OwnerUserID,
+		AuthSessionID:      input.AuthSessionID,
+		RequestID:          input.RequestID,
+		OriginType:         input.OriginType,
+		Operation:          defaultOperation(input.Operation, "investment.instrument.update"),
+		Spec:               spec,
+		IdentifiersOmitted: identifiersOmitted,
+		MetadataOmitted:    metadataOmitted,
+		RecordedAt:         now.Format(time.RFC3339),
+		EffectiveFrom:      effectiveFrom,
+		ChangeReason:       changeReason,
 	})
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
 			return InvestmentInstrument{}, ErrInvestmentInstrumentNotFound
+		}
+		if backdated, ok := errors.AsType[db.InvestmentInstrumentVersionBackdatedError](err); ok {
+			return InvestmentInstrument{}, fmt.Errorf("%w: %s", ErrInvestmentInstrumentVersionBackdated, backdated.Error())
 		}
 		return InvestmentInstrument{}, fmt.Errorf("persist investment instrument update: %w", err)
 	}

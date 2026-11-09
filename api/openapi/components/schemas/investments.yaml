@@ -154,7 +154,7 @@ InvestmentInstrumentRequest:
     quote_identifiers:
       type: object
       additionalProperties: false
-      description: Merge these provider identities on the server, preserving other identifiers as exact JSON. An empty string clears the named identity. Omitted identifiers and metadata are preserved on PATCH; explicit objects replace them.
+      description: Merge these provider identities on the server, preserving other identifiers as exact JSON. An empty string clears the named identity. Omitted identifiers and metadata are preserved on PATCH; explicit objects replace them. On a backdated PATCH, omitted identifiers/metadata keep the version in effect on that date, while quote_identifiers edits merge onto the current identifiers object.
       properties:
         coingecko_id: { type: string, maxLength: 128 }
         yahoo_symbol: { type: string, maxLength: 128 }
@@ -168,6 +168,10 @@ InvestmentInstrumentRequest:
     effective_from:
       type: string
       format: date
+      description: >-
+        Effective date for an instrument update. Ignored on create: instrument
+        creation always dates the first version at the commodity genesis. A
+        malformed or future value is still rejected with VALIDATION_FAILED.
     change_reason:
       type: string
 

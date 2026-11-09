@@ -281,9 +281,13 @@ func (r *PayeeRepository) UpdatePayee(ctx context.Context, params UpdatePayeePar
 		return PayeeRecord{}, err
 	}
 
+	versionSeq, err := nextVersionSeqTx(ctx, tx, "payee_versions", "payee_id", params.PayeeID)
+	if err != nil {
+		return PayeeRecord{}, err
+	}
 	record, err := insertPayeeVersion(ctx, tx, insertPayeeVersionParams{
 		PayeeID:            params.PayeeID,
-		VersionSeq:         current.VersionSeq + 1,
+		VersionSeq:         versionSeq,
 		EffectiveFrom:      params.EffectiveFrom,
 		RecordedAt:         params.RecordedAt,
 		ChangedByUserID:    params.ActorUserID,

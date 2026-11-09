@@ -614,12 +614,16 @@ func (r *AccountRepository) UpdateAccount(ctx context.Context, params UpdateAcco
 		return AccountRecord{}, err
 	}
 
+	versionSeq, err := nextVersionSeqTx(ctx, tx, "account_versions", "account_id", params.AccountID)
+	if err != nil {
+		return AccountRecord{}, err
+	}
 	record, err := insertAccountVersion(ctx, tx, insertAccountVersionParams{
 		BookID:             params.BookID,
 		AccountID:          params.AccountID,
 		CreatedAt:          current.CreatedAt,
 		CreatedByUserID:    current.CreatedByUserID,
-		VersionSeq:         current.VersionSeq + 1,
+		VersionSeq:         versionSeq,
 		EffectiveFrom:      params.EffectiveFrom,
 		RecordedAt:         params.RecordedAt,
 		ChangedByUserID:    params.ChangedByUserID,

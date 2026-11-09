@@ -286,12 +286,16 @@ func (r *InstitutionRepository) UpdateInstitution(ctx context.Context, params Up
 		return InstitutionRecord{}, err
 	}
 
+	versionSeq, err := nextVersionSeqTx(ctx, tx, "institution_versions", "institution_id", params.InstitutionID)
+	if err != nil {
+		return InstitutionRecord{}, err
+	}
 	record, err := insertInstitutionVersion(ctx, tx, insertInstitutionVersionParams{
 		BookID:             params.BookID,
 		InstitutionID:      params.InstitutionID,
 		CreatedAt:          current.CreatedAt,
 		CreatedByUserID:    current.CreatedByUserID,
-		VersionSeq:         current.VersionSeq + 1,
+		VersionSeq:         versionSeq,
 		EffectiveFrom:      params.EffectiveFrom,
 		RecordedAt:         params.RecordedAt,
 		ChangedByUserID:    params.ChangedByUserID,

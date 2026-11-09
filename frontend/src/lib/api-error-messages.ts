@@ -20,6 +20,7 @@ const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   FORECAST_TOO_LARGE: () => m.api_error_forecast_too_large(),
   FORECAST_BASIS_CHANGED: () => m.api_error_forecast_basis_changed(),
   INVESTMENT_WORKFLOW_REQUIRED: () => m.api_error_investment_workflow_required(),
+  INVESTMENT_INSTRUMENT_VERSION_BACKDATED: () => m.api_error_investment_instrument_version_backdated(),
   INVESTMENT_EVENT_OUT_OF_ORDER: () => m.api_error_investment_event_out_of_order(),
   INVESTMENT_POSITION_SIDE_CONFLICT: () => m.api_error_investment_position_side_conflict(),
   INVESTMENT_SHORT_DEPENDENCY: () => m.api_error_investment_short_dependency(),

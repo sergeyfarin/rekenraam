@@ -95,7 +95,6 @@ func TestDividendInstrumentReplacementKeepsInverseWithOriginalPayer(t *testing.T
 	instrument, err := f.investmentService.CreateInstrument(ctx, InvestmentInstrumentInput{
 		OwnerUserID: f.ownerUserID, OriginType: "browser_api", ChangeReason: "test payer", CommodityCode: "OTHER", InstrumentType: "stock", DisplayName: "Other payer",
 		QuoteCommodityID: &f.eurCommodityID, TradingCommodityID: &f.eurCommodityID, QuantityScale: 0, PriceScale: 2,
-		EffectiveFrom: "2026-01-01",
 	})
 	require.NoError(t, err)
 	originalInput := cashDividendInput(f, 0, 10000, 0)

@@ -2042,6 +2042,8 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusUnprocessableEntity, "LEDGER_OVERFLOW", overflowError.Error())
 	case errors.Is(err, app.ErrInvestmentInstrumentNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "investment instrument not found")
+	case errors.Is(err, app.ErrInvestmentInstrumentVersionBackdated):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_INSTRUMENT_VERSION_BACKDATED", err.Error())
 	case errors.Is(err, app.ErrInvestmentInstrumentExists):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "investment instrument already exists")
 	case errors.Is(err, app.ErrCostBasisProfileNotFound):

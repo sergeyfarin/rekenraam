@@ -335,12 +335,16 @@ func (r *CategoryRepository) UpdateCategory(ctx context.Context, params UpdateCa
 		return AccountRecord{}, err
 	}
 
+	versionSeq, err := nextVersionSeqTx(ctx, tx, "account_versions", "account_id", params.CategoryID)
+	if err != nil {
+		return AccountRecord{}, err
+	}
 	record, err := insertAccountVersion(ctx, tx, insertAccountVersionParams{
 		BookID:             params.BookID,
 		AccountID:          params.CategoryID,
 		CreatedAt:          current.CreatedAt,
 		CreatedByUserID:    current.CreatedByUserID,
-		VersionSeq:         current.VersionSeq + 1,
+		VersionSeq:         versionSeq,
 		EffectiveFrom:      params.EffectiveFrom,
 		RecordedAt:         params.RecordedAt,
 		ChangedByUserID:    params.ChangedByUserID,
@@ -416,12 +420,16 @@ func (r *CategoryRepository) ChangeCategoryStatus(ctx context.Context, params Ca
 
 	spec := accountSpecFromRecord(current)
 	spec.ClosedOn = params.ClosedOn
+	versionSeq, err := nextVersionSeqTx(ctx, tx, "account_versions", "account_id", params.CategoryID)
+	if err != nil {
+		return AccountRecord{}, err
+	}
 	record, err := insertAccountVersion(ctx, tx, insertAccountVersionParams{
 		BookID:             params.BookID,
 		AccountID:          params.CategoryID,
 		CreatedAt:          current.CreatedAt,
 		CreatedByUserID:    current.CreatedByUserID,
-		VersionSeq:         current.VersionSeq + 1,
+		VersionSeq:         versionSeq,
 		EffectiveFrom:      params.EffectiveFrom,
 		RecordedAt:         params.RecordedAt,
 		ChangedByUserID:    params.ChangedByUserID,
