@@ -106,13 +106,24 @@ func updateInstrumentVersion(t *testing.T, f referenceVersionFixture, instrument
 	t.Helper()
 	current, err := f.investmentService.Instrument(context.Background(), instrumentID)
 	require.NoError(t, err)
+	return updateInstrumentFields(t, f, instrumentID, name, current.QuoteCommodityID, current.IdentifiersJSON, current.MetadataJSON, effectiveFrom)
+}
+
+func updateInstrumentFields(t *testing.T, f referenceVersionFixture, instrumentID int64, name string, quoteCommodityID *int64, identifiersJSON, metadataJSON, effectiveFrom string) InvestmentInstrument {
+	t.Helper()
+	current, err := f.investmentService.Instrument(context.Background(), instrumentID)
+	require.NoError(t, err)
+	tradingCommodityID := current.TradingCommodityID
+	if quoteCommodityID != nil {
+		tradingCommodityID = quoteCommodityID
+	}
 	updated, err := f.investmentService.UpdateInstrument(context.Background(), InvestmentInstrumentInput{
 		OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "investment.instrument.update",
 		InstrumentID: instrumentID, CommodityCode: current.CommodityCode, InstrumentType: current.InstrumentType,
 		DisplayName: name, Symbol: current.Symbol, ExchangeCode: current.ExchangeCode, MIC: current.MIC,
-		Issuer: current.Issuer, CountryCode: current.CountryCode, QuoteCommodityID: current.QuoteCommodityID,
-		TradingCommodityID: current.TradingCommodityID, QuantityScale: current.QuantityScale, PriceScale: current.PriceScale,
-		IdentifiersJSON: current.IdentifiersJSON, MetadataJSON: current.MetadataJSON,
+		Issuer: current.Issuer, CountryCode: current.CountryCode, QuoteCommodityID: quoteCommodityID,
+		TradingCommodityID: tradingCommodityID, QuantityScale: current.QuantityScale, PriceScale: current.PriceScale,
+		IdentifiersJSON: identifiersJSON, MetadataJSON: metadataJSON,
 		EffectiveFrom: effectiveFrom, ChangeReason: "version sequence regression",
 	})
 	require.NoError(t, err)
@@ -189,6 +200,81 @@ func TestReferenceVersionSequenceFollowsTheNewestRowAfterBackdating(t *testing.T
 	updateInstrumentVersion(t, f, instrument.ID, "Instrument backdated", "2026-03-01")
 	updateInstrumentVersion(t, f, instrument.ID, "Instrument final", "2026-07-01")
 	requireLatestVersionSeq(t, f, "investment_instrument_versions", "instrument_id", instrument.ID, 4)
+}
+
+// #549 / #550 review: the structural comparison is against the version in
+// effect on the new row's date, not today's version. A backdated descriptive
+// correction uses the old structure; a backdated structural change is refused.
+func TestInstrumentBackdatedStructureUsesTheVersionInEffectOnItsDate(t *testing.T) {
+	t.Parallel()
+	f := newReferenceVersionFixture(t)
+	ctx := context.Background()
+	usd := seedTestCurrencyCommodity(t, f.database, "USD")
+	gbp := seedTestCurrencyCommodity(t, f.database, "GBP")
+
+	instrument, err := f.investmentService.CreateInstrument(ctx, InvestmentInstrumentInput{
+		OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "investment.instrument.create",
+		CommodityCode: "ASOF", InstrumentType: "stock", DisplayName: "As-of instrument",
+		QuoteCommodityID: &usd, TradingCommodityID: &usd, QuantityScale: 6, PriceScale: 4,
+	})
+	require.NoError(t, err)
+	updateInstrumentFields(t, f, instrument.ID, "Forward GBP", &gbp, "", "", "2026-06-01")
+
+	// March is governed by v1 (USD), so a descriptive correction carrying USD
+	// is allowed and stays out of effect behind the June GBP version.
+	updateInstrumentFields(t, f, instrument.ID, "March correction", &usd, "", "", "2026-03-01")
+
+	var versionsBefore, auditsBefore int64
+	require.NoError(t, f.database.QueryRow(`SELECT COUNT(*) FROM investment_instrument_versions WHERE instrument_id = ?`, instrument.ID).Scan(&versionsBefore))
+	require.NoError(t, f.database.QueryRow(`SELECT COUNT(*) FROM audit_events`).Scan(&auditsBefore))
+
+	_, err = f.investmentService.UpdateInstrument(ctx, InvestmentInstrumentInput{
+		OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "investment.instrument.update",
+		InstrumentID: instrument.ID, CommodityCode: instrument.CommodityCode, InstrumentType: instrument.InstrumentType,
+		DisplayName: "March structural change", QuoteCommodityID: &gbp, TradingCommodityID: &gbp,
+		QuantityScale: instrument.QuantityScale, PriceScale: instrument.PriceScale,
+		EffectiveFrom: "2026-03-01", ChangeReason: "backdated quote currency",
+	})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrInvestmentInstrumentVersionBackdated), "March is governed by USD, so GBP is structural: %v", err)
+	var versionsAfter, auditsAfter int64
+	require.NoError(t, f.database.QueryRow(`SELECT COUNT(*) FROM investment_instrument_versions WHERE instrument_id = ?`, instrument.ID).Scan(&versionsAfter))
+	require.NoError(t, f.database.QueryRow(`SELECT COUNT(*) FROM audit_events`).Scan(&auditsAfter))
+	assert.Equal(t, versionsBefore, versionsAfter, "the refusal writes no version")
+	assert.Equal(t, auditsBefore, auditsAfter, "the refusal writes no audit event")
+
+	// A same-date structural version is allowed and supersedes by version_seq.
+	eur := f.eurCommodityID
+	updateInstrumentFields(t, f, instrument.ID, "Same-date EUR", &eur, "", "", "2026-06-01")
+	requireLatestVersionSeq(t, f, "investment_instrument_versions", "instrument_id", instrument.ID, 4)
+}
+
+// #550 review: omitted JSON objects in a backdated correction keep the value
+// of the version in effect on that date, not today's value.
+func TestInstrumentBackdatedCorrectionKeepsAsOfJSON(t *testing.T) {
+	t.Parallel()
+	f := newReferenceVersionFixture(t)
+	ctx := context.Background()
+	usd := seedTestCurrencyCommodity(t, f.database, "USD")
+
+	instrument, err := f.investmentService.CreateInstrument(ctx, InvestmentInstrumentInput{
+		OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "investment.instrument.create",
+		CommodityCode: "ASOFJSON", InstrumentType: "stock", DisplayName: "As-of JSON instrument",
+		QuoteCommodityID: &usd, TradingCommodityID: &usd, QuantityScale: 6, PriceScale: 4,
+		IdentifiersJSON: `{"isin":"OLD"}`, MetadataJSON: `{"source":"old"}`,
+	})
+	require.NoError(t, err)
+	updateInstrumentFields(t, f, instrument.ID, "Forward identifiers", &usd, `{"isin":"NEW"}`, `{"source":"new"}`, "2026-06-01")
+	updateInstrumentFields(t, f, instrument.ID, "March correction", &usd, "", "", "2026-03-01")
+
+	var identifiers, metadata string
+	require.NoError(t, f.database.QueryRow(`
+		SELECT identifiers_json, metadata_json
+		FROM investment_instrument_versions
+		WHERE instrument_id = ? AND version_seq = 3
+	`, instrument.ID).Scan(&identifiers, &metadata))
+	assert.JSONEq(t, `{"isin":"OLD"}`, identifiers, "the March window keeps the identifiers in effect then")
+	assert.JSONEq(t, `{"source":"old"}`, metadata, "the March window keeps the metadata in effect then")
 }
 
 // #549: instruments follow the account backdating contract: a version dated

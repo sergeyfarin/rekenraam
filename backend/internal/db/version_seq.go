@@ -18,7 +18,7 @@ func nextVersionSeqTx(ctx context.Context, tx *sql.Tx, table, entityColumn strin
 		"payee_versions.payee_id",
 		"investment_instrument_versions.instrument_id":
 	default:
-		return 0, fmt.Errorf("next version sequence: unsupported version table %s", table)
+		return 0, fmt.Errorf("next version sequence: unsupported version table %s.%s", table, entityColumn)
 	}
 
 	var next int64

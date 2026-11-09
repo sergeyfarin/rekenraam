@@ -199,38 +199,62 @@ func TestFXSavingAQuoteCurrencyOnAHeldInstrumentWakesCoverage(t *testing.T) {
 // that actually becomes current.
 func TestFXBackdatedInstrumentVersionStillWakesTheCurrentCurrency(t *testing.T) {
 	t.Parallel()
+	ctx := context.Background()
 	f := newHomeFixture(t)
 	f.move(t, "2026-09-10", f.cashAccountID, f.eurCommodityID, 100000)
 	usd := seedTestCurrencyCommodity(t, f.database, "USD")
 	gbp := seedTestCurrencyCommodity(t, f.database, "GBP")
-	instrumentID := createTestInstrumentEffective(t, f, &usd, "2026-06-01")
-	f.buyTenWithEUR(t, "2026-09-28")
-	_, err := f.database.Exec(`DELETE FROM background_work_items WHERE kind = 'pricing.fx_coverage'`)
+	instrument, err := f.investmentService.CreateInstrument(ctx, InvestmentInstrumentInput{
+		OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "investment.instrument.create",
+		CommodityCode: "FXBACKDATED", InstrumentType: "stock", DisplayName: "FX backdated instrument",
+		QuoteCommodityID: &gbp, TradingCommodityID: &gbp, QuantityScale: 0, PriceScale: 2,
+	})
+	require.NoError(t, err)
+	holding, err := f.investmentService.CreateHoldingAccount(ctx, HoldingAccountInput{
+		OwnerUserID: f.ownerUserID, InstrumentID: instrument.ID,
+		Name: "FX holding", OpenedOn: "2026-01-01", EffectiveFrom: "2026-01-01",
+	})
+	require.NoError(t, err)
+	_, err = f.investmentService.Buy(ctx, InvestmentTradeInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-09-28",
+		CommodityID: instrument.CommodityID, HoldingAccountID: holding.ID,
+		CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
+		QuantityValue: exact.New(10), CashAmountValue: 50000, CashAmountScale: 2,
+	})
+	require.NoError(t, err)
+	_, err = f.database.Exec(`DELETE FROM background_work_items WHERE kind = 'pricing.fx_coverage'`)
 	require.NoError(t, err)
 
-	// The service refuses a structural version backdated before the instrument's
-	// first version (#549), so v2 is a deliberately durable raw row that is not
-	// in effect. v3 is then a normal forward-dated update through the service.
-	_, err = f.database.Exec(`INSERT INTO investment_instrument_versions (instrument_id, version_seq, effective_from, recorded_at,
-		changed_by_user_id, change_reason, status, instrument_type, display_name, symbol, exchange_code, mic, issuer, country_code,
-		quote_commodity_id, trading_commodity_id, quantity_scale, price_scale, identifiers_json, metadata_json)
-		SELECT instrument_id, 2, '2026-03-01', '2026-03-01T00:00:00Z', 1, 'test fixture', status, instrument_type, display_name,
-			symbol, exchange_code, mic, issuer, country_code, ?,
-			trading_commodity_id, quantity_scale, price_scale, identifiers_json, metadata_json
-		FROM investment_instrument_versions WHERE instrument_id = ? AND version_seq = 1`, gbp, instrumentID)
-	require.NoError(t, err)
+	updateHeldInstrumentQuote(t, f, instrument.ID, "Forward USD", usd, "2026-06-01")
+	updateHeldInstrumentQuote(t, f, instrument.ID, "March GBP correction", gbp, "2026-03-01")
 	_, found := demandFor(t, f, gbp)
-	require.False(t, found, "the backdated version is not in effect")
+	require.False(t, found, "the backdated GBP version is not in effect")
 	_, err = f.database.Exec(`UPDATE background_work_items SET status = 'completed', completed_at = updated_at
 		WHERE kind = 'pricing.fx_coverage' AND json_extract(payload_json, '$.currency_id') = ?`, gbp)
 	require.NoError(t, err)
 
-	updateTestInstrumentQuote(t, f, instrumentID, gbp, "2026-10-04")
+	updateHeldInstrumentQuote(t, f, instrument.ID, "Current GBP", gbp, "2026-10-04")
 	record, found := demandFor(t, f, gbp)
 	require.True(t, found, "the effective version now demands GBP")
 	assert.Equal(t, "2026-09-28", record.StartDate)
 	assert.Equal(t, []string{"2026-09-28"}, pendingFXCoverageFor(t, f, gbp),
-		"the version that becomes current wakes coverage even though its predecessor already named GBP")
+		"the version that becomes current wakes coverage even though an obsolete version already named GBP")
+}
+
+func updateHeldInstrumentQuote(t *testing.T, f homeFixture, instrumentID int64, name string, quoteCommodityID int64, effectiveFrom string) {
+	t.Helper()
+	current, err := f.investmentService.Instrument(context.Background(), instrumentID)
+	require.NoError(t, err)
+	_, err = f.investmentService.UpdateInstrument(context.Background(), InvestmentInstrumentInput{
+		OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "investment.instrument.update",
+		InstrumentID: instrumentID, CommodityCode: current.CommodityCode, InstrumentType: current.InstrumentType,
+		DisplayName: name, Symbol: current.Symbol, ExchangeCode: current.ExchangeCode, MIC: current.MIC,
+		Issuer: current.Issuer, CountryCode: current.CountryCode, QuoteCommodityID: &quoteCommodityID,
+		TradingCommodityID: &quoteCommodityID, QuantityScale: current.QuantityScale, PriceScale: current.PriceScale,
+		IdentifiersJSON: current.IdentifiersJSON, MetadataJSON: current.MetadataJSON,
+		EffectiveFrom: effectiveFrom, ChangeReason: "test fixture",
+	})
+	require.NoError(t, err)
 }
 
 // #540: quote refreshes are routine, so only the first non-voided observation
@@ -393,13 +417,8 @@ func TestFXHoldingWakeupCannotBackdateOtherDemand(t *testing.T) {
 	ctx := context.Background()
 	f := newHomeFixture(t)
 	usd := seedTestCurrencyCommodity(t, f.database, "USD")
-	quoteInstrument(t, f, usd)
-	_, err := f.database.Exec(`INSERT INTO investment_instrument_versions (instrument_id, version_seq, effective_from, recorded_at,
-		changed_by_user_id, change_reason, status, instrument_type, display_name, quote_commodity_id, trading_commodity_id, quantity_scale, price_scale)
-		SELECT instrument_id, 2, effective_from, '2026-10-15T00:00:00Z', 1, 'correct mistaken quote currency', status, instrument_type,
-			display_name, ?, ?, quantity_scale, price_scale
-		FROM investment_instrument_versions WHERE version_seq = 1`, f.eurCommodityID, f.eurCommodityID)
-	require.NoError(t, err)
+	instrumentID := createTestInstrument(t, f, &usd)
+	updateTestInstrumentQuote(t, f, instrumentID, f.eurCommodityID, "2026-06-01")
 	f.move(t, "2026-10-14", f.cashAccountID, usd, 100)
 	f.buyTenWithEUR(t, "2026-09-28")
 
@@ -417,7 +436,7 @@ func TestFXHoldingWakeupCannotBackdateOtherDemand(t *testing.T) {
 	requests := []string{}
 	service := NewPricingService(db.NewPricingRepository(f.database), marketdata.NewRegistry(recordingFXProvider{requests: &requests}))
 	service.SetNowForTest(func() time.Time { return time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC) })
-	_, err = f.database.Exec(`UPDATE market_data_sources SET status = 'disabled' WHERE kind = 'provider' AND code <> 'frankfurter'`)
+	_, err := f.database.Exec(`UPDATE market_data_sources SET status = 'disabled' WHERE kind = 'provider' AND code <> 'frankfurter'`)
 	require.NoError(t, err)
 	source := marketDataSourceIDByCode(t, f.database, "frankfurter")
 	// One provider attempt per chunk: every later date and the second pair

@@ -369,8 +369,9 @@ Version ordering rules:
   identity row, never the in-effect version's sequence plus one: a backdated
   version must not make the next append collide on the unique key (#549).
 - It must be positive and unique per identity row:
-  `(commodity_id, version_seq)`, `(account_id, version_seq)`, or
-  `(institution_id, version_seq)`.
+  `(commodity_id, version_seq)`, `(account_id, version_seq)`,
+  `(institution_id, version_seq)`, `(payee_id, version_seq)`, or
+  `(instrument_id, version_seq)`.
 - `effective_from` is always a date-only `YYYY-MM-DD` value. Do not store
   timestamps in this field; timestamp strings break date comparison semantics
   and create timezone ambiguity.
@@ -417,7 +418,20 @@ supersedes by `version_seq`. A backdated structural change is refused with
 `409 INVESTMENT_INSTRUMENT_VERSION_BACKDATED`, naming the earliest allowed
 date. A listing or quote-currency change that happened now is a forward-dated
 instrument version; a genuine security-identity change uses the real corporate
-action/transfer workflow, not instrument master-data mutation.
+action/transfer workflow, not instrument master-data mutation. A forward-dated
+precision reduction is accepted: stored postings, lots and prices keep their
+own scales, so the reduction affects future entry and display, not recorded
+facts. A backdated instrument update is a full snapshot: a caller changing one
+descriptive field must copy the other descriptive fields from the version in
+effect on that date. Blank `identifiers_json` and `metadata_json` objects are
+merged from that version; the remaining text fields are taken as sent.
+Recording a listing/currency change late is also accepted only from the
+latest version's date forward, because versions are never voided or reordered;
+the app does not rewrite the already-recorded window. Identifier changes are
+descriptive for the instrument, but import resolution matches the current
+version: statement rows carrying an old identifier do not re-resolve to the
+renamed instrument. Historical-identifier matching remains a separate import
+improvement.
 
 SQLite triggers should reject `UPDATE` and `DELETE` on version tables once this
 is implemented. Corrections create a new version with a clear reason.

@@ -995,11 +995,13 @@ func (s *InvestmentService) UpdateInstrument(ctx context.Context, input Investme
 	if err != nil {
 		return InvestmentInstrument{}, fmt.Errorf("read instrument for update: %w", err)
 	}
-	if strings.TrimSpace(input.IdentifiersJSON) == "" {
+	identifiersOmitted := strings.TrimSpace(input.IdentifiersJSON) == ""
+	metadataOmitted := strings.TrimSpace(input.MetadataJSON) == ""
+	if identifiersOmitted && len(input.QuoteIdentifiers) > 0 {
+		// Quote-identifier edits are an explicit sparse edit of the current
+		// object; they need the current keys as their base.
 		input.IdentifiersJSON = current.IdentifiersJSON
-	}
-	if strings.TrimSpace(input.MetadataJSON) == "" {
-		input.MetadataJSON = current.MetadataJSON
+		identifiersOmitted = false
 	}
 
 	spec, err := cleanInvestmentInstrumentSpec(input)
@@ -1028,17 +1030,19 @@ func (s *InvestmentService) UpdateInstrument(ctx context.Context, input Investme
 		return InvestmentInstrument{}, err
 	}
 	record, err := s.repository.UpdateInstrument(ctx, db.UpdateInvestmentInstrumentParams{
-		BookID:          BookID,
-		InstrumentID:    input.InstrumentID,
-		ChangedByUserID: input.OwnerUserID,
-		AuthSessionID:   input.AuthSessionID,
-		RequestID:       input.RequestID,
-		OriginType:      input.OriginType,
-		Operation:       defaultOperation(input.Operation, "investment.instrument.update"),
-		Spec:            spec,
-		RecordedAt:      now.Format(time.RFC3339),
-		EffectiveFrom:   effectiveFrom,
-		ChangeReason:    changeReason,
+		BookID:             BookID,
+		InstrumentID:       input.InstrumentID,
+		ChangedByUserID:    input.OwnerUserID,
+		AuthSessionID:      input.AuthSessionID,
+		RequestID:          input.RequestID,
+		OriginType:         input.OriginType,
+		Operation:          defaultOperation(input.Operation, "investment.instrument.update"),
+		Spec:               spec,
+		IdentifiersOmitted: identifiersOmitted,
+		MetadataOmitted:    metadataOmitted,
+		RecordedAt:         now.Format(time.RFC3339),
+		EffectiveFrom:      effectiveFrom,
+		ChangeReason:       changeReason,
 	})
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {

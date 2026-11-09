@@ -104,17 +104,19 @@ type CreateInvestmentInstrumentParams struct {
 }
 
 type UpdateInvestmentInstrumentParams struct {
-	BookID          int64
-	InstrumentID    int64
-	ChangedByUserID int64
-	AuthSessionID   int64
-	RequestID       string
-	OriginType      string
-	Operation       string
-	Spec            InvestmentInstrumentSpec
-	RecordedAt      string
-	EffectiveFrom   string
-	ChangeReason    string
+	BookID             int64
+	InstrumentID       int64
+	ChangedByUserID    int64
+	AuthSessionID      int64
+	RequestID          string
+	OriginType         string
+	Operation          string
+	Spec               InvestmentInstrumentSpec
+	IdentifiersOmitted bool
+	MetadataOmitted    bool
+	RecordedAt         string
+	EffectiveFrom      string
+	ChangeReason       string
 }
 
 type CostBasisProfileRecord struct {
@@ -808,6 +810,7 @@ func (r *InvestmentRepository) UpdateInstrument(ctx context.Context, params Upda
 	if err != nil {
 		return InvestmentInstrumentRecord{}, err
 	}
+	mergeSource := current
 	if params.EffectiveFrom < latest {
 		// An earlier-dated version governs only the days up to the latest one,
 		// so structural fields must take effect on or after that date. An
@@ -822,6 +825,15 @@ func (r *InvestmentRepository) UpdateInstrument(ctx context.Context, params Upda
 		if investmentInstrumentStructureDiffers(asOf, params.Spec) {
 			return InvestmentInstrumentRecord{}, InvestmentInstrumentVersionBackdatedError{LatestEffectiveFrom: latest}
 		}
+		mergeSource = asOf
+	}
+	// An omitted JSON object keeps the value from the version that governs the
+	// new row's date, never a later version's value (#550 review).
+	if params.IdentifiersOmitted {
+		params.Spec.IdentifiersJSON = mergeSource.IdentifiersJSON
+	}
+	if params.MetadataOmitted {
+		params.Spec.MetadataJSON = mergeSource.MetadataJSON
 	}
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
 		BookID:        params.BookID,
