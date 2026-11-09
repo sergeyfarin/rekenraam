@@ -63,8 +63,11 @@ which slows `internal/app` from 186 s to 250 s and breaks the race deadline
 ([candidate review](reviews/sqlite-driver-candidate-2026-11-08.md)). The
 production module pin remains v1.14.52. Every driver admission review also
 builds the [FTS5 integrity probe](reviews/fts5-integrity-stale-structure-2026-11-08.md)
-against the candidate engine without its `refresh` argument and records
-whether the #403 workaround (`refreshFTS5StructuresTx`) is still needed.
+against the candidate engine without its `refresh` argument and records its
+exit status: 1 means the #403 workaround (`refreshFTS5StructuresTx`) is
+still needed, 0 means the engine looks fixed, and 2 means the run is
+invalid. Exit 0 alone does not remove the workaround; the review says what
+else that decision needs.
 
 ### Install
 

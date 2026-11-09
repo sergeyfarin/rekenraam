@@ -6,17 +6,27 @@
  * command, report as ok.
  *
  * Usage: probe [wal|delete] [refresh]
- *   refresh  read one row of t on the reader before each integrity_check
- *            (the application's refreshFTS5StructuresTx workaround).
- * Exit 0: every reader check on the undamaged file says ok, and the damage
- *         control (a deleted t_docsize row) is still reported.
- * Exit 1: a false finding, or the damage control was missed.
+ *   refresh  run each reader check as the application does: one read
+ *            transaction that reads one row of t, then runs the pragma
+ *            (refreshFTS5StructuresTx). Without it, each pragma runs in
+ *            autocommit, which is the bare engine behaviour under test.
  *
- * Results on 2026-11-08 (official amalgamations, both journal modes):
- *   3.53.4  no refresh: exit 1 (run 2 and 3 mismatch)   refresh: exit 0
- *   3.54.1  no refresh: exit 1 (run 2 and 3 mismatch)   refresh: exit 0
+ * Exit status (the only thing an admission review should read):
+ *   0  PASS   every reader check on the undamaged file returned ok, and every
+ *             control passed.
+ *   1  BUG    a reader check on the undamaged file reported a finding, and
+ *             every control passed, so that finding is false.
+ *   2  INVALID  the run cannot be interpreted: an open, statement or setup
+ *             call failed, the fresh-connection or FTS5-command control did
+ *             not return ok, or the damage control did not produce an FTS5
+ *             finding for t. Treat this as neither fixed nor broken.
+ *
+ * Results on 2026-11-08, rerun 2026-11-09 (official amalgamations, both
+ * journal modes):
+ *   3.53.4  no refresh: 1   refresh: 0
+ *   3.54.1  no refresh: 1   refresh: 0
  *   3.54.1 + candidate patch (fts5NewTransaction() at the top of
- *          fts5IntegrityMethod, as fts5BeginMethod does): exit 0 without refresh
+ *          fts5IntegrityMethod, as fts5BeginMethod does): 0 in both modes
  *
  * Compile once per official amalgamation, e.g.
  *   cc -O1 -DSQLITE_THREADSAFE=1 -DSQLITE_ENABLE_FTS5 \
@@ -30,76 +40,140 @@
 #include <unistd.h>
 #include "sqlite3.h"
 
-static const char *one(sqlite3 *db, const char *sql) {
-  static char buf[4096];
-  sqlite3_stmt *s;
-  buf[0] = 0;
-  if (sqlite3_prepare_v2(db, sql, -1, &s, 0) != SQLITE_OK) {
-    snprintf(buf, sizeof buf, "prepare error: %s", sqlite3_errmsg(db));
-    return buf;
-  }
-  int rc = sqlite3_step(s);
-  if (rc == SQLITE_ROW && sqlite3_column_text(s, 0))
-    snprintf(buf, sizeof buf, "%s", (const char *)sqlite3_column_text(s, 0));
-  else if (rc != SQLITE_ROW && rc != SQLITE_DONE)
-    snprintf(buf, sizeof buf, "step error: %s", sqlite3_errmsg(db));
-  while (rc == SQLITE_ROW) rc = sqlite3_step(s);
-  sqlite3_finalize(s);
-  return buf;
+static int invalid; /* a control or harness step failed: exit 2 */
+static int bug;     /* a false finding on the undamaged file: exit 1 */
+
+static void harness_fail(const char *what, const char *detail) {
+  printf("INVALID: %s: %s\n", what, detail);
+  invalid = 1;
 }
 
-static void exec(sqlite3 *db, const char *sql) {
+/* Runs sql and copies the first column of the first row into out. Returns the
+ * final result code: SQLITE_OK when every step ended in ROW or DONE. */
+static int query(sqlite3 *db, const char *sql, char *out, size_t n) {
+  sqlite3_stmt *s = 0;
+  out[0] = 0;
+  int rc = sqlite3_prepare_v2(db, sql, -1, &s, 0);
+  if (rc != SQLITE_OK) {
+    snprintf(out, n, "prepare: %s", sqlite3_errmsg(db));
+    return rc;
+  }
+  int first = 1;
+  while ((rc = sqlite3_step(s)) == SQLITE_ROW) {
+    if (first && sqlite3_column_text(s, 0))
+      snprintf(out, n, "%s", (const char *)sqlite3_column_text(s, 0));
+    first = 0;
+  }
+  if (rc != SQLITE_DONE) {
+    snprintf(out, n, "step: %s", sqlite3_errmsg(db));
+    sqlite3_finalize(s);
+    return rc;
+  }
+  return sqlite3_finalize(s);
+}
+
+static int exec(sqlite3 *db, const char *sql) {
   char *err = 0;
-  if (sqlite3_exec(db, sql, 0, 0, &err) != SQLITE_OK) {
-    fprintf(stderr, "%s: %s\n", sql, err);
+  int rc = sqlite3_exec(db, sql, 0, 0, &err);
+  if (rc != SQLITE_OK) harness_fail(sql, err ? err : sqlite3_errstr(rc));
+  sqlite3_free(err);
+  return rc;
+}
+
+static sqlite3 *open_db(const char *who) {
+  sqlite3 *db = 0;
+  int rc = sqlite3_open_v2("probe.db", &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, 0);
+  if (rc != SQLITE_OK) {
+    harness_fail(who, db ? sqlite3_errmsg(db) : sqlite3_errstr(rc));
+    sqlite3_close(db);
+    printf("FAIL (invalid run)\n");
     exit(2);
   }
+  return db;
 }
 
-static const char *check(sqlite3 *r, int refresh) {
-  if (refresh) one(r, "SELECT rowid FROM t LIMIT 1");
-  return one(r, "PRAGMA integrity_check");
+/* One integrity_check on the reader. Returns SQLITE_OK when the pragma itself
+ * executed; out holds its first row. Any execution failure is a harness
+ * failure, never a finding. */
+static int reader_check(sqlite3 *r, int refresh, char *out, size_t n) {
+  char row[64];
+  int rc;
+  if (refresh) {
+    if (exec(r, "BEGIN") != SQLITE_OK) return SQLITE_ERROR;
+    /* A read error here is deliberately not fatal, as in the application:
+     * the pragma that follows reports real damage as the finding. */
+    query(r, "SELECT rowid FROM t LIMIT 1", row, sizeof row);
+  }
+  rc = query(r, "PRAGMA integrity_check", out, n);
+  if (rc != SQLITE_OK) harness_fail("reader PRAGMA integrity_check", out);
+  if (refresh && exec(r, "COMMIT") != SQLITE_OK) return SQLITE_ERROR;
+  return rc;
 }
 
 int main(int argc, char **argv) {
   const char *mode = argc > 1 ? argv[1] : "wal";
   int refresh = argc > 2 && strcmp(argv[2], "refresh") == 0;
-  int failed = 0;
-  char sql[128];
+  char sql[128], got[4096];
   unlink("probe.db"); unlink("probe.db-wal"); unlink("probe.db-shm"); unlink("probe.db-journal");
   printf("sqlite %s journal_mode=%s refresh=%d\n", sqlite3_libversion(), mode, refresh);
 
-  sqlite3 *w, *r, *f;
-  sqlite3_open("probe.db", &w);
+  sqlite3 *w = open_db("open writer");
   snprintf(sql, sizeof sql, "PRAGMA journal_mode=%s", mode);
-  exec(w, sql);
+  if (query(w, sql, got, sizeof got) != SQLITE_OK || strcmp(got, mode) != 0)
+    harness_fail("set journal_mode", got);
   exec(w, "CREATE VIRTUAL TABLE t USING fts5(x);"
           "INSERT INTO t(x) VALUES('alpha beta');");
-  sqlite3_open("probe.db", &r);
+  sqlite3 *r = open_db("open reader");
 
-  for (int run = 1; run <= 3; run++) {
-    const char *got = check(r, refresh);
-    printf("reader integrity_check run %d: %s\n", run, got);
-    if (strcmp(got, "ok") != 0) failed = 1;
+  for (int run = 1; run <= 3 && !invalid; run++) {
+    if (reader_check(r, refresh, got, sizeof got) == SQLITE_OK) {
+      printf("reader integrity_check run %d: %s\n", run, got);
+      if (strcmp(got, "ok") != 0) bug = 1;
+    }
     snprintf(sql, sizeof sql, "INSERT INTO t(x) VALUES('gamma delta %d')", run);
     exec(w, sql);
   }
 
-  sqlite3_open("probe.db", &f);
-  printf("fresh connection integrity_check: %s\n", one(f, "PRAGMA integrity_check"));
+  /* Controls: the same file, judged without the reader's cached structure. */
+  sqlite3 *f = open_db("open fresh connection");
+  int rc = query(f, "PRAGMA integrity_check", got, sizeof got);
+  printf("fresh connection integrity_check: %s\n", got);
+  if (rc != SQLITE_OK || strcmp(got, "ok") != 0)
+    harness_fail("fresh-connection control", got);
   sqlite3_close(f);
-  printf("reader FTS5 'integrity-check' command: %s\n",
-         sqlite3_exec(r, "INSERT INTO t(t) VALUES('integrity-check')", 0, 0, 0) == SQLITE_OK
-             ? "ok" : sqlite3_errmsg(r));
 
-  /* Damage control: real FTS5 damage must still be reported on the reader. */
-  exec(w, "DELETE FROM t_docsize WHERE id = 2");
-  const char *damaged = check(r, refresh);
-  printf("reader integrity_check after deleting a t_docsize row: %s\n", damaged);
-  if (strcmp(damaged, "ok") == 0) failed = 1;
+  rc = sqlite3_exec(r, "INSERT INTO t(t) VALUES('integrity-check')", 0, 0, 0);
+  printf("reader FTS5 'integrity-check' command: %s\n", rc == SQLITE_OK ? "ok" : sqlite3_errmsg(r));
+  if (rc != SQLITE_OK) harness_fail("FTS5 'integrity-check' control", sqlite3_errmsg(r));
+
+  /* Damage control: real FTS5 damage must be reported as an FTS5 finding for
+   * t, not as a failure to run the check. The fresh connection has no cached
+   * structure, so its finding cannot be the stale-cache defect; the reader
+   * must report it too (with refresh, or with a fixed engine). */
+  if (exec(w, "DELETE FROM t_docsize WHERE id = 2") == SQLITE_OK) {
+    if (sqlite3_changes(w) != 1) harness_fail("damage control", "no t_docsize row deleted");
+    f = open_db("open fresh connection for damage control");
+    rc = query(f, "PRAGMA integrity_check", got, sizeof got);
+    printf("fresh connection integrity_check after deleting a t_docsize row: %s\n", got);
+    if (rc != SQLITE_OK) harness_fail("fresh-connection damage control", got);
+    else if (!strstr(got, "malformed inverted index for FTS5 table main.t"))
+      harness_fail("fresh-connection damage control", "no FTS5 corruption finding for t");
+    sqlite3_close(f);
+    if (reader_check(r, refresh, got, sizeof got) == SQLITE_OK) {
+      printf("reader integrity_check after deleting a t_docsize row: %s\n", got);
+      /* A reader that showed the defect may report the damage through its
+       * stale cache as a checksum mismatch; one that did not must report the
+       * same corruption finding as the fresh connection. */
+      if (!strstr(got, "malformed inverted index for FTS5 table main.t") &&
+          !(bug && strstr(got, "fts5: checksum mismatch for table \"t\"")))
+        harness_fail("reader damage control", "no FTS5 corruption finding for t");
+    }
+  }
 
   sqlite3_close(r);
   sqlite3_close(w);
-  printf("%s\n", failed ? "FAIL" : "PASS");
-  return failed;
+  if (invalid) { printf("FAIL (invalid run)\n"); return 2; }
+  if (bug) { printf("FAIL (false finding on an undamaged file)\n"); return 1; }
+  printf("PASS\n");
+  return 0;
 }
