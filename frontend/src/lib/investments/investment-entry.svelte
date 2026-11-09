@@ -127,7 +127,7 @@
     {/each}
   </select>
   <button type="button" onclick={open} disabled={!selected || locked}
-    class="min-h-11 rounded-(--radius-control) bg-foreground px-4 py-2 text-sm font-semibold text-background disabled:opacity-50">{m.investments_activity_continue()}</button>
+    class="min-h-11 rounded-(--radius-control) bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-50">{m.investments_activity_continue()}</button>
   <p class="text-xs text-muted">{m.investments_activity_help()}</p>
   {#if onCancel}<button type="button" onclick={onCancel} class="min-h-11 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">{m.transactions_form_cancel()}</button>{/if}
 </div>

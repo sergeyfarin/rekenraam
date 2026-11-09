@@ -89,7 +89,7 @@
   <Panel>
     <h2 class="text-lg font-semibold">{m.quotes_instruments()}</h2>
     <p class="mt-2 text-sm text-muted">{m.quotes_scope()}</p>
-    <button type="button" onclick={() => start(null)} class="mt-4 min-h-11 rounded-(--radius-control) bg-foreground px-4 text-sm font-semibold text-background">{m.quotes_add_instrument()}</button>
+    <button type="button" onclick={() => start(null)} class="mt-4 min-h-11 rounded-(--radius-control) bg-accent px-4 text-sm font-semibold text-accent-foreground">{m.quotes_add_instrument()}</button>
     {#if instrumentsQuery.isPending}<p role="status" class="mt-3">{m.investments_loading()}</p>
     {:else if instrumentsQuery.isError}<APIFormError error={instrumentsQuery.error} />
     {:else if instruments.length === 0}<p class="mt-3 text-sm text-muted">{m.quotes_empty()}</p>
@@ -112,7 +112,7 @@
         <label class="grid gap-1 text-sm">{m.quotes_mic()}<input maxlength="16" bind:value={mic} class="min-h-11 rounded-(--radius-control) border border-border bg-control px-3" /></label>
       </div>
       <p class="text-sm text-muted">{m.quotes_identity_help()}</p>
-      <button type="submit" disabled={pending || !csrfToken} class="min-h-11 rounded-(--radius-control) bg-foreground px-4 text-sm font-semibold text-background disabled:opacity-50">{m.quotes_save()}</button>
+      <button type="submit" disabled={pending || !csrfToken} class="min-h-11 rounded-(--radius-control) bg-accent px-4 text-sm font-semibold text-accent-foreground disabled:opacity-50">{m.quotes_save()}</button>
     </form>
     {#if currenciesQuery.isError}<APIFormError error={currenciesQuery.error} />{/if}
     {#if selected}

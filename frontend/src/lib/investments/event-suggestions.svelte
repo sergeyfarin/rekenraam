@@ -314,12 +314,12 @@
                   {#if shape === 'complete'}
                     <button type="button" disabled={busy.has(s.id)}
                       onclick={() => act(s, () => acceptEventSuggestion(s.id, csrfToken), m.investments_suggestion_accept_error(), true)}
-                      class="rounded-(--radius-control) bg-foreground px-3 py-1.5 text-xs font-semibold text-background transition hover:opacity-90 disabled:opacity-40">
+                      class="rounded-(--radius-control) bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground transition hover:opacity-90 disabled:opacity-40">
                       {m.investments_suggestion_accept()}
                     </button>
                   {:else if (shape === 'needs_completion' || (shape === 'payment_in_lieu' && inLieu)) && completing !== s.id}
                     <button type="button" disabled={busy.has(s.id)} onclick={() => (completing = s.id)}
-                      class="rounded-(--radius-control) bg-foreground px-3 py-1.5 text-xs font-semibold text-background transition hover:opacity-90 disabled:opacity-40">
+                      class="rounded-(--radius-control) bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground transition hover:opacity-90 disabled:opacity-40">
                       {m.investments_suggestion_complete()}
                     </button>
                   {/if}

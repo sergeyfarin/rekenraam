@@ -147,8 +147,10 @@ the other languages. Catalogs and all user-facing metadata live under
 `frontend/project.inlang/settings.json`; native-language review remains #102.
 All images/CSS/scripts are local. There are no analytics or external fonts.
 
-The README's spending screenshot is reused during the build. Refresh the
-other screenshots from the synthetic reference book with:
+The README's spending screenshot is reused during the build. It is a split
+image: the left half is the light theme and the right half is the dark theme,
+captured from the same report state and composed at 2x. Refresh it and the other
+screenshots from the synthetic reference book with:
 
 ```sh
 pnpm build

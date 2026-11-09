@@ -1531,7 +1531,7 @@
         {m.transactions_entry_discard_keep()}
       </button>
       <button type="button" onclick={confirmDiscard}
-        class="inline-flex min-h-11 items-center rounded-[var(--radius-control)] bg-foreground px-4 py-2 text-sm font-semibold text-background transition hover:opacity-90">
+        class="inline-flex min-h-11 items-center rounded-[var(--radius-control)] bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground transition hover:opacity-90">
         {m.transactions_entry_discard_confirm()}
       </button>
     </div>
@@ -1779,7 +1779,7 @@
         <div class="mt-3 flex flex-wrap gap-2">
           <button
             type="button"
-            class="rounded-(--radius-control) bg-foreground px-3 py-1.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:opacity-60"
+            class="rounded-(--radius-control) bg-accent px-3 py-1.5 text-sm font-semibold text-accent-foreground transition hover:opacity-90 disabled:opacity-60"
             disabled={payeeCreatePending}
             onclick={() =>
               payeeConfirm.resolution?.kind === 'unknown' &&
@@ -2379,7 +2379,7 @@
     {#if !(isVoided && mode === 'edit') && !(tier === 'locked' && mode === 'correct')}
       <button
         type="submit"
-        class="inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        class="inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         disabled={busy}
       >
         <Save size={16} aria-hidden="true" />

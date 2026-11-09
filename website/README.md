@@ -51,7 +51,8 @@ review/publish workflow are documented in
   credentials or providers. Source revision and viewports are recorded in
   `assets/capture.json`, which is not published.
 - The spending report shows the book's euro spending (one commodity, so its
-  chart is drawn). It is written to `docs/images/reports-spending.png` at 2x
+  chart is drawn) with the light theme on the left half and the dark theme on
+  the right half. It is written to `docs/images/reports-spending.png` at 2x
   (2880 × 2224, the size `build.mjs` states) and copied during build. It is the
   same screenshot the repository README shows.
 - Capture after committing the code change, then commit the images:

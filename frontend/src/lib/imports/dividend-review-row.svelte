@@ -79,7 +79,7 @@
     </label>
   {/if}
   <APIFormError {error} id={`dividend-review-error-${review.row_id}`} />
-  <button type="submit" disabled={pending || !csrfToken} class="min-h-11 rounded-(--radius-control) bg-foreground px-4 py-2 text-sm font-semibold text-background disabled:opacity-60">
+  <button type="submit" disabled={pending || !csrfToken} class="min-h-11 rounded-(--radius-control) bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-60">
     {repaired ? m.import_dividend_repair() : m.import_dividend_record()}
   </button>
 </form>

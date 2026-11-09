@@ -125,7 +125,7 @@
       <label class="grid gap-1 text-sm sm:col-span-2" for="price-reason">{m.pricing_reason()}<textarea id="price-reason" required maxlength="500" bind:value={reason} class="min-h-20 w-full rounded-(--radius-control) border border-border bg-control p-3"></textarea></label>
     </fieldset>
     {#if !reviewing}<div class="flex flex-wrap gap-3">
-      <button bind:this={reviewButton} type="submit" disabled={pending || !canReview} class="min-h-11 rounded-(--radius-control) bg-foreground px-4 py-2 font-semibold text-background disabled:opacity-50">{pending ? m.pricing_loading() : m.pricing_review()}</button>
+      <button bind:this={reviewButton} type="submit" disabled={pending || !canReview} class="min-h-11 rounded-(--radius-control) bg-accent px-4 py-2 font-semibold text-accent-foreground disabled:opacity-50">{pending ? m.pricing_loading() : m.pricing_review()}</button>
       <button type="button" onclick={close} disabled={pending} class="min-h-11 rounded-(--radius-control) border border-border px-4 py-2">{m.pricing_cancel()}</button>
     </div>{/if}
   </form>
@@ -142,7 +142,7 @@
       <p class="break-words text-sm">{reason}</p>
       {#if impact}<p class="font-semibold">{m.pricing_retire_list()}</p><ul class="space-y-3">{#each impact.prices as observation}<li class="min-w-0 border-t border-border pt-3"><PriceDetail price={observation} {workspace} /></li>{/each}</ul>{/if}
       <div class="flex flex-wrap gap-3">
-        <button {@attach autofocus} type="button" onclick={save} disabled={pending} class="min-h-11 rounded-(--radius-control) bg-foreground px-4 py-2 font-semibold text-background disabled:opacity-50">{pending ? m.pricing_saving() : m.pricing_confirm()}</button>
+        <button {@attach autofocus} type="button" onclick={save} disabled={pending} class="min-h-11 rounded-(--radius-control) bg-accent px-4 py-2 font-semibold text-accent-foreground disabled:opacity-50">{pending ? m.pricing_saving() : m.pricing_confirm()}</button>
         <button type="button" onclick={cancelReview} disabled={pending} class="min-h-11 rounded-(--radius-control) border border-border px-4 py-2">{m.pricing_back()}</button>
       </div>
     </section>

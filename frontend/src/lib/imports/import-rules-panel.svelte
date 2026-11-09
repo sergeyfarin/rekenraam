@@ -198,7 +198,7 @@
       {#if !valid}<p class="text-xs text-muted">{m.import_rules_action_required()}</p>{/if}
       <APIFormError error={mutationError} id="import-rule-error" />
       <div class="flex gap-3">
-        <button type="button" class="rounded-(--radius-control) bg-foreground px-3 py-2 text-sm font-semibold text-background disabled:opacity-60" disabled={!valid || saving || !targetsReady} onclick={saveRule}>{saving ? m.import_rules_saving() : m.import_rules_save()}</button>
+        <button type="button" class="rounded-(--radius-control) bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-60" disabled={!valid || saving || !targetsReady} onclick={saveRule}>{saving ? m.import_rules_saving() : m.import_rules_save()}</button>
         <button type="button" class="text-sm text-muted hover:text-foreground" onclick={resetForm}>{m.import_rules_cancel()}</button>
       </div>
     </fieldset>
