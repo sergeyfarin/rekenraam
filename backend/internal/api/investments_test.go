@@ -92,7 +92,7 @@ func createInstrumentForSession(t *testing.T, handler http.Handler, f investment
 	t.Helper()
 	res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/instruments", investmentInstrumentRequest{
 		CommodityCode: symbol, InstrumentType: "etf", DisplayName: "Test Instrument " + symbol, Symbol: symbol,
-		QuantityScale: 6, PriceScale: 4, EffectiveFrom: "2026-01-01",
+		QuantityScale: 6, PriceScale: 4,
 		Identifiers: json.RawMessage(`{}`), Metadata: json.RawMessage(`{}`),
 	}, http.StatusCreated)
 	var response investmentInstrumentResponse
@@ -922,7 +922,7 @@ func TestInvestmentMutations_RequireCSRFToken(t *testing.T) {
 		path   string
 		body   any
 	}{
-		{"create instrument", http.MethodPost, "/api/v1/investments/instruments", investmentInstrumentRequest{CommodityCode: "AAPL", InstrumentType: "stock", DisplayName: "Apple", Symbol: "AAPL", QuantityScale: 6, PriceScale: 4, EffectiveFrom: "2026-01-01"}},
+		{"create instrument", http.MethodPost, "/api/v1/investments/instruments", investmentInstrumentRequest{CommodityCode: "AAPL", InstrumentType: "stock", DisplayName: "Apple", Symbol: "AAPL", QuantityScale: 6, PriceScale: 4}},
 		{"update instrument", http.MethodPatch, "/api/v1/investments/instruments/" + strconv.FormatInt(instrument.ID, 10), investmentInstrumentRequest{CommodityCode: "VWRL", InstrumentType: "etf", DisplayName: "Renamed", Symbol: "VWRL", QuantityScale: 6, PriceScale: 4, EffectiveFrom: "2026-01-01"}},
 		{"create holding account", http.MethodPost, "/api/v1/investments/holding-accounts", holdingAccountRequest{InstrumentID: instrument.ID, Name: "Holding", OpenedOn: "2026-01-01", EffectiveFrom: "2026-01-01"}},
 		{"buy", http.MethodPost, "/api/v1/investments/buy", tradeRequestBody(f, 1, instrument.CommodityID, "1", 1000)},
@@ -1021,6 +1021,44 @@ func TestUpdateInvestmentInstrument_HTTP(t *testing.T) {
 	var updated investmentInstrumentResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&updated))
 	assert.Equal(t, "Vanguard FTSE All-World UCITS ETF", updated.DisplayName)
+}
+
+func TestCreateInvestmentInstrument_ValidatesIgnoredEffectiveFrom(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+
+	res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/instruments", investmentInstrumentRequest{
+		CommodityCode: "CREATE-DATE", InstrumentType: "stock", DisplayName: "Create date",
+		QuantityScale: 6, PriceScale: 4, EffectiveFrom: "2027-01-01",
+		Identifiers: json.RawMessage(`{}`), Metadata: json.RawMessage(`{}`),
+	}, http.StatusBadRequest)
+	var body errorResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, "VALIDATION_FAILED", body.Error.Code)
+	assert.Contains(t, body.Error.Message, "effective date must not be in the future")
+}
+
+func TestUpdateInvestmentInstrument_BackdatedStructuralChangeReturnsCodedConflict(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "BACKDATED")
+
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPatch, "/api/v1/investments/instruments/"+strconv.FormatInt(instrument.ID, 10), investmentInstrumentRequest{
+		CommodityCode: "BACKDATED", InstrumentType: "etf", DisplayName: "Forward rename",
+		QuantityScale: 6, PriceScale: 4, EffectiveFrom: "2026-06-01",
+		Identifiers: json.RawMessage(`{}`), Metadata: json.RawMessage(`{}`),
+	}, http.StatusOK)
+
+	res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPatch, "/api/v1/investments/instruments/"+strconv.FormatInt(instrument.ID, 10), investmentInstrumentRequest{
+		CommodityCode: "BACKDATED", InstrumentType: "etf", DisplayName: "Backdated quote currency",
+		QuoteCommodityID: &f.commodityID, QuantityScale: 6, PriceScale: 4, EffectiveFrom: "2026-03-01",
+		Identifiers: json.RawMessage(`{}`), Metadata: json.RawMessage(`{}`),
+	}, http.StatusConflict)
+	var body errorResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, "INVESTMENT_INSTRUMENT_VERSION_BACKDATED", body.Error.Code)
 }
 
 func TestCostBasisProfiles_ListAndSave_HTTP(t *testing.T) {

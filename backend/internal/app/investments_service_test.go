@@ -1411,7 +1411,7 @@ func TestSearch_MatchesInstrumentAndReturnsEmptyForBlankQuery(t *testing.T) {
 	instrument, err := f.investmentService.CreateInstrument(ctx, InvestmentInstrumentInput{
 		OwnerUserID: f.ownerUserID, OriginType: "browser_api", CommodityCode: "VWRL", InstrumentType: "etf",
 		DisplayName: "Vanguard FTSE All-World", Symbol: "VWRL",
-		QuantityScale: 6, PriceScale: 4, EffectiveFrom: "2026-01-01",
+		QuantityScale: 6, PriceScale: 4,
 	})
 	require.NoError(t, err)
 
@@ -1433,7 +1433,7 @@ func TestUpdateInstrument_CreatesNewVersionWithChangedFields(t *testing.T) {
 	instrument, err := f.investmentService.CreateInstrument(ctx, InvestmentInstrumentInput{
 		OwnerUserID: f.ownerUserID, OriginType: "browser_api", CommodityCode: "VWRL", InstrumentType: "etf",
 		DisplayName: "Vanguard FTSE All-World", Symbol: "VWRL",
-		QuantityScale: 6, PriceScale: 4, EffectiveFrom: "2026-01-01",
+		QuantityScale: 6, PriceScale: 4,
 	})
 	require.NoError(t, err)
 

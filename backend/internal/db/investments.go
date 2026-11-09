@@ -27,6 +27,17 @@ var (
 	ErrOutOfOrderPositionEvent = errors.New("investment events must be entered in chronological order")
 )
 
+// InvestmentInstrumentVersionBackdatedError refuses a structural instrument
+// version dated before the instrument's latest version (#549). LatestEffectiveFrom
+// is the earliest date such a change may take effect.
+type InvestmentInstrumentVersionBackdatedError struct {
+	LatestEffectiveFrom string
+}
+
+func (e InvestmentInstrumentVersionBackdatedError) Error() string {
+	return fmt.Sprintf("instrument type, quote/trading currency and precision changes cannot take effect before %s, when the instrument's latest version takes effect; an earlier date may change descriptive fields only", e.LatestEffectiveFrom)
+}
+
 type InvestmentRepository struct {
 	database *sql.DB
 }
@@ -93,17 +104,19 @@ type CreateInvestmentInstrumentParams struct {
 }
 
 type UpdateInvestmentInstrumentParams struct {
-	BookID          int64
-	InstrumentID    int64
-	ChangedByUserID int64
-	AuthSessionID   int64
-	RequestID       string
-	OriginType      string
-	Operation       string
-	Spec            InvestmentInstrumentSpec
-	RecordedAt      string
-	EffectiveFrom   string
-	ChangeReason    string
+	BookID             int64
+	InstrumentID       int64
+	ChangedByUserID    int64
+	AuthSessionID      int64
+	RequestID          string
+	OriginType         string
+	Operation          string
+	Spec               InvestmentInstrumentSpec
+	IdentifiersOmitted bool
+	MetadataOmitted    bool
+	RecordedAt         string
+	EffectiveFrom      string
+	ChangeReason       string
 }
 
 type CostBasisProfileRecord struct {
@@ -793,6 +806,35 @@ func (r *InvestmentRepository) UpdateInstrument(ctx context.Context, params Upda
 	if err != nil {
 		return InvestmentInstrumentRecord{}, err
 	}
+	latest, err := latestInvestmentInstrumentVersionDateTx(ctx, tx, params.InstrumentID)
+	if err != nil {
+		return InvestmentInstrumentRecord{}, err
+	}
+	mergeSource := current
+	if params.EffectiveFrom < latest {
+		// An earlier-dated version governs only the days up to the latest one,
+		// so structural fields must take effect on or after that date. An
+		// earlier date may correct descriptive fields only (#549).
+		asOf, err := investmentInstrumentVersionAsOfTx(ctx, tx, params.BookID, params.InstrumentID, params.EffectiveFrom)
+		if errors.Is(err, ErrNotFound) {
+			return InvestmentInstrumentRecord{}, InvestmentInstrumentVersionBackdatedError{LatestEffectiveFrom: latest}
+		}
+		if err != nil {
+			return InvestmentInstrumentRecord{}, err
+		}
+		if investmentInstrumentStructureDiffers(asOf, params.Spec) {
+			return InvestmentInstrumentRecord{}, InvestmentInstrumentVersionBackdatedError{LatestEffectiveFrom: latest}
+		}
+		mergeSource = asOf
+	}
+	// An omitted JSON object keeps the value from the version that governs the
+	// new row's date, never a later version's value (#550 review).
+	if params.IdentifiersOmitted {
+		params.Spec.IdentifiersJSON = mergeSource.IdentifiersJSON
+	}
+	if params.MetadataOmitted {
+		params.Spec.MetadataJSON = mergeSource.MetadataJSON
+	}
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
 		BookID:        params.BookID,
 		ActorUserID:   params.ChangedByUserID,
@@ -806,7 +848,11 @@ func (r *InvestmentRepository) UpdateInstrument(ctx context.Context, params Upda
 	if err != nil {
 		return InvestmentInstrumentRecord{}, err
 	}
-	if _, err := insertInvestmentInstrumentVersion(ctx, tx, params.InstrumentID, current.VersionSeq+1, params.Spec, current.CommodityID, params.EffectiveFrom, params.RecordedAt, params.ChangedByUserID, params.ChangeReason, auditEventID); err != nil {
+	versionSeq, err := nextVersionSeqTx(ctx, tx, "investment_instrument_versions", "instrument_id", params.InstrumentID)
+	if err != nil {
+		return InvestmentInstrumentRecord{}, err
+	}
+	if _, err := insertInvestmentInstrumentVersion(ctx, tx, params.InstrumentID, versionSeq, params.Spec, current.CommodityID, params.EffectiveFrom, params.RecordedAt, params.ChangedByUserID, params.ChangeReason, auditEventID); err != nil {
 		return InvestmentInstrumentRecord{}, err
 	}
 	record, err := investmentInstrumentByIDTx(ctx, tx, params.BookID, params.InstrumentID)
@@ -2853,6 +2899,10 @@ func investmentInstrumentByIDTx(ctx context.Context, tx *sql.Tx, bookID int64, i
 }
 
 func investmentInstrumentSelect(ctx context.Context, whereClause string) string {
+	return investmentInstrumentSelectFrom(CurrentReferenceVersions(ctx, "investment_instrument"), whereClause)
+}
+
+func investmentInstrumentSelectFrom(versionSource, whereClause string) string {
 	return `
 		SELECT
 			ii.id, ii.book_id, ii.commodity_id, c.code, c.is_builtin, ii.created_at, ii.created_by_user_id,
@@ -2862,8 +2912,46 @@ func investmentInstrumentSelect(ctx context.Context, whereClause string) string 
 			iiv.trading_commodity_id, iiv.quantity_scale, iiv.price_scale, iiv.identifiers_json, iiv.metadata_json
 		FROM investment_instruments ii
 		JOIN commodities c ON c.id = ii.commodity_id
-		JOIN ` + CurrentReferenceVersions(ctx, "investment_instrument") + ` iiv ON iiv.instrument_id = ii.id
+		JOIN ` + versionSource + ` iiv ON iiv.instrument_id = ii.id
 	` + whereClause
+}
+
+func latestInvestmentInstrumentVersionDateTx(ctx context.Context, tx *sql.Tx, instrumentID int64) (string, error) {
+	var latest sql.NullString
+	if err := tx.QueryRowContext(ctx, `
+		SELECT MAX(effective_from)
+		FROM investment_instrument_versions
+		WHERE instrument_id = ?
+	`, instrumentID).Scan(&latest); err != nil {
+		return "", fmt.Errorf("read latest investment instrument version date: %w", err)
+	}
+	return latest.String, nil
+}
+
+func investmentInstrumentVersionAsOfTx(ctx context.Context, tx *sql.Tx, bookID, instrumentID int64, date string) (InvestmentInstrumentRecord, error) {
+	var record InvestmentInstrumentRecord
+	if err := scanInvestmentInstrumentRecord(tx.QueryRowContext(ctx, investmentInstrumentSelectFrom("investment_instrument_versions", `
+		WHERE ii.book_id = ? AND ii.id = ?
+			AND iiv.id = (
+				SELECT asof.id FROM investment_instrument_versions asof
+				WHERE asof.instrument_id = ii.id AND asof.effective_from <= ?
+				ORDER BY asof.effective_from DESC, asof.version_seq DESC
+				LIMIT 1
+			)
+	`), bookID, instrumentID, date), &record); err != nil {
+		return InvestmentInstrumentRecord{}, err
+	}
+	return record, nil
+}
+
+func investmentInstrumentStructureDiffers(record InvestmentInstrumentRecord, spec InvestmentInstrumentSpec) bool {
+	return record.InstrumentType != spec.InstrumentType ||
+		record.QuoteCommodityID.Valid != spec.QuoteCommodityID.Valid ||
+		record.QuoteCommodityID.Int64 != spec.QuoteCommodityID.Int64 ||
+		record.TradingCommodityID.Valid != spec.TradingCommodityID.Valid ||
+		record.TradingCommodityID.Int64 != spec.TradingCommodityID.Int64 ||
+		record.QuantityScale != spec.QuantityScale ||
+		record.PriceScale != spec.PriceScale
 }
 
 func scanInvestmentInstrumentRecord(row rowScanner, record *InvestmentInstrumentRecord) error {

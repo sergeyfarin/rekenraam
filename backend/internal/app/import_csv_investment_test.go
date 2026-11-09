@@ -66,7 +66,7 @@ func csvIncomeFixture(t *testing.T) (*investTestFixture, InvestmentInstrument, i
 	t.Helper()
 	f := newInvestTestFixture(t)
 	instrument, err := f.investmentSvc.CreateInstrument(context.Background(), InvestmentInstrumentInput{
-		OwnerUserID: f.ownerUserID, OriginType: "browser_api", ChangeReason: "fixture", CommodityCode: "PAYER", InstrumentType: "stock", DisplayName: "Payer", EffectiveFrom: "0001-01-01", QuantityScale: 0, PriceScale: 2,
+		OwnerUserID: f.ownerUserID, OriginType: "browser_api", ChangeReason: "fixture", CommodityCode: "PAYER", InstrumentType: "stock", DisplayName: "Payer", QuantityScale: 0, PriceScale: 2,
 	})
 	require.NoError(t, err)
 	cash, err := f.investmentSvc.accountService.CreateAccount(context.Background(), CreateAccountInput{
@@ -246,7 +246,7 @@ func TestCSVInvestmentNoReferenceIdentityKeepsDistinctPayersAndOccurrences(t *te
 	t.Parallel()
 	f, _, _, profile := csvIncomeFixture(t)
 	_, err := f.investmentSvc.CreateInstrument(context.Background(), InvestmentInstrumentInput{
-		OwnerUserID: f.ownerUserID, OriginType: "browser_api", ChangeReason: "fixture", CommodityCode: "OTHER", InstrumentType: "stock", DisplayName: "Other payer", EffectiveFrom: "0001-01-01", QuantityScale: 0, PriceScale: 2,
+		OwnerUserID: f.ownerUserID, OriginType: "browser_api", ChangeReason: "fixture", CommodityCode: "OTHER", InstrumentType: "stock", DisplayName: "Other payer", QuantityScale: 0, PriceScale: 2,
 	})
 	require.NoError(t, err)
 	rows := "2026-03-01;DIV;PAYER;85,00;100,00;15,00;\n2026-03-01;DIV;OTHER;85,00;100,00;15,00;\n2026-03-01;DIV;PAYER;85,00;100,00;15,00;\n"

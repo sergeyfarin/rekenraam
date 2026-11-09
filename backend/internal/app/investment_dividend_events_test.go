@@ -56,7 +56,7 @@ func newDividendEventFixture(t *testing.T) *dividendEventFixture {
 	f.pricing.SetNowForTest(func() time.Time { return now })
 	instrument, err := f.investmentSvc.CreateInstrument(ctx, InvestmentInstrumentInput{OwnerUserID: 1, OriginType: "browser_api", ChangeReason: "fixture",
 		InstrumentType: "stock", DisplayName: "ASML Holding", CommodityCode: "ASML", Symbol: "ASML", MIC: "XAMS", QuantityScale: 4, PriceScale: 4,
-		QuoteCommodityID: &f.eurCommodityID, IdentifiersJSON: `{"twelve_data_symbol":"ASML"}`, EffectiveFrom: "0001-01-01"})
+		QuoteCommodityID: &f.eurCommodityID, IdentifiersJSON: `{"twelve_data_symbol":"ASML"}`})
 	require.NoError(t, err)
 	f.instrument = instrument
 	f.holding, err = f.investmentSvc.CreateHoldingAccount(ctx, HoldingAccountInput{OwnerUserID: 1, InstrumentID: instrument.ID, Name: "ASML", OpenedOn: "2020-01-01", EffectiveFrom: "2020-01-01"})
@@ -606,7 +606,7 @@ func TestProviderPaymentInLieuLinksOwnerRecordedPaymentOnce(t *testing.T) {
 	// Another instrument's payment in lieu on the same ex-date is not this one.
 	other, err := f.investmentSvc.CreateInstrument(ctx, InvestmentInstrumentInput{OwnerUserID: 1, OriginType: "browser_api", ChangeReason: "fixture",
 		InstrumentType: "stock", DisplayName: "Other", CommodityCode: "OTHR", Symbol: "OTHR", MIC: "XAMS", QuantityScale: 4, PriceScale: 4,
-		QuoteCommodityID: &f.eurCommodityID, EffectiveFrom: "0001-01-01"})
+		QuoteCommodityID: &f.eurCommodityID})
 	require.NoError(t, err)
 	otherHolding, err := f.investmentSvc.CreateHoldingAccount(ctx, HoldingAccountInput{OwnerUserID: 1, InstrumentID: other.ID, Name: "Other", OpenedOn: "2020-01-01", EffectiveFrom: "2020-01-01"})
 	require.NoError(t, err)
