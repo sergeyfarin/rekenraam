@@ -63,6 +63,32 @@ which slows `internal/app` from 186 s to 250 s and breaks the race deadline
 ([candidate review](reviews/sqlite-driver-candidate-2026-11-08.md)). The
 production module pin remains v1.14.52.
 
+Every driver admission review also decides whether the #403 workaround
+(`refreshFTS5StructuresTx`) is still needed. This paragraph is the
+authoritative rule. The [FTS5 integrity review](reviews/fts5-integrity-stale-structure-2026-11-08.md)
+supplies the probe and its evidence.
+
+- Build `docs/reviews/fixtures/fts5-integrity-stale-structure-probe.c.txt`
+  against the authenticated official amalgamation whose `sqlite3.c` matches
+  the candidate's bundled `sqlite3-binding.c`. That match is the one the
+  candidate review establishes. Do not include the driver's binding files
+  directly: they carry its wrapper.
+- Run the probe as `probe wal` (no `refresh`) and record its exit status in
+  the admission review, with the printed finding.
+  - **1** means the workaround is still needed. Any non-`ok` result on the
+    undamaged file gives exit 1, so confirm that the finding is the FTS5
+    `checksum mismatch`. A different finding is a new defect to investigate.
+  - **0** means the engine looks fixed.
+  - **2** means the run is invalid, for example because a control failed or
+    a damage-control message no longer matches. Repair the probe and rerun;
+    never read exit 2 as either result.
+- Keep the workaround until an admitted driver bundles a fixed engine. Exit
+  0 alone does not remove it. Removing it also needs the upstream fix to be
+  identified, and the bare-pragma canary in
+  `TestSQLiteIntegrityOnAReusedReaderAfterSearchWrites` to fail on the
+  candidate as expected. The admission review then decides whether to remove
+  the refresh, and whether to keep or invert the canary.
+
 ### Install
 
 ```sh

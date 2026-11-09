@@ -1,0 +1,3508 @@
+{
+  "probe_sha256": "1d2f0bfdc96f2ed4784ae15e3add5154248ed38d8de05445aa0fd27a0acdd276",
+  "matrix_sha256": "83897f25849490a1b9e02ed05766d31746b38e003621ffe5aff01f1d44629f08",
+  "cflags": [
+    "-O1",
+    "-DSQLITE_THREADSAFE=1",
+    "-DSQLITE_ENABLE_FTS5"
+  ],
+  "engines": {
+    "3.53.4": {
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16"
+    },
+    "3.53.4+patch": {
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "patched_sqlite3_c_sha3_256": "868a1d80412b998fbeba31693fef258685640f3ae9d51ab1cf97018b94473f76"
+    },
+    "3.54.1": {
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81"
+    },
+    "3.54.1+patch": {
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "patched_sqlite3_c_sha3_256": "80f621ad392c3767126dea8756785c57b5424495872fcf529e7976339fd00874"
+    }
+  },
+  "runs": [
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "base",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 1,
+      "required_lines": [
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\""
+      ],
+      "exit": 1,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check run 3: fts5: checksum mismatch for table \"t\"",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (false finding on an undamaged file)"
+      ],
+      "verdict": "FAIL (false finding on an undamaged file)",
+      "invalid": null,
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "base",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 0,
+      "required_lines": [
+        "reader integrity_check run 2: ok"
+      ],
+      "exit": 0,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "PASS"
+      ],
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "base",
+      "args": [
+        "delete"
+      ],
+      "expected_exit": 1,
+      "required_lines": [
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\""
+      ],
+      "exit": 1,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=delete refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check run 3: fts5: checksum mismatch for table \"t\"",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (false finding on an undamaged file)"
+      ],
+      "verdict": "FAIL (false finding on an undamaged file)",
+      "invalid": null,
+      "engine_version": "sqlite 3.53.4 journal_mode=delete refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "base",
+      "args": [
+        "delete",
+        "refresh"
+      ],
+      "expected_exit": 0,
+      "required_lines": [
+        "reader integrity_check run 2: ok"
+      ],
+      "exit": 0,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=delete refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "PASS"
+      ],
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.53.4 journal_mode=delete refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "invalid arguments",
+      "args": [
+        "wal",
+        "refesh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "usage: <work>/probe-"
+      ],
+      "exit": 2,
+      "stdout": [
+        "usage: <work>/probe-3.53.4 [wal|delete] [refresh]",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "invalid arguments",
+      "args": [
+        "wal",
+        "refresh",
+        "extra"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "usage: <work>/probe-"
+      ],
+      "exit": 2,
+      "stdout": [
+        "usage: <work>/probe-3.53.4 [wal|delete] [refresh]",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "invalid arguments",
+      "args": [
+        "wl"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "usage: <work>/probe-"
+      ],
+      "exit": 2,
+      "stdout": [
+        "usage: <work>/probe-3.53.4 [wal|delete] [refresh]",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "invalid arguments",
+      "args": [
+        "wal",
+        ""
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "usage: <work>/probe-"
+      ],
+      "exit": 2,
+      "stdout": [
+        "usage: <work>/probe-3.53.4 [wal|delete] [refresh]",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "authorizer denies the reader pragma at the damage check",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check run 3: fts5: checksum mismatch for table \"t\"",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "authorizer denies the reader pragma at the damage check",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "authorizer denies every reader pragma",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=0",
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: authorization denied",
+        "INVALID: FTS5 'integrity-check' control: authorization denied",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "authorizer denies every reader pragma",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=1",
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: authorization denied",
+        "INVALID: FTS5 'integrity-check' control: authorization denied",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "fresh-connection control returns not ok",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: fresh-connection control: not ok"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check run 3: fts5: checksum mismatch for table \"t\"",
+        "fresh connection integrity_check: not ok",
+        "INVALID: fresh-connection control: not ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: fresh-connection control: not ok",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "fresh-connection control returns not ok",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: fresh-connection control: not ok"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: not ok",
+        "INVALID: fresh-connection control: not ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: fresh-connection control: not ok",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "FTS5 integrity-check command fails",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: FTS5 'integrity-check' control"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check run 3: fts5: checksum mismatch for table \"t\"",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: SQL logic error",
+        "INVALID: FTS5 'integrity-check' control: SQL logic error",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: FTS5 'integrity-check' control: SQL logic error",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "FTS5 integrity-check command fails",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: FTS5 'integrity-check' control"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: SQL logic error",
+        "INVALID: FTS5 'integrity-check' control: SQL logic error",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: FTS5 'integrity-check' control: SQL logic error",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "damage DELETE matches no row",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: damage control: no t_docsize row deleted"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check run 3: fts5: checksum mismatch for table \"t\"",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "INVALID: damage control: no t_docsize row deleted",
+        "fresh connection integrity_check after deleting a t_docsize row: ok",
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+        "reader integrity_check after deleting a t_docsize row: ok",
+        "INVALID: reader damage control: no FTS5 corruption finding for t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: damage control: no t_docsize row deleted",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "damage DELETE matches no row",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: damage control: no t_docsize row deleted"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "INVALID: damage control: no t_docsize row deleted",
+        "fresh connection integrity_check after deleting a t_docsize row: ok",
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+        "reader integrity_check after deleting a t_docsize row: ok",
+        "INVALID: reader damage control: no FTS5 corruption finding for t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: damage control: no t_docsize row deleted",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "damage DELETE fails",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check run 3: fts5: checksum mismatch for table \"t\"",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table: t_docsizzz",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table: t_docsizzz",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "damage DELETE fails",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table: t_docsizzz",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table: t_docsizzz",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "writer INSERT between checks fails",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: INSERT INTO nope(x)"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "INVALID: INSERT INTO nope(x) VALUES('gamma delta 1'): no such table: nope",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "INVALID: damage control: no t_docsize row deleted",
+        "fresh connection integrity_check after deleting a t_docsize row: ok",
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+        "reader integrity_check after deleting a t_docsize row: ok",
+        "INVALID: reader damage control: no FTS5 corruption finding for t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: INSERT INTO nope(x) VALUES('gamma delta 1'): no such table: nope",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "writer INSERT between checks fails",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: INSERT INTO nope(x)"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "INVALID: INSERT INTO nope(x) VALUES('gamma delta 1'): no such table: nope",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "INVALID: damage control: no t_docsize row deleted",
+        "fresh connection integrity_check after deleting a t_docsize row: ok",
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+        "reader integrity_check after deleting a t_docsize row: ok",
+        "INVALID: reader damage control: no FTS5 corruption finding for t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: INSERT INTO nope(x) VALUES('gamma delta 1'): no such table: nope",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "fresh connection cannot open",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: open fresh connection: no such vfs"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check run 3: fts5: checksum mismatch for table \"t\"",
+        "INVALID: open fresh connection: no such vfs: no-such-vfs",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: open fresh connection: no such vfs: no-such-vfs",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "fresh connection cannot open",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: open fresh connection: no such vfs"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "INVALID: open fresh connection: no such vfs: no-such-vfs",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: open fresh connection: no such vfs: no-such-vfs",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "fresh damage-control expected text changed (simulated)",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check run 3: fts5: checksum mismatch for table \"t\"",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "fresh damage-control expected text changed (simulated)",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "reader damage-control expected text changed (simulated)",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: reader damage control: no FTS5 corruption finding for t"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check run 3: fts5: checksum mismatch for table \"t\"",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: reader damage control: no FTS5 corruption finding for t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader damage control: no FTS5 corruption finding for t",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "reader damage-control expected text changed (simulated)",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: reader damage control: no FTS5 corruption finding for t"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: reader damage control: no FTS5 corruption finding for t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader damage control: no FTS5 corruption finding for t",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "FTS5 command replaced by a bare reader check (reader stale just before the damage check)",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 1,
+      "required_lines": [
+        "reader bare integrity_check before damage: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t"
+      ],
+      "exit": 1,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check run 3: fts5: checksum mismatch for table \"t\"",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: replaced by a bare reader check (mutation)",
+        "reader bare integrity_check before damage: fts5: checksum mismatch for table \"t\"",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (false finding on an undamaged file)"
+      ],
+      "verdict": "FAIL (false finding on an undamaged file)",
+      "invalid": null,
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": false,
+      "case": "FTS5 command replaced by a bare reader check (reader stale just before the damage check)",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 0,
+      "required_lines": [
+        "reader bare integrity_check before damage: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t"
+      ],
+      "exit": 0,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: replaced by a bare reader check (mutation)",
+        "reader bare integrity_check before damage: fts5: checksum mismatch for table \"t\"",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "PASS"
+      ],
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "base",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 0,
+      "required_lines": [
+        "reader integrity_check run 2: ok"
+      ],
+      "exit": 0,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "PASS"
+      ],
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "base",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 0,
+      "required_lines": [
+        "reader integrity_check run 2: ok"
+      ],
+      "exit": 0,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "PASS"
+      ],
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "base",
+      "args": [
+        "delete"
+      ],
+      "expected_exit": 0,
+      "required_lines": [
+        "reader integrity_check run 2: ok"
+      ],
+      "exit": 0,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=delete refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "PASS"
+      ],
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.53.4 journal_mode=delete refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "base",
+      "args": [
+        "delete",
+        "refresh"
+      ],
+      "expected_exit": 0,
+      "required_lines": [
+        "reader integrity_check run 2: ok"
+      ],
+      "exit": 0,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=delete refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "PASS"
+      ],
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.53.4 journal_mode=delete refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "invalid arguments",
+      "args": [
+        "wal",
+        "refesh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "usage: <work>/probe-"
+      ],
+      "exit": 2,
+      "stdout": [
+        "usage: <work>/probe-3.53.4+patch [wal|delete] [refresh]",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "invalid arguments",
+      "args": [
+        "wal",
+        "refresh",
+        "extra"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "usage: <work>/probe-"
+      ],
+      "exit": 2,
+      "stdout": [
+        "usage: <work>/probe-3.53.4+patch [wal|delete] [refresh]",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "invalid arguments",
+      "args": [
+        "wl"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "usage: <work>/probe-"
+      ],
+      "exit": 2,
+      "stdout": [
+        "usage: <work>/probe-3.53.4+patch [wal|delete] [refresh]",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "invalid arguments",
+      "args": [
+        "wal",
+        ""
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "usage: <work>/probe-"
+      ],
+      "exit": 2,
+      "stdout": [
+        "usage: <work>/probe-3.53.4+patch [wal|delete] [refresh]",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "authorizer denies the reader pragma at the damage check",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "authorizer denies the reader pragma at the damage check",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "authorizer denies every reader pragma",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=0",
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: authorization denied",
+        "INVALID: FTS5 'integrity-check' control: authorization denied",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "authorizer denies every reader pragma",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=1",
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: authorization denied",
+        "INVALID: FTS5 'integrity-check' control: authorization denied",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "fresh-connection control returns not ok",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: fresh-connection control: not ok"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: not ok",
+        "INVALID: fresh-connection control: not ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: fresh-connection control: not ok",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "fresh-connection control returns not ok",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: fresh-connection control: not ok"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: not ok",
+        "INVALID: fresh-connection control: not ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: fresh-connection control: not ok",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "FTS5 integrity-check command fails",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: FTS5 'integrity-check' control"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: SQL logic error",
+        "INVALID: FTS5 'integrity-check' control: SQL logic error",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: FTS5 'integrity-check' control: SQL logic error",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "FTS5 integrity-check command fails",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: FTS5 'integrity-check' control"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: SQL logic error",
+        "INVALID: FTS5 'integrity-check' control: SQL logic error",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: FTS5 'integrity-check' control: SQL logic error",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "damage DELETE matches no row",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: damage control: no t_docsize row deleted"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "INVALID: damage control: no t_docsize row deleted",
+        "fresh connection integrity_check after deleting a t_docsize row: ok",
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+        "reader integrity_check after deleting a t_docsize row: ok",
+        "INVALID: reader damage control: no FTS5 corruption finding for t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: damage control: no t_docsize row deleted",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "damage DELETE matches no row",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: damage control: no t_docsize row deleted"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "INVALID: damage control: no t_docsize row deleted",
+        "fresh connection integrity_check after deleting a t_docsize row: ok",
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+        "reader integrity_check after deleting a t_docsize row: ok",
+        "INVALID: reader damage control: no FTS5 corruption finding for t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: damage control: no t_docsize row deleted",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "damage DELETE fails",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table: t_docsizzz",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table: t_docsizzz",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "damage DELETE fails",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table: t_docsizzz",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table: t_docsizzz",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "writer INSERT between checks fails",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: INSERT INTO nope(x)"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "INVALID: INSERT INTO nope(x) VALUES('gamma delta 1'): no such table: nope",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "INVALID: damage control: no t_docsize row deleted",
+        "fresh connection integrity_check after deleting a t_docsize row: ok",
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+        "reader integrity_check after deleting a t_docsize row: ok",
+        "INVALID: reader damage control: no FTS5 corruption finding for t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: INSERT INTO nope(x) VALUES('gamma delta 1'): no such table: nope",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "writer INSERT between checks fails",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: INSERT INTO nope(x)"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "INVALID: INSERT INTO nope(x) VALUES('gamma delta 1'): no such table: nope",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "INVALID: damage control: no t_docsize row deleted",
+        "fresh connection integrity_check after deleting a t_docsize row: ok",
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+        "reader integrity_check after deleting a t_docsize row: ok",
+        "INVALID: reader damage control: no FTS5 corruption finding for t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: INSERT INTO nope(x) VALUES('gamma delta 1'): no such table: nope",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "fresh connection cannot open",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: open fresh connection: no such vfs"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "INVALID: open fresh connection: no such vfs: no-such-vfs",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: open fresh connection: no such vfs: no-such-vfs",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "fresh connection cannot open",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: open fresh connection: no such vfs"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "INVALID: open fresh connection: no such vfs: no-such-vfs",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: open fresh connection: no such vfs: no-such-vfs",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "fresh damage-control expected text changed (simulated)",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "fresh damage-control expected text changed (simulated)",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "reader damage-control expected text changed (simulated)",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: reader damage control: no FTS5 corruption finding for t"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: reader damage control: no FTS5 corruption finding for t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader damage control: no FTS5 corruption finding for t",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "reader damage-control expected text changed (simulated)",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: reader damage control: no FTS5 corruption finding for t"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: reader damage control: no FTS5 corruption finding for t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader damage control: no FTS5 corruption finding for t",
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "FTS5 command replaced by a bare reader check (reader stale just before the damage check)",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 0,
+      "required_lines": [
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t"
+      ],
+      "exit": 0,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: replaced by a bare reader check (mutation)",
+        "reader bare integrity_check before damage: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "PASS"
+      ],
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.53.4+patch",
+      "official_sqlite3_c_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "candidate_patch": true,
+      "case": "FTS5 command replaced by a bare reader check (reader stale just before the damage check)",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 0,
+      "required_lines": [
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t"
+      ],
+      "exit": 0,
+      "stdout": [
+        "sqlite 3.53.4 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: replaced by a bare reader check (mutation)",
+        "reader bare integrity_check before damage: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "PASS"
+      ],
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.53.4 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "base",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 1,
+      "required_lines": [
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\""
+      ],
+      "exit": 1,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check run 3: fts5: checksum mismatch for table \"t\"",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (false finding on an undamaged file)"
+      ],
+      "verdict": "FAIL (false finding on an undamaged file)",
+      "invalid": null,
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "base",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 0,
+      "required_lines": [
+        "reader integrity_check run 2: ok"
+      ],
+      "exit": 0,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "PASS"
+      ],
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "base",
+      "args": [
+        "delete"
+      ],
+      "expected_exit": 1,
+      "required_lines": [
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\""
+      ],
+      "exit": 1,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=delete refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check run 3: fts5: checksum mismatch for table \"t\"",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (false finding on an undamaged file)"
+      ],
+      "verdict": "FAIL (false finding on an undamaged file)",
+      "invalid": null,
+      "engine_version": "sqlite 3.54.1 journal_mode=delete refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "base",
+      "args": [
+        "delete",
+        "refresh"
+      ],
+      "expected_exit": 0,
+      "required_lines": [
+        "reader integrity_check run 2: ok"
+      ],
+      "exit": 0,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=delete refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "PASS"
+      ],
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.54.1 journal_mode=delete refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "invalid arguments",
+      "args": [
+        "wal",
+        "refesh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "usage: <work>/probe-"
+      ],
+      "exit": 2,
+      "stdout": [
+        "usage: <work>/probe-3.54.1 [wal|delete] [refresh]",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "invalid arguments",
+      "args": [
+        "wal",
+        "refresh",
+        "extra"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "usage: <work>/probe-"
+      ],
+      "exit": 2,
+      "stdout": [
+        "usage: <work>/probe-3.54.1 [wal|delete] [refresh]",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "invalid arguments",
+      "args": [
+        "wl"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "usage: <work>/probe-"
+      ],
+      "exit": 2,
+      "stdout": [
+        "usage: <work>/probe-3.54.1 [wal|delete] [refresh]",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "invalid arguments",
+      "args": [
+        "wal",
+        ""
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "usage: <work>/probe-"
+      ],
+      "exit": 2,
+      "stdout": [
+        "usage: <work>/probe-3.54.1 [wal|delete] [refresh]",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "authorizer denies the reader pragma at the damage check",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check run 3: fts5: checksum mismatch for table \"t\"",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "authorizer denies the reader pragma at the damage check",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "authorizer denies every reader pragma",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=0",
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: authorization denied",
+        "INVALID: FTS5 'integrity-check' control: authorization denied",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "authorizer denies every reader pragma",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=1",
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: authorization denied",
+        "INVALID: FTS5 'integrity-check' control: authorization denied",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "fresh-connection control returns not ok",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: fresh-connection control: not ok"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check run 3: fts5: checksum mismatch for table \"t\"",
+        "fresh connection integrity_check: not ok",
+        "INVALID: fresh-connection control: not ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: fresh-connection control: not ok",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "fresh-connection control returns not ok",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: fresh-connection control: not ok"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: not ok",
+        "INVALID: fresh-connection control: not ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: fresh-connection control: not ok",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "FTS5 integrity-check command fails",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: FTS5 'integrity-check' control"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check run 3: fts5: checksum mismatch for table \"t\"",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: SQL logic error",
+        "INVALID: FTS5 'integrity-check' control: SQL logic error",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: FTS5 'integrity-check' control: SQL logic error",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "FTS5 integrity-check command fails",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: FTS5 'integrity-check' control"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: SQL logic error",
+        "INVALID: FTS5 'integrity-check' control: SQL logic error",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: FTS5 'integrity-check' control: SQL logic error",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "damage DELETE matches no row",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: damage control: no t_docsize row deleted"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check run 3: fts5: checksum mismatch for table \"t\"",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "INVALID: damage control: no t_docsize row deleted",
+        "fresh connection integrity_check after deleting a t_docsize row: ok",
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+        "reader integrity_check after deleting a t_docsize row: ok",
+        "INVALID: reader damage control: no FTS5 corruption finding for t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: damage control: no t_docsize row deleted",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "damage DELETE matches no row",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: damage control: no t_docsize row deleted"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "INVALID: damage control: no t_docsize row deleted",
+        "fresh connection integrity_check after deleting a t_docsize row: ok",
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+        "reader integrity_check after deleting a t_docsize row: ok",
+        "INVALID: reader damage control: no FTS5 corruption finding for t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: damage control: no t_docsize row deleted",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "damage DELETE fails",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check run 3: fts5: checksum mismatch for table \"t\"",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table: t_docsizzz",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table: t_docsizzz",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "damage DELETE fails",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table: t_docsizzz",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table: t_docsizzz",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "writer INSERT between checks fails",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: INSERT INTO nope(x)"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "INVALID: INSERT INTO nope(x) VALUES('gamma delta 1'): no such table: nope",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "INVALID: damage control: no t_docsize row deleted",
+        "fresh connection integrity_check after deleting a t_docsize row: ok",
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+        "reader integrity_check after deleting a t_docsize row: ok",
+        "INVALID: reader damage control: no FTS5 corruption finding for t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: INSERT INTO nope(x) VALUES('gamma delta 1'): no such table: nope",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "writer INSERT between checks fails",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: INSERT INTO nope(x)"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "INVALID: INSERT INTO nope(x) VALUES('gamma delta 1'): no such table: nope",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "INVALID: damage control: no t_docsize row deleted",
+        "fresh connection integrity_check after deleting a t_docsize row: ok",
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+        "reader integrity_check after deleting a t_docsize row: ok",
+        "INVALID: reader damage control: no FTS5 corruption finding for t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: INSERT INTO nope(x) VALUES('gamma delta 1'): no such table: nope",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "fresh connection cannot open",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: open fresh connection: no such vfs"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check run 3: fts5: checksum mismatch for table \"t\"",
+        "INVALID: open fresh connection: no such vfs: no-such-vfs",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: open fresh connection: no such vfs: no-such-vfs",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "fresh connection cannot open",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: open fresh connection: no such vfs"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "INVALID: open fresh connection: no such vfs: no-such-vfs",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: open fresh connection: no such vfs: no-such-vfs",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "fresh damage-control expected text changed (simulated)",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check run 3: fts5: checksum mismatch for table \"t\"",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "fresh damage-control expected text changed (simulated)",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "reader damage-control expected text changed (simulated)",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: reader damage control: no FTS5 corruption finding for t"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check run 3: fts5: checksum mismatch for table \"t\"",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: reader damage control: no FTS5 corruption finding for t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader damage control: no FTS5 corruption finding for t",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "reader damage-control expected text changed (simulated)",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: reader damage control: no FTS5 corruption finding for t"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: reader damage control: no FTS5 corruption finding for t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader damage control: no FTS5 corruption finding for t",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "FTS5 command replaced by a bare reader check (reader stale just before the damage check)",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 1,
+      "required_lines": [
+        "reader bare integrity_check before damage: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t"
+      ],
+      "exit": 1,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check run 3: fts5: checksum mismatch for table \"t\"",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: replaced by a bare reader check (mutation)",
+        "reader bare integrity_check before damage: fts5: checksum mismatch for table \"t\"",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (false finding on an undamaged file)"
+      ],
+      "verdict": "FAIL (false finding on an undamaged file)",
+      "invalid": null,
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": false,
+      "case": "FTS5 command replaced by a bare reader check (reader stale just before the damage check)",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 0,
+      "required_lines": [
+        "reader bare integrity_check before damage: fts5: checksum mismatch for table \"t\"",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t"
+      ],
+      "exit": 0,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: replaced by a bare reader check (mutation)",
+        "reader bare integrity_check before damage: fts5: checksum mismatch for table \"t\"",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "PASS"
+      ],
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "base",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 0,
+      "required_lines": [
+        "reader integrity_check run 2: ok"
+      ],
+      "exit": 0,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "PASS"
+      ],
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "base",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 0,
+      "required_lines": [
+        "reader integrity_check run 2: ok"
+      ],
+      "exit": 0,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "PASS"
+      ],
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "base",
+      "args": [
+        "delete"
+      ],
+      "expected_exit": 0,
+      "required_lines": [
+        "reader integrity_check run 2: ok"
+      ],
+      "exit": 0,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=delete refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "PASS"
+      ],
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.54.1 journal_mode=delete refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "base",
+      "args": [
+        "delete",
+        "refresh"
+      ],
+      "expected_exit": 0,
+      "required_lines": [
+        "reader integrity_check run 2: ok"
+      ],
+      "exit": 0,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=delete refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "PASS"
+      ],
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.54.1 journal_mode=delete refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "invalid arguments",
+      "args": [
+        "wal",
+        "refesh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "usage: <work>/probe-"
+      ],
+      "exit": 2,
+      "stdout": [
+        "usage: <work>/probe-3.54.1+patch [wal|delete] [refresh]",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "invalid arguments",
+      "args": [
+        "wal",
+        "refresh",
+        "extra"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "usage: <work>/probe-"
+      ],
+      "exit": 2,
+      "stdout": [
+        "usage: <work>/probe-3.54.1+patch [wal|delete] [refresh]",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "invalid arguments",
+      "args": [
+        "wl"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "usage: <work>/probe-"
+      ],
+      "exit": 2,
+      "stdout": [
+        "usage: <work>/probe-3.54.1+patch [wal|delete] [refresh]",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "invalid arguments",
+      "args": [
+        "wal",
+        ""
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "usage: <work>/probe-"
+      ],
+      "exit": 2,
+      "stdout": [
+        "usage: <work>/probe-3.54.1+patch [wal|delete] [refresh]",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": null,
+      "engine_version": null,
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "authorizer denies the reader pragma at the damage check",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "authorizer denies the reader pragma at the damage check",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "authorizer denies every reader pragma",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=0",
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: authorization denied",
+        "INVALID: FTS5 'integrity-check' control: authorization denied",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "authorizer denies every reader pragma",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=1",
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: authorization denied",
+        "INVALID: FTS5 'integrity-check' control: authorization denied",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader PRAGMA integrity_check: prepare: not authorized",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "fresh-connection control returns not ok",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: fresh-connection control: not ok"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: not ok",
+        "INVALID: fresh-connection control: not ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: fresh-connection control: not ok",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "fresh-connection control returns not ok",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: fresh-connection control: not ok"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: not ok",
+        "INVALID: fresh-connection control: not ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: fresh-connection control: not ok",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "FTS5 integrity-check command fails",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: FTS5 'integrity-check' control"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: SQL logic error",
+        "INVALID: FTS5 'integrity-check' control: SQL logic error",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: FTS5 'integrity-check' control: SQL logic error",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "FTS5 integrity-check command fails",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: FTS5 'integrity-check' control"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: SQL logic error",
+        "INVALID: FTS5 'integrity-check' control: SQL logic error",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: FTS5 'integrity-check' control: SQL logic error",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "damage DELETE matches no row",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: damage control: no t_docsize row deleted"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "INVALID: damage control: no t_docsize row deleted",
+        "fresh connection integrity_check after deleting a t_docsize row: ok",
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+        "reader integrity_check after deleting a t_docsize row: ok",
+        "INVALID: reader damage control: no FTS5 corruption finding for t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: damage control: no t_docsize row deleted",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "damage DELETE matches no row",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: damage control: no t_docsize row deleted"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "INVALID: damage control: no t_docsize row deleted",
+        "fresh connection integrity_check after deleting a t_docsize row: ok",
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+        "reader integrity_check after deleting a t_docsize row: ok",
+        "INVALID: reader damage control: no FTS5 corruption finding for t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: damage control: no t_docsize row deleted",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "damage DELETE fails",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table: t_docsizzz",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table: t_docsizzz",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "damage DELETE fails",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table: t_docsizzz",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: DELETE FROM t_docsizzz WHERE id = 2: no such table: t_docsizzz",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "writer INSERT between checks fails",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: INSERT INTO nope(x)"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "INVALID: INSERT INTO nope(x) VALUES('gamma delta 1'): no such table: nope",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "INVALID: damage control: no t_docsize row deleted",
+        "fresh connection integrity_check after deleting a t_docsize row: ok",
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+        "reader integrity_check after deleting a t_docsize row: ok",
+        "INVALID: reader damage control: no FTS5 corruption finding for t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: INSERT INTO nope(x) VALUES('gamma delta 1'): no such table: nope",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "writer INSERT between checks fails",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: INSERT INTO nope(x)"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "INVALID: INSERT INTO nope(x) VALUES('gamma delta 1'): no such table: nope",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "INVALID: damage control: no t_docsize row deleted",
+        "fresh connection integrity_check after deleting a t_docsize row: ok",
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+        "reader integrity_check after deleting a t_docsize row: ok",
+        "INVALID: reader damage control: no FTS5 corruption finding for t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: INSERT INTO nope(x) VALUES('gamma delta 1'): no such table: nope",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "fresh connection cannot open",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: open fresh connection: no such vfs"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "INVALID: open fresh connection: no such vfs: no-such-vfs",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: open fresh connection: no such vfs: no-such-vfs",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "fresh connection cannot open",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: open fresh connection: no such vfs"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "INVALID: open fresh connection: no such vfs: no-such-vfs",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: open fresh connection: no such vfs: no-such-vfs",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "fresh damage-control expected text changed (simulated)",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "fresh damage-control expected text changed (simulated)",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: fresh-connection damage control: no FTS5 corruption finding for t",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "reader damage-control expected text changed (simulated)",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: reader damage control: no FTS5 corruption finding for t"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: reader damage control: no FTS5 corruption finding for t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader damage control: no FTS5 corruption finding for t",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "reader damage-control expected text changed (simulated)",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 2,
+      "required_lines": [
+        "INVALID: reader damage control: no FTS5 corruption finding for t"
+      ],
+      "exit": 2,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "INVALID: reader damage control: no FTS5 corruption finding for t",
+        "FAIL (invalid run)"
+      ],
+      "verdict": "FAIL (invalid run)",
+      "invalid": "INVALID: reader damage control: no FTS5 corruption finding for t",
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "FTS5 command replaced by a bare reader check (reader stale just before the damage check)",
+      "args": [
+        "wal"
+      ],
+      "expected_exit": 0,
+      "required_lines": [
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t"
+      ],
+      "exit": 0,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=0",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: replaced by a bare reader check (mutation)",
+        "reader bare integrity_check before damage: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "PASS"
+      ],
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=0",
+      "as_expected": true
+    },
+    {
+      "engine": "3.54.1+patch",
+      "official_sqlite3_c_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+      "candidate_patch": true,
+      "case": "FTS5 command replaced by a bare reader check (reader stale just before the damage check)",
+      "args": [
+        "wal",
+        "refresh"
+      ],
+      "expected_exit": 0,
+      "required_lines": [
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t"
+      ],
+      "exit": 0,
+      "stdout": [
+        "sqlite 3.54.1 journal_mode=wal refresh=1",
+        "reader integrity_check run 1: ok",
+        "reader integrity_check run 2: ok",
+        "reader integrity_check run 3: ok",
+        "fresh connection integrity_check: ok",
+        "reader FTS5 'integrity-check' command: replaced by a bare reader check (mutation)",
+        "reader bare integrity_check before damage: ok",
+        "fresh connection integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "reader integrity_check after deleting a t_docsize row: malformed inverted index for FTS5 table main.t",
+        "PASS"
+      ],
+      "verdict": "PASS",
+      "invalid": null,
+      "engine_version": "sqlite 3.54.1 journal_mode=wal refresh=1",
+      "as_expected": true
+    }
+  ],
+  "all_as_expected": true
+}

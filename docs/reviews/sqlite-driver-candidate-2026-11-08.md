@@ -55,7 +55,13 @@ introduced by 3.54.x. The 3.54.1 patch fixes a 32-bit-only heap overflow that
 **#403 is not fixed upstream.** With `refreshFTS5StructuresTx` disabled,
 `TestRepeatedSelfCheckRunsPassAfterNewEntries` still fails on run 2 under
 3.54.1. [#541](https://github.com/sergeyfarin/rekenraam/issues/541) tracks a
-standalone reproduction and the upstream report.
+standalone reproduction and the draft upstream report; the
+[standalone review](fts5-integrity-stale-structure-2026-11-08.md) reproduces
+it on official 3.53.4 and 3.54.1 amalgamations. Under the admission rule in
+`docs/developer-workflow.md`, the FTS5 probe built against this candidate's
+engine (the official 3.54.1 amalgamation authenticated above) and run as
+`probe wal` **exits 1** (2026-11-09) with `fts5: checksum mismatch for
+table "t"` on runs 2–3: the workaround is still needed.
 
 ## Blocking finding — statement re-preparation
 

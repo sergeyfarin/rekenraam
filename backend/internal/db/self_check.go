@@ -634,12 +634,15 @@ const SelfCheckSampleLimit = 20
 // SQLiteIntegrity runs the two PRAGMA checks against the live database through
 // the read pool, in one read transaction.
 //
-// The pool outlives each run, and SQLite 3.53.4's FTS5 part of integrity_check
-// trusts a connection's cached FTS5 structure without the freshness check an
-// ordinary FTS5 read makes. After another connection writes transaction_search,
-// a connection that already ran the check reports a checksum mismatch the file
-// does not have (#403). Reading each FTS5 table first in the same transaction
-// refreshes that cache; real FTS5 damage still fails the check.
+// The pool outlives each run, and SQLite's FTS5 part of integrity_check (3.53.4
+// and 3.54.1) trusts a connection's cached FTS5 structure without the freshness
+// check an ordinary FTS5 read makes. After another connection writes
+// transaction_search, a connection that already ran the check reports a
+// checksum mismatch the file does not have (#403). Reading each FTS5 table
+// first in the same transaction refreshes that cache; real FTS5 damage still
+// fails the check. The standalone reproduction and draft upstream report are
+// in docs/reviews/fts5-integrity-stale-structure-2026-11-08.md; posting status
+// is tracked in #541.
 func (r *SelfCheckRepository) SQLiteIntegrity(ctx context.Context) (string, error) {
 	transaction, err := r.readOnly.BeginTx(ctx, nil)
 	if err != nil {
