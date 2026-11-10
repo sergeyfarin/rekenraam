@@ -1,5 +1,5 @@
 {
-  "source_revision": "be7bb29856452391d3fc847f39f0a69025f161c4",
+  "source_revision": "29d0e3502089760eedc182781dacaf152e6d9e30",
   "source_clean": true,
   "fixture": "fixtures/reference-book.json",
   "language": "en",
@@ -25,9 +25,10 @@
       },
       "device_scale_factor": 2,
       "themes": {
-        "left": "light",
-        "right": "dark"
-      }
+        "light": "top-left",
+        "dark": "bottom-right"
+      },
+      "split": "diagonal"
     }
   ],
   "note": "Disposable database; synthetic reference book; no live providers or owner records."
