@@ -61,10 +61,11 @@ official 3.54.1. The released candidate, go-sqlite3 v1.14.53 (SQLite 3.54.1),
 passes both probes. The
 [2026-11-10 admission review](reviews/sqlite-driver-admission-2026-11-10.md)
 records the source, probes, gates and production-query cost; the production
-module pin moves to v1.14.53 only when that admission is accepted. The race
-timeout was not reproduced (latest head 253.2 s against 219.4 s; both below
-ADR 0016's act threshold), but representative production queries are **16–63%
-slower**, so the owner performance decision remains open under #356.
+module pin moves to v1.14.53 only when that admission is accepted. The clean
+uncached race pair fires ADR 0016's 270 s act threshold (two candidate runs
+above 270 s; neither baseline run above it), and representative production
+queries are **16–63% slower**, so the owner performance decision remains open
+under #356. Hosted runs are cached observations, not threshold evidence.
 
 Every driver admission review also decides whether the #403 workaround
 (`refreshFTS5StructuresTx`) is still needed. This paragraph is the
@@ -336,9 +337,10 @@ must still fail the gate.
 retaining CGO/FTS5/`netgo`/`osusergo`, WAL/FULL and the statement-cache-disabled
 policy. The [admission review](reviews/sqlite-driver-admission-2026-11-10.md)
 records source authentication, both correctness probes, matched full gates,
-the measured production-query cost (**+16% to +63%**) and the advisory
-reconciliation. The owner performance acceptance is the remaining decision; the
-production pin stays v1.14.52 until merge. The #403 FTS5 workaround remains
+the measured production-query cost (**+16% to +63%**), the clean uncached pair
+firing the 270 s act threshold, and the advisory reconciliation. The owner
+performance acceptance is the remaining decision; the production pin stays
+v1.14.52 until merge. The #403 FTS5 workaround remains
 required under 3.54.1; #541 owns the upstream report.
 
 **Commit durability follow-up (2026-10-12):**

@@ -70,11 +70,11 @@ below continue alongside it and do not block it.
    [#356](https://github.com/sergeyfarin/rekenraam/issues/356) retain separate
    acceptance. #356's released candidate, go-sqlite3 v1.14.53 / SQLite 3.54.1,
    has an
-   [admission review](reviews/sqlite-driver-admission-2026-11-10.md); the race
-   deadline hold did not reproduce (latest head 253.2 s against 219.4 s, both
-   below the act threshold), but representative production queries measured
-   **16–63% slower**. The owner performance decision is the remaining gate
-   before merge. Release remains on hold; these gates do not block accepted
+   [admission review](reviews/sqlite-driver-admission-2026-11-10.md). The clean
+   uncached race pair fires ADR 0016's 270 s act threshold (two candidate runs
+   above 270 s; neither baseline run above it), and representative production
+   queries measured **16–63% slower**. The owner performance decision is the
+   remaining gate before merge. Release remains on hold; these gates do not block accepted
    maintenance. Adoption assets #335 stay P3 for later release preparation.
    See [Public-release gates](#public-release-gates) for the remaining evidence.
 2. **Track the remaining bounded maintenance follow-ups.**

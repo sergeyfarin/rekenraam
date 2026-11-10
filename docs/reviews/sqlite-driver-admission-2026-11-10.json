@@ -1,7 +1,7 @@
 {
   "review": "sqlite-driver-admission-2026-11-10",
   "date": "2026-11-10",
-  "decision": "pending-owner-performance-acceptance",
+  "decision": "pending-owner-performance-and-act-threshold-acceptance",
   "module": {
     "path": "github.com/mattn/go-sqlite3",
     "version": "v1.14.53",
@@ -44,14 +44,25 @@
       "./scripts/go-backend.sh test ./internal/api -run '^(TestNativeSQLiteAuditSearchRejectsNULBeforeFTS|TestRepeatedSelfCheckRunsPassAfterNewEntries)$' -count=1"
     ],
     "race_gates": [
-      {"environment": "local-6cpu", "engine": "3.53.4", "driver": "v1.14.52", "commit": "7d3d2059", "app_seconds": 217.163, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "cache": "not-applicable (go test -count=1)", "result": "pass", "provisional": false},
-      {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "commit": "3c52b99b (worktree content; run before commit)", "app_seconds": 245.012, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "cache": "not-applicable (go test -count=1)", "result": "pass", "provisional": true},
-      {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "commit": "3c52b99b (worktree content; run before commit)", "app_seconds": 257.674, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "cache": "not-applicable (go test -count=1)", "result": "pass", "provisional": true},
-      {"environment": "hosted-ci", "engine": "3.53.4", "driver": "v1.14.52", "commit": "7d3d2059", "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42760293595/job/129644138504", "app_seconds": 219.404, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "cache_exact_hit": false, "result": "pass", "provisional": false},
-      {"environment": "hosted-ci", "engine": "3.54.1", "driver": "v1.14.53", "commit": "2eb5adb4", "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42873724976/job/130031379151", "app_seconds": 216.848, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "cache_exact_hit": false, "result": "pass", "provisional": false},
-      {"environment": "hosted-ci", "engine": "3.54.1", "driver": "v1.14.53", "commit": "b6655526", "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42767669769/job/129667989356", "app_seconds": 252.718, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "cache_exact_hit": false, "result": "pass", "provisional": false},
-      {"environment": "hosted-ci", "engine": "3.54.1", "driver": "v1.14.53", "commit": "faeedf20", "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42876220590/job/130040105987", "app_seconds": 253.242, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "cache_exact_hit": true, "result": "pass", "provisional": false}
+      {"environment": "local-6cpu", "engine": "3.53.4", "driver": "v1.14.52", "commit": "7d3d2059", "app_seconds": 225.121, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "uncached": true, "threshold_evidence": true, "result": "pass"},
+      {"environment": "local-6cpu", "engine": "3.53.4", "driver": "v1.14.52", "commit": "7d3d2059", "app_seconds": 232.339, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "uncached": true, "threshold_evidence": true, "result": "pass"},
+      {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "commit": "35ee1bf5", "app_seconds": 245.657, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "uncached": true, "threshold_evidence": true, "result": "pass"},
+      {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "commit": "35ee1bf5", "app_seconds": 293.578, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "uncached": true, "threshold_evidence": true, "result": "pass", "exceeds_act_threshold": true},
+      {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "commit": "35ee1bf5", "app_seconds": 271.254, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "uncached": true, "threshold_evidence": true, "result": "pass", "exceeds_act_threshold": true},
+      {"environment": "local-6cpu", "engine": "3.53.4", "driver": "v1.14.52", "commit": "7d3d2059", "app_seconds": 217.163, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "uncached": true, "threshold_evidence": false, "provisional": true, "superseded": true, "result": "pass"},
+      {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "commit": "3c52b99b (worktree content; run before commit)", "app_seconds": 245.012, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "uncached": true, "threshold_evidence": false, "provisional": true, "superseded": true, "result": "pass"},
+      {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "commit": "3c52b99b (worktree content; run before commit)", "app_seconds": 257.674, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "uncached": true, "threshold_evidence": false, "provisional": true, "superseded": true, "result": "pass"},
+      {"environment": "hosted-ci", "engine": "3.53.4", "driver": "v1.14.52", "commit": "7d3d2059", "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42760293595/job/129644138504", "app_seconds": 219.404, "configuration": "-race -p 2 -timeout=5m, feature tags fts5/netgo/osusergo, GO_PHASE_TIMINGS=1, Go test cache enabled", "go_test_cache": "enabled; app fresh; other packages may be cached", "uncached": false, "threshold_evidence": false, "build_cache_exact_hit": false, "result": "pass"},
+      {"environment": "hosted-ci", "engine": "3.54.1", "driver": "v1.14.53", "commit": "2eb5adb4", "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42873724976/job/130031379151", "app_seconds": 216.848, "configuration": "-race -p 2 -timeout=5m, feature tags fts5/netgo/osusergo, GO_PHASE_TIMINGS=1, Go test cache enabled", "go_test_cache": "enabled; app fresh; other packages may be cached", "uncached": false, "threshold_evidence": false, "build_cache_exact_hit": false, "result": "pass"},
+      {"environment": "hosted-ci", "engine": "3.54.1", "driver": "v1.14.53", "commit": "b6655526", "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42767669769/job/129667989356", "app_seconds": 252.718, "configuration": "-race -p 2 -timeout=5m, feature tags fts5/netgo/osusergo, GO_PHASE_TIMINGS=1, Go test cache enabled", "go_test_cache": "enabled; app fresh; other packages may be cached", "uncached": false, "threshold_evidence": false, "build_cache_exact_hit": false, "result": "pass"},
+      {"environment": "hosted-ci", "engine": "3.54.1", "driver": "v1.14.53", "commit": "faeedf20", "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42876220590/job/130040105987", "app_seconds": 253.242, "configuration": "-race -p 2 -timeout=5m, feature tags fts5/netgo/osusergo, GO_PHASE_TIMINGS=1, Go test cache enabled", "go_test_cache": "enabled; app fresh; other packages may be cached", "uncached": false, "threshold_evidence": false, "build_cache_exact_hit": true, "result": "pass"}
     ],
+    "adr_0016_act_threshold": {
+      "fired": true,
+      "act_seconds": 270,
+      "deadline_seconds": 300,
+      "reason": "Two clean uncached candidate runs exceed 270 s (293.578 s, 271.254 s); neither baseline run does (225.121 s, 232.339 s)."
+    },
     "coverage_percent": 82.8,
     "integrated_build": "pass",
     "planner_regression": "TestBaselineIndexesKeepOrderedAndForeignKeyLookups pass"
@@ -87,9 +98,9 @@
     "notes": "3.54.1 fixes a 32-bit-only heap-buffer overflow introduced by 3.54.0. No new 3.54.x advisory or feature exposure identified."
   },
   "limits": [
-    "The local host has six CPUs; the 2026-11-08 review recorded its ten-CPU reference measurement, which this run could not reproduce.",
-    "The latest measured candidate code-head run (faeedf20) measured 253.242 s, +15.4% against the 219.404 s baseline; an earlier run on 2eb5adb4 measured 216.848 s. The latest result is the admission-relevant one, and the difference shows material runner variance. Commit 33f94129 adds the evidence and probe only.",
-    "The investigate threshold (>210 s) remains exceeded; the 270 s act threshold did not fire in these runs.",
-    "Production-query cost is +16% to +63% on representative affected paths (median of three runs), so the admission decision remains with the owner under #356."
+    "The threshold host has six CPUs; the 2026-11-08 review recorded its ten-CPU reference measurement, which this run could not reproduce.",
+    "Hosted CI runs use Go test caching (several packages report cached); they are observations, not formal ADR 0016 threshold runs. The internal/app package did execute in the recorded runs.",
+    "The clean uncached pair fires the 270 s act threshold: candidate 245.657/293.578/271.254 s; baseline 225.121/232.339 s. All runs still finish under the 300 s deadline.",
+    "Production-query cost is +16% to +63% on representative affected paths (median of three runs). The owner must accept both the act-threshold breach and the production cost, or a mitigation is required."
   ]
 }

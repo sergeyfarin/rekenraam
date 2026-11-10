@@ -11,16 +11,17 @@ environments measured below; the candidate's source and probe evidence remains
 valid.
 
 The 2026-11-08 review measured a 34% application-package slowdown and a race
-deadline timeout on its reference host. The matched 2026-11-10 race gates do
-not reproduce the timeout: the latest measured code head reported **253.242 s** against
-**219.404 s** for main (+15.4%), and an earlier candidate run measured
-**216.848 s** (-1.2%). Both pass below ADR 0016's 270-second act threshold, but
-the latest result is slower and the investigate threshold remains exceeded.
-More importantly, the production-query measurements this review adds show a
-**+16% to +63%** cost on representative affected paths. The implementation and
-correctness acceptance are met; the performance acceptance is not. Per the
-2026-11-08 #356 decision, merging requires an explicit owner amendment
-accepting that measured cost (or a mitigation). This review records the
+deadline timeout on its reference host. The clean 2026-11-10 uncached pair below
+now shows the [ADR 0016](../adrs/0016-native-backend-test-resources.md) **act
+threshold firing**: candidate runs of **245.657 s / 293.578 s / 271.254 s**
+against baseline **225.121 s / 232.339 s** on the same six-CPU host. Two
+candidate runs exceed 270 s while the baseline does not; all still finish under
+the 300 s deadline. The hosted runs are cached-gate observations, not threshold
+evidence. Production-query measurements also show a **+16% to +63%** cost on
+representative affected paths. The implementation and correctness acceptance
+are met; the performance acceptance is not. Per the 2026-11-08 #356 decision,
+merging requires an explicit owner amendment accepting both the act-threshold
+breach and the production cost (or a mitigation). This review records the
 evidence; it does not grant that acceptance. No statement cache, deadline,
 scheduling or durability policy changes.
 
@@ -69,9 +70,11 @@ passes against this engine.
 
 Run on the six-CPU workspace described below, from the admission branch:
 
-- `GOFLAGS=-count=1 GO_PHASE_TIMINGS=1 ./scripts/test-backend.sh` passed twice.
-  The application package ran in **245.012 s** and **257.674 s**; every other
-  package passed in both runs. Both are below the 270 s act threshold.
+- The earlier provisional uncached runs passed twice
+  (`GOFLAGS=-count=1 GO_PHASE_TIMINGS=1 ./scripts/test-backend.sh`), with the
+  application package at **245.012 s** and **257.674 s**. The clean uncached
+  pair under [Race-suite performance](#race-suite-performance) supersedes them
+  and fires the 270 s act threshold.
 - `COVERAGE=1 GO_PHASE_TIMINGS=1 ./scripts/test-backend.sh` passed with merged
   coverage **82.8%**; the application package ran in 198.720 s.
 - `pnpm build` passed, including the embedded-asset test and the integrated
@@ -88,11 +91,17 @@ and 100, which still rejects per-account or per-posting lookups.
 
 ## Race-suite performance
 
-Hosted runs use the same CI configuration: `-race -p 2 -timeout=5m`,
-`GOFLAGS=-count=1 GO_PHASE_TIMINGS=1`, GitHub-hosted runner. Cache state is
-the setup-go-cache exact-hit flag. Each row names its commit and run.
+### Hosted observations (cached gate)
 
-| Measurement | Commit | Run | `internal/app` | vs baseline | Cache exact hit |
+The CI workflow runs `./scripts/test-backend.sh` with `-race -p 2 -timeout=5m`,
+the shared feature tags `fts5,netgo,osusergo`, `CGO_ENABLED=1` and
+`GO_PHASE_TIMINGS=1`. It does **not** set `GOFLAGS=-count=1`: Go test caching is
+enabled, and the logs show `(cached)` packages. The `internal/app` package
+executed in these runs, but the gate as a whole is not cache-free, so these are
+observations, not formal ADR 0016 threshold runs. The `setup-go-cache` exact-hit
+flag is the build/module cache, separate from Go's test cache.
+
+| Measurement | Commit | Run | `internal/app` | vs baseline | Build-cache exact hit |
 |---|---|---|---:|---:|---|
 | Main baseline | `7d3d2059` | [42760293595 / 129644138504](https://github.com/sergeyfarin/rekenraam/actions/runs/42760293595/job/129644138504) | 219.404 s | — | false |
 | Candidate | `2eb5adb4` | [42873724976 / 130031379151](https://github.com/sergeyfarin/rekenraam/actions/runs/42873724976/job/130031379151) | 216.848 s | -1.2% | false |
@@ -100,14 +109,28 @@ the setup-go-cache exact-hit flag. Each row names its commit and run.
 | Candidate, code head measured | `faeedf20` | [42876220590 / 130040105987](https://github.com/sergeyfarin/rekenraam/actions/runs/42876220590/job/130040105987) | 253.242 s | +15.4% | true |
 
 The latest measured code-head result is **253.242 s**, not the earlier
-**216.848 s**; the latter belongs to `2eb5adb4`. Both pass, but the latest
-result does not show a speedup, and runner variance is material. The subsequent
-`33f94129` commit adds this evidence and the retained probe; it does not change
-the backend or frontend. The earlier local six-CPU runs
-(baseline **217.163 s** on clean `7d3d2059`; candidate **245.012 s / 257.674 s**
-on the worktree that became `3c52b99b`) are provisional dirty-tree timings;
-they are not used for the admission threshold. The 2026-11-08 review's ten-CPU
-reference measurement remains the record of its own environment.
+**216.848 s**; the latter belongs to `2eb5adb4`. The later `33f94129` and
+`1e3fd127` commits add this evidence and the retained probe; they do not change
+the backend or frontend.
+
+### Clean uncached threshold pair
+
+Configuration: `GOFLAGS=-count=1 GO_PHASE_TIMINGS=1 ./scripts/test-backend.sh`
+on the same six-CPU host, clean commits, `-race -p 2 -timeout=5m`.
+
+| Tree | Commit | `internal/app` runs |
+|---|---|---:|
+| Main baseline, v1.14.52 / 3.53.4 | `7d3d2059` | 225.121 s, 232.339 s |
+| Candidate, v1.14.53 / 3.54.1 | `35ee1bf5` | 245.657 s, **293.578 s**, **271.254 s** |
+
+Two candidate runs exceed ADR 0016's 270 s act threshold; neither baseline run
+does. All runs still finish under the 300 s deadline, but the act rule fires and
+requires an owner amendment or mitigation before the next feature slice. The
+earlier provisional runs (baseline 217.163 s; candidate 245.012 s / 257.674 s on
+the worktree that became `3c52b99b`) are superseded by this clean pair and are
+not used for the threshold. The 2026-11-08 review's ten-CPU reference
+measurement remains the record of its own environment; this six-CPU host is the
+available threshold evidence.
 
 ## Production-query cost
 
@@ -166,12 +189,13 @@ The implementation and correctness acceptance items are met: both retained
 probes return their expected values on the exact engine source, the full
 backend/integrated gates pass, the advisory/FTS5 positions are reconciled, and
 the measured production results match. The performance acceptance is **not**
-met by this review alone. The latest race gate passes below the 270 s act
-threshold, but the production-query cost is **+16% to +63%** on the
-representative affected paths above. Per the 2026-11-08 [#356 recheck](https://github.com/sergeyfarin/rekenraam/issues/356#issuecomment-6726921647),
-merging requires an explicit owner amendment accepting that cost, or a
-mitigation. If the owner accepts it, admit `github.com/mattn/go-sqlite3`
-v1.14.53 with bundled SQLite 3.54.1 under the existing ADR 0014 driver
-decision and ADR 0015 durability policy. This review records the evidence; it
-does not itself grant the performance acceptance. The investigate threshold
-remains open under #419/#445.
+met by this review alone. The clean uncached pair fires ADR 0016's 270 s act
+threshold (candidate 245.657 s / 293.578 s / 271.254 s; baseline 225.121 s /
+232.339 s), and production-query cost is **+16% to +63%** on the representative
+affected paths above. Per the 2026-11-08 [#356 recheck](https://github.com/sergeyfarin/rekenraam/issues/356#issuecomment-6726921647),
+merging requires an explicit owner amendment accepting both the act-threshold
+breach and the production cost, or a mitigation. If the owner accepts them,
+admit `github.com/mattn/go-sqlite3` v1.14.53 with bundled SQLite 3.54.1 under
+the existing ADR 0014 driver decision and ADR 0015 durability policy. This
+review records the evidence; it does not itself grant the performance
+acceptance. The investigate threshold remains open under #419/#445.

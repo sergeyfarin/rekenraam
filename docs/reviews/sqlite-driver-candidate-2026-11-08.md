@@ -3,9 +3,9 @@
 > **Superseded by the
 > [2026-11-10 admission review](sqlite-driver-admission-2026-11-10.md) for the
 > final decision.** The source and correctness evidence below remains valid.
-> The race-deadline hold was not reproduced, but representative production
-> queries measured **16–63% slower**; the admission review records that cost
-> and the pending owner decision.
+> The clean uncached pair fires ADR 0016's 270 s act threshold, and
+> representative production queries measured **16–63% slower**; the admission
+> review records both and the pending owner decision.
 
 **Historical status (2026-11-08): #356 remained OPEN; the candidate was held.**
 Upstream released

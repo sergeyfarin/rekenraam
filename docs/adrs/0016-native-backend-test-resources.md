@@ -174,19 +174,19 @@ policy changes. The [report](../reviews/investment-read-preparation-2026-10-29.m
 retains SQL, fixture/semantic controls, exact sources, all matched timings and
 their limits.
 
-**#356 driver recheck (2026-11-10).** The SQLite 3.54.1 candidate passed two
-provisional local full race gates at **245.0 / 257.7 s** in the application
-package on a six-CPU workspace, against **217.2 s** for the admitted v1.14.52
-engine on the same host. Hosted runs measured **216.8 s** (`2eb5adb4`),
-**252.7 s** (`b6655526`) and **253.2 s** (`faeedf20`, latest code head
-measured) against **219.4 s**. The latest is +15.4%, not a speedup; all remain
-below the 270 s act
-threshold. The investigate threshold remains exceeded, as it already was
-before the candidate, and the margin is narrow; #419/#445 monitoring continues.
-Production-query cost is separately measured at **+16% to +63%** on
-representative affected paths, so the performance acceptance remains an owner
-decision under #356. No deadline, scheduling, cache, durability, coverage or
-schema policy changes. See the [admission review](../reviews/sqlite-driver-admission-2026-11-10.md).
+**#356 driver recheck (2026-11-10).** The SQLite 3.54.1 candidate was measured
+with the explicit uncached gate (`GOFLAGS=-count=1 GO_PHASE_TIMINGS=1
+./scripts/test-backend.sh`) on a six-CPU workspace: baseline **225.1 / 232.3 s**,
+candidate **245.7 / 293.6 / 271.3 s** in the application package. Two candidate
+runs exceed the **270 s act threshold** while neither baseline run does, so the
+act rule fires; all runs still finish under the 300 s deadline. Hosted runs
+(**216.8 s** `2eb5adb4`; **252.7 s** `b6655526`; **253.2 s** `faeedf20`) are
+cached-gate observations, not threshold evidence. The investigate threshold
+also remains exceeded. Production-query cost is separately measured at **+16%
+to +63%** on representative affected paths. The performance acceptance is an
+owner decision under #356; no deadline, scheduling, cache, durability,
+coverage or schema policy changes are made here. See the
+[admission review](../reviews/sqlite-driver-admission-2026-11-10.md).
 
 ## References
 

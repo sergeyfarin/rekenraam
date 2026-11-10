@@ -103,8 +103,10 @@ under this ADR's existing driver, bundled-source and feature decisions. The
 [admission review](../reviews/sqlite-driver-admission-2026-11-10.md) records
 source authentication, the retained correctness probes, full gates and
 production-query cost. The implementation is sound, but representative
-production queries measured **16–63% slower**; this amendment takes effect only
-if the owner accepts that cost. The compile options add only
+production queries measured **16–63% slower**, and the clean uncached race pair
+fires ADR 0016's 270 s act threshold (two candidate runs above 270 s; neither
+baseline run above it). This amendment takes effect only if the owner accepts
+both the threshold breach and that cost, or a mitigation is delivered. The compile options add only
 `MAX_SCHEMA=10000000`. WAL/FULL, the disabled statement cache, the single
 writer/read pool and the #403 FTS5 workaround remain unchanged.
 
