@@ -144,6 +144,9 @@ describe('theme contrast', () => {
         ['danger badge', contrast(p['danger'], p['danger-soft'])],
         ['positive badge', contrast(p['positive'], p['positive-soft'])],
         ['button text on accent', contrast(p['accent-foreground'], p['accent'])],
+        // Primary buttons fade to 90% on hover. Both the fill and its text move
+        // toward the surface; the lightest surface is the worst backdrop.
+        ['button text on accent, hovered', contrast(over(p['accent-foreground'], 0.9, p['surface']), over(p['accent'], 0.9, p['surface']))],
         ['selected text', contrast(p['selected-foreground'], p['selected'])],
         // Confirmation buttons carry the page background on their fill (#324).
         ['button text on danger', contrast(p['background'], p['danger'])],
@@ -163,7 +166,7 @@ describe('theme contrast', () => {
       ];
       // The sticky sections row is translucent: page content scrolls beneath
       // it, so its muted text must hold AA over any opaque token fill there
-      // (#501: a bg-foreground control under an 84% tint read 4.41:1).
+      // (#501: a dark control under an 84% tint read 4.41:1).
       for (const [name, backdrop] of Object.entries(p)) {
         pairs.push([`muted section text over ${name}`, contrast(p['muted'], over(p['shell-sections'], sectionsTint, backdrop))]);
       }
@@ -174,6 +177,26 @@ describe('theme contrast', () => {
       pairs.push(['shell count badge', contrast(p['nav-marker-foreground'], p['nav-marker'])]);
       const failing = pairs.filter(([, ratio]) => ratio < AA).map(([name, ratio]) => `${name} ${ratio.toFixed(2)}:1`);
       expect(failing).toEqual([]);
+    });
+  }
+});
+
+/**
+ * The data plane must be the easiest place to read, in both themes: cards are
+ * lighter than the page in light mode, and darker than the page in dark mode,
+ * so foreground text always has at least the contrast it has on the page.
+ */
+describe('surface hierarchy', () => {
+  for (const { theme, base, accent } of combinations) {
+    it(`${theme} / ${base} / ${accent} keeps the data plane ahead of the page`, () => {
+      const p = palette(theme, base, accent);
+      const surface = luminance(p['surface']);
+      const background = luminance(p['background']);
+      if (theme === 'light') expect(surface).toBeGreaterThan(background);
+      else expect(surface).toBeLessThan(background);
+      expect(contrast(p['foreground'], p['surface'])).toBeGreaterThanOrEqual(
+        contrast(p['foreground'], p['background'])
+      );
     });
   }
 });

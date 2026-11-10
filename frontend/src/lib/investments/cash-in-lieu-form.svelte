@@ -169,7 +169,7 @@
   <APIFormError error={formError} />
   <div class="flex flex-wrap justify-end gap-3">
     <button type="button" onclick={onCancel} disabled={pending} class="rounded-(--radius-control) border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground">{m.investments_form_cancel()}</button>
-    {#if preview}<button type="button" onclick={record} disabled={pending || !csrfToken} class="rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background disabled:opacity-50">{pending ? m.investments_transfer_pending() : initial ? m.investments_cash_in_lieu_correct_submit() : m.investments_cash_in_lieu_submit()}</button>
-    {:else}<button type="submit" disabled={!canPreview || pending} class="rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background disabled:opacity-50">{pending ? m.investments_transfer_internal_previewing() : m.investments_cash_in_lieu_preview()}</button>{/if}
+    {#if preview}<button type="button" onclick={record} disabled={pending || !csrfToken} class="rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground disabled:opacity-50">{pending ? m.investments_transfer_pending() : initial ? m.investments_cash_in_lieu_correct_submit() : m.investments_cash_in_lieu_submit()}</button>
+    {:else}<button type="submit" disabled={!canPreview || pending} class="rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground disabled:opacity-50">{pending ? m.investments_transfer_internal_previewing() : m.investments_cash_in_lieu_preview()}</button>{/if}
   </div>
 </form>

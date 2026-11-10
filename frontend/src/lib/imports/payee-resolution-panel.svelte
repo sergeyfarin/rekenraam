@@ -142,7 +142,7 @@
               </button>
               <button
                 type="button"
-                class="rounded-(--radius-control) bg-foreground px-3 py-2 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                class="rounded-(--radius-control) bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={creatingKey !== null || !csrfToken}
                 onclick={() => createAndResolve(group.key, group.name, group.rowIDs)}
               >

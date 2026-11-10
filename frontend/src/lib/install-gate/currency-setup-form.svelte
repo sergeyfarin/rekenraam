@@ -122,7 +122,7 @@
 
     <button
       type="submit"
-      class="inline-flex w-full items-center justify-center rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+      class="inline-flex w-full items-center justify-center rounded-full bg-accent px-5 py-3 text-sm font-semibold text-accent-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
       disabled={pending || catalogPending || !defaultCode}
     >
       {pending ? m.install_gate_currencies_submit_pending() : m.install_gate_currencies_submit()}

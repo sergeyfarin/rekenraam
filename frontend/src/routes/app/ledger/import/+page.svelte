@@ -1195,7 +1195,7 @@
                     <button type="button" class="text-sm text-muted hover:text-foreground" onclick={() => { confirmDeleteProfileId = null; profileMutationError = undefined; }}>
                       {m.import_csv_profile_delete_cancel()}
                     </button>
-                    <button type="button" class="rounded-(--radius-control) bg-foreground px-3 py-2 text-sm font-semibold text-background disabled:opacity-60" onclick={handleDeleteProfile} disabled={deletingProfileId === Number(selectedProfileId)}>
+                    <button type="button" class="rounded-(--radius-control) bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-60" onclick={handleDeleteProfile} disabled={deletingProfileId === Number(selectedProfileId)}>
                       {m.import_csv_profile_delete_confirm_button()}
                     </button>
                   {:else}
@@ -1279,7 +1279,7 @@
                 <CSVInvestmentMappingForm bind:value={csvInvestment} headers={csvHeaders} {accounts} />
                 {#if editingProfileId}
                   <div class="flex items-center gap-3">
-                    <button type="button" class="rounded-(--radius-control) bg-foreground px-3 py-2 text-sm font-semibold text-background disabled:opacity-60" onclick={saveProfileEdit} disabled={savingProfile || !csvMappingValid}>
+                    <button type="button" class="rounded-(--radius-control) bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-60" onclick={saveProfileEdit} disabled={savingProfile || !csvMappingValid}>
                       {savingProfile ? m.import_csv_profile_saving() : m.import_csv_profile_save()}
                     </button>
                     <button type="button" class="text-sm text-muted hover:text-foreground" onclick={() => { editingProfileId = null; profileMutationError = undefined; }}>
@@ -1297,7 +1297,7 @@
 
         <button
           type="button"
-          class="inline-flex items-center gap-2 rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          class="inline-flex items-center gap-2 rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           onclick={handleUpload}
           disabled={!selectedFile || (cryptoCSV && (!cryptoHoldingId || !cryptoCashId)) || uploading || analyzingCSV || editingProfileId !== null || (selectedIsCSV && (!!csvAnalysisError || csvHeaders.length === 0 || (!selectedProfileId && !newCSVProfileValid)))}
         >
@@ -1368,7 +1368,7 @@
                         ? m.import_connections_auto_refresh_on()
                         : m.import_connections_auto_refresh_off()}
                       class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-60 {conn.auto_refresh_enabled
-                        ? 'bg-foreground'
+                        ? 'bg-accent'
                         : 'bg-control'} border border-border"
                       onclick={() => handleToggleAutoRefresh(conn)}
                       disabled={togglingAutoRefreshId === conn.id}
@@ -1437,7 +1437,7 @@
                         </button>
                         <button
                           type="button"
-                          class="inline-flex items-center gap-1 rounded-(--radius-control) bg-foreground px-2.5 py-1 text-xs font-semibold text-background transition hover:opacity-90 disabled:opacity-60"
+                          class="inline-flex items-center gap-1 rounded-(--radius-control) bg-accent px-2.5 py-1 text-xs font-semibold text-accent-foreground transition hover:opacity-90 disabled:opacity-60"
                           onclick={() => handleDeleteConnection(conn.id)}
                           disabled={deletingConnectionId === conn.id}
                         >
@@ -1546,7 +1546,7 @@
             <div class="flex items-center gap-3">
               <button
                 type="button"
-                class="inline-flex items-center gap-2 rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                class="inline-flex items-center gap-2 rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                 onclick={handleAddConnection}
                 disabled={addingConnection || !newConnName.trim() || !newConnKey.trim()}
               >
@@ -1994,7 +1994,7 @@
                       <button
                         type="submit"
                         disabled={sourceCorrectionPending || !csrfToken || !sourceCorrectionReason.trim() || (sourceCorrectionImpact !== null && sourceCorrectionImpact.affected_checkpoints.length > 0 && !sourceCorrectionOverride) || (sourceCorrectionGainRows.length > 0 && !sourceCorrectionAcceptGains)}
-                        class="rounded-(--radius-control) bg-foreground px-4 py-2 text-sm font-semibold text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                        class="rounded-(--radius-control) bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                       >{sourceCorrectionPending ? (sourceCorrectionImpact ? m.import_preview_correct_buy_pending() : m.import_preview_correct_buy_preview_pending()) : sourceCorrectionImpact ? m.import_preview_correct_buy_submit() : m.import_preview_correct_buy_preview()}</button>
                     </form>
                   </td>
@@ -2073,7 +2073,7 @@
         <div class="flex items-center gap-3">
           <button
             type="button"
-            class="inline-flex items-center gap-2 rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            class="inline-flex items-center gap-2 rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             onclick={handleCommit}
             disabled={committing || sourceCorrectionPending || reviewedCheckpointsPending || matchCheckPending}
           >
@@ -2109,7 +2109,7 @@
           </button>
           <button
             type="button"
-            class="inline-flex items-center gap-2 rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            class="inline-flex items-center gap-2 rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             onclick={handleDiscard}
             disabled={discarding}
           >
@@ -2177,7 +2177,7 @@
       <div class="mt-6 flex gap-3">
         <a
           href="/app/ledger/transactions"
-          class="inline-flex items-center gap-2 rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90"
+          class="inline-flex items-center gap-2 rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-90"
         >
           {m.import_result_view_transactions()}
         </a>

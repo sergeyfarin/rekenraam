@@ -253,7 +253,7 @@
     <!-- One New transaction: its tabs cover transfers and investments (#506). -->
     <button
       type="button"
-      class="inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90"
+      class="inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-90"
       onclick={() => openCreate()}
     >
       <Plus size={16} aria-hidden="true" />

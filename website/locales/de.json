@@ -17,7 +17,7 @@
   "heroStatus": "Entwicklungsstand",
   "screenshotNote": "Die Bildschirmansichten zeigen die englische Oberfläche mit fiktiven Daten.",
   "reportCaption": "Ausgaben nach Kategorie",
-  "reportAlt": "Ausgabenbericht in Rekenraam mit Kategorien und ihrem Anteil an den Gesamtausgaben, anhand fiktiver Beispieldaten.",
+  "reportAlt": "Ausgabenbericht in Rekenraam mit Kategorien und ihrem Anteil an den Gesamtausgaben, links im hellen und rechts im dunklen Theme, anhand fiktiver Beispieldaten.",
   "openScreenshot": "Vollständige Bildschirmansicht öffnen",
   "ledgerTitle": "Doppelte Buchführung in mehreren Währungen",
   "ledgerBody": "Ausgeglichene Buchungssätze und exakte Dezimalbeträge in mehreren Währungen. Kontenhierarchien, aufgeteilte Buchungen, Umbuchungen, Versionshistorie und Abgleich mit Kontoauszügen. Originalwährungen getrennt führen oder Berichte mit einsehbaren und bearbeitbaren Wechselkursen umrechnen.",

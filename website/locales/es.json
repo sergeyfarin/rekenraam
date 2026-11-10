@@ -17,7 +17,7 @@
   "heroStatus": "Estado del desarrollo",
   "screenshotNote": "Las capturas muestran la interfaz en inglés con datos ficticios.",
   "reportCaption": "Gastos por categoría",
-  "reportAlt": "Informe de gastos de Rekenraam con categorías y su proporción del gasto total, a partir de datos ficticios.",
+  "reportAlt": "Informe de gastos de Rekenraam con categorías y su proporción del gasto total, con el tema claro a la izquierda y el tema oscuro a la derecha, a partir de datos ficticios.",
   "openScreenshot": "Abrir la captura completa",
   "ledgerTitle": "Partida doble y varias divisas",
   "ledgerBody": "Asientos equilibrados e importes decimales exactos en varias divisas. Jerarquías de cuentas, transacciones desglosadas, transferencias, historial de versiones y conciliación con extractos. Mantener las divisas originales separadas o convertir los informes con tipos de cambio que se pueden consultar y editar.",

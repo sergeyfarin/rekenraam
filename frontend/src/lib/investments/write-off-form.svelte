@@ -313,12 +313,12 @@
         class="min-h-10 rounded-(--radius-control) border border-border bg-control px-4 py-2.5 text-sm font-semibold">{m.investments_form_cancel()}</button>
       {#if preview}
         <button type="button" bind:this={recordButton} onclick={record} disabled={pending || reviewing || !csrfToken}
-          class="min-h-10 rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background disabled:opacity-50">
+          class="min-h-10 rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground disabled:opacity-50">
           {pending ? m.investments_transfer_pending() : m.investments_record_write_off()}
         </button>
       {:else}
         <button type="submit" disabled={!canPreview || pending || reviewing}
-          class="min-h-10 rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background disabled:opacity-50">
+          class="min-h-10 rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground disabled:opacity-50">
           {pending ? m.investments_transfer_internal_previewing() : m.investments_write_off_preview()}
         </button>
       {/if}
