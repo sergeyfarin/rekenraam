@@ -95,7 +95,7 @@
     'mt-1.5 h-10 w-full rounded-(--radius-control) border border-border bg-control px-3 text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted focus:border-accent disabled:cursor-not-allowed disabled:opacity-70';
   const labelClass = 'block text-xs font-semibold uppercase tracking-[0.12em] text-muted';
   const buttonClass =
-    'inline-flex h-10 items-center justify-center gap-2 rounded-(--radius-control) bg-accent px-4 text-sm font-semibold text-accent-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60';
+    'inline-flex h-10 items-center justify-center gap-2 rounded-(--radius-control) bg-accent px-4 text-sm font-semibold text-accent-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60';
   const secondaryButtonClass =
     'inline-flex h-9 items-center justify-center gap-2 rounded-(--radius-control) border border-border bg-control px-3 text-sm font-medium text-foreground transition hover:border-accent disabled:cursor-not-allowed disabled:opacity-60';
 

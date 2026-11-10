@@ -132,7 +132,7 @@
       </fieldset>
       <APIFormError error={linkError} id={`short-link-error-${rowId}`} />
       <button type="submit" disabled={!selected || pending || !csrfToken}
-        class="rounded-(--radius-control) bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60">
+        class="rounded-(--radius-control) bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60">
         {pending ? m.import_preview_short_link_pending() : m.import_preview_short_link_submit()}
       </button>
     {/if}

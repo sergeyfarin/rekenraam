@@ -172,7 +172,7 @@
           <button
             type="button"
             onclick={onRetry}
-            class="rounded-(--radius-control) bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground hover:opacity-90"
+            class="rounded-(--radius-control) bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground hover:opacity-95"
           >
             {m.transactions_retry()}
           </button>

@@ -323,7 +323,7 @@
       {m.investments_form_cancel()}
     </button>
     <button type="submit" disabled={!canSubmit || pending}
-      class="min-h-11 rounded-(--radius-control) bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
+      class="min-h-11 rounded-(--radius-control) bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50">
       {pending ? m.investments_payment_in_lieu_pending() : initial ? m.investments_payment_in_lieu_correct_submit() : m.investments_payment_in_lieu_submit()}
     </button>
   </div>

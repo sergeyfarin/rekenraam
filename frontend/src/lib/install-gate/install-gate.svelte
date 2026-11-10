@@ -307,7 +307,7 @@
           <APIFormError error={installGateError} id="install-gate-error" />
           <button
             type="button"
-            class="inline-flex items-center rounded-full bg-accent px-5 py-3 text-sm font-semibold text-accent-foreground transition hover:opacity-90"
+            class="inline-flex items-center rounded-full bg-accent px-5 py-3 text-sm font-semibold text-accent-foreground transition hover:opacity-95"
             onclick={refreshInstallGate}
           >
             {m.install_gate_retry()}

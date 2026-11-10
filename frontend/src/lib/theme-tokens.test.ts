@@ -139,4 +139,20 @@ describe('theme tokens', () => {
     }
     expect(faded).toEqual([]);
   });
+
+  // A 90% accent fade read 4.39:1 over the light page background in the
+  // transfer-dialog E2E check (2026-11-10). Danger fills stay at 90% because
+  // their hovered pair remains above AA (#341).
+  it('never fades an accent-filled control below 95% on hover', () => {
+    const faded: string[] = [];
+    for (const file of sources(src)) {
+      readFileSync(file, 'utf8').split('\n').forEach((line, index) => {
+        if (!/(?<![\w-])bg-accent(?![\w/-])/.test(line)) return;
+        for (const [, value] of line.matchAll(/hover:opacity-(\d+)/g)) {
+          if (Number(value) < 95) faded.push(`${path.relative(src, file)}:${index + 1}`);
+        }
+      });
+    }
+    expect(faded).toEqual([]);
+  });
 });
