@@ -1,6 +1,13 @@
 # SQLite driver candidate — go-sqlite3 v1.14.53 / SQLite 3.54.1 — 2026-11-08
 
-**#356 remains OPEN. The candidate exists but is held.** Upstream released
+> **Superseded for admission by the
+> [2026-11-10 admission review](sqlite-driver-admission-2026-11-10.md).** The
+> source and correctness evidence below remains valid. The performance hold
+> was not reproduced in the matched 2026-11-10 environments; see the admission
+> review for the recheck and its limits.
+
+**Historical status (2026-11-08): #356 remained OPEN; the candidate was held.**
+Upstream released
 [`github.com/mattn/go-sqlite3` v1.14.53](https://github.com/mattn/go-sqlite3/releases/tag/v1.14.53),
 which bundles SQLite **3.54.1** ("Upgrade SQLite to version 3540100",
 mattn/go-sqlite3#1472). That clears the prerequisite recorded in the

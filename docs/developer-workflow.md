@@ -58,10 +58,12 @@ the independent upstream-bug probe retained for driver-admission follow-up #356.
 The [#356 prerequisite recheck](reviews/sqlite-driver-upgrade-blocker-2026-10-20.md)
 adds an isolated C admission probe: it fails on official 3.53.4 and passes on
 official 3.54.1. The released candidate, go-sqlite3 v1.14.53 (SQLite 3.54.1),
-passes both probes but is held: 3.54.1 re-prepares common joined statements,
-which slows `internal/app` from 186 s to 250 s and breaks the race deadline
-([candidate review](reviews/sqlite-driver-candidate-2026-11-08.md)). The
-production module pin remains v1.14.52.
+passes both probes and is admitted by the
+[2026-11-10 admission review](reviews/sqlite-driver-admission-2026-11-10.md).
+The earlier hold for statement re-preparation was not reproduced in the
+matched admission environments: full race gates pass below ADR 0016's act
+threshold, with the investigate threshold still exceeded. The production
+module pin is v1.14.53.
 
 Every driver admission review also decides whether the #403 workaround
 (`refreshFTS5StructuresTx`) is still needed. This paragraph is the
@@ -71,7 +73,7 @@ supplies the probe and its evidence.
 - Build `docs/reviews/fixtures/fts5-integrity-stale-structure-probe.c.txt`
   against the authenticated official amalgamation whose `sqlite3.c` matches
   the candidate's bundled `sqlite3-binding.c`. That match is the one the
-  candidate review establishes. Do not include the driver's binding files
+  admission review establishes. Do not include the driver's binding files
   directly: they carry its wrapper.
 - Run the probe as `probe wal` (no `refresh`) and record its exit status in
   the admission review, with the printed finding.
@@ -88,6 +90,10 @@ supplies the probe and its evidence.
   `TestSQLiteIntegrityOnAReusedReaderAfterSearchWrites` to fail on the
   candidate as expected. The admission review then decides whether to remove
   the refresh, and whether to keep or invert the canary.
+
+The [2026-11-10 admission review](reviews/sqlite-driver-admission-2026-11-10.md)
+recorded exit **1** for SQLite 3.54.1 with the expected `checksum mismatch`;
+`refreshFTS5StructuresTx` therefore stays. #541 owns the upstream report.
 
 ### Install
 
@@ -322,6 +328,15 @@ exclusions are applied:
 `-race` covers Go application and driver-wrapper code, while the native
 SQLite C engine is outside Go's race instrumentation. A deliberate Go race
 must still fail the gate.
+
+**SQLite engine update (2026-11-10):**
+[#356](https://github.com/sergeyfarin/rekenraam/issues/356) admits
+`github.com/mattn/go-sqlite3` v1.14.53 with bundled SQLite 3.54.1, retaining
+CGO/FTS5/`netgo`/`osusergo`, WAL/FULL and the statement-cache-disabled policy.
+The [admission review](reviews/sqlite-driver-admission-2026-11-10.md) records
+source authentication, both correctness probes, matched full gates, the
+statement re-preparation cost and the advisory reconciliation. The #403 FTS5
+workaround remains required under 3.54.1; #541 owns the upstream report.
 
 **Commit durability follow-up (2026-10-12):**
 [ADR 0015](adrs/0015-sqlite-commit-durability.md) requires WAL/FULL for the

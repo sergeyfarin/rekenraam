@@ -1,0 +1,73 @@
+{
+  "review": "sqlite-driver-admission-2026-11-10",
+  "date": "2026-11-10",
+  "module": {
+    "path": "github.com/mattn/go-sqlite3",
+    "version": "v1.14.53",
+    "checksum": "h1:mnTM0owzUMrKuLo+0w51NUiB0ir2Fo7kFXlPt/l3BGs=",
+    "bundled_c_blob": "2cff93269e94e4dbae0fffd29032362d4a8c0e85",
+    "bundled_c_sha256": "758343f1464f3ee8c7c601d5b0cde415b52dcdf43a44ed884a62d19ec416e824"
+  },
+  "engine": {
+    "version": "3.54.1",
+    "source_id": "2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f1607f4c3c1e4551e8e6ca76",
+    "official_amalgamation_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+    "compile_options_delta": ["MAX_SCHEMA=10000000"],
+    "compile_options_removed": []
+  },
+  "go_probe": {
+    "command": "./scripts/go-backend.sh run /tmp/opencode/native-sqlite-upstream-probe.go",
+    "result": {
+      "index_count_actual": 1,
+      "index_count_expected": 1,
+      "json_rendered": "[31,2]",
+      "json_valid_actual": 1,
+      "json_valid_expected": 1,
+      "not_indexed_control": 1,
+      "source_id": "2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f1607f4c3c1e4551e8e6ca76",
+      "update_actual": "new",
+      "update_expected": "new",
+      "version": "3.54.1"
+    }
+  },
+  "c_probe": {
+    "official_3_53_4": {"json_valid": 0, "indexed_count": 0, "update": "old", "not_indexed_control": 1, "check_fixed_exit": 1},
+    "official_3_54_1": {"json_valid": 1, "indexed_count": 1, "update": "new", "not_indexed_control": 1, "check_fixed_exit": 0}
+  },
+  "validation": {
+    "commands": [
+      "GOFLAGS=-count=1 GO_PHASE_TIMINGS=1 ./scripts/test-backend.sh",
+      "COVERAGE=1 GO_PHASE_TIMINGS=1 ./scripts/test-backend.sh",
+      "pnpm build",
+      "./scripts/go-backend.sh test ./internal/db -run '^TestBaselineIndexesKeepOrderedAndForeignKeyLookups$' -count=1",
+      "./scripts/go-backend.sh test ./internal/api -run '^(TestNativeSQLiteAuditSearchRejectsNULBeforeFTS|TestRepeatedSelfCheckRunsPassAfterNewEntries)$' -count=1"
+    ],
+    "race_gates": [
+      {"environment": "local-6cpu", "engine": "3.53.4", "driver": "v1.14.52", "app_seconds": 217.163, "result": "pass"},
+      {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "app_seconds": 245.012, "result": "pass"},
+      {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "app_seconds": 257.674, "result": "pass"},
+      {"environment": "hosted-ci", "engine": "3.53.4", "driver": "v1.14.52", "commit": "7d3d2059", "app_seconds": 219.404, "result": "pass"},
+      {"environment": "hosted-ci", "engine": "3.54.1", "driver": "v1.14.53", "context": "PR 556 candidate run", "app_seconds": 250.094, "result": "test-expectation-failure-only"}
+    ],
+    "coverage_percent": 82.8,
+    "integrated_build": "pass",
+    "planner_regression": "TestBaselineIndexesKeepOrderedAndForeignKeyLookups pass"
+  },
+  "fts5": {
+    "403_workaround_required": true,
+    "probe_command": "probe wal",
+    "exit": 1,
+    "finding": "checksum mismatch",
+    "tracking_issue": 541
+  },
+  "advisory": {
+    "sqlite_cve_catalogue_rechecked": "2026-11-10",
+    "3_54_x_cve_entries": 0,
+    "notes": "3.54.1 fixes a 32-bit-only heap-buffer overflow introduced by 3.54.0. No new 3.54.x advisory or feature exposure identified."
+  },
+  "limits": [
+    "The local host has six CPUs; the 2026-11-08 review recorded its ten-CPU reference measurement, which this run could not reproduce.",
+    "The hosted candidate number is from the superseded PR 556 run; the admission branch CI should be compared when available.",
+    "The investigate threshold (>210 s) remains exceeded; the 270 s act threshold did not fire in these runs."
+  ]
+}

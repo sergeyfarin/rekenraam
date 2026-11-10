@@ -174,6 +174,16 @@ policy changes. The [report](../reviews/investment-read-preparation-2026-10-29.m
 retains SQL, fixture/semantic controls, exact sources, all matched timings and
 their limits.
 
+**#356 driver recheck (2026-11-10).** The SQLite 3.54.1 candidate passed two
+uncached full race gates at **245.0 / 257.7 s** in the application package on a
+six-CPU workspace, against **217.2 s** for the admitted v1.14.52 engine on the
+same host; hosted CI measured **250.1 s** against **219.4 s**. Neither run
+crosses the 270 s act threshold, so the act rule does not fire for this
+admission. The investigate threshold remains exceeded, as it already was
+before the candidate, and the margin is narrow; #419/#445 monitoring continues.
+No deadline, scheduling, cache, durability, coverage or schema policy changes.
+See the [admission review](../reviews/sqlite-driver-admission-2026-11-10.md).
+
 ## References
 
 - [ADR 0014](0014-native-sqlite-driver.md), native driver admission.

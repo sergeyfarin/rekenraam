@@ -35,7 +35,7 @@ native driver does not fix the embedded-NUL CHECK gap.
 ### Dependency and feature selection
 
 Use the driver's bundled amalgamation, with an exact Go module pin. The
-admitted version is v1.14.52, bundling SQLite 3.53.4, with
+admitted version is v1.14.53, bundling SQLite 3.54.1, with
 `fts5,netgo,osusergo`; the implementation stages below define its admission. Record `sqlite_version()`, `sqlite_source_id()` and
 `PRAGMA compile_options` for both drivers. If their engine versions differ,
 identify the engine update rather than attributing all differences to CGO.

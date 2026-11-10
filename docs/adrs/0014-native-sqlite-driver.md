@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted; implemented in #195 (2026-10-12).
+Accepted; implemented in #195 (2026-10-12); amended 2026-11-10 by #356 to
+admit v1.14.53 / SQLite 3.54.1.
 
 [ADR 0015](0015-sqlite-commit-durability.md) subsequently replaces the retained
 WAL/NORMAL writer policy with FULL consistently. The original driver admission
@@ -92,11 +93,24 @@ Desktop remains deferred under the existing product requirements. PostgreSQL,
 dual database support, financial schema redesign, weaker durability settings,
 and changes to local-versus-CI validation frequency are separate decisions.
 
+## Amendment — SQLite 3.54.1, 2026-11-10
+
+[#356](https://github.com/sergeyfarin/rekenraam/issues/356) admits
+`github.com/mattn/go-sqlite3` v1.14.53, bundling SQLite 3.54.1 (source ID
+`2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f1607f4c3c1e4551e8e6ca76`),
+under this ADR's existing driver, bundled-source and feature decisions. The
+[admission review](../reviews/sqlite-driver-admission-2026-11-10.md) records
+source authentication, the retained correctness probes, full gates and the
+measured statement-re-preparation cost. The compile options add only
+`MAX_SCHEMA=10000000`. WAL/FULL, the disabled statement cache, the single
+writer/read pool and the #403 FTS5 workaround remain unchanged.
+
 ## References
 
 - [#164 measurements and proposal](https://github.com/sergeyfarin/rekenraam/issues/164#issuecomment-6109667983).
-- [Driver v1.14.52 documentation](https://github.com/mattn/go-sqlite3/blob/v1.14.52/README.md).
-- [Native backup implementation](https://github.com/mattn/go-sqlite3/blob/v1.14.52/backup.go).
+- [Driver v1.14.53 documentation](https://github.com/mattn/go-sqlite3/blob/v1.14.53/README.md).
+- [Native backup implementation](https://github.com/mattn/go-sqlite3/blob/v1.14.53/backup.go).
+- [SQLite 3.54.1 admission review](../reviews/sqlite-driver-admission-2026-11-10.md).
 - [ADR 0004](0004-sqlite-connection-migrations-and-backup.md),
   [ADR 0005](0005-docker-runtime-base-image.md),
   [ADR 0013](0013-investment-operations-and-position-sides.md).

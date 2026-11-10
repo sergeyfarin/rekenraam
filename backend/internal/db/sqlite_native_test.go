@@ -24,8 +24,8 @@ func TestNativeSQLiteEngineFeaturesAndFingerprint(t *testing.T) {
 	database := openTestDatabase(t)
 	var version, sourceID string
 	require.NoError(t, database.QueryRow("SELECT sqlite_version(),sqlite_source_id()").Scan(&version, &sourceID))
-	assert.Equal(t, "3.53.4", version, "admit engine changes together with the pinned driver")
-	assert.Equal(t, "2026-07-24 19:02:57 bf7c7f30031888f4e796e429ab3978879485813aaca6f641c7b33e4e09459bcc", sourceID)
+	assert.Equal(t, "3.54.1", version, "admit engine changes together with the pinned driver")
+	assert.Equal(t, "2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f1607f4c3c1e4551e8e6ca76", sourceID)
 	rows, err := database.Query("PRAGMA compile_options")
 	require.NoError(t, err)
 	var options []string
@@ -38,6 +38,7 @@ func TestNativeSQLiteEngineFeaturesAndFingerprint(t *testing.T) {
 	require.NoError(t, rows.Close())
 	assert.Contains(t, options, "ENABLE_FTS5")
 	assert.Contains(t, options, "THREADSAFE=1")
+	assert.Contains(t, options, "MAX_SCHEMA=10000000", "3.54.1 adds this compile option")
 	fingerprint, err := json.Marshal(map[string]any{"version": version, "source_id": sourceID, "compile_options": options})
 	require.NoError(t, err)
 	t.Log("SQLite fingerprint:", string(fingerprint))
