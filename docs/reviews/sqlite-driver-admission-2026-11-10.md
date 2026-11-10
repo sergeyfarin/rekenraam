@@ -1,24 +1,28 @@
 # SQLite driver admission — go-sqlite3 v1.14.53 / SQLite 3.54.1 — 2026-11-10
 
-**Admission pending merge.** `github.com/mattn/go-sqlite3` v1.14.53 is the
-latest released upstream driver and bundles SQLite **3.54.1**. It carries both
-upstream correctness fixes retained by [#356](https://github.com/sergeyfarin/rekenraam/issues/356):
-the stale-JSON-validation fix and the expression-index constant-propagation
-fix. This review supersedes the admission hold in the
+**Admission requires an owner performance decision.** `github.com/mattn/go-sqlite3`
+v1.14.53 is the latest released upstream driver and bundles SQLite **3.54.1**.
+It carries both upstream correctness fixes retained by
+[#356](https://github.com/sergeyfarin/rekenraam/issues/356): the
+stale-JSON-validation fix and the expression-index constant-propagation fix.
+This review supersedes the admission hold in the
 [2026-11-08 candidate review](sqlite-driver-candidate-2026-11-08.md) for the
 environments measured below; the candidate's source and probe evidence remains
 valid.
 
 The 2026-11-08 review measured a 34% application-package slowdown and a race
-deadline timeout on its reference host. That result was **not reproduced** in
-the matched 2026-11-10 environments: the candidate is 12.8–18.7% slower than
-main on the available six-CPU workspace, while two hosted runs measured
-**-1.2%** and **+15.2%**; all full race gates pass below ADR 0016's 270-second
-act threshold. The
-[ADR 0016](../adrs/0016-native-backend-test-resources.md) investigate
-threshold (>210 s) remains exceeded, as it already was before this candidate;
-headroom is narrow and monitoring continues under #419/#445. No statement
-cache, deadline, scheduling or durability policy changes with this admission.
+deadline timeout on its reference host. The matched 2026-11-10 race gates do
+not reproduce the timeout: the latest head measured **253.242 s** against
+**219.404 s** for main (+15.4%), and an earlier candidate run measured
+**216.848 s** (-1.2%). Both pass below ADR 0016's 270-second act threshold, but
+the latest result is slower and the investigate threshold remains exceeded.
+More importantly, the production-query measurements this review adds show a
+**+16% to +63%** cost on representative affected paths. The implementation and
+correctness acceptance are met; the performance acceptance is not. Per the
+2026-11-08 #356 decision, merging requires an explicit owner amendment
+accepting that measured cost (or a mitigation). This review records the
+evidence; it does not grant that acceptance. No statement cache, deadline,
+scheduling or durability policy changes.
 
 ## Exact source
 
@@ -82,27 +86,58 @@ part in constant propagation, so the two bulk lookups may compile twice. The
 test now requires one to two preparations and equal counts at batch sizes 2
 and 100, which still rejects per-account or per-posting lookups.
 
-## Performance recheck
+## Race-suite performance
 
-Matched application-package timings (`internal/app`):
+Hosted runs use the same CI configuration: `-race -p 2 -timeout=5m`,
+`GOFLAGS=-count=1 GO_PHASE_TIMINGS=1`, GitHub-hosted runner. Cache state is
+the setup-go-cache exact-hit flag. Each row names its commit and run.
 
-| Environment | v1.14.52 / 3.53.4 | v1.14.53 / 3.54.1 | Delta |
+| Measurement | Commit | Run | `internal/app` | vs baseline | Cache exact hit |
+|---|---|---|---:|---:|---|
+| Main baseline | `7d3d2059` | [42760293595 / 129644138504](https://github.com/sergeyfarin/rekenraam/actions/runs/42760293595/job/129644138504) | 219.404 s | — | false |
+| Candidate | `2eb5adb4` | [42873724976 / 130031379151](https://github.com/sergeyfarin/rekenraam/actions/runs/42873724976/job/130031379151) | 216.848 s | -1.2% | false |
+| Candidate | `b6655526` | [42767669769 / 129667989356](https://github.com/sergeyfarin/rekenraam/actions/runs/42767669769/job/129667989356) | 252.718 s | +15.2% | false |
+| Candidate, current head | `faeedf20` | [42876220590 / 130040105987](https://github.com/sergeyfarin/rekenraam/actions/runs/42876220590/job/130040105987) | 253.242 s | +15.4% | true |
+
+The latest head result is **253.242 s**, not the earlier **216.848 s**; the
+latter belongs to `2eb5adb4`. Both pass, but the latest result does not show a
+speedup, and runner variance is material. The earlier local six-CPU runs
+(baseline **217.163 s** on clean `7d3d2059`; candidate **245.012 s / 257.674 s**
+on the worktree that became `3c52b99b`) are provisional dirty-tree timings;
+they are not used for the admission threshold. The 2026-11-08 review's ten-CPU
+reference measurement remains the record of its own environment.
+
+## Production-query cost
+
+The [retained probe](fixtures/sqlite-driver-production-query-cost.go.txt) uses
+the real repository methods, the production connection policy
+(`_stmt_cache_size=0`, WAL/FULL) and one fixture with 20 buy transactions,
+three accounts and two commodities. Copy it to
+`backend/internal/app/sqlite_driver_production_query_cost_test.go` and run:
+
+```sh
+SQLITE_DRIVER_COST=1 ./scripts/go-backend.sh test ./internal/app \
+  -run '^TestSQLiteDriverProductionQueryCost$' -count=1 -v
+```
+
+Medians of three matched runs on the same six-CPU host and fixture:
+
+| Production path | v1.14.52 / 3.53.4 | v1.14.53 / 3.54.1 | Delta |
 |---|---:|---:|---:|
-| Local six-CPU workspace, `-race` full gate | 217.163 s | 245.012 s / 257.674 s | +12.8% / +18.7% |
-| Hosted CI, `-race` full gate | 219.404 s (main `7d3d2059`) | 216.848 s / 252.718 s (PR #557) | -1.2% / +15.2% |
+| Accounts batch, 2 IDs | 127.28 µs | 189.99 µs | **+49.3%** |
+| Commodities batch, 2 IDs | 95.79 µs | 156.54 µs | **+63.4%** |
+| Enrich 2 transaction records | 240.19 µs | 345.50 µs | **+43.8%** |
+| Transaction by ID | 335.62 µs | 528.37 µs | **+57.4%** |
+| List transactions, page 50 | 3,879.05 µs | 5,020.96 µs | **+29.4%** |
+| Account register, page 50 | 1,333.16 µs | 1,541.78 µs | **+15.6%** |
 
-The local baseline and candidate runs used the same host and branch content
-except for the driver, its test expectations and the documentation in this
-change. The hosted comparison uses main `7d3d2059` and the admission branch's
-own PR #557 runs; the two candidate runs show runner variance, with the final
-run slightly faster than the baseline. The 2026-11-08
-review's ten-CPU reference measurement remains the record of its own
-environment; the difference is why the act decision is based on matched runs,
-not a single cross-host comparison.
-
-No production query plan or result changed in the tested consumers. The cost
-is engine statement preparation, not the driver's Go bindings; the hybrid
-measurement in the candidate review showed the Go changes are neutral.
+These are same-host measurements, not a production load test or a whole-book
+latency SLA; the three raw samples per path are in the structured evidence.
+They confirm that the 3.54.1 re-preparation cost reaches the application's real
+query paths rather than only the test suite. No query result or observed plan
+changed in the tested consumers; the cost is engine statement preparation, not
+the driver's Go bindings (the hybrid measurement in the candidate review showed
+the Go changes are neutral).
 
 ## FTS5 and advisory reconciliation
 
@@ -125,11 +160,16 @@ advisory or feature exposure was identified.
 
 ## Decision
 
-Admit `github.com/mattn/go-sqlite3` v1.14.53 with bundled SQLite 3.54.1 under
-the existing ADR 0014 driver decision and ADR 0015 durability policy. The
-production module pin changes only with this admission. The #356 acceptance
-items are met: both retained probes return their expected values on the exact
-engine source, the full backend/integrated gates pass, and the advisory/FTS5
-positions are reconciled above. The performance investigate threshold remains
-open under #419/#445; that is a continuing monitoring item, not a correctness
-or durability exception.
+The implementation and correctness acceptance items are met: both retained
+probes return their expected values on the exact engine source, the full
+backend/integrated gates pass, the advisory/FTS5 positions are reconciled, and
+the measured production results match. The performance acceptance is **not**
+met by this review alone. The latest race gate passes below the 270 s act
+threshold, but the production-query cost is **+16% to +63%** on the
+representative affected paths above. Per the 2026-11-08 [#356 recheck](https://github.com/sergeyfarin/rekenraam/issues/356#issuecomment-6726921647),
+merging requires an explicit owner amendment accepting that cost, or a
+mitigation. If the owner accepts it, admit `github.com/mattn/go-sqlite3`
+v1.14.53 with bundled SQLite 3.54.1 under the existing ADR 0014 driver
+decision and ADR 0015 durability policy. This review records the evidence; it
+does not itself grant the performance acceptance. The investigate threshold
+remains open under #419/#445.

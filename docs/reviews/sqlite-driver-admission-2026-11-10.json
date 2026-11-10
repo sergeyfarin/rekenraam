@@ -1,6 +1,7 @@
 {
   "review": "sqlite-driver-admission-2026-11-10",
   "date": "2026-11-10",
+  "decision": "pending-owner-performance-acceptance",
   "module": {
     "path": "github.com/mattn/go-sqlite3",
     "version": "v1.14.53",
@@ -43,16 +44,35 @@
       "./scripts/go-backend.sh test ./internal/api -run '^(TestNativeSQLiteAuditSearchRejectsNULBeforeFTS|TestRepeatedSelfCheckRunsPassAfterNewEntries)$' -count=1"
     ],
     "race_gates": [
-      {"environment": "local-6cpu", "engine": "3.53.4", "driver": "v1.14.52", "app_seconds": 217.163, "result": "pass"},
-      {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "app_seconds": 245.012, "result": "pass"},
-      {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "app_seconds": 257.674, "result": "pass"},
-      {"environment": "hosted-ci", "engine": "3.53.4", "driver": "v1.14.52", "commit": "7d3d2059", "app_seconds": 219.404, "result": "pass"},
-      {"environment": "hosted-ci", "engine": "3.54.1", "driver": "v1.14.53", "context": "PR 557 admission branch, final run", "app_seconds": 216.848, "result": "pass"},
-      {"environment": "hosted-ci", "engine": "3.54.1", "driver": "v1.14.53", "context": "PR 557 admission branch, earlier run", "app_seconds": 252.718, "result": "pass"}
+      {"environment": "local-6cpu", "engine": "3.53.4", "driver": "v1.14.52", "commit": "7d3d2059", "app_seconds": 217.163, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "cache": "not-applicable (go test -count=1)", "result": "pass", "provisional": false},
+      {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "commit": "3c52b99b (worktree content; run before commit)", "app_seconds": 245.012, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "cache": "not-applicable (go test -count=1)", "result": "pass", "provisional": true},
+      {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "commit": "3c52b99b (worktree content; run before commit)", "app_seconds": 257.674, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "cache": "not-applicable (go test -count=1)", "result": "pass", "provisional": true},
+      {"environment": "hosted-ci", "engine": "3.53.4", "driver": "v1.14.52", "commit": "7d3d2059", "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42760293595/job/129644138504", "app_seconds": 219.404, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "cache_exact_hit": false, "result": "pass", "provisional": false},
+      {"environment": "hosted-ci", "engine": "3.54.1", "driver": "v1.14.53", "commit": "2eb5adb4", "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42873724976/job/130031379151", "app_seconds": 216.848, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "cache_exact_hit": false, "result": "pass", "provisional": false},
+      {"environment": "hosted-ci", "engine": "3.54.1", "driver": "v1.14.53", "commit": "b6655526", "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42767669769/job/129667989356", "app_seconds": 252.718, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "cache_exact_hit": false, "result": "pass", "provisional": false},
+      {"environment": "hosted-ci", "engine": "3.54.1", "driver": "v1.14.53", "commit": "faeedf20", "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42876220590/job/130040105987", "app_seconds": 253.242, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "cache_exact_hit": true, "result": "pass", "provisional": false}
     ],
     "coverage_percent": 82.8,
     "integrated_build": "pass",
     "planner_regression": "TestBaselineIndexesKeepOrderedAndForeignKeyLookups pass"
+  },
+  "production_query_cost": {
+    "fixture": "docs/reviews/fixtures/sqlite-driver-production-query-cost.go.txt",
+    "command": "SQLITE_DRIVER_COST=1 ./scripts/go-backend.sh test ./internal/app -run '^TestSQLiteDriverProductionQueryCost$' -count=1 -v",
+    "host": "local six-CPU workspace",
+    "baseline": {"driver": "v1.14.52", "engine": "3.53.4", "commit": "7d3d2059"},
+    "candidate": {"driver": "v1.14.53", "engine": "3.54.1", "commit": "faeedf20"},
+    "fixture_data": {"transactions": 20, "accounts": 3, "commodities": 2, "connection_policy": "production DSN, _stmt_cache_size=0, WAL/FULL"},
+    "runs": 3,
+    "results": [
+      {"path": "accounts batch (2 ids)", "baseline_samples_us": [157.88, 125.30, 127.28], "baseline_median_us": 127.28, "candidate_samples_us": [212.54, 189.99, 189.39], "candidate_median_us": 189.99, "delta_percent": 49.3},
+      {"path": "commodities batch (2 ids)", "baseline_samples_us": [132.14, 95.66, 95.79], "baseline_median_us": 95.79, "candidate_samples_us": [156.54, 133.59, 156.94], "candidate_median_us": 156.54, "delta_percent": 63.4},
+      {"path": "enrich 2 transaction records", "baseline_samples_us": [294.00, 240.19, 225.91], "baseline_median_us": 240.19, "candidate_samples_us": [377.27, 340.52, 345.50], "candidate_median_us": 345.50, "delta_percent": 43.8},
+      {"path": "transaction by id", "baseline_samples_us": [365.32, 314.94, 335.62], "baseline_median_us": 335.62, "candidate_samples_us": [530.02, 475.73, 528.37], "candidate_median_us": 528.37, "delta_percent": 57.4},
+      {"path": "list transactions page 50", "baseline_samples_us": [4045.56, 3879.05, 3772.51], "baseline_median_us": 3879.05, "candidate_samples_us": [5400.85, 4990.29, 5020.96], "candidate_median_us": 5020.96, "delta_percent": 29.4},
+      {"path": "account register page 50", "baseline_samples_us": [1354.01, 1327.56, 1333.16], "baseline_median_us": 1333.16, "candidate_samples_us": [1541.78, 1554.79, 1511.71], "candidate_median_us": 1541.78, "delta_percent": 15.6}
+    ],
+    "limits": "Median of three same-host runs, not a production load test or a whole-book latency SLA. No query result or observed plan changed in the tested consumers."
   },
   "fts5": {
     "403_workaround_required": true,
@@ -68,6 +88,8 @@
   },
   "limits": [
     "The local host has six CPUs; the 2026-11-08 review recorded its ten-CPU reference measurement, which this run could not reproduce.",
-    "The investigate threshold (>210 s) remains exceeded; the 270 s act threshold did not fire in these runs."
+    "The latest candidate head run (faeedf20) measured 253.242 s, +15.4% against the 219.404 s baseline; an earlier run on 2eb5adb4 measured 216.848 s. The latest result is the admission-relevant one, and the difference shows material runner variance.",
+    "The investigate threshold (>210 s) remains exceeded; the 270 s act threshold did not fire in these runs.",
+    "Production-query cost is +16% to +63% on representative affected paths (median of three runs), so the admission decision remains with the owner under #356."
   ]
 }

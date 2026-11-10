@@ -69,11 +69,12 @@ below continue alongside it and do not block it.
    driver prerequisite
    [#356](https://github.com/sergeyfarin/rekenraam/issues/356) retain separate
    acceptance. #356's released candidate, go-sqlite3 v1.14.53 / SQLite 3.54.1,
-   is being admitted by the
-   [2026-11-10 admission review](reviews/sqlite-driver-admission-2026-11-10.md)
-   pending that change's merge; the statement re-preparation cost remains under
-   ADR 0016 monitoring but did not reproduce the earlier deadline hold in the
-   matched gates. Release remains on hold; these gates do not block accepted
+   has an
+   [admission review](reviews/sqlite-driver-admission-2026-11-10.md); the race
+   deadline hold did not reproduce (latest head 253.2 s against 219.4 s, both
+   below the act threshold), but representative production queries measured
+   **16–63% slower**. The owner performance decision is the remaining gate
+   before merge. Release remains on hold; these gates do not block accepted
    maintenance. Adoption assets #335 stay P3 for later release preparation.
    See [Public-release gates](#public-release-gates) for the remaining evidence.
 2. **Track the remaining bounded maintenance follow-ups.**
