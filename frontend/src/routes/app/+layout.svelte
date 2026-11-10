@@ -172,7 +172,7 @@
           <APIFormError error={shellError} id="app-shell-error" />
           <button
             type="button"
-            class="inline-flex items-center gap-2 rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90"
+            class="inline-flex items-center gap-2 rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-90"
             onclick={refreshShell}
           >
             <RefreshCw size={16} aria-hidden="true" />

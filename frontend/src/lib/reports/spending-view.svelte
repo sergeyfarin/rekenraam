@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
   import Panel from '#lib/components/panel.svelte';
+  import SegmentedControl from '#lib/components/segmented-control.svelte';
   import StatePanel from '#lib/components/state-panel.svelte';
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
@@ -96,6 +97,14 @@
   // to show at all.
   const convertedTotal = $derived(query.data?.converted_total);
   const groupBy = $derived(options.groupBy);
+  const groupByOptions = $derived([
+    { value: 'category' as const, label: m.reports_column_category() },
+    { value: 'payee' as const, label: m.reports_column_payee() }
+  ]);
+  const modeOptions = $derived([
+    { value: 'spending' as const, label: m.reports_spending_mode_spending() },
+    { value: 'income' as const, label: m.reports_spending_mode_income() }
+  ]);
 
   /**
    * This report's own policy, beyond the shell's common context.
@@ -207,48 +216,21 @@
     </div>
   </div>
 
-  <div class="mt-4 flex flex-wrap gap-3">
-    <fieldset class="flex flex-wrap items-center gap-2">
-      <legend class="sr-only">{m.reports_spending_group_by_legend()}</legend>
-      <span class="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
-        {m.reports_spending_group_by_legend()}
-      </span>
-      {#each [{ value: 'category' as const, label: m.reports_column_category() }, { value: 'payee' as const, label: m.reports_column_payee() }] as choice (choice.value)}
-        <button
-          type="button"
-          aria-pressed={groupBy === choice.value}
-          onclick={() => onGroupByChange(choice.value)}
-          class={`h-9 rounded-(--radius-control) border px-3 text-sm font-medium transition ${
-            groupBy === choice.value
-              ? 'border-accent bg-accent text-accent-foreground'
-              : 'border-border bg-control text-foreground hover:bg-control-hover'
-          }`}
-        >
-          {choice.label}
-        </button>
-      {/each}
-    </fieldset>
-
-    <fieldset class="flex flex-wrap items-center gap-2">
-      <legend class="sr-only">{m.reports_spending_mode_legend()}</legend>
-      <span class="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
-        {m.reports_spending_mode_legend()}
-      </span>
-      {#each [{ value: 'spending' as const, label: m.reports_spending_mode_spending() }, { value: 'income' as const, label: m.reports_spending_mode_income() }] as choice (choice.value)}
-        <button
-          type="button"
-          aria-pressed={mode === choice.value}
-          onclick={() => onModeChange(choice.value)}
-          class={`h-9 rounded-(--radius-control) border px-3 text-sm font-medium transition ${
-            mode === choice.value
-              ? 'border-accent bg-accent text-accent-foreground'
-              : 'border-border bg-control text-foreground hover:bg-control-hover'
-          }`}
-        >
-          {choice.label}
-        </button>
-      {/each}
-    </fieldset>
+  <div class="mt-4 flex flex-wrap gap-x-5 gap-y-3">
+    <SegmentedControl
+      legend={m.reports_spending_group_by_legend()}
+      label={m.reports_spending_group_by_legend()}
+      value={groupBy}
+      options={groupByOptions}
+      onChange={onGroupByChange}
+    />
+    <SegmentedControl
+      legend={m.reports_spending_mode_legend()}
+      label={m.reports_spending_mode_legend()}
+      value={mode}
+      options={modeOptions}
+      onChange={onModeChange}
+    />
   </div>
 
   {#if query.isPending}

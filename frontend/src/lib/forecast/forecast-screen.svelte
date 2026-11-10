@@ -263,7 +263,7 @@
 
 {#if !parsed.valid}
   <StatePanel title={m.forecast_invalid_filters_title()} copy={m.forecast_invalid_filters_copy()}>
-    <button type="button" class="rounded-(--radius-control) bg-foreground px-4 py-2 text-sm font-semibold text-background" onclick={resetFilters}>{m.forecast_reset()}</button>
+    <button type="button" class="rounded-(--radius-control) bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground" onclick={resetFilters}>{m.forecast_reset()}</button>
   </StatePanel>
 {:else if query.isPending}
   <StatePanel title={m.forecast_loading_title()} copy={m.forecast_loading_copy()} />
@@ -271,7 +271,7 @@
   <StatePanel title={m.forecast_error_title()} copy={m.forecast_error_copy()}>
     <APIFormError error={query.error} id="forecast-error" />
     <div class="flex flex-wrap gap-2">
-      <button type="button" class="rounded-(--radius-control) bg-foreground px-4 py-2 text-sm font-semibold text-background" onclick={refreshForecast}>{m.forecast_retry()}</button>
+      <button type="button" class="rounded-(--radius-control) bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground" onclick={refreshForecast}>{m.forecast_retry()}</button>
       <button type="button" class="rounded-(--radius-control) border border-border bg-control px-4 py-2 text-sm font-semibold text-foreground" onclick={resetFilters}>{m.forecast_reset()}</button>
     </div>
   </StatePanel>
@@ -324,7 +324,7 @@
           </label>
         </div>
         <div class="mt-5 flex flex-wrap items-center gap-2">
-          <button type="submit" disabled={!formValid} class="rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background disabled:opacity-50">{m.forecast_apply()}</button>
+          <button type="submit" disabled={!formValid} class="rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground disabled:opacity-50">{m.forecast_apply()}</button>
           <button type="button" class="rounded-(--radius-control) border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground" onclick={resetFilters}>{m.forecast_reset()}</button>
           <button type="button" class="ml-auto inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground disabled:opacity-60" disabled={query.isFetching} onclick={refreshForecast}><RefreshCw size={16} aria-hidden="true" />{query.isFetching ? m.forecast_updating() : m.forecast_refresh()}</button>
         </div>

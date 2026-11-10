@@ -373,7 +373,7 @@
       <div class="flex flex-wrap gap-2 xl:justify-end">
         <button
           type="button"
-          class="inline-flex items-center gap-2 rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90"
+          class="inline-flex items-center gap-2 rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-90"
           onclick={() => (editor = { type: 'account-create' })}
         >
           <Plus size={16} aria-hidden="true" />
@@ -448,7 +448,7 @@
       <APIFormError error={shellError} id="accounts-error" />
       <button
         type="button"
-        class="inline-flex items-center gap-2 rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90"
+        class="inline-flex items-center gap-2 rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-90"
         onclick={refreshAccounts}
       >
         <RefreshCw size={16} aria-hidden="true" />
@@ -460,7 +460,7 @@
       <div class="flex flex-wrap justify-center gap-2">
         <button
           type="button"
-          class="inline-flex items-center gap-2 rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90"
+          class="inline-flex items-center gap-2 rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-90"
           onclick={() => (editor = { type: 'account-create' })}
         >
           <WalletCards size={16} aria-hidden="true" />

@@ -146,7 +146,7 @@
 <div>
   <PageHeader title={m.investments_nav()}>
     {#snippet actions()}
-      <button type="button" onclick={() => addTransaction({ tab: 'investment' })} class="min-h-11 rounded-(--radius-control) bg-foreground px-4 py-2 text-sm font-semibold text-background">{m.transactions_form_create_title()}</button>
+      <button type="button" onclick={() => addTransaction({ tab: 'investment' })} class="min-h-11 rounded-(--radius-control) bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground">{m.transactions_form_create_title()}</button>
     {/snippet}
   </PageHeader>
   <div>
@@ -167,7 +167,7 @@
           {:else}{m.investments_tab_suggestions()}
           {/if}
           {#if tab === 'suggestions' && pendingCount > 0}
-            <span class="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-foreground px-1 text-[10px] font-semibold text-background">
+            <span class="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-accent-foreground">
               {pendingCount}
             </span>
           {/if}

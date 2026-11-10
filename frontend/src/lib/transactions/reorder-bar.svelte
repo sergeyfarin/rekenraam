@@ -36,7 +36,7 @@
       </p>
       <button
         type="button"
-        class="rounded-(--radius-control) bg-foreground px-3 py-2 text-sm font-semibold text-background transition hover:opacity-90"
+        class="rounded-(--radius-control) bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground transition hover:opacity-90"
         onclick={() => mode.finish()}
       >
         {m.transactions_reorder_done()}
@@ -54,7 +54,7 @@
         <div class="flex flex-wrap gap-2">
           <button
             type="button"
-            class="rounded-(--radius-control) bg-foreground px-3 py-2 text-sm font-semibold text-background transition hover:opacity-90"
+            class="rounded-(--radius-control) bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground transition hover:opacity-90"
             disabled={mode.pending}
             onclick={() => mode.confirmDayMove()}
             {@attach autofocus}

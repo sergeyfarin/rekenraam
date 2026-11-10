@@ -112,7 +112,7 @@
       <p class="mt-2 text-sm leading-6 text-muted">{m.reconcile_finished_copy()}</p>
       <button
         type="button"
-        class="mt-5 inline-flex items-center gap-2 rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90"
+        class="mt-5 inline-flex items-center gap-2 rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-90"
         onclick={backToStart}
       >
         {m.reconcile_finished_again()}

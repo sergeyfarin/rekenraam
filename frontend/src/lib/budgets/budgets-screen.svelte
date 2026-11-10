@@ -122,7 +122,7 @@
             {/if}
             <div><p class="text-xs text-muted">{m.budgets_actual()}</p><p class="mt-2 font-semibold">{display(amount?.actual)}</p></div>
             <div><p class="text-xs text-muted">{m.budgets_remaining()}</p><p class="mt-2 font-semibold">{display(amount?.remaining)}</p></div>
-            {#if !archived}<button class="rounded-(--radius-control) bg-foreground px-4 py-2 text-sm font-semibold text-background disabled:opacity-50" disabled={savingID===category.id}>{savingID===category.id ? m.budgets_saving() : m.budgets_save()}</button>{/if}
+            {#if !archived}<button class="rounded-(--radius-control) bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-50" disabled={savingID===category.id}>{savingID===category.id ? m.budgets_saving() : m.budgets_save()}</button>{/if}
           </form>
         {/each}
       </div>

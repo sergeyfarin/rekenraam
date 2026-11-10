@@ -390,12 +390,12 @@
     </button>
     {#if preview}
       <button type="button" onclick={review.record} disabled={pending || !csrfToken}
-        class="rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
+        class="rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
         {pending ? m.investments_transfer_pending() : m.investments_transfer_submit()}
       </button>
     {:else}
       <button type="submit" disabled={!canPreview || pending}
-        class="rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
+        class="rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
         {pending ? m.investments_transfer_internal_previewing() : m.investments_transfer_internal_preview()}
       </button>
     {/if}

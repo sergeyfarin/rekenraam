@@ -229,7 +229,7 @@
       {m.investments_form_cancel()}
     </button>
     <button type="submit" disabled={!canSubmit}
-      class="rounded-(--radius-control) bg-foreground px-3 py-1.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
+      class="rounded-(--radius-control) bg-accent px-3 py-1.5 text-sm font-semibold text-accent-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
       {pending ? m.investments_suggestion_posting() : m.investments_suggestion_post()}
     </button>
   </div>
