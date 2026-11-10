@@ -11,9 +11,10 @@ valid.
 
 The 2026-11-08 review measured a 34% application-package slowdown and a race
 deadline timeout on its reference host. That result was **not reproduced** in
-the matched 2026-11-10 environments: the candidate is 12.8% slower than main
-on the available six-CPU workspace and 15.2% slower on hosted CI, and both
-full race gates pass below ADR 0016's 270-second act threshold. The
+the matched 2026-11-10 environments: the candidate is 12.8–18.7% slower than
+main on the available six-CPU workspace, while two hosted runs measured
+**-1.2%** and **+15.2%**; all full race gates pass below ADR 0016's 270-second
+act threshold. The
 [ADR 0016](../adrs/0016-native-backend-test-resources.md) investigate
 threshold (>210 s) remains exceeded, as it already was before this candidate;
 headroom is narrow and monitoring continues under #419/#445. No statement
@@ -88,12 +89,13 @@ Matched application-package timings (`internal/app`):
 | Environment | v1.14.52 / 3.53.4 | v1.14.53 / 3.54.1 | Delta |
 |---|---:|---:|---:|
 | Local six-CPU workspace, `-race` full gate | 217.163 s | 245.012 s / 257.674 s | +12.8% / +18.7% |
-| Hosted CI, `-race` full gate | 219.404 s (main `7d3d2059`) | 252.718 s (PR #557) | +15.2% |
+| Hosted CI, `-race` full gate | 219.404 s (main `7d3d2059`) | 216.848 s / 252.718 s (PR #557) | -1.2% / +15.2% |
 
 The local baseline and candidate runs used the same host and branch content
 except for the driver, its test expectations and the documentation in this
 change. The hosted comparison uses main `7d3d2059` and the admission branch's
-own PR #557 run. The 2026-11-08
+own PR #557 runs; the two candidate runs show runner variance, with the final
+run slightly faster than the baseline. The 2026-11-08
 review's ten-CPU reference measurement remains the record of its own
 environment; the difference is why the act decision is based on matched runs,
 not a single cross-host comparison.

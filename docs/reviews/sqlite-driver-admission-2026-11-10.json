@@ -47,7 +47,8 @@
       {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "app_seconds": 245.012, "result": "pass"},
       {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "app_seconds": 257.674, "result": "pass"},
       {"environment": "hosted-ci", "engine": "3.53.4", "driver": "v1.14.52", "commit": "7d3d2059", "app_seconds": 219.404, "result": "pass"},
-      {"environment": "hosted-ci", "engine": "3.54.1", "driver": "v1.14.53", "context": "PR 557 admission branch", "app_seconds": 252.718, "result": "pass"}
+      {"environment": "hosted-ci", "engine": "3.54.1", "driver": "v1.14.53", "context": "PR 557 admission branch, final run", "app_seconds": 216.848, "result": "pass"},
+      {"environment": "hosted-ci", "engine": "3.54.1", "driver": "v1.14.53", "context": "PR 557 admission branch, earlier run", "app_seconds": 252.718, "result": "pass"}
     ],
     "coverage_percent": 82.8,
     "integrated_build": "pass",
