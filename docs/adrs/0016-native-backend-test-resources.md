@@ -178,8 +178,9 @@ their limits.
 provisional local full race gates at **245.0 / 257.7 s** in the application
 package on a six-CPU workspace, against **217.2 s** for the admitted v1.14.52
 engine on the same host. Hosted runs measured **216.8 s** (`2eb5adb4`),
-**252.7 s** (`b6655526`) and **253.2 s** (`faeedf20`, the latest head) against
-**219.4 s**. The latest is +15.4%, not a speedup; all remain below the 270 s act
+**252.7 s** (`b6655526`) and **253.2 s** (`faeedf20`, latest code head
+measured) against **219.4 s**. The latest is +15.4%, not a speedup; all remain
+below the 270 s act
 threshold. The investigate threshold remains exceeded, as it already was
 before the candidate, and the margin is narrow; #419/#445 monitoring continues.
 Production-query cost is separately measured at **+16% to +63%** on

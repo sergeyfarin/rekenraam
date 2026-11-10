@@ -331,13 +331,15 @@ SQLite C engine is outside Go's race instrumentation. A deliberate Go race
 must still fail the gate.
 
 **SQLite engine update (2026-11-10):**
-[#356](https://github.com/sergeyfarin/rekenraam/issues/356) admits
-`github.com/mattn/go-sqlite3` v1.14.53 with bundled SQLite 3.54.1, retaining
-CGO/FTS5/`netgo`/`osusergo`, WAL/FULL and the statement-cache-disabled policy.
-The [admission review](reviews/sqlite-driver-admission-2026-11-10.md) records
-source authentication, both correctness probes, matched full gates, the
-statement re-preparation cost and the advisory reconciliation. The #403 FTS5
-workaround remains required under 3.54.1; #541 owns the upstream report.
+[#356](https://github.com/sergeyfarin/rekenraam/issues/356) evaluates
+`github.com/mattn/go-sqlite3` v1.14.53 with bundled SQLite 3.54.1 for admission,
+retaining CGO/FTS5/`netgo`/`osusergo`, WAL/FULL and the statement-cache-disabled
+policy. The [admission review](reviews/sqlite-driver-admission-2026-11-10.md)
+records source authentication, both correctness probes, matched full gates,
+the measured production-query cost (**+16% to +63%**) and the advisory
+reconciliation. The owner performance acceptance is the remaining decision; the
+production pin stays v1.14.52 until merge. The #403 FTS5 workaround remains
+required under 3.54.1; #541 owns the upstream report.
 
 **Commit durability follow-up (2026-10-12):**
 [ADR 0015](adrs/0015-sqlite-commit-durability.md) requires WAL/FULL for the

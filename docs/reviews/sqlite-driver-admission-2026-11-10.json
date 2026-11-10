@@ -88,7 +88,7 @@
   },
   "limits": [
     "The local host has six CPUs; the 2026-11-08 review recorded its ten-CPU reference measurement, which this run could not reproduce.",
-    "The latest candidate head run (faeedf20) measured 253.242 s, +15.4% against the 219.404 s baseline; an earlier run on 2eb5adb4 measured 216.848 s. The latest result is the admission-relevant one, and the difference shows material runner variance.",
+    "The latest measured candidate code-head run (faeedf20) measured 253.242 s, +15.4% against the 219.404 s baseline; an earlier run on 2eb5adb4 measured 216.848 s. The latest result is the admission-relevant one, and the difference shows material runner variance. Commit 33f94129 adds the evidence and probe only.",
     "The investigate threshold (>210 s) remains exceeded; the 270 s act threshold did not fire in these runs.",
     "Production-query cost is +16% to +63% on representative affected paths (median of three runs), so the admission decision remains with the owner under #356."
   ]

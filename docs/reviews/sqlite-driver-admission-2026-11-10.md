@@ -12,7 +12,7 @@ valid.
 
 The 2026-11-08 review measured a 34% application-package slowdown and a race
 deadline timeout on its reference host. The matched 2026-11-10 race gates do
-not reproduce the timeout: the latest head measured **253.242 s** against
+not reproduce the timeout: the latest measured code head reported **253.242 s** against
 **219.404 s** for main (+15.4%), and an earlier candidate run measured
 **216.848 s** (-1.2%). Both pass below ADR 0016's 270-second act threshold, but
 the latest result is slower and the investigate threshold remains exceeded.
@@ -97,11 +97,13 @@ the setup-go-cache exact-hit flag. Each row names its commit and run.
 | Main baseline | `7d3d2059` | [42760293595 / 129644138504](https://github.com/sergeyfarin/rekenraam/actions/runs/42760293595/job/129644138504) | 219.404 s | — | false |
 | Candidate | `2eb5adb4` | [42873724976 / 130031379151](https://github.com/sergeyfarin/rekenraam/actions/runs/42873724976/job/130031379151) | 216.848 s | -1.2% | false |
 | Candidate | `b6655526` | [42767669769 / 129667989356](https://github.com/sergeyfarin/rekenraam/actions/runs/42767669769/job/129667989356) | 252.718 s | +15.2% | false |
-| Candidate, current head | `faeedf20` | [42876220590 / 130040105987](https://github.com/sergeyfarin/rekenraam/actions/runs/42876220590/job/130040105987) | 253.242 s | +15.4% | true |
+| Candidate, code head measured | `faeedf20` | [42876220590 / 130040105987](https://github.com/sergeyfarin/rekenraam/actions/runs/42876220590/job/130040105987) | 253.242 s | +15.4% | true |
 
-The latest head result is **253.242 s**, not the earlier **216.848 s**; the
-latter belongs to `2eb5adb4`. Both pass, but the latest result does not show a
-speedup, and runner variance is material. The earlier local six-CPU runs
+The latest measured code-head result is **253.242 s**, not the earlier
+**216.848 s**; the latter belongs to `2eb5adb4`. Both pass, but the latest
+result does not show a speedup, and runner variance is material. The subsequent
+`33f94129` commit adds this evidence and the retained probe; it does not change
+the backend or frontend. The earlier local six-CPU runs
 (baseline **217.163 s** on clean `7d3d2059`; candidate **245.012 s / 257.674 s**
 on the worktree that became `3c52b99b`) are provisional dirty-tree timings;
 they are not used for the admission threshold. The 2026-11-08 review's ten-CPU
