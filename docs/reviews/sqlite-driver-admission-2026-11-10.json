@@ -47,7 +47,7 @@
       {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "app_seconds": 245.012, "result": "pass"},
       {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "app_seconds": 257.674, "result": "pass"},
       {"environment": "hosted-ci", "engine": "3.53.4", "driver": "v1.14.52", "commit": "7d3d2059", "app_seconds": 219.404, "result": "pass"},
-      {"environment": "hosted-ci", "engine": "3.54.1", "driver": "v1.14.53", "context": "PR 556 candidate run", "app_seconds": 250.094, "result": "test-expectation-failure-only"}
+      {"environment": "hosted-ci", "engine": "3.54.1", "driver": "v1.14.53", "context": "PR 557 admission branch", "app_seconds": 252.718, "result": "pass"}
     ],
     "coverage_percent": 82.8,
     "integrated_build": "pass",
@@ -67,7 +67,6 @@
   },
   "limits": [
     "The local host has six CPUs; the 2026-11-08 review recorded its ten-CPU reference measurement, which this run could not reproduce.",
-    "The hosted candidate number is from the superseded PR 556 run; the admission branch CI should be compared when available.",
     "The investigate threshold (>210 s) remains exceeded; the 270 s act threshold did not fire in these runs."
   ]
 }
