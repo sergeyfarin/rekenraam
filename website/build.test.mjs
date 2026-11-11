@@ -13,6 +13,11 @@ test('screenshot manifest hashes describe the shipped images', async () => {
   const manifest = JSON.parse(await readFile(new URL('./assets/capture.json', import.meta.url), 'utf8'));
   assert.match(manifest.source_revision, /^[0-9a-f]{40}$/);
   assert.equal(manifest.source_clean, true);
+  // Walking manifest.files alone cannot notice a removed entry. Name the
+  // complete shipped set first; the exact sorted list also rejects duplicates
+  // and unrecognised extra entries.
+  const expectedFiles = ['transactions.png', 'investments.png', '../../docs/images/reports-spending.png'];
+  assert.deepEqual(manifest.files.map((entry) => entry.file).sort(), [...expectedFiles].sort());
   for (const entry of manifest.files) {
     assert.match(entry.sha256, /^[0-9a-f]{64}$/, entry.file);
     const image = await readFile(new URL(entry.file, new URL('./assets/', import.meta.url)));
