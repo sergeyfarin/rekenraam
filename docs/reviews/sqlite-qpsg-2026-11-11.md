@@ -80,9 +80,14 @@ and test-only tables.
 - **6** differ only in the order of primary-key lookups inside the same join
   (`investment_capital_return` sets ×4, transfer depletion, transfer link
   revisions).
-- **2** split-fact reads with the recursive `correction_roots` CTE scan
-  `investment_split_facts` and probe an automatic index on the CTE, instead
-  of scanning the CTE and probing split facts by primary key.
+- **2** split-fact reads (`PricingRepository.InstrumentSplits`, two and three
+  commodity IDs) change from scanning the recursive `correction_roots` CTE and
+  probing `investment_split_facts` by primary key to a **full scan of
+  `investment_split_facts`** (`SCAN f`) that probes an automatic index built
+  on the CTE. The table has no index besides its primary key, so this scan
+  reads every book's split facts, one row per recorded split. Both plans
+  still read the whole CTE, which covers every investment operation in the
+  book.
 - **1** self-check (`investment_cash_payment_identity` ⋈ suggestions) uses the
   two partial unique indexes on generated/linked transaction IDs through a
   multi-index OR, instead of an automatic index on `book_id`.
@@ -93,7 +98,10 @@ and test-only tables.
   (verified with the same SQL and IDs 1/5). QPSG removes that value
   dependence; it does not introduce the plan.
 
-No changed plan adds a full scan of a book-scoped financial table.
+One changed plan adds a full scan of a book-scoped financial table: the
+`investment_split_facts` scan in `InstrumentSplits` above. Its latency impact
+has not been measured. Neither plan uses a book-scoped index on split facts,
+because none exists. No other changed plan adds a table scan.
 
 ## Correctness
 
@@ -156,6 +164,9 @@ direction and size of the recovery but are not formal threshold evidence.
 - The plan scan covers statements the test suites execute, with their test
   values, on an unanalysed schema. Statements no test executes are not
   covered; the application never runs `ANALYZE`.
+- The `InstrumentSplits` change from a CTE scan to a table-wide
+  `investment_split_facts` scan is unmeasured; it grows with the number of
+  splits recorded, not with operations or transactions.
 - A build that does not source `scripts/native-sqlite-env.sh` loses QPSG; the
   fingerprint test catches this in the backend gate, not at runtime.
 - No statement cache, deadline, scheduling, durability, coverage or schema

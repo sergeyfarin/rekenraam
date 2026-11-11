@@ -124,7 +124,9 @@ records the cause, a value-bound plan comparison of 1,802 statements and the
 measured production-query recovery (**39–55% faster** than 3.54.1 without
 QPSG on the admission review's paths). Plans no longer depend on bound
 `LIMIT` values, partial-index matches against bound values or bound `LIKE`
-prefixes; the application uses none of these to choose an index. Other compile
+prefixes. The comparison found 10 changed plans; one, in `InstrumentSplits`,
+replaces a primary-key lookup with a full scan of `investment_split_facts`
+whose latency is unmeasured. Other compile
 options, WAL/FULL, the disabled statement cache and connection policies are
 unchanged.
 

@@ -69,8 +69,11 @@
       },
       {
         "count": 2,
-        "kind": "split facts scanned with an automatic index on the correction_roots CTE instead of scanning the CTE and probing split facts by rowid",
-        "statements": "investment_split_facts with correction_roots"
+        "kind": "full table scan of investment_split_facts (SCAN f) probing an automatic index on the correction_roots CTE, instead of scanning the CTE and probing split facts by rowid",
+        "statements": "PricingRepository.InstrumentSplits (two and three commodity ids)",
+        "adds_book_scoped_table_scan": true,
+        "latency_measured": false,
+        "note": "investment_split_facts has no index besides its primary key; the scan reads every book's split facts. Both plans read the whole CTE."
       },
       {
         "count": 1,
@@ -82,6 +85,9 @@
         "kind": "value coincidence: default 3.54.1 changes plan only when book id, template id and LIMIT inputs all equal 1; QPSG matches the default plan for other template ids",
         "statements": "ForecastSnapshotReader.draftPostings"
       }
+    ],
+    "adds_book_scoped_table_scan": [
+      "investment_split_facts in InstrumentSplits"
     ]
   },
   "correctness": {
