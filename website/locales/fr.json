@@ -17,7 +17,7 @@
   "heroStatus": "État du développement",
   "screenshotNote": "Les captures montrent l’interface en anglais avec des données fictives.",
   "reportCaption": "Dépenses par catégorie",
-  "reportAlt": "Rapport de dépenses de Rekenraam, avec les catégories et leur part dans les dépenses totales, en thème clair à gauche et en thème sombre à droite, à partir de données fictives.",
+  "reportAlt": "Rapport de dépenses de Rekenraam, avec les catégories et leur part dans les dépenses totales, en thème clair en haut à gauche et en thème sombre en bas à droite, à partir de données fictives.",
   "openScreenshot": "Ouvrir la capture complète",
   "ledgerTitle": "Comptabilité en partie double, multidevise",
   "ledgerBody": "Écritures équilibrées et montants décimaux exacts dans plusieurs devises. Hiérarchies de comptes, transactions ventilées, virements, historique des versions et rapprochement avec les relevés. Conserver les devises d’origine séparément ou convertir les rapports avec des taux de change consultables et modifiables.",

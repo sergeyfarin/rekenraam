@@ -17,7 +17,7 @@
   "heroStatus": "Development status",
   "screenshotNote": "The screenshots show the English interface with fictional data.",
   "reportCaption": "Spending by category",
-  "reportAlt": "Rekenraam spending report showing categorized expenses and their share of total spending in the light theme on the left and the dark theme on the right, using fictional sample data.",
+  "reportAlt": "Rekenraam spending report showing categorized expenses and their share of total spending in the light theme across the upper-left and the dark theme across the lower-right, using fictional sample data.",
   "openScreenshot": "Open full screenshot",
   "ledgerTitle": "Double-entry, multi-currency ledger",
   "ledgerBody": "Balanced entries and exact decimal amounts across currencies. Account hierarchies, split transactions, transfers, version history and statement reconciliation. Keep original currencies separate or convert reports with exchange rates you can inspect and edit.",

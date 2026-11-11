@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,6 +11,11 @@ import { seedReferenceBook } from './playwright/support/reference-book';
 // The book's euro spending: one commodity, so the report draws its chart.
 const spendingPath = '/app/reports/spending?start_date=2026-01-01&end_date=2026-03-31';
 const spendingViewport = { width: 1440, height: 1112 };
+
+/** Binds capture.json to the exact image bytes that ship beside it. */
+function fileSHA256(relativePath: string): string {
+  return createHash('sha256').update(readFileSync(join(repoRoot, relativePath))).digest('hex');
+}
 
 test('capture website screens from a disposable synthetic book', async ({ browser }) => {
   // Never point this asset generator at an existing installation.
@@ -49,10 +56,10 @@ test('capture website screens from a disposable synthetic book', async ({ browse
         });
       }
       // The README and the website's lead image: the spending report over the
-      // reference book's quarter, at 2x for the README (#489). The left half
-      // stays light and the right half follows the dark theme, so one image
-      // shows both without a second scroll position. The website's build
-      // copies it and states these pixel sizes.
+      // reference book's quarter, at 2x for the README (#489). It runs light
+      // in the upper-left triangle and dark in the lower-right, so one image
+      // shows both themes without a second scroll position. The website's
+      // build copies it and states these pixel sizes.
       const spending = await browser.newContext({
         baseURL: backend.url,
         viewport: spendingViewport,
@@ -78,8 +85,10 @@ test('capture website screens from a disposable synthetic book', async ({ browse
         const dark = await report.screenshot({ animations: 'disabled' });
 
         // Compose in the browser: no image dependency is needed, and the two
-        // screenshots keep their 2x pixels. Clip at 50% so each half is the
-        // same report region, not two differently laid-out crops.
+        // screenshots keep their 2x pixels. The dark full frame sits underneath
+        // and the light frame is clipped to the upper-left triangle, so the
+        // antialiased diagonal blends into the dark image instead of exposing
+        // the page background as a hairline seam.
         const composite = await browser.newPage({
           viewport: spendingViewport,
           deviceScaleFactor: 2
@@ -90,16 +99,15 @@ test('capture website screens from a disposable synthetic book', async ({ browse
               html, body { margin: 0; background: #000; }
               #theme-split { position: relative; width: ${spendingViewport.width}px; height: ${spendingViewport.height}px; overflow: hidden; }
               #theme-split img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
-              #theme-split .light { clip-path: inset(0 50% 0 0); }
-              #theme-split .dark { clip-path: inset(0 0 0 50%); }
+              #theme-split .light { clip-path: polygon(0 0, 100% 0, 0 100%); }
             </style>
             <div id="theme-split">
-              <img class="light" alt="">
               <img class="dark" alt="">
+              <img class="light" alt="">
             </div>
           `);
           await composite.locator('#theme-split').evaluate(async (element, images) => {
-            const [lightImage, darkImage] = Array.from(element.querySelectorAll('img')) as HTMLImageElement[];
+            const [darkImage, lightImage] = Array.from(element.querySelectorAll('img')) as HTMLImageElement[];
             lightImage.src = `data:image/png;base64,${images.light}`;
             darkImage.src = `data:image/png;base64,${images.dark}`;
             await Promise.all([lightImage.decode(), darkImage.decode()]);
@@ -125,13 +133,19 @@ test('capture website screens from a disposable synthetic book', async ({ browse
         language: 'en',
         viewport: { width: 1440, height: 1050 },
         files: [
-          ...captures.map(({ name, route }) => ({ file: `${name}.png`, route })),
+          ...captures.map(({ name, route }) => ({
+            file: `${name}.png`,
+            route,
+            sha256: fileSHA256(`website/assets/${name}.png`)
+          })),
           {
             file: '../../docs/images/reports-spending.png',
             route: spendingRoute,
             viewport: spendingViewport,
             device_scale_factor: 2,
-            themes: { left: 'light', right: 'dark' }
+            themes: { light: 'top-left', dark: 'bottom-right' },
+            split: 'diagonal',
+            sha256: fileSHA256('docs/images/reports-spending.png')
           }
         ],
         note: 'Disposable database; synthetic reference book; no live providers or owner records.'

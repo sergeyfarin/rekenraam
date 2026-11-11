@@ -147,10 +147,10 @@ the other languages. Catalogs and all user-facing metadata live under
 `frontend/project.inlang/settings.json`; native-language review remains #102.
 All images/CSS/scripts are local. There are no analytics or external fonts.
 
-The README's spending screenshot is reused during the build. It is a split
-image: the left half is the light theme and the right half is the dark theme,
-captured from the same report state and composed at 2x. Refresh it and the other
-screenshots from the synthetic reference book with:
+The README's spending screenshot is reused during the build. It is a diagonal
+split image: the upper-left triangle is the light theme and the lower-right is
+the dark theme, captured from the same report state and composed at 2x. Refresh
+it and the other screenshots from the synthetic reference book with:
 
 ```sh
 pnpm build
@@ -162,7 +162,9 @@ This generator creates and removes a disposable database, refuses
 address, and captures the transaction register and investment lot details.
 It does not start a provider or read an existing installation. Images and
 capture provenance belong in `website/assets/`; only presentation assets go
-into the public build. Screenshots remain English with localized captions and
+into the public build. `capture.json` records the source revision and each
+image's SHA-256, and `pnpm website:check` verifies the hashes against the
+shipped bytes. Screenshots remain English with localized captions and
 alternative text.
 
 For a temporary project-path build instead of a custom domain:
