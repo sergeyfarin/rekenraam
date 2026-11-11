@@ -134,3 +134,46 @@ func TestInvestmentReplayReplacementKeepsRootSameDaySlot(t *testing.T) {
 	require.Equal(t, replacementID, intents[0].OperationID, "corrected buy must precede a later same-day sale")
 	require.EqualValues(t, 3, intents[1].OperationID)
 }
+
+// correctionRootsOf walks up from the operations a read needs (#561); it must
+// give every operation the same root as the book-wide replay order, through a
+// chain of replacements, and must not depend on which other operations are
+// seeded.
+func TestCorrectionRootsOfMatchesReplayOrderRoots(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	database := seedReplayTestBook(t)
+	replace := func(of int64, reason string) int64 {
+		result, err := database.ExecContext(ctx, `INSERT INTO investment_operations
+			(book_id, operation_kind, event_date, created_at, created_audit_event_id,
+			 correction_of_operation_id, correction_mode, correction_reason)
+			VALUES (1, 'buy', '2026-04-02', '2026-09-28T00:00:00Z', 31, ?, 'replace', ?)`, of, reason)
+		require.NoError(t, err)
+		id, err := result.LastInsertId()
+		require.NoError(t, err)
+		return id
+	}
+	first := replace(1, "correct original buy")
+	second := replace(first, "correct the correction")
+	want, err := investmentReplayOrderOperationIDsQuery(ctx, database, 1)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, want[second], "the canonical root of a two-step chain")
+	roots := func(seed string, args ...any) map[int64]int64 {
+		rows, err := database.QueryContext(ctx, correctionRootsOf(seed)+`SELECT operation_id, root_id FROM correction_roots`,
+			append(args, int64(1), int64(1))...)
+		require.NoError(t, err)
+		defer rows.Close()
+		got := map[int64]int64{}
+		for rows.Next() {
+			var operationID, rootID int64
+			require.NoError(t, rows.Scan(&operationID, &rootID))
+			got[operationID] = rootID
+		}
+		require.NoError(t, rows.Err())
+		return got
+	}
+	require.Equal(t, want, roots(`SELECT id FROM investment_operations WHERE book_id = ?`, int64(1)), "every operation, same roots")
+	require.Equal(t, map[int64]int64{second: 1}, roots(`SELECT ?`, second), "one seed walks its whole chain")
+	require.Equal(t, map[int64]int64{first: 1, second: 1}, roots(`SELECT ? UNION SELECT ? UNION SELECT ?`, first, second, first), "duplicate seeds yield one root each")
+	require.Empty(t, roots(`SELECT ?`, int64(999999)), "an unknown operation has no root")
+}

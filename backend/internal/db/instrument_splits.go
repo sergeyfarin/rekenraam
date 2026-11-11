@@ -21,16 +21,29 @@ type InstrumentSplit struct {
 	OrderOperationID int64
 }
 
-// correctionRootsCTE maps every investment operation to its correction root,
-// the same-day slot replay orders by (investmentReplayOrderOperationIDsQuery).
-// Parameters: book, book.
-const correctionRootsCTE = `WITH RECURSIVE correction_roots(operation_id, root_id) AS (
-	SELECT id, id FROM investment_operations WHERE book_id = ? AND correction_of_operation_id IS NULL
+// correctionRootsOf maps each investment operation selected by seed to its
+// correction root, the same-day slot replay orders by
+// (investmentReplayOrderOperationIDsQuery). It walks up each seed's
+// correction_of_operation_id chain rather than down from every root, so the
+// cost follows the operations a read needs, not the book's whole history
+// (#561). An operation whose chain leaves the book has no root, as before.
+// Parameters: the seed's own, book, book.
+func correctionRootsOf(seed string) string {
+	// CROSS JOIN keeps SQLite from driving the walk from every book
+	// operation and probing the seeds; each seed is one primary-key lookup.
+	return `WITH RECURSIVE correction_seeds(operation_id) AS (SELECT DISTINCT * FROM (` + seed + `)),
+correction_ancestry(operation_id, ancestor_id, parent_id) AS (
+	SELECT o.id, o.id, o.correction_of_operation_id FROM correction_seeds s
+	CROSS JOIN investment_operations o ON o.id = s.operation_id
+	WHERE o.book_id = ?
 	UNION ALL
-	SELECT child.id, correction_roots.root_id FROM investment_operations child
-	JOIN correction_roots ON correction_roots.operation_id = child.correction_of_operation_id
-	WHERE child.book_id = ?
+	SELECT a.operation_id, parent.id, parent.correction_of_operation_id FROM correction_ancestry a
+	JOIN investment_operations parent ON parent.id = a.parent_id
+	WHERE parent.book_id = ?
+), correction_roots(operation_id, root_id) AS (
+	SELECT operation_id, ancestor_id FROM correction_ancestry WHERE parent_id IS NULL
 ) `
+}
 
 // TotalReturnSecurities reports whether this repository prices securities by
 // total-return observations, which are continuous index levels and are never
@@ -55,13 +68,17 @@ func instrumentSplits(ctx context.Context, queryer rowsQueryer, bookID int64, co
 		return nil, nil
 	}
 	clause, args := inClause("f.commodity_id", commodityIDs)
-	rows, err := queryer.QueryContext(ctx, correctionRootsCTE+`
+	splitsInRange := `SELECT f.operation_id FROM investment_split_facts f
+		WHERE f.book_id = ? AND ` + clause + ` AND f.effective_on > ? AND f.effective_on <= ?`
+	rangeArgs := append(append([]any{bookID}, args...), after, through)
+	queryArgs := append(append(append([]any{}, rangeArgs...), bookID, bookID), rangeArgs...)
+	rows, err := queryer.QueryContext(ctx, correctionRootsOf(splitsInRange)+`
 		SELECT f.commodity_id, f.account_id, f.effective_on, f.ratio_numerator, f.ratio_denominator, root.root_id
 		FROM investment_split_facts f
 		JOIN effective_investment_operations o ON o.id = f.operation_id
 		JOIN correction_roots root ON root.operation_id = f.operation_id
 		WHERE f.book_id = ? AND `+clause+` AND f.effective_on > ? AND f.effective_on <= ?
-		ORDER BY f.commodity_id, f.effective_on, root.root_id`, append(append([]any{bookID, bookID, bookID}, args...), after, through)...)
+		ORDER BY f.commodity_id, f.effective_on, root.root_id`, queryArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("read instrument splits: %w", err)
 	}
@@ -204,7 +221,19 @@ func tradeQuotePendingSplits(ctx context.Context, queryer rowsQueryer, bookID in
 		return bases, nil
 	}
 	clause, args := inClause("po.base_commodity_id", commodityIDs)
-	rows, err := queryer.QueryContext(ctx, correctionRootsCTE+`
+	splitClause, splitArgs := inClause("f.commodity_id", commodityIDs)
+	// Roots are needed for the trades behind the observations and for the
+	// splits recorded on their days; both sets lie inside the range.
+	seeds := `SELECT link.operation_id FROM price_observations po
+		JOIN investment_operation_journal_links link ON link.transaction_version_id = po.source_transaction_version_id
+		WHERE po.book_id = ? AND po.quote_type = 'trade_implied' AND ` + clause + `
+			AND po.valuation_date > ? AND po.valuation_date <= ?
+		UNION
+		SELECT f.operation_id FROM investment_split_facts f
+		WHERE f.book_id = ? AND ` + splitClause + ` AND f.effective_on > ? AND f.effective_on <= ?`
+	seedArgs := append(append(append(append([]any{bookID}, args...), after, through, bookID), splitArgs...), after, through)
+	queryArgs := append(append(append(append([]any{}, seedArgs...), bookID, bookID, bookID), args...), after, through)
+	rows, err := queryer.QueryContext(ctx, correctionRootsOf(seeds)+`
 		SELECT po.id, f.account_id, f.ratio_numerator, f.ratio_denominator, slot.root_id > trade.root_id
 		FROM price_observations po
 		JOIN investment_operation_journal_links link ON link.transaction_version_id = po.source_transaction_version_id
@@ -215,7 +244,7 @@ func tradeQuotePendingSplits(ctx context.Context, queryer rowsQueryer, bookID in
 		JOIN correction_roots slot ON slot.operation_id = f.operation_id
 		WHERE po.book_id = ? AND po.quote_type = 'trade_implied' AND `+clause+`
 			AND po.valuation_date > ? AND po.valuation_date <= ?
-		ORDER BY po.id, f.account_id, slot.root_id`, append(append([]any{bookID, bookID, bookID}, args...), after, through)...)
+		ORDER BY po.id, f.account_id, slot.root_id`, queryArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("read trade quote pending splits: %w", err)
 	}
