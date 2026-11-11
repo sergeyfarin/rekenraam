@@ -29,6 +29,7 @@ func TestBaselineIndexesKeepOrderedAndForeignKeyLookups(t *testing.T) {
 		{"payee_versions backwards sequence", "SELECT id FROM payee_versions WHERE payee_id=1 ORDER BY version_seq DESC", "sqlite_autoindex_payee_versions_1"},
 		{"transaction_versions backwards sequence", "SELECT id FROM transaction_versions WHERE transaction_id=1 ORDER BY version_seq DESC", "sqlite_autoindex_transaction_versions_1"},
 		{"investment_instrument_versions backwards sequence", "SELECT id FROM investment_instrument_versions WHERE instrument_id=1 ORDER BY version_seq DESC", "sqlite_autoindex_investment_instrument_versions_1"},
+		{"split facts by instrument and date", "SELECT operation_id FROM investment_split_facts WHERE book_id=1 AND commodity_id=1 AND effective_on > '2026-01-01' ORDER BY effective_on", "investment_split_facts_lookup_idx"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			// Force the retained key to prove its capability independently of

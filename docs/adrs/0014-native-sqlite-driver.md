@@ -126,7 +126,10 @@ QPSG on the admission review's paths). Plans no longer depend on bound
 `LIMIT` values, partial-index matches against bound values or bound `LIKE`
 prefixes. The comparison found 10 changed plans; one, in `InstrumentSplits`,
 replaces a primary-key lookup with a full scan of `investment_split_facts`
-whose latency is unmeasured ([#561](https://github.com/sergeyfarin/rekenraam/issues/561)). Other compile
+whose cause [#561](https://github.com/sergeyfarin/rekenraam/issues/561) removed: both split reads walked correction roots for
+every investment operation in the book. They now walk only the operations
+they need, and migration `0012` indexes split facts by instrument and date.
+Other compile
 options, WAL/FULL, the disabled statement cache and connection policies are
 unchanged.
 
