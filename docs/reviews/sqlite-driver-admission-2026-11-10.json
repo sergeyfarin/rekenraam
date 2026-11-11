@@ -1,7 +1,13 @@
 {
   "review": "sqlite-driver-admission-2026-11-10",
   "date": "2026-11-10",
-  "decision": "pending-owner-performance-and-act-threshold-acceptance",
+  "decision": "admitted-owner-accepted-performance-and-act-threshold-cost",
+  "owner_acceptance": {
+    "date": "2026-11-11",
+    "accepts": ["ADR 0016 270 s act-threshold breach (candidate 293.578 s / 271.254 s)", "production-query cost +16% to +63% on the measured paths"],
+    "scope": "go-sqlite3 v1.14.53 / SQLite 3.54.1 admission only",
+    "follow_up": "separate speed-up investigation; does not gate admission"
+  },
   "go_toolchain": {
     "minimum": "1.27.4",
     "security_fix": "GO-2026-6859 (net/http MaxBytesReader header race)",

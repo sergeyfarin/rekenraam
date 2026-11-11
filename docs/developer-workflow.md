@@ -60,12 +60,12 @@ adds an isolated C admission probe: it fails on official 3.53.4 and passes on
 official 3.54.1. The released candidate, go-sqlite3 v1.14.53 (SQLite 3.54.1),
 passes both probes. The
 [2026-11-10 admission review](reviews/sqlite-driver-admission-2026-11-10.md)
-records the source, probes, gates and production-query cost; the production
-module pin moves to v1.14.53 only when that admission is accepted. The clean
+records the source, probes, gates and production-query cost. The clean
 uncached race pair fires ADR 0016's 270 s act threshold (two candidate runs
 above 270 s; neither baseline run above it), and representative production
-queries are **16–63% slower**, so the owner performance decision remains open
-under #356. Hosted runs are cached observations, not threshold evidence.
+queries are **16–63% slower**. The owner accepted both on 2026-11-11 and the
+production module pin is v1.14.53. Hosted runs are cached observations, not
+threshold evidence.
 
 Every driver admission review also decides whether the #403 workaround
 (`refreshFTS5StructuresTx`) is still needed. This paragraph is the

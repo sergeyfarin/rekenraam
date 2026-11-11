@@ -185,10 +185,13 @@ so the toolchain patch does not change the conclusion. Hosted runs
 (**216.8 s** `2eb5adb4`; **252.7 s** `b6655526`; **253.2 s** `faeedf20`) are
 cached-gate observations, not threshold evidence. The investigate threshold
 also remains exceeded. Production-query cost is separately measured at **+16%
-to +63%** on representative affected paths. The performance acceptance is an
-owner decision under #356; no deadline, scheduling, cache, durability,
-coverage or schema policy changes are made here. See the
-[admission review](../reviews/sqlite-driver-admission-2026-11-10.md).
+to +63%** on representative affected paths. **Owner amendment (2026-11-11):**
+the owner accepted this act-threshold breach and the production cost for the
+#356 driver admission, which satisfies the act rule for this change; a
+speed-up follow-up is separate. No deadline, scheduling, cache, durability,
+coverage or schema policy changes are made here. The investigate threshold
+and the 30% headroom objective remain open. See the
+[admission review](../reviews/sqlite-driver-admission-2026-11-10.md#owner-acceptance-2026-11-11).
 
 ## References
 

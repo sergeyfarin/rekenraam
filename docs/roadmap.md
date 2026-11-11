@@ -73,8 +73,8 @@ below continue alongside it and do not block it.
    [admission review](reviews/sqlite-driver-admission-2026-11-10.md). The clean
    uncached race pair fires ADR 0016's 270 s act threshold (two candidate runs
    above 270 s; neither baseline run above it), and representative production
-   queries measured **16–63% slower**. The owner performance decision is the
-   remaining gate before merge. Release remains on hold; these gates do not block accepted
+   queries measured **16–63% slower**. The owner accepted both on 2026-11-11;
+   a speed-up follow-up is separate. Release remains on hold; these gates do not block accepted
    maintenance. Adoption assets #335 stay P3 for later release preparation.
    See [Public-release gates](#public-release-gates) for the remaining evidence.
 2. **Track the remaining bounded maintenance follow-ups.**

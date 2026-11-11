@@ -2,9 +2,9 @@
 
 ## Status
 
-Accepted; implemented in #195 (2026-10-12). The 2026-11-10 amendment proposes
-v1.14.53 / SQLite 3.54.1 admission and takes effect only when the owner accepts
-the measured production-query cost.
+Accepted; implemented in #195 (2026-10-12). Amended 2026-11-10/11: v1.14.53 /
+SQLite 3.54.1 admitted after the owner accepted the measured production-query
+cost and ADR 0016 act-threshold breach.
 
 [ADR 0015](0015-sqlite-commit-durability.md) subsequently replaces the retained
 WAL/NORMAL writer policy with FULL consistently. The original driver admission
@@ -94,7 +94,7 @@ Desktop remains deferred under the existing product requirements. PostgreSQL,
 dual database support, financial schema redesign, weaker durability settings,
 and changes to local-versus-CI validation frequency are separate decisions.
 
-## Amendment — SQLite 3.54.1, 2026-11-10 (pending owner decision)
+## Amendment — SQLite 3.54.1, 2026-11-10 (owner accepted 2026-11-11)
 
 [#356](https://github.com/sergeyfarin/rekenraam/issues/356) evaluates
 `github.com/mattn/go-sqlite3` v1.14.53, bundling SQLite 3.54.1 (source ID
@@ -105,8 +105,9 @@ source authentication, the retained correctness probes, full gates and
 production-query cost. The implementation is sound, but representative
 production queries measured **16–63% slower**, and the clean uncached race pair
 fires ADR 0016's 270 s act threshold (two candidate runs above 270 s; neither
-baseline run above it). This amendment takes effect only if the owner accepts
-both the threshold breach and that cost, or a mitigation is delivered. The compile options add only
+baseline run above it). The owner accepted both the threshold breach and that
+cost on 2026-11-11, so this amendment is in effect; a speed-up follow-up is
+separate and does not gate it. The compile options add only
 `MAX_SCHEMA=10000000`. WAL/FULL, the disabled statement cache, the single
 writer/read pool and the #403 FTS5 workaround remain unchanged.
 

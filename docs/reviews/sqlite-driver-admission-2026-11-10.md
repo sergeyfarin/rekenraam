@@ -1,6 +1,7 @@
 # SQLite driver admission — go-sqlite3 v1.14.53 / SQLite 3.54.1 — 2026-11-10
 
-**Admission requires an owner performance decision.** `github.com/mattn/go-sqlite3`
+**Admitted; the owner accepted the performance cost on 2026-11-11.**
+`github.com/mattn/go-sqlite3`
 v1.14.53 is the latest released upstream driver and bundles SQLite **3.54.1**.
 It carries both upstream correctness fixes retained by
 [#356](https://github.com/sergeyfarin/rekenraam/issues/356): the
@@ -20,10 +21,11 @@ the 300 s deadline. The hosted runs are cached-gate observations, not threshold
 evidence. Production-query measurements also show a **+16% to +63%** cost on
 representative affected paths. The implementation and correctness acceptance
 are met; the performance acceptance is not. Per the 2026-11-08 #356 decision,
-merging requires an explicit owner amendment accepting both the act-threshold
-breach and the production cost (or a mitigation). This review records the
-evidence; it does not grant that acceptance. No statement cache, deadline,
-scheduling or durability policy changes.
+merging required an explicit owner amendment accepting both the act-threshold
+breach and the production cost (or a mitigation). The owner gave that
+acceptance on 2026-11-11 and asked for a follow-up that looks for speed-ups;
+see [Owner acceptance](#owner-acceptance-2026-11-11). No statement cache,
+deadline, scheduling or durability policy changes.
 
 ## Exact source
 
@@ -206,3 +208,14 @@ admit `github.com/mattn/go-sqlite3` v1.14.53 with bundled SQLite 3.54.1 under
 the existing ADR 0014 driver decision and ADR 0015 durability policy. This
 review records the evidence; it does not itself grant the performance
 acceptance. The investigate threshold remains open under #419/#445.
+
+### Owner acceptance (2026-11-11)
+
+The owner accepted both the ADR 0016 act-threshold breach measured above and
+the **+16% to +63%** production-query cost, and admitted
+`github.com/mattn/go-sqlite3` v1.14.53 with bundled SQLite 3.54.1 under the
+existing ADR 0014 driver decision and ADR 0015 durability policy. This is the
+explicit owner amendment the #356 recheck required; it satisfies ADR 0016's
+act rule for this driver change only. The owner also asked for a separate
+follow-up that looks for ways to recover the speed. That follow-up does not
+gate this admission.
