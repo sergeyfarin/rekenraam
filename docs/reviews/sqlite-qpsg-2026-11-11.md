@@ -192,36 +192,56 @@ The fix:
 - `correctionRootsOf` seeds the walk with only the operations a read needs and
   climbs each `correction_of_operation_id` chain by primary key. `CROSS JOIN`
   keeps the seeds first.
+- `InstrumentSplits` selects the **effective** splits in range once, in a
+  materialized CTE, and uses it as both the seed and the result. Superseded
+  split versions are never walked, and the instrument list is bound once.
 - `TradeQuotePendingSplits` matches trade-implied observations to the
-  effective splits on their day once, in a materialized CTE, and seeds the
-  walk from those matches.
+  effective splits on their day once, in a materialized CTE, reading the
+  instrument's observations once and seeking each day's splits by index
+  (`CROSS JOIN`), then seeds the walk from those matches.
 - Migration `0012` adds `investment_split_facts_lookup_idx`
-  (`book_id, commodity_id, effective_on`). Neither read now scans a book
-  table; the remaining scans are of the small seed, ancestry and match CTEs.
+  (`book_id, commodity_id, effective_on`). Neither read scans a book table;
+  the remaining scans are of the small seed, ancestry and match CTEs.
 
 Measured with the opt-in `TestSplitQueryCost` probe
-(`SPLIT_QUERY_COST=1 SPLIT_QUERY_OPS=n`): one holding, *n* buys, three 2:1
-splits, two instrument IDs. Medians of three alternating rounds per build on
-the four-CPU workspace:
+(`SPLIT_QUERY_COST=1`, `SPLIT_QUERY_OPS` buys, `SPLIT_QUERY_SPLITS` splits
+alternating 2:1 and 1:2, `SPLIT_QUERY_REPLACEMENTS` replacements of the last
+split; one holding, two instrument IDs). Each code version ran from its own
+clean worktree with the probe copied in: `main` at `22c4f913`, the first #562
+head `ead111ec`, and the final version `bcdb2466`. Medians of three
+alternating rounds per version and build on the four-CPU workspace:
 
-| Read | Operations | Before, 3.54.1 | Before, + QPSG | After, 3.54.1 | After, + QPSG |
-|---|---:|---:|---:|---:|---:|
-| `InstrumentSplits` | 200 | 239 µs | 216 µs | 210 µs | 137 µs |
-| | 2,000 | 1,383 µs | 1,317 µs | 237 µs | 138 µs |
-| | 5,000 | 3,439 µs | 4,325 µs | 203 µs | **98 µs** |
-| `TradeQuotePendingSplits` | 200 | 764 µs | 528 µs | 850 µs | 498 µs |
-| | 2,000 | 3,613 µs | 3,160 µs | 1,871 µs | 1,295 µs |
-| | 5,000 | 9,658 µs | 9,582 µs | 2,906 µs | **2,116 µs** |
+| Case | Read | `main` | `main` + QPSG | first #562 + QPSG | Final | Final + QPSG |
+|---|---|---:|---:|---:|---:|---:|
+| 2,000 buys, 3 splits | `InstrumentSplits` | 1,714 µs | 1,848 µs | 288 µs | 412 µs | **319 µs** |
+| | `TradeQuotePendingSplits` | 4,083 µs | 3,265 µs | 1,332 µs | 1,849 µs | **1,981 µs** |
+| 500 buys, 300 splits | `InstrumentSplits` | 1,243 µs | 1,425 µs | 1,012 µs | 1,441 µs | **1,077 µs** |
+| | `TradeQuotePendingSplits` | 1,636 µs | 1,485 µs | **21,363 µs** | 1,350 µs | **776 µs** |
+| 200 buys, 3 splits, 100 replacements | `InstrumentSplits` | 312 µs | 393 µs | **2,591 µs** | 545 µs | **518 µs** |
+| | `TradeQuotePendingSplits` | 697 µs | 851 µs | 630 µs | 976 µs | **662 µs** |
 
-The "after" columns were measured before migration `0012`. With the index, at
-5,000 operations, the reads take **129 µs** and **2,186 µs** with QPSG (197 µs
-and 2,381 µs without), within noise of the pre-index figures: this fixture
-records three splits, and the index replaces a scan of one row per recorded
-split, so its gain grows only with the number of splits.
-`InstrumentSplits` no longer grows with the operation count.
-`TradeQuotePendingSplits` still reads the instrument's observations in range
-through `price_observations_lookup_idx`, as it did before, so it keeps a smaller
-linear term in trade-implied quotes.
+The review of #562 and these measurements found two regressions in the
+first #562 version, both fixed in the final one:
+
+- **Replacement chains:** it seeded every split fact in range, including
+  superseded versions, so a chain of *k* replacements was walked *k* times
+  (2,591 µs against 393 µs on `main` for 100 replacements). It also bound
+  the instrument list twice, so 16,380 instruments exceeded SQLite's 32,766
+  bound parameters.
+- **Many splits:** its trade-quote match drove from split facts and rescanned
+  the instrument's observations once per split, about 14× slower than `main`
+  with 300 splits.
+
+Neither read now grows with the book's operation count. The upward walk
+costs about 1.7 µs per version in the chains it needs, where `main`'s
+book-wide CTE cost about 0.75 µs per book operation (measured on the
+100-replacement fixture: 209 µs for the walk from one effective split, 225 µs
+for `main`'s CTE over 301 operations). The final version is therefore slower
+than `main` only when the needed chains total more than roughly 45% of the
+book's operations, as in the deliberately extreme 100-replacement fixture
+(518 µs against 393 µs with QPSG). `TradeQuotePendingSplits` still reads the
+instrument's observations in range through `price_observations_lookup_idx`,
+as `main` did.
 
 Correctness:
 
@@ -236,6 +256,9 @@ Correctness:
 - Dropping the trade seeds fails five existing split-day quote tests.
 - `TestBaselineIndexesKeepOrderedAndForeignKeyLookups` requires the new index
   for split facts by instrument and date.
+- `TestSplitReadsBindTheirInstrumentListOnce` reads 16,380 instruments
+  through both split reads; it fails on the first #562 version with "too
+  many SQL variables".
 
 ## Limits
 
