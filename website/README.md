@@ -48,8 +48,9 @@ review/publish workflow are documented in
 - All three screenshots are captured from an app instance with a new
   disposable database, replaying `fixtures/reference-book.json` through public
   APIs without a run suffix. The capture uses no real owner database,
-  credentials or providers. Source revision and viewports are recorded in
-  `assets/capture.json`, which is not published.
+  credentials or providers. Source revision, viewports and each image's
+  SHA-256 are recorded in `assets/capture.json`, which is not published.
+  `pnpm website:check` verifies every hash against the shipped image bytes.
 - The spending report shows the book's euro spending (one commodity, so its
   chart is drawn) with the light theme across the upper-left triangle and the
   dark theme across the lower-right. It is written to
@@ -57,8 +58,10 @@ review/publish workflow are documented in
   states) and copied during build. It is the same screenshot the repository
   README shows.
 - Capture after committing the code change, then commit the images:
-  `capture.json` records `source_revision` and `source_clean`, which is true
-  only when nothing but these images differed from that revision.
+  `capture.json` records `source_revision`, `source_clean` and each image's
+  SHA-256. `source_clean` is true only when nothing but these images differed
+  from that revision, and the hashes keep the manifest tied to the exact bytes
+  that ship.
 - `assets/transactions.png` and `assets/investments.png` are 1440 × 1050.
 
 Refresh deliberately after building the current app binary:

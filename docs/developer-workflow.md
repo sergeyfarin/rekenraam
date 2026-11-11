@@ -162,7 +162,9 @@ This generator creates and removes a disposable database, refuses
 address, and captures the transaction register and investment lot details.
 It does not start a provider or read an existing installation. Images and
 capture provenance belong in `website/assets/`; only presentation assets go
-into the public build. Screenshots remain English with localized captions and
+into the public build. `capture.json` records the source revision and each
+image's SHA-256, and `pnpm website:check` verifies the hashes against the
+shipped bytes. Screenshots remain English with localized captions and
 alternative text.
 
 For a temporary project-path build instead of a custom domain:

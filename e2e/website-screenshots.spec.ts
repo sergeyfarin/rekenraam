@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,6 +11,11 @@ import { seedReferenceBook } from './playwright/support/reference-book';
 // The book's euro spending: one commodity, so the report draws its chart.
 const spendingPath = '/app/reports/spending?start_date=2026-01-01&end_date=2026-03-31';
 const spendingViewport = { width: 1440, height: 1112 };
+
+/** Binds capture.json to the exact image bytes that ship beside it. */
+function fileSHA256(relativePath: string): string {
+  return createHash('sha256').update(readFileSync(join(repoRoot, relativePath))).digest('hex');
+}
 
 test('capture website screens from a disposable synthetic book', async ({ browser }) => {
   // Never point this asset generator at an existing installation.
@@ -126,14 +133,19 @@ test('capture website screens from a disposable synthetic book', async ({ browse
         language: 'en',
         viewport: { width: 1440, height: 1050 },
         files: [
-          ...captures.map(({ name, route }) => ({ file: `${name}.png`, route })),
+          ...captures.map(({ name, route }) => ({
+            file: `${name}.png`,
+            route,
+            sha256: fileSHA256(`website/assets/${name}.png`)
+          })),
           {
             file: '../../docs/images/reports-spending.png',
             route: spendingRoute,
             viewport: spendingViewport,
             device_scale_factor: 2,
             themes: { light: 'top-left', dark: 'bottom-right' },
-            split: 'diagonal'
+            split: 'diagonal',
+            sha256: fileSHA256('docs/images/reports-spending.png')
           }
         ],
         note: 'Disposable database; synthetic reference book; no live providers or owner records.'

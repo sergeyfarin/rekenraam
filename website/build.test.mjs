@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, cp, writeFile, rm, access, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,6 +8,17 @@ import { build, readCatalogs, siteConfig } from './build.mjs';
 
 const locales = ['en', 'es', 'fr', 'nl', 'de', 'ru'];
 const fontHosts = ['fonts.googleapis.com', 'fonts.gstatic.com'];
+
+test('screenshot manifest hashes describe the shipped images', async () => {
+  const manifest = JSON.parse(await readFile(new URL('./assets/capture.json', import.meta.url), 'utf8'));
+  assert.match(manifest.source_revision, /^[0-9a-f]{40}$/);
+  assert.equal(manifest.source_clean, true);
+  for (const entry of manifest.files) {
+    assert.match(entry.sha256, /^[0-9a-f]{64}$/, entry.file);
+    const image = await readFile(new URL(entry.file, new URL('./assets/', import.meta.url)));
+    assert.equal(createHash('sha256').update(image).digest('hex'), entry.sha256, entry.file);
+  }
+});
 
 // Hostnames of every absolute (`https://…`) or protocol-relative (`//…`) URL in
 // the text, in any quoting or CSS url(), resolved against the site origin.
