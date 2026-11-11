@@ -177,3 +177,23 @@ func TestCorrectionRootsOfMatchesReplayOrderRoots(t *testing.T) {
 	require.Equal(t, map[int64]int64{first: 1, second: 1}, roots(`SELECT ? UNION SELECT ? UNION SELECT ?`, first, second, first), "duplicate seeds yield one root each")
 	require.Empty(t, roots(`SELECT ?`, int64(999999)), "an unknown operation has no root")
 }
+
+// Each split read binds its instrument list once, so one read accepts as many
+// instruments as the book-wide query it replaced (#562 review: repeating the
+// list made 16,380 instruments exceed SQLite's 32,766 bound parameters).
+func TestSplitReadsBindTheirInstrumentListOnce(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	database := openTestDatabase(t)
+	require.NoError(t, Migrate(ctx, database))
+	ids := make([]int64, 16380)
+	for i := range ids {
+		ids[i] = int64(i + 1)
+	}
+	splits, err := instrumentSplits(ctx, database, 1, ids, "2000-01-01", "2100-01-01")
+	require.NoError(t, err)
+	require.Empty(t, splits)
+	bases, err := tradeQuotePendingSplits(ctx, database, 1, ids, "2000-01-01", "2100-01-01")
+	require.NoError(t, err)
+	require.Empty(t, bases)
+}

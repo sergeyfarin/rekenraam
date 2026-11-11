@@ -69,17 +69,22 @@ func instrumentSplits(ctx context.Context, queryer rowsQueryer, bookID int64, co
 		return nil, nil
 	}
 	clause, args := inClause("f.commodity_id", commodityIDs)
-	splitsInRange := `SELECT f.operation_id FROM investment_split_facts f
-		WHERE f.book_id = ? AND ` + clause + ` AND f.effective_on > ? AND f.effective_on <= ?`
-	rangeArgs := append(append([]any{bookID}, args...), after, through)
-	queryArgs := append(append(append([]any{}, rangeArgs...), bookID, bookID), rangeArgs...)
-	rows, err := queryer.QueryContext(ctx, correctionRootsOf("", splitsInRange)+`
-		SELECT f.commodity_id, f.account_id, f.effective_on, f.ratio_numerator, f.ratio_denominator, root.root_id
+	// Select the effective splits in range once: they are both the result and
+	// the only operations whose roots are needed. Seeding superseded facts
+	// too would walk a replacement chain once per version (#562 review), and
+	// repeating the IN list would halve how many instruments one read takes.
+	effectiveSplits := `effective_splits AS MATERIALIZED (
+		SELECT f.operation_id, f.commodity_id, f.account_id, f.effective_on, f.ratio_numerator, f.ratio_denominator
 		FROM investment_split_facts f
 		JOIN effective_investment_operations o ON o.id = f.operation_id
-		JOIN correction_roots root ON root.operation_id = f.operation_id
-		WHERE f.book_id = ? AND `+clause+` AND f.effective_on > ? AND f.effective_on <= ?
-		ORDER BY f.commodity_id, f.effective_on, root.root_id`, queryArgs...)
+		WHERE f.book_id = ? AND ` + clause + ` AND f.effective_on > ? AND f.effective_on <= ?
+	), `
+	queryArgs := append(append(append([]any{bookID}, args...), after, through), bookID, bookID)
+	rows, err := queryer.QueryContext(ctx, correctionRootsOf(effectiveSplits, `SELECT operation_id FROM effective_splits`)+`
+		SELECT s.commodity_id, s.account_id, s.effective_on, s.ratio_numerator, s.ratio_denominator, root.root_id
+		FROM effective_splits s
+		JOIN correction_roots root ON root.operation_id = s.operation_id
+		ORDER BY s.commodity_id, s.effective_on, root.root_id`, queryArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("read instrument splits: %w", err)
 	}
