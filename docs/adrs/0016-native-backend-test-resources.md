@@ -198,10 +198,13 @@ compilation of every joined statement whose bound equality takes part in
 constant propagation. Building the engine with `SQLITE_ENABLE_QPSG`
 (ADR 0014 amendment) removes it. Isolated uncached `internal/app` race runs on
 a four-CPU workspace, alternating builds, measured **306.5 / 297.2 s** without
-QPSG and **255.2 / 250.0 s** with it (−16% to −17%). These are not
-six-CPU `-p 2` full-gate threshold runs; the formal act/investigate
-measurement on the threshold host remains to be repeated
-([#560](https://github.com/sergeyfarin/rekenraam/issues/560)). Remedy order,
+QPSG and **255.2 / 250.0 s** with it (−16% to −17%). Hosted pull-request CI
+with QPSG ran the package in **167.1 s** (`5e5cf679`) and **182.2 s**
+(`f95eabcb`), against 252.7 / 253.2 s for the candidate without QPSG. None
+of these is threshold evidence. Act needs two uncached `-p 2` full gates on
+the six-CPU threshold host. Investigate needs the `internal/app` median of
+three interleaved uncached runs on the ten-CPU reference host, or of CI's
+latest six successful `main` runs. Both remain open under [#560](https://github.com/sergeyfarin/rekenraam/issues/560). Remedy order,
 deadline, scheduling, cache, durability and coverage policy are unchanged. See
 the [QPSG review](../reviews/sqlite-qpsg-2026-11-11.md).
 

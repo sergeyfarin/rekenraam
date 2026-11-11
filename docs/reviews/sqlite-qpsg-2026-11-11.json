@@ -250,5 +250,46 @@
   "follow_up_issues": {
     "560": "formal ADR 0016 -p 2 full-gate measurement with QPSG on the six-CPU threshold host",
     "561": "measure the investment_split_facts scan in InstrumentSplits; index or rewrite if slower"
+  },
+  "hosted_ci_observations": {
+    "threshold_evidence": false,
+    "note": "pull-request runs with Go test cache enabled; internal/app executed",
+    "runs": [
+      {
+        "build": "3.53.4",
+        "commit": "7d3d2059",
+        "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42760293595/job/129644138504",
+        "app_seconds": 219.404
+      },
+      {
+        "build": "3.54.1",
+        "commit": "b6655526",
+        "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42767669769/job/129667989356",
+        "app_seconds": 252.718
+      },
+      {
+        "build": "3.54.1",
+        "commit": "faeedf20",
+        "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42876220590/job/130040105987",
+        "app_seconds": 253.242
+      },
+      {
+        "build": "3.54.1+QPSG",
+        "commit": "5e5cf679",
+        "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42985705399/job/130406232475",
+        "app_seconds": 167.066
+      },
+      {
+        "build": "3.54.1+QPSG",
+        "commit": "f95eabcb",
+        "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42991474105/job/130425311729",
+        "app_seconds": 182.212
+      }
+    ]
+  },
+  "adr_0016_threshold_methods": {
+    "act": "two uncached -p 2 full gates on the six-CPU threshold host, both > 270 s for any package",
+    "investigate": "internal/app median > 210 s: three interleaved uncached single-package runs on the ten-CPU reference host, or CI per-package time over the latest six successful main runs",
+    "status": "both open under #560"
   }
 }

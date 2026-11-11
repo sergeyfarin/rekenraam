@@ -157,7 +157,23 @@ destination; this workspace runs as root, so permission errors never occur.
 These are isolated single-package runs on a four-CPU host, not ADR 0016's
 `-p 2` full-gate threshold runs on the six-CPU threshold host. They show the
 direction and size of the recovery but are not formal threshold evidence.
-[#560](https://github.com/sergeyfarin/rekenraam/issues/560) owns the formal measurement on the threshold host.
+
+Hosted CI observations (pull-request runs, Go test cache enabled, the
+`internal/app` package executed):
+
+| Build | Commit | Run | `internal/app` |
+|---|---|---|---:|
+| 3.53.4 (main baseline) | `7d3d2059` | [42760293595](https://github.com/sergeyfarin/rekenraam/actions/runs/42760293595/job/129644138504) | 219.4 s |
+| 3.54.1 | `b6655526` | [42767669769](https://github.com/sergeyfarin/rekenraam/actions/runs/42767669769/job/129667989356) | 252.7 s |
+| 3.54.1 | `faeedf20` | [42876220590](https://github.com/sergeyfarin/rekenraam/actions/runs/42876220590/job/130040105987) | 253.2 s |
+| 3.54.1 + QPSG | `5e5cf679` | [42985705399](https://github.com/sergeyfarin/rekenraam/actions/runs/42985705399/job/130406232475) | **167.1 s** |
+| 3.54.1 + QPSG | `f95eabcb` | [42991474105](https://github.com/sergeyfarin/rekenraam/actions/runs/42991474105/job/130425311729) | **182.2 s** |
+
+ADR 0016 measures its thresholds differently, so neither table is threshold
+evidence. Act needs two uncached `-p 2` full gates on the six-CPU threshold
+host. Investigate needs the `internal/app` median of three interleaved
+uncached runs on the ten-CPU reference host, or of CI's latest six successful
+`main` runs. [#560](https://github.com/sergeyfarin/rekenraam/issues/560) owns both.
 
 ## Limits
 
