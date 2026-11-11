@@ -230,3 +230,24 @@ func (f *returnsFixture) secondHoldingWithOneUnit(t *testing.T) int64 {
 	require.NoError(t, err)
 	return second
 }
+
+// A split recorded on a later day is not pending for an earlier trade quote:
+// only splits on the quote's own day can change which units it priced (#561).
+// The quote of 100 prices 11 units at 1,100 before the split; after it, the
+// stale quote is rescaled to 50 for 22 units, still 1,100.
+func TestTradeQuoteBeforeALaterDaySplitIsNotPending(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f := newReturnsFixture(t)
+	f.buyFromBrokerCash(t, "2026-02-02", 10000)
+	_, err := acknowledgedSplit(ctx, f.investmentService, splitInput(f.investmentsTestFixture, "2026-02-05", 2, 1))
+	require.NoError(t, err)
+
+	before := f.read(t, "2026-02-01", "2026-02-03")
+	requireReturnsAmount(t, 1100, before.ClosingValue)
+	requireReturn(t, "0.000000", before.TimeWeighted)
+
+	after := f.read(t, "2026-02-01", "2026-02-06")
+	requireReturnsAmount(t, 1100, after.ClosingValue)
+	requireReturn(t, "0.000000", after.TimeWeighted)
+}
