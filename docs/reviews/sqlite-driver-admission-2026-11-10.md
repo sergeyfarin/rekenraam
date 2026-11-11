@@ -218,4 +218,6 @@ existing ADR 0014 driver decision and ADR 0015 durability policy. This is the
 explicit owner amendment the #356 recheck required; it satisfies ADR 0016's
 act rule for this driver change only. The owner also asked for a separate
 follow-up that looks for ways to recover the speed. That follow-up does not
-gate this admission.
+gate this admission; the [QPSG review](sqlite-qpsg-2026-11-11.md) finds the
+cause (a second compilation of joined lookups) and recovers 39–55% on the
+paths above.

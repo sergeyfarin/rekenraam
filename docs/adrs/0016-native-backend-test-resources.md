@@ -193,6 +193,17 @@ coverage or schema policy changes are made here. The investigate threshold
 and the 30% headroom objective remain open. See the
 [admission review](../reviews/sqlite-driver-admission-2026-11-10.md#owner-acceptance-2026-11-11).
 
+**#356 speed-up follow-up (2026-11-11).** The 3.54.1 cost is a second
+compilation of every joined statement whose bound equality takes part in
+constant propagation. Building the engine with `SQLITE_ENABLE_QPSG`
+(ADR 0014 amendment) removes it. Isolated uncached `internal/app` race runs on
+a four-CPU workspace, alternating builds, measured **306.5 / 297.2 s** without
+QPSG and **255.2 / 250.0 s** with it (−16% to −17%). These are not
+six-CPU `-p 2` full-gate threshold runs; the formal act/investigate
+measurement on the threshold host remains to be repeated. Remedy order,
+deadline, scheduling, cache, durability and coverage policy are unchanged. See
+the [QPSG review](../reviews/sqlite-qpsg-2026-11-11.md).
+
 ## References
 
 - [ADR 0014](0014-native-sqlite-driver.md), native driver admission.

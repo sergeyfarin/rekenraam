@@ -134,7 +134,21 @@ median recorded there.
 
 ## Race-suite timing
 
-Matched race runs of the application package (default 3.54.1 vs QPSG, alternating) are in progress on the review host and will be recorded here.
+Isolated, uncached race runs of the `internal/app` package on the same
+four-CPU workspace, alternating builds from one clean worktree
+(`go test -race -c`, then the test binary with `-test.count=1`):
+
+| Build | Run 1 | Run 2 |
+|---|---:|---:|
+| 3.54.1 | 306.5 s | 297.2 s |
+| 3.54.1 + QPSG | **255.2 s** | **250.0 s** |
+
+QPSG is **16–17% faster** in each matched pair. The only failures, identical
+in all four runs, are three backup tests that require an unwritable
+destination; this workspace runs as root, so permission errors never occur.
+These are isolated single-package runs on a four-CPU host, not ADR 0016's
+`-p 2` full-gate threshold runs on the six-CPU threshold host. They show the
+direction and size of the recovery but are not formal threshold evidence.
 
 ## Limits
 

@@ -207,5 +207,38 @@
     ],
     "limits": "Median of three same-host runs; not comparable with the six-CPU admission host's 3.53.4 column; not a load test or latency SLA."
   },
-  "race_suite": {"status": "in-progress"}
+  "race_suite": {
+    "package": "internal/app",
+    "host": "local four-CPU workspace",
+    "configuration": "go test -race -c; test binary -test.count=1 -test.timeout=30m; alternating builds from one clean worktree",
+    "threshold_evidence": false,
+    "runs": [
+      {
+        "build": "3.54.1",
+        "seconds": 306.516
+      },
+      {
+        "build": "3.54.1+QPSG",
+        "seconds": 255.192
+      },
+      {
+        "build": "3.54.1",
+        "seconds": 297.247
+      },
+      {
+        "build": "3.54.1+QPSG",
+        "seconds": 250.03
+      }
+    ],
+    "delta_percent": [
+      -16.7,
+      -15.9
+    ],
+    "known_environment_failures": [
+      "TestWorkerRetriesToTheCapAndThenStops",
+      "TestPruningFailureStillLeavesASelfCheckBehind",
+      "TestDiskShortageIsRetryableAndRecovers"
+    ],
+    "failure_reason": "workspace runs as root; unwritable-destination tests cannot fail; identical in all four runs"
+  }
 }
