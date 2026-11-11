@@ -250,9 +250,11 @@ tools). Windows needs a target C toolchain; no Windows release artifact is
 claimed by this Linux/amd64 validation.
 
 Supported commands source `scripts/native-sqlite-env.sh`, which checks CGO
-and the compiler and enables `fts5,netgo,osusergo`. FTS5 is required by the
+and the compiler, enables `fts5,netgo,osusergo` and adds
+`-DSQLITE_ENABLE_QPSG` to `CGO_CFLAGS` (ADR 0014). FTS5 is required by the
 schema; the other tags preserve the previous pure-Go network/user lookup
-behavior. Do not use the `libsqlite3` tag. `CGO_ENABLED=0` fails early with
+behavior. QPSG stops SQLite 3.54.1 compiling joined lookups twice; the engine
+fingerprint test fails a build without it. Do not use the `libsqlite3` tag. `CGO_ENABLED=0` fails early with
 setup guidance. For focused Go commands from repo root, use
 `./scripts/go-backend.sh test ./internal/db -run TestNative -count=1` rather
 than an untagged raw command. Advanced commands may source the same helper

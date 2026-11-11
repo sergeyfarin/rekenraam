@@ -39,9 +39,64 @@ func TestNativeSQLiteEngineFeaturesAndFingerprint(t *testing.T) {
 	assert.Contains(t, options, "ENABLE_FTS5")
 	assert.Contains(t, options, "THREADSAFE=1")
 	assert.Contains(t, options, "MAX_SCHEMA=10000000", "3.54.1 adds this compile option")
+	assert.Contains(t, options, "ENABLE_QPSG", "build through scripts/native-sqlite-env.sh (ADR 0014)")
 	fingerprint, err := json.Marshal(map[string]any{"version": version, "source_id": sourceID, "compile_options": options})
 	require.NoError(t, err)
 	t.Log("SQLite fingerprint:", string(fingerprint))
+}
+
+// SQLite 3.54.1 marks a joined statement for re-preparation when a bound
+// equality takes part in constant propagation, so the first bind recompiles it.
+// The QPSG build keeps one compile per statement, as 3.53.4 did.
+func TestNativeBoundJoinedEqualityCompilesOnce(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	database := openTestDatabase(t)
+	database.SetMaxOpenConns(1)
+	_, err := database.ExecContext(ctx, `CREATE TABLE qpsg_parent(id INTEGER PRIMARY KEY, book_id INTEGER NOT NULL);
+		CREATE TABLE qpsg_child(id INTEGER PRIMARY KEY, parent_id INTEGER NOT NULL REFERENCES qpsg_parent(id), name TEXT NOT NULL);
+		CREATE INDEX qpsg_child_parent_idx ON qpsg_child(parent_id);
+		INSERT INTO qpsg_parent VALUES (1, 1), (2, 1), (3, 2);
+		INSERT INTO qpsg_child VALUES (10, 1, 'a'), (11, 2, 'b'), (12, 3, 'c')`)
+	require.NoError(t, err)
+	conn, err := database.Conn(ctx)
+	require.NoError(t, err)
+	defer conn.Close()
+	var compiles int
+	require.NoError(t, conn.Raw(func(raw any) error {
+		raw.(*sqlite.SQLiteConn).RegisterAuthorizer(func(operation int, _, _, _ string) int {
+			if operation == sqlite.SQLITE_SELECT {
+				compiles++
+			}
+			return sqlite.SQLITE_OK
+		})
+		return nil
+	}))
+	defer func() {
+		require.NoError(t, conn.Raw(func(raw any) error { raw.(*sqlite.SQLiteConn).RegisterAuthorizer(nil); return nil }))
+	}()
+	for _, lookup := range []struct {
+		query string
+		args  []any
+		want  []string
+	}{
+		{`SELECT c.name FROM qpsg_parent p JOIN qpsg_child c ON c.parent_id = p.id WHERE p.id = ? ORDER BY c.id`, []any{2}, []string{"b"}},
+		{`SELECT c.name FROM qpsg_parent p JOIN qpsg_child c ON c.parent_id = p.id WHERE p.book_id = ? AND p.id IN (?, ?) ORDER BY c.id`, []any{1, 1, 2}, []string{"a", "b"}},
+	} {
+		compiles = 0
+		rows, err := conn.QueryContext(ctx, lookup.query, lookup.args...)
+		require.NoError(t, err)
+		var names []string
+		for rows.Next() {
+			var name string
+			require.NoError(t, rows.Scan(&name))
+			names = append(names, name)
+		}
+		require.NoError(t, rows.Err())
+		require.NoError(t, rows.Close())
+		assert.Equal(t, lookup.want, names, lookup.query)
+		assert.Equal(t, 1, compiles, "one compile, no re-prepare on first bind: %s", lookup.query)
+	}
 }
 
 func TestNativeConnectionPoliciesSurviveReplacement(t *testing.T) {

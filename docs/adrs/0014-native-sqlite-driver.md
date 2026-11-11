@@ -111,12 +111,30 @@ separate and does not gate it. The compile options add only
 `MAX_SCHEMA=10000000`. WAL/FULL, the disabled statement cache, the single
 writer/read pool and the #403 FTS5 workaround remain unchanged.
 
+## Amendment — query planner stability guarantee, 2026-11-11
+
+The bundled engine is built with `SQLITE_ENABLE_QPSG`.
+`scripts/native-sqlite-env.sh` adds it to `CGO_CFLAGS` for every supported
+build, and the engine fingerprint test requires `ENABLE_QPSG` in
+`PRAGMA compile_options`. SQLite 3.54.1 otherwise re-prepares each joined
+statement whose bound equality takes part in constant propagation the first
+time a value is bound, compiling it twice; QPSG keeps one plan per statement
+and removes that compile. The [QPSG review](../reviews/sqlite-qpsg-2026-11-11.md)
+records the cause, a value-bound plan comparison of 1,802 statements and the
+measured production-query recovery (**39–55% faster** than 3.54.1 without
+QPSG on the admission review's paths). Plans no longer depend on bound
+`LIMIT` values, partial-index matches against bound values or bound `LIKE`
+prefixes; the application uses none of these to choose an index. Other compile
+options, WAL/FULL, the disabled statement cache and connection policies are
+unchanged.
+
 ## References
 
 - [#164 measurements and proposal](https://github.com/sergeyfarin/rekenraam/issues/164#issuecomment-6109667983).
 - [Driver v1.14.53 documentation](https://github.com/mattn/go-sqlite3/blob/v1.14.53/README.md).
 - [Native backup implementation](https://github.com/mattn/go-sqlite3/blob/v1.14.53/backup.go).
 - [SQLite 3.54.1 admission review](../reviews/sqlite-driver-admission-2026-11-10.md).
+- [QPSG review](../reviews/sqlite-qpsg-2026-11-11.md).
 - [ADR 0004](0004-sqlite-connection-migrations-and-backup.md),
   [ADR 0005](0005-docker-runtime-base-image.md),
   [ADR 0013](0013-investment-operations-and-position-sides.md).

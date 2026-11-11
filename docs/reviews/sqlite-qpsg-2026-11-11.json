@@ -1,0 +1,211 @@
+{
+  "review": "sqlite-qpsg-2026-11-11",
+  "date": "2026-11-11",
+  "decision": "proposed-build-with-SQLITE_ENABLE_QPSG",
+  "engine": {
+    "version": "3.54.1",
+    "driver": "github.com/mattn/go-sqlite3 v1.14.53",
+    "source_id": "2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f1607f4c3c1e4551e8e6ca76"
+  },
+  "build_change": {
+    "file": "scripts/native-sqlite-env.sh",
+    "cgo_cflags_added": "-DSQLITE_ENABLE_QPSG",
+    "compile_option_required": "ENABLE_QPSG"
+  },
+  "cause": {
+    "mechanism": "3.54.1 marks a joined statement for re-preparation when a bound equality takes part in constant propagation; the first sqlite3_step after binding recompiles it",
+    "compile_counts": [
+      {
+        "shape": "accounts JOIN current versions JOIN kinds WHERE book_id = ? AND id IN (?, ?)",
+        "sqlite_3_53_4": 1,
+        "sqlite_3_54_1": 2,
+        "sqlite_3_54_1_qpsg": 1
+      },
+      {
+        "shape": "same, book_id = 1 literal",
+        "sqlite_3_53_4": 1,
+        "sqlite_3_54_1": 1,
+        "sqlite_3_54_1_qpsg": 1
+      },
+      {
+        "shape": "same, book_id = +?",
+        "sqlite_3_53_4": 1,
+        "sqlite_3_54_1": 1,
+        "sqlite_3_54_1_qpsg": 1
+      },
+      {
+        "shape": "accounts alone WHERE book_id = ? AND id IN (?, ?)",
+        "sqlite_3_53_4": 1,
+        "sqlite_3_54_1": 1,
+        "sqlite_3_54_1_qpsg": 1
+      },
+      {
+        "shape": "accounts JOIN account_versions WHERE id = ?",
+        "sqlite_3_53_4": 1,
+        "sqlite_3_54_1": 2,
+        "sqlite_3_54_1_qpsg": 1
+      }
+    ],
+    "method": "native authorizer SQLITE_SELECT callbacks per execution on the migrated schema, normalised per compile"
+  },
+  "qpsg_affected_mechanisms": {
+    "stat4": "not compiled in",
+    "like_prefix": "application LIKE patterns are always '%term%'; prefix optimisation never applies",
+    "partial_index_bound_value": "covered by plan scan",
+    "limit_offset_value": "covered by plan scan"
+  },
+  "plan_scan": {
+    "method": "statements executed by app, db, api and appruntime tests recorded with bound values (scratch sqlite_trace build); EXPLAIN QUERY PLAN with recorded values bound, default 3.54.1 vs QPSG build, migrated empty schema (application never runs ANALYZE)",
+    "distinct_parameterised_statements": 1802,
+    "not_plannable": 41,
+    "not_plannable_reason": "migration DDL and test-only tables",
+    "identical": 1792,
+    "different": 10,
+    "differences": [
+      {
+        "count": 6,
+        "kind": "order of primary-key lookups within the same join",
+        "statements": "investment_capital_return sets x4, transfer depletion, transfer link revisions"
+      },
+      {
+        "count": 2,
+        "kind": "split facts scanned with an automatic index on the correction_roots CTE instead of scanning the CTE and probing split facts by rowid",
+        "statements": "investment_split_facts with correction_roots"
+      },
+      {
+        "count": 1,
+        "kind": "partial unique indexes via multi-index OR instead of automatic book_id index",
+        "statements": "self-check investment_cash_payment_identity JOIN investment_event_suggestions"
+      },
+      {
+        "count": 1,
+        "kind": "value coincidence: default 3.54.1 changes plan only when book id, template id and LIMIT inputs all equal 1; QPSG matches the default plan for other template ids",
+        "statements": "ForecastSnapshotReader.draftPostings"
+      }
+    ]
+  },
+  "correctness": {
+    "go_probe_with_qpsg": {
+      "json_valid_actual": 1,
+      "index_count_actual": 1,
+      "update_actual": "new",
+      "not_indexed_control": 1
+    },
+    "bound_expression_index_probe": {
+      "indexed": 1,
+      "not_indexed": 1,
+      "with_and_without_qpsg": true
+    },
+    "tests": [
+      "TestNativeSQLiteEngineFeaturesAndFingerprint requires ENABLE_QPSG",
+      "TestNativeBoundJoinedEqualityCompilesOnce",
+      "TestTransactionResponseEnrichmentBatchesCompoundAndRepeatedJournals requires exactly one batch compile"
+    ]
+  },
+  "production_query_cost": {
+    "fixture": "docs/reviews/fixtures/sqlite-driver-production-query-cost.go.txt",
+    "host": "local four-CPU workspace",
+    "runs": 3,
+    "order": "alternating default/qpsg",
+    "results": [
+      {
+        "path": "accounts batch (2 ids)",
+        "default_samples_us": [
+          124.56,
+          163.5,
+          134.28
+        ],
+        "default_median_us": 134.28,
+        "qpsg_samples_us": [
+          78.55,
+          103.48,
+          58.47
+        ],
+        "qpsg_median_us": 78.55,
+        "delta_percent": -41.5
+      },
+      {
+        "path": "commodities batch (2 ids)",
+        "default_samples_us": [
+          115.88,
+          95.3,
+          77.3
+        ],
+        "default_median_us": 95.3,
+        "qpsg_samples_us": [
+          53.92,
+          43.04,
+          40.13
+        ],
+        "qpsg_median_us": 43.04,
+        "delta_percent": -54.8
+      },
+      {
+        "path": "enrich 2 transaction records",
+        "default_samples_us": [
+          371.92,
+          285.01,
+          236.88
+        ],
+        "default_median_us": 285.01,
+        "qpsg_samples_us": [
+          194.56,
+          142.12,
+          141.62
+        ],
+        "qpsg_median_us": 142.12,
+        "delta_percent": -50.1
+      },
+      {
+        "path": "transaction by id",
+        "default_samples_us": [
+          406.14,
+          478.9,
+          348.95
+        ],
+        "default_median_us": 406.14,
+        "qpsg_samples_us": [
+          289.42,
+          157.9,
+          245.69
+        ],
+        "qpsg_median_us": 245.69,
+        "delta_percent": -39.5
+      },
+      {
+        "path": "list transactions page 50",
+        "default_samples_us": [
+          3739.69,
+          3798.06,
+          3345.6
+        ],
+        "default_median_us": 3739.69,
+        "qpsg_samples_us": [
+          2292.26,
+          2260.51,
+          2244.5
+        ],
+        "qpsg_median_us": 2260.51,
+        "delta_percent": -39.6
+      },
+      {
+        "path": "account register page 50",
+        "default_samples_us": [
+          1507.76,
+          1351.58,
+          1353.56
+        ],
+        "default_median_us": 1353.56,
+        "qpsg_samples_us": [
+          784.8,
+          729.96,
+          800.27
+        ],
+        "qpsg_median_us": 784.8,
+        "delta_percent": -42.0
+      }
+    ],
+    "limits": "Median of three same-host runs; not comparable with the six-CPU admission host's 3.53.4 column; not a load test or latency SLA."
+  },
+  "race_suite": {"status": "in-progress"}
+}

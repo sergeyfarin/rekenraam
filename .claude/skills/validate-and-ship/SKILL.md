@@ -51,7 +51,8 @@ full local trace with DOM snapshots, screenshots, sources and network records;
 keep it focused and leave CI unset (#473).
 
 Native SQLite requires CGO and a C compiler with development headers. Supported
-commands source `scripts/native-sqlite-env.sh` and enable `fts5,netgo,osusergo`.
+commands source `scripts/native-sqlite-env.sh`, which enables `fts5,netgo,osusergo`
+and builds the engine with `-DSQLITE_ENABLE_QPSG` (ADR 0014).
 Use `./scripts/go-backend.sh test ...` for focused checks. Go race detection
 covers application and driver-wrapper Go code; it does not instrument the
 bundled SQLite C engine.
