@@ -246,5 +246,9 @@
       "TestDiskShortageIsRetryableAndRecovers"
     ],
     "failure_reason": "workspace runs as root; unwritable-destination tests cannot fail; identical in all four runs"
+  },
+  "follow_up_issues": {
+    "560": "formal ADR 0016 -p 2 full-gate measurement with QPSG on the six-CPU threshold host",
+    "561": "measure the investment_split_facts scan in InstrumentSplits; index or rewrite if slower"
   }
 }

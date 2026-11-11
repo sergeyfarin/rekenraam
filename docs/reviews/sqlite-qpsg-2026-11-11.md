@@ -100,7 +100,7 @@ and test-only tables.
 
 One changed plan adds a full scan of a book-scoped financial table: the
 `investment_split_facts` scan in `InstrumentSplits` above. Its latency impact
-has not been measured. Neither plan uses a book-scoped index on split facts,
+has not been measured; [#561](https://github.com/sergeyfarin/rekenraam/issues/561) owns that measurement. Neither plan uses a book-scoped index on split facts,
 because none exists. No other changed plan adds a table scan.
 
 ## Correctness
@@ -157,6 +157,7 @@ destination; this workspace runs as root, so permission errors never occur.
 These are isolated single-package runs on a four-CPU host, not ADR 0016's
 `-p 2` full-gate threshold runs on the six-CPU threshold host. They show the
 direction and size of the recovery but are not formal threshold evidence.
+[#560](https://github.com/sergeyfarin/rekenraam/issues/560) owns the formal measurement on the threshold host.
 
 ## Limits
 
@@ -166,7 +167,7 @@ direction and size of the recovery but are not formal threshold evidence.
   covered; the application never runs `ANALYZE`.
 - The `InstrumentSplits` change from a CTE scan to a table-wide
   `investment_split_facts` scan is unmeasured; it grows with the number of
-  splits recorded, not with operations or transactions.
+  splits recorded, not with operations or transactions ([#561](https://github.com/sergeyfarin/rekenraam/issues/561)).
 - A build that does not source `scripts/native-sqlite-env.sh` loses QPSG; the
   fingerprint test catches this in the backend gate, not at runtime.
 - No statement cache, deadline, scheduling, durability, coverage or schema

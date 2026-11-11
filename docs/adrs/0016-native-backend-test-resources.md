@@ -200,7 +200,8 @@ constant propagation. Building the engine with `SQLITE_ENABLE_QPSG`
 a four-CPU workspace, alternating builds, measured **306.5 / 297.2 s** without
 QPSG and **255.2 / 250.0 s** with it (−16% to −17%). These are not
 six-CPU `-p 2` full-gate threshold runs; the formal act/investigate
-measurement on the threshold host remains to be repeated. Remedy order,
+measurement on the threshold host remains to be repeated
+([#560](https://github.com/sergeyfarin/rekenraam/issues/560)). Remedy order,
 deadline, scheduling, cache, durability and coverage policy are unchanged. See
 the [QPSG review](../reviews/sqlite-qpsg-2026-11-11.md).
 
