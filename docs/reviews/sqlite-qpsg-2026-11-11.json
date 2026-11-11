@@ -323,7 +323,7 @@
       "versions": {
         "main": "22c4f913",
         "first_562": "ead111ec",
-        "final": "bcdb2466"
+        "final": "bcdb2467"
       },
       "method": "each version from its own clean worktree with the probe copied in; three alternating rounds per version and build; four-CPU workspace",
       "keys": "operations|splits|replacements|read|version|qpsg(0/1)",
@@ -866,7 +866,7 @@
     },
     "note_superseded": "superseded_* measured earlier versions with three splits and no replacements; review_matrix is the final comparison",
     "measured_trade_off": {
-      "case": "200 buys, 3 splits, 100 replacements of the last split (301 operations; one 101-version chain, about a third of the book's operations)",
+      "case": "200 buys, 3 splits, 100 replacements of the last split (303 operations and 103 split facts, as logged by the probe; one 101-version chain, about a third of the book's operations)",
       "InstrumentSplits_median_us": {
         "main": 312.0,
         "main_qpsg": 393.0,

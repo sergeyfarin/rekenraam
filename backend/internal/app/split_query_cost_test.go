@@ -71,7 +71,11 @@ func TestSplitQueryCost(t *testing.T) {
 		require.NoError(t, err)
 		lastSplitID = replaced.OperationID
 	}
-	t.Logf("fixture: operations=%d splits=%d replacements=%d built in %s", operations, len(splitDays), replacements, time.Since(start))
+	var bookOperations, splitFacts int
+	require.NoError(t, f.database.QueryRow(`SELECT (SELECT count(*) FROM investment_operations WHERE book_id = ?),
+		(SELECT count(*) FROM investment_split_facts WHERE book_id = ?)`, BookID, BookID).Scan(&bookOperations, &splitFacts))
+	t.Logf("fixture: buys=%d splits=%d replacements=%d book_operations=%d split_facts=%d built in %s",
+		operations, len(splitDays), replacements, bookOperations, splitFacts, time.Since(start))
 	var version string
 	var qpsg int
 	require.NoError(t, f.database.QueryRow("SELECT sqlite_version(), sqlite_compileoption_used('ENABLE_QPSG')").Scan(&version, &qpsg))

@@ -210,7 +210,7 @@ Measured with the opt-in `TestSplitQueryCost` probe
 alternating 2:1 and 1:2, `SPLIT_QUERY_REPLACEMENTS` replacements of the last
 split; one holding, two instrument IDs). Each code version ran from its own
 clean worktree with the probe copied in: `main` at `22c4f913`, the first #562
-head `ead111ec`, and the final version `bcdb2466`. Medians of three
+head `ead111ec`, and the final version `bcdb2467`. Medians of three
 alternating rounds per version and build on the four-CPU workspace:
 
 | Case | Read | `main` | `main` + QPSG | first #562 + QPSG | Final | Final + QPSG |
@@ -237,8 +237,9 @@ first #562 version, both fixed in the final one:
 Neither read now grows with the book's operation count; the split read grows
 instead with the length of the correction chains behind the effective splits
 in range, because the walk visits each superseded predecessor once. That
-trade-off is measured, not modelled: on the 100-replacement fixture (301
-operations, one 101-version chain, about a third of the book) the final
+trade-off is measured, not modelled: on the 100-replacement fixture (200
+buys, 3 splits and 100 replacements: 303 operations and 103 split facts, as
+the probe logs; one 101-version chain, about a third of the book) the final
 `InstrumentSplits` is slower than `main`, **518 µs against 393 µs** with QPSG
 and 545 µs against 312 µs without. No general crossover point is claimed.
 `TradeQuotePendingSplits` still reads the instrument's observations in range
