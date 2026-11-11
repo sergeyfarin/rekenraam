@@ -213,8 +213,11 @@ the four-CPU workspace:
 | | 2,000 | 3,613 µs | 3,160 µs | 1,871 µs | 1,295 µs |
 | | 5,000 | 9,658 µs | 9,582 µs | 2,906 µs | **2,116 µs** |
 
-The "after" timings were taken before migration `0012`; the index removes the
-remaining split-facts scan, which reads one row per recorded split.
+The "after" columns were measured before migration `0012`. With the index, at
+5,000 operations, the reads take **129 µs** and **2,186 µs** with QPSG (197 µs
+and 2,381 µs without), within noise of the pre-index figures: this fixture
+records three splits, and the index replaces a scan of one row per recorded
+split, so its gain grows only with the number of splits.
 `InstrumentSplits` no longer grows with the operation count.
 `TradeQuotePendingSplits` still reads the instrument's observations in range
 through `price_observations_lookup_idx`, as it did before, so it keeps a smaller

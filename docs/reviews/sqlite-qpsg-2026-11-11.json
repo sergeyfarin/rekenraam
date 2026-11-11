@@ -73,7 +73,8 @@
         "statements": "PricingRepository.InstrumentSplits (two and three commodity ids)",
         "adds_book_scoped_table_scan": true,
         "latency_measured": false,
-        "note": "investment_split_facts has no index besides its primary key; the scan reads every book's split facts. Both plans read the whole CTE."
+        "note": "investment_split_facts has no index besides its primary key; the scan reads every book's split facts. Both plans read the whole CTE.",
+        "resolved_by": "#561: correction roots walked from needed operations; migration 0012 index"
       },
       {
         "count": 1,
@@ -299,5 +300,252 @@
     "act": "two uncached -p 2 full gates on the six-CPU threshold host, both > 270 s for any package",
     "investigate": "internal/app median > 210 s: three interleaved uncached single-package runs on the ten-CPU reference host, or CI per-package time over the latest six successful main runs",
     "status": "both open under #560"
+  },
+  "follow_up_561": {
+    "cause": "InstrumentSplits and TradeQuotePendingSplits built correction roots for every investment operation in the book (top-down recursive CTE), so cost grew with investment history; under QPSG InstrumentSplits also full-scanned investment_split_facts",
+    "fix": [
+      "correctionRootsOf seeds the walk with the operations a read needs and climbs correction_of_operation_id by primary key (CROSS JOIN keeps seeds first)",
+      "TradeQuotePendingSplits matches trade-implied observations to same-day effective splits once in a materialized CTE and seeds from the matches",
+      "migration 0012 adds investment_split_facts_lookup_idx (book_id, commodity_id, effective_on)"
+    ],
+    "probe": "backend/internal/app/split_query_cost_test.go (SPLIT_QUERY_COST=1 SPLIT_QUERY_OPS=n); one holding, n buys, three 2:1 splits, two instrument ids; medians of three alternating rounds per build, four-CPU workspace",
+    "keys": "read|operations|build",
+    "before": {
+      "InstrumentSplits|200|default": {
+        "samples_us": [
+          307.35,
+          171.52,
+          238.93
+        ],
+        "median_us": 238.93
+      },
+      "TradeQuotePendingSplits|200|default": {
+        "samples_us": [
+          939.85,
+          570.48,
+          764.21
+        ],
+        "median_us": 764.21
+      },
+      "InstrumentSplits|200|qpsg": {
+        "samples_us": [
+          215.59,
+          148.04,
+          216.66
+        ],
+        "median_us": 215.59
+      },
+      "TradeQuotePendingSplits|200|qpsg": {
+        "samples_us": [
+          534.59,
+          509.96,
+          527.69
+        ],
+        "median_us": 527.69
+      },
+      "InstrumentSplits|2000|default": {
+        "samples_us": [
+          1036.12,
+          1383.15,
+          1634.01
+        ],
+        "median_us": 1383.15
+      },
+      "TradeQuotePendingSplits|2000|default": {
+        "samples_us": [
+          3214.68,
+          3612.89,
+          4002.97
+        ],
+        "median_us": 3612.89
+      },
+      "InstrumentSplits|2000|qpsg": {
+        "samples_us": [
+          1481.12,
+          1317.32,
+          1307.08
+        ],
+        "median_us": 1317.32
+      },
+      "TradeQuotePendingSplits|2000|qpsg": {
+        "samples_us": [
+          3160.41,
+          3385.7,
+          3125.97
+        ],
+        "median_us": 3160.41
+      },
+      "InstrumentSplits|5000|default": {
+        "samples_us": [
+          2876.97,
+          3438.89,
+          3444.85
+        ],
+        "median_us": 3438.89
+      },
+      "TradeQuotePendingSplits|5000|default": {
+        "samples_us": [
+          8725.67,
+          9792.72,
+          9657.88
+        ],
+        "median_us": 9657.88
+      },
+      "InstrumentSplits|5000|qpsg": {
+        "samples_us": [
+          3936.64,
+          4325.44,
+          4366.36
+        ],
+        "median_us": 4325.44
+      },
+      "TradeQuotePendingSplits|5000|qpsg": {
+        "samples_us": [
+          12654.43,
+          9581.56,
+          8841.74
+        ],
+        "median_us": 9581.56
+      }
+    },
+    "after_without_index": {
+      "InstrumentSplits|200|default": {
+        "samples_us": [
+          201.54,
+          210.06,
+          223.75
+        ],
+        "median_us": 210.06
+      },
+      "TradeQuotePendingSplits|200|default": {
+        "samples_us": [
+          915.71,
+          850.46,
+          593.16
+        ],
+        "median_us": 850.46
+      },
+      "InstrumentSplits|200|qpsg": {
+        "samples_us": [
+          137.02,
+          168.96,
+          104.02
+        ],
+        "median_us": 137.02
+      },
+      "TradeQuotePendingSplits|200|qpsg": {
+        "samples_us": [
+          405.05,
+          498.13,
+          593.81
+        ],
+        "median_us": 498.13
+      },
+      "InstrumentSplits|2000|default": {
+        "samples_us": [
+          239.54,
+          175.28,
+          236.55
+        ],
+        "median_us": 236.55
+      },
+      "TradeQuotePendingSplits|2000|default": {
+        "samples_us": [
+          2114.28,
+          1481.84,
+          1870.76
+        ],
+        "median_us": 1870.76
+      },
+      "InstrumentSplits|2000|qpsg": {
+        "samples_us": [
+          121.11,
+          137.84,
+          148.06
+        ],
+        "median_us": 137.84
+      },
+      "TradeQuotePendingSplits|2000|qpsg": {
+        "samples_us": [
+          1294.7,
+          1160.53,
+          1459.75
+        ],
+        "median_us": 1294.7
+      },
+      "InstrumentSplits|5000|default": {
+        "samples_us": [
+          202.5,
+          218.78,
+          157.49
+        ],
+        "median_us": 202.5
+      },
+      "TradeQuotePendingSplits|5000|default": {
+        "samples_us": [
+          3555.62,
+          2683.04,
+          2906.36
+        ],
+        "median_us": 2906.36
+      },
+      "InstrumentSplits|5000|qpsg": {
+        "samples_us": [
+          92.48,
+          99.14,
+          98.09
+        ],
+        "median_us": 98.09
+      },
+      "TradeQuotePendingSplits|5000|qpsg": {
+        "samples_us": [
+          2268.95,
+          2115.62,
+          2040.68
+        ],
+        "median_us": 2115.62
+      }
+    },
+    "after_with_index": {
+      "InstrumentSplits|5000|default": {
+        "samples_us": [
+          174.54,
+          197.31,
+          220.06
+        ],
+        "median_us": 197.31
+      },
+      "TradeQuotePendingSplits|5000|default": {
+        "samples_us": [
+          2447.14,
+          2380.91,
+          2336.51
+        ],
+        "median_us": 2380.91
+      },
+      "InstrumentSplits|5000|qpsg": {
+        "samples_us": [
+          129.41,
+          147.28,
+          104.43
+        ],
+        "median_us": 129.41
+      },
+      "TradeQuotePendingSplits|5000|qpsg": {
+        "samples_us": [
+          2186.09,
+          2167.09,
+          2342.09
+        ],
+        "median_us": 2186.09
+      }
+    },
+    "tests": [
+      "TestCorrectionRootsOfMatchesReplayOrderRoots",
+      "TestTradeQuoteBeforeALaterDaySplitIsNotPending",
+      "TestBaselineIndexesKeepOrderedAndForeignKeyLookups (split facts by instrument and date)",
+      "TestMigrationsProduceTheExpectedSchema (migration 12)"
+    ],
+    "remaining": "TradeQuotePendingSplits reads the instrument's observations in range through price_observations_lookup_idx, as before, so it keeps a linear term in trade-implied quotes"
   }
 }
