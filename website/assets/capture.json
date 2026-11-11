@@ -1,5 +1,5 @@
 {
-  "source_revision": "be7bb29856452391d3fc847f39f0a69025f161c4",
+  "source_revision": "8e35974c6ec0840fc4d1c2909bd8f4ca5b9307d7",
   "source_clean": true,
   "fixture": "fixtures/reference-book.json",
   "language": "en",
@@ -10,11 +10,13 @@
   "files": [
     {
       "file": "transactions.png",
-      "route": "/app/ledger/transactions?account_id=66"
+      "route": "/app/ledger/transactions?account_id=66",
+      "sha256": "25a268cbe6f1a86c19a1dbad7fd3beb8e36fff12ea871a9bffc6a118271580a0"
     },
     {
       "file": "investments.png",
-      "route": "/app/investments"
+      "route": "/app/investments",
+      "sha256": "bdab48cf38aca99c4f513c3e7f39a04b033c349830d6fb8a7700da22d8216ae6"
     },
     {
       "file": "../../docs/images/reports-spending.png",
@@ -25,9 +27,11 @@
       },
       "device_scale_factor": 2,
       "themes": {
-        "left": "light",
-        "right": "dark"
-      }
+        "light": "top-left",
+        "dark": "bottom-right"
+      },
+      "split": "diagonal",
+      "sha256": "6f340a1804494955292c85f10c4ba54cd47ed9bc20621c5d9ba1b0b7225b32fa"
     }
   ],
   "note": "Disposable database; synthetic reference book; no live providers or owner records."
