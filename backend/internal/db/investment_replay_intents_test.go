@@ -159,7 +159,7 @@ func TestCorrectionRootsOfMatchesReplayOrderRoots(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, 1, want[second], "the canonical root of a two-step chain")
 	roots := func(seed string, args ...any) map[int64]int64 {
-		rows, err := database.QueryContext(ctx, correctionRootsOf(seed)+`SELECT operation_id, root_id FROM correction_roots`,
+		rows, err := database.QueryContext(ctx, correctionRootsOf("", seed)+`SELECT operation_id, root_id FROM correction_roots`,
 			append(args, int64(1), int64(1))...)
 		require.NoError(t, err)
 		defer rows.Close()
