@@ -1,6 +1,11 @@
 # SQLite driver upgrade prerequisite — 2026-10-20
 
-**#356 remains OPEN / BLOCKED.** The prerequisite was rechecked at clean main
+> **Historical prerequisite evidence.** Superseded by the
+> [2026-11-08 candidate review](sqlite-driver-candidate-2026-11-08.md) and the
+> [2026-11-10 admission review](sqlite-driver-admission-2026-11-10.md). Keep
+> this record for the source-authentication and negative-control evidence.
+
+**Status on 2026-10-20: #356 remained OPEN / BLOCKED.** The prerequisite was rechecked at clean main
 `7b07a2f68bff878a45905b67294fa5135fc2b0ce`. There is still no released
 `github.com/mattn/go-sqlite3` candidate carrying the required fixes. This
 review supplies a functional admission probe and verifies the official fixed

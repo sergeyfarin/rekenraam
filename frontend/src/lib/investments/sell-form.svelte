@@ -795,7 +795,7 @@
     <button
       type="submit"
       disabled={!canSubmit || pending || (!!correction && !reason.trim())}
-      class="rounded-(--radius-control) bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+      class="rounded-(--radius-control) bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
     >
       {pending ? m.investments_sell_pending() : correction ? m.transactions_investment_replace_submit() : m.investments_sell_submit()}
     </button>

@@ -189,7 +189,7 @@
       </label>
       <button
         type="submit"
-        class="rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        class="rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
         disabled={preferencesPending || selectedTimeZone === ''}
       >
         {preferencesPending ? m.settings_preferences_saving() : m.settings_preferences_save()}

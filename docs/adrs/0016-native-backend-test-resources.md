@@ -174,6 +174,37 @@ policy changes. The [report](../reviews/investment-read-preparation-2026-10-29.m
 retains SQL, fixture/semantic controls, exact sources, all matched timings and
 their limits.
 
+**#356 driver recheck (2026-11-10).** The SQLite 3.54.1 candidate was measured
+with the explicit uncached gate (`GOFLAGS=-count=1 GO_PHASE_TIMINGS=1
+./scripts/test-backend.sh`) on a six-CPU workspace: baseline **225.1 / 232.3 s**,
+candidate **245.7 / 293.6 / 271.3 s** in the application package. Two candidate
+runs exceed the **270 s act threshold** while neither baseline run does, so the
+act rule fires; all runs still finish under the 300 s deadline. A provisional
+uncached gate on the Go 1.27.4 security-patch worktree measured **279.089 s**,
+so the toolchain patch does not change the conclusion. Hosted runs
+(**216.8 s** `2eb5adb4`; **252.7 s** `b6655526`; **253.2 s** `faeedf20`) are
+cached-gate observations, not threshold evidence. The investigate threshold
+also remains exceeded. Production-query cost is separately measured at **+16%
+to +63%** on representative affected paths. **Owner amendment (2026-11-11):**
+the owner accepted this act-threshold breach and the production cost for the
+#356 driver admission, which satisfies the act rule for this change; a
+speed-up follow-up is separate. No deadline, scheduling, cache, durability,
+coverage or schema policy changes are made here. The investigate threshold
+and the 30% headroom objective remain open. See the
+[admission review](../reviews/sqlite-driver-admission-2026-11-10.md#owner-acceptance-2026-11-11).
+
+**#356 speed-up follow-up (2026-11-11).** The 3.54.1 cost is a second
+compilation of every joined statement whose bound equality takes part in
+constant propagation. Building the engine with `SQLITE_ENABLE_QPSG`
+(ADR 0014 amendment) removes it. Isolated uncached `internal/app` race runs on
+a four-CPU workspace, alternating builds, measured **306.5 / 297.2 s** without
+QPSG and **255.2 / 250.0 s** with it (−16% to −17%). These are not
+six-CPU `-p 2` full-gate threshold runs; the formal act/investigate
+measurement on the threshold host remains to be repeated
+([#560](https://github.com/sergeyfarin/rekenraam/issues/560)). Remedy order,
+deadline, scheduling, cache, durability and coverage policy are unchanged. See
+the [QPSG review](../reviews/sqlite-qpsg-2026-11-11.md).
+
 ## References
 
 - [ADR 0014](0014-native-sqlite-driver.md), native driver admission.

@@ -1,0 +1,98 @@
+package app
+
+// Retained production-query cost probe for #356. Copy this file to
+// backend/internal/app/sqlite_driver_production_query_cost_test.go and run:
+//
+//   SQLITE_DRIVER_COST=1 ./scripts/go-backend.sh test ./internal/app \
+//     -run '^TestSQLiteDriverProductionQueryCost$' -count=1 -v
+//
+// Run it on the same host and database fixture against v1.14.52/SQLite 3.53.4
+// and v1.14.53/SQLite 3.54.1, then record the matched output in the admission
+// review. The fixture uses the production connection policy
+// (_stmt_cache_size=0, WAL/FULL) and exercises the joined lookups identified
+// by the 3.54.1 re-preparation probe, not a synthetic SQL benchmark.
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+
+	"rekenraam/backend/internal/db"
+)
+
+func TestSQLiteDriverProductionQueryCost(t *testing.T) {
+	if os.Getenv("SQLITE_DRIVER_COST") != "1" {
+		t.Skip("set SQLITE_DRIVER_COST=1 to run the retained production-query cost probe")
+	}
+
+	ctx := context.Background()
+	f := newInvestmentsTestFixture(t)
+
+	const transactionCount = 20
+	ids := make([]int64, 0, transactionCount)
+	records := make([]db.TransactionRecord, 0, transactionCount)
+	for i := 0; i < transactionCount; i++ {
+		date := fmt.Sprintf("2026-02-%02d", i+1)
+		result := buyOn(t, f, date, 1, 1000)
+		record, err := f.transactionService.repository.TransactionByID(ctx, BookID, result.Transaction.ID)
+		require.NoError(t, err)
+		ids = append(ids, result.Transaction.ID)
+		records = append(records, record)
+	}
+
+	var version, sourceID string
+	require.NoError(t, f.database.QueryRow("SELECT sqlite_version(),sqlite_source_id()").Scan(&version, &sourceID))
+	t.Logf("engine=%s source_id=%s transactions=%d accounts=3 commodities=2", version, sourceID, transactionCount)
+
+	accountIDs := []int64{f.cashAccountID, f.holdingAccountID}
+	commodityIDs := []int64{f.eurCommodityID, f.stockCommodityID}
+
+	measure := func(name string, iterations int, fn func() error) {
+		for i := 0; i < 10; i++ {
+			if err := fn(); err != nil {
+				t.Fatal(err)
+			}
+		}
+		start := time.Now()
+		for i := 0; i < iterations; i++ {
+			if err := fn(); err != nil {
+				t.Fatal(err)
+			}
+		}
+		elapsed := time.Since(start)
+		t.Logf("%s: iterations=%d total=%s per_op=%.2fus", name, iterations, elapsed, float64(elapsed.Microseconds())/float64(iterations))
+	}
+
+	measure("accounts batch (2 ids)", 500, func() error {
+		_, err := f.transactionService.accountRepository.AccountsByIDs(ctx, BookID, accountIDs)
+		return err
+	})
+	measure("commodities batch (2 ids)", 500, func() error {
+		_, err := f.transactionService.commodityRepository.CommoditiesByIDs(ctx, BookID, commodityIDs)
+		return err
+	})
+	measure("enrich 2 transaction records", 200, func() error {
+		_, err := f.transactionService.enrichRecords(ctx, records[0], records[1])
+		return err
+	})
+	measure("transaction by id", 200, func() error {
+		_, err := f.transactionService.repository.TransactionByID(ctx, BookID, ids[0])
+		return err
+	})
+	measure("list transactions page 50", 100, func() error {
+		_, err := f.transactionService.repository.ListTransactions(ctx, db.ListTransactionsParams{
+			BookID: BookID, ExcludeDraft: true, Limit: 50,
+		})
+		return err
+	})
+	measure("account register page 50", 100, func() error {
+		_, err := f.transactionService.repository.AccountRegister(ctx, db.ListTransactionsParams{
+			BookID: BookID, AccountID: f.cashAccountID, ExcludeDraft: true, Limit: 50,
+		})
+		return err
+	})
+}

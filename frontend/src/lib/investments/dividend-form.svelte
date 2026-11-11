@@ -707,7 +707,7 @@
     <button
       type="submit"
       disabled={!canSubmit || pending}
-      class="rounded-(--radius-control) bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+      class="rounded-(--radius-control) bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground transition-colors hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
     >
       {submitLabel}
     </button>

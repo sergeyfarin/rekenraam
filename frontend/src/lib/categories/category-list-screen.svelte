@@ -433,7 +433,7 @@
 
       <button
         type="button"
-        class="inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-90"
+        class="inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-95"
         onclick={() => (editor = { type: 'create' })}
       >
         <Plus size={16} aria-hidden="true" />
@@ -464,7 +464,7 @@
       <APIFormError error={shellError} id="categories-error" />
       <button
         type="button"
-        class="inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-90"
+        class="inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-95"
         onclick={refreshCategories}
       >
         <RefreshCw size={16} aria-hidden="true" />
@@ -475,7 +475,7 @@
     <StatePanel title={m.categories_empty_title()} copy={m.categories_empty_copy()}>
       <button
         type="button"
-        class="inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-90"
+        class="inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-95"
         onclick={() => (editor = { type: 'create' })}
       >
         <Tags size={16} aria-hidden="true" />

@@ -151,7 +151,7 @@ Use a backup to restore Rekenraam. Exports are for use outside the app.
 The backend is Go with SQLite, the frontend is SvelteKit, and production is a
 single Go binary that serves the built frontend.
 
-You'll need Go 1.27.3+ (with CGO and a C compiler, e.g.
+You'll need Go 1.27.4+ (with CGO and a C compiler, e.g.
 `sudo apt install build-essential`), Node 26 and the pnpm version pinned in
 `package.json`.
 

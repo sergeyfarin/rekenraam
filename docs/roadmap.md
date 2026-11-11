@@ -68,9 +68,16 @@ below continue alongside it and do not block it.
    accepted; candidate validation remains) and the upstream
    driver prerequisite
    [#356](https://github.com/sergeyfarin/rekenraam/issues/356) retain separate
-   acceptance (#356's released candidate is held on a statement re-preparation
-   cost regression; see its
-   [candidate review](reviews/sqlite-driver-candidate-2026-11-08.md)). Release remains on hold; these gates do not block accepted
+   acceptance. #356's released candidate, go-sqlite3 v1.14.53 / SQLite 3.54.1,
+   has an
+   [admission review](reviews/sqlite-driver-admission-2026-11-10.md). The clean
+   uncached race pair fires ADR 0016's 270 s act threshold (two candidate runs
+   above 270 s; neither baseline run above it), and representative production
+   queries measured **16–63% slower**. The owner accepted both on 2026-11-11.
+   The follow-up builds the engine with `SQLITE_ENABLE_QPSG`, which removes
+   3.54.1's double compilation of joined lookups
+   ([QPSG review](reviews/sqlite-qpsg-2026-11-11.md): production paths 39–55%
+   faster, application race package 16–17% faster on one host). Release remains on hold; these gates do not block accepted
    maintenance. Adoption assets #335 stay P3 for later release preparation.
    See [Public-release gates](#public-release-gates) for the remaining evidence.
 2. **Track the remaining bounded maintenance follow-ups.**

@@ -1,0 +1,121 @@
+{
+  "review": "sqlite-driver-admission-2026-11-10",
+  "date": "2026-11-10",
+  "decision": "admitted-owner-accepted-performance-and-act-threshold-cost",
+  "owner_acceptance": {
+    "date": "2026-11-11",
+    "accepts": ["ADR 0016 270 s act-threshold breach (candidate 293.578 s / 271.254 s)", "production-query cost +16% to +63% on the measured paths"],
+    "scope": "go-sqlite3 v1.14.53 / SQLite 3.54.1 admission only",
+    "follow_up": "separate speed-up investigation; does not gate admission"
+  },
+  "go_toolchain": {
+    "minimum": "1.27.4",
+    "security_fix": "GO-2026-6859 (net/http MaxBytesReader header race)",
+    "govulncheck": "No vulnerabilities found"
+  },
+  "module": {
+    "path": "github.com/mattn/go-sqlite3",
+    "version": "v1.14.53",
+    "checksum": "h1:mnTM0owzUMrKuLo+0w51NUiB0ir2Fo7kFXlPt/l3BGs=",
+    "bundled_c_blob": "2cff93269e94e4dbae0fffd29032362d4a8c0e85",
+    "bundled_c_sha256": "758343f1464f3ee8c7c601d5b0cde415b52dcdf43a44ed884a62d19ec416e824"
+  },
+  "engine": {
+    "version": "3.54.1",
+    "source_id": "2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f1607f4c3c1e4551e8e6ca76",
+    "official_amalgamation_sha3_256": "e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81",
+    "compile_options_delta": ["MAX_SCHEMA=10000000"],
+    "compile_options_removed": []
+  },
+  "go_probe": {
+    "command": "./scripts/go-backend.sh run /tmp/opencode/native-sqlite-upstream-probe.go",
+    "result": {
+      "index_count_actual": 1,
+      "index_count_expected": 1,
+      "json_rendered": "[31,2]",
+      "json_valid_actual": 1,
+      "json_valid_expected": 1,
+      "not_indexed_control": 1,
+      "source_id": "2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f1607f4c3c1e4551e8e6ca76",
+      "update_actual": "new",
+      "update_expected": "new",
+      "version": "3.54.1"
+    }
+  },
+  "c_probe": {
+    "official_3_53_4": {"json_valid": 0, "indexed_count": 0, "update": "old", "not_indexed_control": 1, "check_fixed_exit": 1},
+    "official_3_54_1": {"json_valid": 1, "indexed_count": 1, "update": "new", "not_indexed_control": 1, "check_fixed_exit": 0}
+  },
+  "validation": {
+    "commands": [
+      "GOFLAGS=-count=1 GO_PHASE_TIMINGS=1 ./scripts/test-backend.sh",
+      "COVERAGE=1 GO_PHASE_TIMINGS=1 ./scripts/test-backend.sh",
+      "pnpm build",
+      "./scripts/go-backend.sh test ./internal/db -run '^TestBaselineIndexesKeepOrderedAndForeignKeyLookups$' -count=1",
+      "./scripts/go-backend.sh test ./internal/api -run '^(TestNativeSQLiteAuditSearchRejectsNULBeforeFTS|TestRepeatedSelfCheckRunsPassAfterNewEntries)$' -count=1",
+      "./scripts/go-backend.sh run golang.org/x/vuln/cmd/govulncheck@latest ./..."
+    ],
+    "govulncheck": {"toolchain": "go1.27.4", "result": "No vulnerabilities found"},
+    "race_gates": [
+      {"environment": "local-6cpu", "engine": "3.53.4", "driver": "v1.14.52", "commit": "7d3d2059", "app_seconds": 225.121, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "uncached": true, "threshold_evidence": true, "result": "pass"},
+      {"environment": "local-6cpu", "engine": "3.53.4", "driver": "v1.14.52", "commit": "7d3d2059", "app_seconds": 232.339, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "uncached": true, "threshold_evidence": true, "result": "pass"},
+      {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "commit": "35ee1bf5", "app_seconds": 245.657, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "uncached": true, "threshold_evidence": true, "result": "pass"},
+      {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "commit": "35ee1bf5", "app_seconds": 293.578, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "uncached": true, "threshold_evidence": true, "result": "pass", "exceeds_act_threshold": true},
+      {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "commit": "35ee1bf5", "app_seconds": 271.254, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "uncached": true, "threshold_evidence": true, "result": "pass", "exceeds_act_threshold": true},
+      {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "commit": "6ee5afb8 (Go 1.27.4 worktree; run before commit)", "app_seconds": 279.089, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1, go1.27.4", "uncached": true, "threshold_evidence": false, "provisional": true, "result": "pass", "exceeds_act_threshold": true},
+      {"environment": "local-6cpu", "engine": "3.53.4", "driver": "v1.14.52", "commit": "7d3d2059", "app_seconds": 217.163, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "uncached": true, "threshold_evidence": false, "provisional": true, "superseded": true, "result": "pass"},
+      {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "commit": "3c52b99b (worktree content; run before commit)", "app_seconds": 245.012, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "uncached": true, "threshold_evidence": false, "provisional": true, "superseded": true, "result": "pass"},
+      {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "commit": "3c52b99b (worktree content; run before commit)", "app_seconds": 257.674, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "uncached": true, "threshold_evidence": false, "provisional": true, "superseded": true, "result": "pass"},
+      {"environment": "hosted-ci", "engine": "3.53.4", "driver": "v1.14.52", "commit": "7d3d2059", "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42760293595/job/129644138504", "app_seconds": 219.404, "configuration": "-race -p 2 -timeout=5m, feature tags fts5/netgo/osusergo, GO_PHASE_TIMINGS=1, Go test cache enabled", "go_test_cache": "enabled; app fresh; other packages may be cached", "uncached": false, "threshold_evidence": false, "build_cache_exact_hit": false, "result": "pass"},
+      {"environment": "hosted-ci", "engine": "3.54.1", "driver": "v1.14.53", "commit": "2eb5adb4", "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42873724976/job/130031379151", "app_seconds": 216.848, "configuration": "-race -p 2 -timeout=5m, feature tags fts5/netgo/osusergo, GO_PHASE_TIMINGS=1, Go test cache enabled", "go_test_cache": "enabled; app fresh; other packages may be cached", "uncached": false, "threshold_evidence": false, "build_cache_exact_hit": false, "result": "pass"},
+      {"environment": "hosted-ci", "engine": "3.54.1", "driver": "v1.14.53", "commit": "b6655526", "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42767669769/job/129667989356", "app_seconds": 252.718, "configuration": "-race -p 2 -timeout=5m, feature tags fts5/netgo/osusergo, GO_PHASE_TIMINGS=1, Go test cache enabled", "go_test_cache": "enabled; app fresh; other packages may be cached", "uncached": false, "threshold_evidence": false, "build_cache_exact_hit": false, "result": "pass"},
+      {"environment": "hosted-ci", "engine": "3.54.1", "driver": "v1.14.53", "commit": "faeedf20", "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42876220590/job/130040105987", "app_seconds": 253.242, "configuration": "-race -p 2 -timeout=5m, feature tags fts5/netgo/osusergo, GO_PHASE_TIMINGS=1, Go test cache enabled", "go_test_cache": "enabled; app fresh; other packages may be cached", "uncached": false, "threshold_evidence": false, "build_cache_exact_hit": true, "result": "pass"}
+    ],
+    "adr_0016_act_threshold": {
+      "fired": true,
+      "act_seconds": 270,
+      "deadline_seconds": 300,
+      "reason": "Two clean uncached candidate runs exceed 270 s (293.578 s, 271.254 s); neither baseline run does (225.121 s, 232.339 s)."
+    },
+    "coverage_percent": 82.8,
+    "integrated_build": "pass",
+    "planner_regression": "TestBaselineIndexesKeepOrderedAndForeignKeyLookups pass"
+  },
+  "production_query_cost": {
+    "fixture": "docs/reviews/fixtures/sqlite-driver-production-query-cost.go.txt",
+    "command": "SQLITE_DRIVER_COST=1 ./scripts/go-backend.sh test ./internal/app -run '^TestSQLiteDriverProductionQueryCost$' -count=1 -v",
+    "host": "local six-CPU workspace",
+    "baseline": {"driver": "v1.14.52", "engine": "3.53.4", "commit": "7d3d2059"},
+    "candidate": {"driver": "v1.14.53", "engine": "3.54.1", "commit": "faeedf20"},
+    "fixture_data": {"transactions": 20, "accounts": 3, "commodities": 2, "connection_policy": "production DSN, _stmt_cache_size=0, WAL/FULL"},
+    "runs": 3,
+    "results": [
+      {"path": "accounts batch (2 ids)", "baseline_samples_us": [157.88, 125.30, 127.28], "baseline_median_us": 127.28, "candidate_samples_us": [212.54, 189.99, 189.39], "candidate_median_us": 189.99, "delta_percent": 49.3},
+      {"path": "commodities batch (2 ids)", "baseline_samples_us": [132.14, 95.66, 95.79], "baseline_median_us": 95.79, "candidate_samples_us": [156.54, 133.59, 156.94], "candidate_median_us": 156.54, "delta_percent": 63.4},
+      {"path": "enrich 2 transaction records", "baseline_samples_us": [294.00, 240.19, 225.91], "baseline_median_us": 240.19, "candidate_samples_us": [377.27, 340.52, 345.50], "candidate_median_us": 345.50, "delta_percent": 43.8},
+      {"path": "transaction by id", "baseline_samples_us": [365.32, 314.94, 335.62], "baseline_median_us": 335.62, "candidate_samples_us": [530.02, 475.73, 528.37], "candidate_median_us": 528.37, "delta_percent": 57.4},
+      {"path": "list transactions page 50", "baseline_samples_us": [4045.56, 3879.05, 3772.51], "baseline_median_us": 3879.05, "candidate_samples_us": [5400.85, 4990.29, 5020.96], "candidate_median_us": 5020.96, "delta_percent": 29.4},
+      {"path": "account register page 50", "baseline_samples_us": [1354.01, 1327.56, 1333.16], "baseline_median_us": 1333.16, "candidate_samples_us": [1541.78, 1554.79, 1511.71], "candidate_median_us": 1541.78, "delta_percent": 15.6}
+    ],
+    "limits": "Median of three same-host runs, not a production load test or a whole-book latency SLA. No query result or observed plan changed in the tested consumers."
+  },
+  "fts5": {
+    "403_workaround_required": true,
+    "probe_command": "probe wal",
+    "exit": 1,
+    "finding": "checksum mismatch",
+    "tracking_issue": 541
+  },
+  "advisory": {
+    "sqlite_cve_catalogue_rechecked": "2026-11-10",
+    "3_54_x_cve_entries": 0,
+    "notes": "3.54.1 fixes a 32-bit-only heap-buffer overflow introduced by 3.54.0. No new 3.54.x advisory or feature exposure identified."
+  },
+  "limits": [
+    "The threshold host has six CPUs; the 2026-11-08 review recorded its ten-CPU reference measurement, which this run could not reproduce.",
+    "Hosted CI runs use Go test caching (several packages report cached); they are observations, not formal ADR 0016 threshold runs. The internal/app package did execute in the recorded runs.",
+    "The clean uncached pair fires the 270 s act threshold: candidate 245.657/293.578/271.254 s; baseline 225.121/232.339 s. All runs still finish under the 300 s deadline.",
+    "Production-query cost is +16% to +63% on representative affected paths (median of three runs). The owner must accept both the act-threshold breach and the production cost, or a mitigation is required.",
+    "The Go 1.27.4 security patch (GO-2026-6859) passes govulncheck; a provisional uncached gate on that toolchain measured 279.089 s, so the act-threshold finding is unchanged."
+  ]
+}

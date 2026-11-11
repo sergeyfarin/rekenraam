@@ -13,3 +13,11 @@ export CGO_ENABLED=1
 # FTS5 is a schema requirement. netgo/osusergo retain the previous pure-Go
 # resolver and user lookup behavior while SQLite alone uses bundled C.
 export GOFLAGS="${GOFLAGS:-} -tags=fts5,netgo,osusergo"
+# ADR 0014: the bundled engine is built with the query planner stability
+# guarantee. SQLite 3.54.1 otherwise re-prepares every joined statement whose
+# bound equality takes part in constant propagation the first time a value is
+# bound, compiling each such query twice. QPSG keeps one plan per statement.
+case " $(go env CGO_CFLAGS) " in
+  *" -DSQLITE_ENABLE_QPSG "*) ;;
+  *) export CGO_CFLAGS="$(go env CGO_CFLAGS) -DSQLITE_ENABLE_QPSG" ;;
+esac

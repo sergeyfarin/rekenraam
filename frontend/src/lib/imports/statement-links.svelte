@@ -126,7 +126,7 @@
   const btnAction =
     'inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-60';
   const btnPrimary =
-    'inline-flex min-h-11 items-center rounded-[var(--radius-control)] bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60';
+    'inline-flex min-h-11 items-center rounded-[var(--radius-control)] bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition-colors hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60';
 </script>
 
 {#if linksQuery.isError}

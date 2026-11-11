@@ -419,7 +419,7 @@
       {/if}
       <button
         type="submit"
-        class="h-10 rounded-(--radius-control) bg-accent px-4 text-sm font-semibold text-accent-foreground transition hover:opacity-90"
+        class="h-10 rounded-(--radius-control) bg-accent px-4 text-sm font-semibold text-accent-foreground transition hover:opacity-95"
       >
         {m.reports_apply_filters()}
       </button>

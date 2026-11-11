@@ -100,8 +100,8 @@ class ReleaseArtifacts(unittest.TestCase):
 
     def test_build_metadata_does_not_capture_the_inspected_binary_path(self):
         with patch.object(release, "run", side_effect=[
-            "/home/runner/dist/rekenraam: go1.27.3\n\tbuild\t-trimpath=true\n",
-            "/tmp/repeat/rekenraam: go1.27.3\n\tbuild\t-trimpath=true\n",
+            "/home/runner/dist/rekenraam: go1.27.4\n\tbuild\t-trimpath=true\n",
+            "/tmp/repeat/rekenraam: go1.27.4\n\tbuild\t-trimpath=true\n",
         ]):
             self.assertEqual(release.go_build_info(Path("one")), release.go_build_info(Path("two")))
 

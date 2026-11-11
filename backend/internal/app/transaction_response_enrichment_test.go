@@ -58,6 +58,9 @@ func TestTransactionResponseEnrichmentBatchesCompoundAndRepeatedJournals(t *test
 			result, err := f.transactionService.enrichRecords(ctx, batch...)
 			require.NoError(t, err)
 			require.Len(t, result, size)
+			// The QPSG build (scripts/native-sqlite-env.sh) stops SQLite
+			// 3.54.1 re-preparing a joined lookup when its bound equality
+			// is first bound, so each batch compiles exactly once.
 			require.Equal(t, int64(1), accountReads.Load(), "one account batch independent of journal/posting count")
 			require.Equal(t, int64(1), commodityReads.Load(), "one commodity batch independent of journal/posting count")
 			for _, transaction := range result {

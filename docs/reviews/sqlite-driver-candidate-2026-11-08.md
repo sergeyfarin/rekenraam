@@ -1,6 +1,14 @@
 # SQLite driver candidate — go-sqlite3 v1.14.53 / SQLite 3.54.1 — 2026-11-08
 
-**#356 remains OPEN. The candidate exists but is held.** Upstream released
+> **Superseded by the
+> [2026-11-10 admission review](sqlite-driver-admission-2026-11-10.md) for the
+> final decision.** The source and correctness evidence below remains valid.
+> The clean uncached pair fires ADR 0016's 270 s act threshold, and
+> representative production queries measured **16–63% slower**; the admission
+> review records both and the pending owner decision.
+
+**Historical status (2026-11-08): #356 remained OPEN; the candidate was held.**
+Upstream released
 [`github.com/mattn/go-sqlite3` v1.14.53](https://github.com/mattn/go-sqlite3/releases/tag/v1.14.53),
 which bundles SQLite **3.54.1** ("Upgrade SQLite to version 3540100",
 mattn/go-sqlite3#1472). That clears the prerequisite recorded in the

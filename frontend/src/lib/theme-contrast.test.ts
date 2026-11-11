@@ -144,9 +144,13 @@ describe('theme contrast', () => {
         ['danger badge', contrast(p['danger'], p['danger-soft'])],
         ['positive badge', contrast(p['positive'], p['positive-soft'])],
         ['button text on accent', contrast(p['accent-foreground'], p['accent'])],
-        // Primary buttons fade to 90% on hover. Both the fill and its text move
-        // toward the surface; the lightest surface is the worst backdrop.
-        ['button text on accent, hovered', contrast(over(p['accent-foreground'], 0.9, p['surface']), over(p['accent'], 0.9, p['surface']))],
+        // Primary buttons fade to 95% on hover. Both the fill and its text move
+        // toward the backdrop, so check every surface they can sit on. The
+        // previous 90% fade read 4.39:1 on the light page background.
+        ...surfaces.map((surface): [string, number] => [
+          `button text on accent, hovered over ${surface}`,
+          contrast(over(p['accent-foreground'], 0.95, p[surface]), over(p['accent'], 0.95, p[surface]))
+        ]),
         ['selected text', contrast(p['selected-foreground'], p['selected'])],
         // Confirmation buttons carry the page background on their fill (#324).
         ['button text on danger', contrast(p['background'], p['danger'])],

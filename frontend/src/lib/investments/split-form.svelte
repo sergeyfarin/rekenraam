@@ -344,12 +344,12 @@
     </button>
     {#if preview}
       <button type="button" onclick={review.record} disabled={pending || !csrfToken}
-        class="rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
+        class="rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50">
         {pending ? m.investments_split_pending() : correction ? m.investments_split_replace_submit() : m.investments_split_submit()}
       </button>
     {:else}
       <button type="submit" disabled={!canPreview || pending}
-        class="rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
+        class="rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50">
         {pending ? m.investments_split_previewing() : m.investments_split_preview()}
       </button>
     {/if}
