@@ -194,7 +194,9 @@ The fix:
   keeps the seeds first.
 - `InstrumentSplits` selects the **effective** splits in range once, in a
   materialized CTE, and uses it as both the seed and the result. Superseded
-  split versions are never walked, and the instrument list is bound once.
+  split versions are no longer starting points, so each chain is walked once
+  rather than once per version; the walk from an effective split still visits
+  its superseded predecessors as ancestors. The instrument list is bound once.
 - `TradeQuotePendingSplits` matches trade-implied observations to the
   effective splits on their day once, in a materialized CTE, reading the
   instrument's observations once and seeking each day's splits by index
@@ -232,16 +234,15 @@ first #562 version, both fixed in the final one:
   the instrument's observations once per split, about 14× slower than `main`
   with 300 splits.
 
-Neither read now grows with the book's operation count. The upward walk
-costs about 1.7 µs per version in the chains it needs, where `main`'s
-book-wide CTE cost about 0.75 µs per book operation (measured on the
-100-replacement fixture: 209 µs for the walk from one effective split, 225 µs
-for `main`'s CTE over 301 operations). The final version is therefore slower
-than `main` only when the needed chains total more than roughly 45% of the
-book's operations, as in the deliberately extreme 100-replacement fixture
-(518 µs against 393 µs with QPSG). `TradeQuotePendingSplits` still reads the
-instrument's observations in range through `price_observations_lookup_idx`,
-as `main` did.
+Neither read now grows with the book's operation count; the split read grows
+instead with the length of the correction chains behind the effective splits
+in range, because the walk visits each superseded predecessor once. That
+trade-off is measured, not modelled: on the 100-replacement fixture (301
+operations, one 101-version chain, about a third of the book) the final
+`InstrumentSplits` is slower than `main`, **518 µs against 393 µs** with QPSG
+and 545 µs against 312 µs without. No general crossover point is claimed.
+`TradeQuotePendingSplits` still reads the instrument's observations in range
+through `price_observations_lookup_idx`, as `main` did.
 
 Correctness:
 

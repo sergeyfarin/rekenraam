@@ -305,7 +305,7 @@
     "cause": "InstrumentSplits and TradeQuotePendingSplits built correction roots for every investment operation in the book (top-down recursive CTE), so cost grew with investment history; under QPSG InstrumentSplits also full-scanned investment_split_facts",
     "fix": [
       "correctionRootsOf seeds the walk with the operations a read needs and climbs correction_of_operation_id by primary key (CROSS JOIN keeps seeds first)",
-      "InstrumentSplits selects effective splits in range once (materialized CTE) as both seed and result; superseded versions are not walked and the instrument list is bound once",
+      "InstrumentSplits selects effective splits in range once (materialized CTE) as both seed and result; superseded versions are no longer starting points, so each chain is walked once rather than once per version, but the walk from an effective split still visits its superseded predecessors as ancestors; the instrument list is bound once",
       "TradeQuotePendingSplits matches trade-implied observations to same-day effective splits once, reading observations once and seeking splits by index (CROSS JOIN), and seeds from the matches",
       "migration 0012 adds investment_split_facts_lookup_idx (book_id, commodity_id, effective_on)"
     ],
@@ -634,7 +634,6 @@
         "status": "fixed: observations read once, splits seeked by index"
       }
     ],
-    "crossover": "upward walk ~1.7 us per needed chain version vs main's ~0.75 us per book operation (209 us walk from one effective split vs 225 us main CTE over 301 operations); final is slower than main only when needed chains exceed ~45% of book operations, e.g. 100-replacement fixture 518 vs 393 us with QPSG",
     "superseded_before": {
       "InstrumentSplits|200|default": {
         "samples_us": [
@@ -865,6 +864,16 @@
         "median_us": 2186.09
       }
     },
-    "note_superseded": "superseded_* measured earlier versions with three splits and no replacements; review_matrix is the final comparison"
+    "note_superseded": "superseded_* measured earlier versions with three splits and no replacements; review_matrix is the final comparison",
+    "measured_trade_off": {
+      "case": "200 buys, 3 splits, 100 replacements of the last split (301 operations; one 101-version chain, about a third of the book's operations)",
+      "InstrumentSplits_median_us": {
+        "main": 312.0,
+        "main_qpsg": 393.0,
+        "final": 545.0,
+        "final_qpsg": 518.0
+      },
+      "note": "the split read grows with the correction chains behind the effective splits in range; this fixture is slower than main. No general crossover point is claimed."
+    }
   }
 }
