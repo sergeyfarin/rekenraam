@@ -239,12 +239,12 @@ complete endpoint certification. Format checks depend on installed optional
 format validators; `summary.json` records the asserted formats. In particular,
 the recorded system environment has no RFC 3339 `date-time` checker.
 
-The minimum Go toolchain is 1.27.2, declared in `backend/go.mod`. This patch
-fixes the standard-library vulnerabilities reported by the 2026-10-09
-`govulncheck` run. GitHub Actions reads that same minimum with
-`go-version-file`; local Go commands automatically select it when needed.
-The Docker builder pins `golang:1.27.2-trixie`; the runtime remains Debian
-trixie. Native SQLite requires CGO and a C compiler with development headers
+The minimum Go toolchain is 1.27.4, declared in `backend/go.mod`. This patch
+fixes the standard-library vulnerabilities reported by the 2026-11-11
+`govulncheck` run (GO-2026-6859, `net/http` MaxBytesReader header race).
+GitHub Actions reads that same minimum with `go-version-file`; local Go commands
+automatically select it when needed. The Docker builder pins
+`golang:1.27.4-trixie`; the runtime remains Debian trixie. Native SQLite requires CGO and a C compiler with development headers
 (Debian/Ubuntu: `sudo apt install build-essential`; macOS: Xcode command-line
 tools). Windows needs a target C toolchain; no Windows release artifact is
 claimed by this Linux/amd64 validation.
