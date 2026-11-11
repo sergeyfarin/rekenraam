@@ -229,13 +229,16 @@ func tradeQuotePendingSplits(ctx context.Context, queryer rowsQueryer, bookID in
 	clause, args := inClause("po.base_commodity_id", commodityIDs)
 	// Match each trade-implied observation to the effective splits recorded
 	// on its day once; roots are then needed only for those trades and splits.
+	// CROSS JOIN reads the instrument's observations once and seeks each
+	// day's splits by investment_split_facts_lookup_idx; driving from the
+	// splits instead rescans the observations once per split (#562 review).
 	matches := `split_day_quotes AS MATERIALIZED (
 		SELECT po.id AS observation_id, link.operation_id AS trade_operation_id, f.operation_id AS split_operation_id,
 			f.account_id, f.ratio_numerator, f.ratio_denominator
 		FROM price_observations po
-		JOIN investment_operation_journal_links link ON link.transaction_version_id = po.source_transaction_version_id
-		JOIN investment_split_facts f ON f.book_id = po.book_id AND f.commodity_id = po.base_commodity_id
+		CROSS JOIN investment_split_facts f ON f.book_id = po.book_id AND f.commodity_id = po.base_commodity_id
 			AND f.effective_on = po.valuation_date
+		JOIN investment_operation_journal_links link ON link.transaction_version_id = po.source_transaction_version_id
 		JOIN effective_investment_operations split ON split.id = f.operation_id
 		WHERE po.book_id = ? AND po.quote_type = 'trade_implied' AND ` + clause + `
 			AND po.valuation_date > ? AND po.valuation_date <= ?
