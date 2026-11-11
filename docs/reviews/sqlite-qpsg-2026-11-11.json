@@ -253,7 +253,7 @@
   },
   "hosted_ci_observations": {
     "threshold_evidence": false,
-    "note": "pull-request runs with Go test cache enabled; internal/app executed",
+    "note": "Go test cache enabled; internal/app executed. Only push-to-main runs count toward ADR 0016 investigate method (b).",
     "runs": [
       {
         "build": "3.53.4",
@@ -284,6 +284,14 @@
         "commit": "f95eabcb",
         "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42991474105/job/130425311729",
         "app_seconds": 182.212
+      },
+      {
+        "build": "3.54.1+QPSG",
+        "commit": "22c4f913",
+        "event": "push to main",
+        "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42995068138/job/130436983504",
+        "app_seconds": 216.623,
+        "counts_toward_investigate_method_b": true
       }
     ]
   },

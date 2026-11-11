@@ -158,8 +158,9 @@ These are isolated single-package runs on a four-CPU host, not ADR 0016's
 `-p 2` full-gate threshold runs on the six-CPU threshold host. They show the
 direction and size of the recovery but are not formal threshold evidence.
 
-Hosted CI observations (pull-request runs, Go test cache enabled, the
-`internal/app` package executed):
+Hosted CI observations (Go test cache enabled, the `internal/app` package
+executed). The `main` run is the first of the six that investigate method (b)
+needs; the pull-request runs do not count toward it:
 
 | Build | Commit | Run | `internal/app` |
 |---|---|---|---:|
@@ -168,6 +169,7 @@ Hosted CI observations (pull-request runs, Go test cache enabled, the
 | 3.54.1 | `faeedf20` | [42876220590](https://github.com/sergeyfarin/rekenraam/actions/runs/42876220590/job/130040105987) | 253.2 s |
 | 3.54.1 + QPSG | `5e5cf679` | [42985705399](https://github.com/sergeyfarin/rekenraam/actions/runs/42985705399/job/130406232475) | **167.1 s** |
 | 3.54.1 + QPSG | `f95eabcb` | [42991474105](https://github.com/sergeyfarin/rekenraam/actions/runs/42991474105/job/130425311729) | **182.2 s** |
+| 3.54.1 + QPSG, first `main` run | `22c4f913` | [42995068138](https://github.com/sergeyfarin/rekenraam/actions/runs/42995068138/job/130436983504) | 216.6 s |
 
 ADR 0016 measures its thresholds differently, so neither table is threshold
 evidence. Act needs two uncached `-p 2` full gates on the six-CPU threshold
