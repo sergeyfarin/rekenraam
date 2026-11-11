@@ -2,6 +2,11 @@
   "review": "sqlite-driver-admission-2026-11-10",
   "date": "2026-11-10",
   "decision": "pending-owner-performance-and-act-threshold-acceptance",
+  "go_toolchain": {
+    "minimum": "1.27.4",
+    "security_fix": "GO-2026-6859 (net/http MaxBytesReader header race)",
+    "govulncheck": "No vulnerabilities found"
+  },
   "module": {
     "path": "github.com/mattn/go-sqlite3",
     "version": "v1.14.53",
@@ -41,14 +46,16 @@
       "COVERAGE=1 GO_PHASE_TIMINGS=1 ./scripts/test-backend.sh",
       "pnpm build",
       "./scripts/go-backend.sh test ./internal/db -run '^TestBaselineIndexesKeepOrderedAndForeignKeyLookups$' -count=1",
-      "./scripts/go-backend.sh test ./internal/api -run '^(TestNativeSQLiteAuditSearchRejectsNULBeforeFTS|TestRepeatedSelfCheckRunsPassAfterNewEntries)$' -count=1"
+      "./scripts/go-backend.sh test ./internal/api -run '^(TestNativeSQLiteAuditSearchRejectsNULBeforeFTS|TestRepeatedSelfCheckRunsPassAfterNewEntries)$' -count=1",
+      "./scripts/go-backend.sh run golang.org/x/vuln/cmd/govulncheck@latest ./..."
     ],
+    "govulncheck": {"toolchain": "go1.27.4", "result": "No vulnerabilities found"},
     "race_gates": [
       {"environment": "local-6cpu", "engine": "3.53.4", "driver": "v1.14.52", "commit": "7d3d2059", "app_seconds": 225.121, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "uncached": true, "threshold_evidence": true, "result": "pass"},
       {"environment": "local-6cpu", "engine": "3.53.4", "driver": "v1.14.52", "commit": "7d3d2059", "app_seconds": 232.339, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "uncached": true, "threshold_evidence": true, "result": "pass"},
       {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "commit": "35ee1bf5", "app_seconds": 245.657, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "uncached": true, "threshold_evidence": true, "result": "pass"},
       {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "commit": "35ee1bf5", "app_seconds": 293.578, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "uncached": true, "threshold_evidence": true, "result": "pass", "exceeds_act_threshold": true},
-      {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "commit": "35ee1bf5", "app_seconds": 271.254, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "uncached": true, "threshold_evidence": true, "result": "pass", "exceeds_act_threshold": true},
+      {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "commit": "6ee5afb8 (Go 1.27.4 worktree; run before commit)", "app_seconds": 279.089, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1, go1.27.4", "uncached": true, "threshold_evidence": true, "provisional": true, "result": "pass", "exceeds_act_threshold": true},
       {"environment": "local-6cpu", "engine": "3.53.4", "driver": "v1.14.52", "commit": "7d3d2059", "app_seconds": 217.163, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "uncached": true, "threshold_evidence": false, "provisional": true, "superseded": true, "result": "pass"},
       {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "commit": "3c52b99b (worktree content; run before commit)", "app_seconds": 245.012, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "uncached": true, "threshold_evidence": false, "provisional": true, "superseded": true, "result": "pass"},
       {"environment": "local-6cpu", "engine": "3.54.1", "driver": "v1.14.53", "commit": "3c52b99b (worktree content; run before commit)", "app_seconds": 257.674, "configuration": "-race -p 2 -timeout=5m, GOFLAGS=-count=1 GO_PHASE_TIMINGS=1", "uncached": true, "threshold_evidence": false, "provisional": true, "superseded": true, "result": "pass"},
@@ -101,6 +108,7 @@
     "The threshold host has six CPUs; the 2026-11-08 review recorded its ten-CPU reference measurement, which this run could not reproduce.",
     "Hosted CI runs use Go test caching (several packages report cached); they are observations, not formal ADR 0016 threshold runs. The internal/app package did execute in the recorded runs.",
     "The clean uncached pair fires the 270 s act threshold: candidate 245.657/293.578/271.254 s; baseline 225.121/232.339 s. All runs still finish under the 300 s deadline.",
-    "Production-query cost is +16% to +63% on representative affected paths (median of three runs). The owner must accept both the act-threshold breach and the production cost, or a mitigation is required."
+    "Production-query cost is +16% to +63% on representative affected paths (median of three runs). The owner must accept both the act-threshold breach and the production cost, or a mitigation is required.",
+    "The Go 1.27.4 security patch (GO-2026-6859) passes govulncheck; a provisional uncached gate on that toolchain measured 279.089 s, so the act-threshold finding is unchanged."
   ]
 }

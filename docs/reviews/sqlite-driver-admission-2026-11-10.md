@@ -79,6 +79,11 @@ Run on the six-CPU workspace described below, from the admission branch:
   coverage **82.8%**; the application package ran in 198.720 s.
 - `pnpm build` passed, including the embedded-asset test and the integrated
   Go binary build.
+- The branch also moves the Go minimum to **1.27.4** for GO-2026-6859
+  (`net/http` MaxBytesReader header race); `govulncheck ./...` reports **no
+  vulnerabilities**. A provisional uncached full gate on that toolchain
+  measured **279.089 s** in the application package, so the act-threshold
+  finding below is unchanged.
 - The full race suite includes the native audit, search/NUL rejection,
   backup/restore, fee-policy, reference-book, self-check and planner tests.
 
@@ -125,7 +130,9 @@ on the same six-CPU host, clean commits, `-race -p 2 -timeout=5m`.
 
 Two candidate runs exceed ADR 0016's 270 s act threshold; neither baseline run
 does. All runs still finish under the 300 s deadline, but the act rule fires and
-requires an owner amendment or mitigation before the next feature slice. The
+requires an owner amendment or mitigation before the next feature slice. A
+provisional uncached gate on the Go 1.27.4 security-patch worktree measured
+**279.089 s**, so the toolchain patch does not change the conclusion. The
 earlier provisional runs (baseline 217.163 s; candidate 245.012 s / 257.674 s on
 the worktree that became `3c52b99b`) are superseded by this clean pair and are
 not used for the threshold. The 2026-11-08 review's ten-CPU reference

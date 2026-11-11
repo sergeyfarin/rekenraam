@@ -179,7 +179,9 @@ with the explicit uncached gate (`GOFLAGS=-count=1 GO_PHASE_TIMINGS=1
 ./scripts/test-backend.sh`) on a six-CPU workspace: baseline **225.1 / 232.3 s**,
 candidate **245.7 / 293.6 / 271.3 s** in the application package. Two candidate
 runs exceed the **270 s act threshold** while neither baseline run does, so the
-act rule fires; all runs still finish under the 300 s deadline. Hosted runs
+act rule fires; all runs still finish under the 300 s deadline. A provisional
+uncached gate on the Go 1.27.4 security-patch worktree measured **279.089 s**,
+so the toolchain patch does not change the conclusion. Hosted runs
 (**216.8 s** `2eb5adb4`; **252.7 s** `b6655526`; **253.2 s** `faeedf20`) are
 cached-gate observations, not threshold evidence. The investigate threshold
 also remains exceeded. Production-query cost is separately measured at **+16%
