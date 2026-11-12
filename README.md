@@ -210,7 +210,7 @@ Start with the [documentation map](docs/README.md). The
 and architecture decisions live in the
 [requirements](docs/product-requirements.md),
 [conventions](docs/conventions.md) and [ADRs](docs/adrs/). Security reports go
-through [SECURITY.md](SECURITY.md).
+through [SECURITY.md](SECURITY.md). 
 
 ## License
 
