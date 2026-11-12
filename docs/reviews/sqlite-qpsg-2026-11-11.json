@@ -249,7 +249,7 @@
     "failure_reason": "workspace runs as root; unwritable-destination tests cannot fail; identical in all four runs"
   },
   "follow_up_issues": {
-    "560": "formal ADR 0016 -p 2 full-gate measurement with QPSG on the six-CPU threshold host",
+    "560": "act measured 2026-11-12: does not fire with QPSG; investigate method (b) pending three more successful push-to-main CI runs",
     "561": "measure the investment_split_facts scan in InstrumentSplits; index or rewrite if slower"
   },
   "hosted_ci_observations": {
@@ -292,6 +292,25 @@
         "event": "push to main",
         "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42995068138/job/130436983504",
         "app_seconds": 216.623,
+        "counts_toward_investigate_method_b": true,
+        "app_cached": false
+      },
+      {
+        "build": "3.54.1+QPSG",
+        "commit": "d1e7757a",
+        "event": "push to main",
+        "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/43172981137/job/131030422678",
+        "app_seconds": 231.921,
+        "app_cached": false,
+        "counts_toward_investigate_method_b": true
+      },
+      {
+        "build": "3.54.1+QPSG",
+        "commit": "ad3a2968",
+        "event": "push to main",
+        "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/43175502690/job/131038672028",
+        "app_seconds": 220.818,
+        "app_cached": false,
         "counts_toward_investigate_method_b": true
       }
     ]
@@ -299,7 +318,149 @@
   "adr_0016_threshold_methods": {
     "act": "two uncached -p 2 full gates on the six-CPU threshold host, both > 270 s for any package",
     "investigate": "internal/app median > 210 s: three interleaved uncached single-package runs on the ten-CPU reference host, or CI per-package time over the latest six successful main runs",
-    "status": "both open under #560"
+    "status": "act does not fire with QPSG (measured 2026-11-12 at ad3a2968); investigate method (b) has 3/6 main runs and remains open"
+  },
+  "adr_0016_threshold_results": {
+    "issue": "560",
+    "date": "2026-11-12",
+    "commit": "ad3a2968bff9986d19b6c2eee479ae17cd0a4fbb",
+    "commit_short": "ad3a2968",
+    "host": {
+      "description": "six-CPU threshold host",
+      "cpus": 6,
+      "cpu_model": "AMD EPYC 3251 8-Core Processor",
+      "memory": "5.2 GiB",
+      "kernel": "7.0.0-43-generic",
+      "user": "coder",
+      "go": "1.27.4"
+    },
+    "configuration": "GOFLAGS=-count=1 GO_PHASE_TIMINGS=1 ./scripts/test-backend.sh; go test -race -p 2 -timeout=5m ./...",
+    "qpsg": {
+      "confirmed": true,
+      "test": "TestNativeSQLiteEngineFeaturesAndFingerprint",
+      "engine_version": "3.54.1",
+      "driver": "github.com/mattn/go-sqlite3 v1.14.53",
+      "source_id": "2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f1607f4c3c1e4551e8e6ca76",
+      "compile_options_required": [
+        "ENABLE_FTS5",
+        "ENABLE_QPSG",
+        "MAX_SCHEMA=10000000",
+        "THREADSAFE=1"
+      ],
+      "cgo_cflags": "-O2 -g -DSQLITE_ENABLE_QPSG"
+    },
+    "act": {
+      "threshold_seconds": 270,
+      "method": "two uncached -p 2 full gates on the six-CPU threshold host",
+      "fires": false,
+      "result": "Both runs are below 270 s for every package; act does not fire with QPSG.",
+      "runs": [
+        {
+          "run": 1,
+          "started_utc": "2026-11-12T19:19:25Z",
+          "finished_utc": "2026-11-12T19:26:43Z",
+          "gate_wall_seconds": 438.289,
+          "phase_seconds": {
+            "modules": 0.02,
+            "vet": 75.64,
+            "race-compile-vet": 105.36,
+            "race-tests": 256.75
+          },
+          "packages_seconds": {
+            "internal/app": 192.409,
+            "internal/api": 123.386,
+            "internal/db": 114.667,
+            "cmd/rekenraam": 55.429,
+            "internal/testdb": 3.706,
+            "internal/appruntime": 3.374,
+            "internal/marketdata": 1.065,
+            "internal/onlinesource/trading212": 1.057,
+            "internal/web": 1.03,
+            "internal/recur": 1.023,
+            "internal/exact": 1.022,
+            "internal/config": 1.018,
+            "internal/totp": 1.018,
+            "internal/secretbox": 1.013,
+            "migrations": 1.013
+          },
+          "packages_over_270_seconds": [],
+          "cached_packages": [],
+          "exit": 0
+        },
+        {
+          "run": 2,
+          "started_utc": "2026-11-12T19:26:51Z",
+          "finished_utc": "2026-11-12T19:31:34Z",
+          "gate_wall_seconds": 283.773,
+          "phase_seconds": {
+            "modules": 0.01,
+            "vet": 0.61,
+            "race-compile-vet": 4.98,
+            "race-tests": 277.68
+          },
+          "packages_seconds": {
+            "internal/app": 212.753,
+            "internal/api": 132.832,
+            "internal/db": 122.518,
+            "cmd/rekenraam": 58.229,
+            "internal/testdb": 3.752,
+            "internal/appruntime": 3.602,
+            "internal/onlinesource/trading212": 1.08,
+            "internal/marketdata": 1.075,
+            "internal/web": 1.033,
+            "internal/recur": 1.03,
+            "internal/secretbox": 1.027,
+            "internal/exact": 1.025,
+            "internal/config": 1.018,
+            "internal/totp": 1.016,
+            "migrations": 1.015
+          },
+          "packages_over_270_seconds": [],
+          "cached_packages": [],
+          "exit": 0
+        }
+      ]
+    },
+    "investigate": {
+      "threshold_seconds": 210,
+      "method_used": "b",
+      "method": "internal/app median over the latest six successful push-to-main CI runs with QPSG",
+      "runs_available": 3,
+      "runs_required": 6,
+      "runs": [
+        {
+          "commit": "22c4f913",
+          "run_id": 42995068138,
+          "job_id": 130436983504,
+          "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/42995068138/job/130436983504",
+          "created_at": "2026-11-11T09:25:34Z",
+          "app_seconds": 216.623,
+          "app_cached": false
+        },
+        {
+          "commit": "d1e7757a",
+          "run_id": 43172981137,
+          "job_id": 131030422678,
+          "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/43172981137/job/131030422678",
+          "created_at": "2026-11-12T07:07:45Z",
+          "app_seconds": 231.921,
+          "app_cached": false
+        },
+        {
+          "commit": "ad3a2968",
+          "run_id": 43175502690,
+          "job_id": 131038672028,
+          "run_url": "https://github.com/sergeyfarin/rekenraam/actions/runs/43175502690/job/131038672028",
+          "created_at": "2026-11-12T07:28:21Z",
+          "app_seconds": 220.818,
+          "app_cached": false
+        }
+      ],
+      "available_median_seconds": 220.818,
+      "available_median_exceeds_threshold": true,
+      "complete": false,
+      "result": "Not yet a threshold result: three more successful push-to-main CI runs are needed. Method (a) requires the ten-CPU reference host, which this six-CPU host is not."
+    }
   },
   "follow_up_561": {
     "cause": "InstrumentSplits and TradeQuotePendingSplits built correction roots for every investment operation in the book (top-down recursive CTE), so cost grew with investment history; under QPSG InstrumentSplits also full-scanned investment_split_facts",
