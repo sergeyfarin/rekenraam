@@ -99,9 +99,9 @@ and test-only tables.
   dependence; it does not introduce the plan.
 
 One changed plan adds a full scan of a book-scoped financial table: the
-`investment_split_facts` scan in `InstrumentSplits` above. Its latency impact
-has not been measured; [#561](https://github.com/sergeyfarin/rekenraam/issues/561) owns that measurement. Neither plan uses a book-scoped index on split facts,
-because none exists. No other changed plan adds a table scan.
+`investment_split_facts` scan in `InstrumentSplits` above. No other changed
+plan adds a table scan. [#561](https://github.com/sergeyfarin/rekenraam/issues/561) measured it and fixed the cause; see
+[Follow-up: split reads](#follow-up-split-reads-561).
 
 ## Correctness
 
@@ -157,7 +157,110 @@ destination; this workspace runs as root, so permission errors never occur.
 These are isolated single-package runs on a four-CPU host, not ADR 0016's
 `-p 2` full-gate threshold runs on the six-CPU threshold host. They show the
 direction and size of the recovery but are not formal threshold evidence.
-[#560](https://github.com/sergeyfarin/rekenraam/issues/560) owns the formal measurement on the threshold host.
+
+Hosted CI observations (Go test cache enabled, the `internal/app` package
+executed). The `main` run is the first of the six that investigate method (b)
+needs; the pull-request runs do not count toward it:
+
+| Build | Commit | Run | `internal/app` |
+|---|---|---|---:|
+| 3.53.4 (main baseline) | `7d3d2059` | [42760293595](https://github.com/sergeyfarin/rekenraam/actions/runs/42760293595/job/129644138504) | 219.4 s |
+| 3.54.1 | `b6655526` | [42767669769](https://github.com/sergeyfarin/rekenraam/actions/runs/42767669769/job/129667989356) | 252.7 s |
+| 3.54.1 | `faeedf20` | [42876220590](https://github.com/sergeyfarin/rekenraam/actions/runs/42876220590/job/130040105987) | 253.2 s |
+| 3.54.1 + QPSG | `5e5cf679` | [42985705399](https://github.com/sergeyfarin/rekenraam/actions/runs/42985705399/job/130406232475) | **167.1 s** |
+| 3.54.1 + QPSG | `f95eabcb` | [42991474105](https://github.com/sergeyfarin/rekenraam/actions/runs/42991474105/job/130425311729) | **182.2 s** |
+| 3.54.1 + QPSG, first `main` run | `22c4f913` | [42995068138](https://github.com/sergeyfarin/rekenraam/actions/runs/42995068138/job/130436983504) | 216.6 s |
+
+ADR 0016 measures its thresholds differently, so neither table is threshold
+evidence. Act needs two uncached `-p 2` full gates on the six-CPU threshold
+host. Investigate needs the `internal/app` median of three interleaved
+uncached runs on the ten-CPU reference host, or of CI's latest six successful
+`main` runs. [#560](https://github.com/sergeyfarin/rekenraam/issues/560) owns both.
+
+## Follow-up: split reads (#561)
+
+`InstrumentSplits` and `TradeQuotePendingSplits` (valuation and returns reads)
+mapped operations to their correction roots with a recursive CTE over
+**every** investment operation in the book, then joined the few splits and
+quotes in range to it. Both plans, with and without QPSG, read that whole CTE,
+so each read cost time in proportion to the book's investment history. Under
+QPSG, `InstrumentSplits` additionally scanned `investment_split_facts`, which
+had no index besides its primary key.
+
+The fix:
+
+- `correctionRootsOf` seeds the walk with only the operations a read needs and
+  climbs each `correction_of_operation_id` chain by primary key. `CROSS JOIN`
+  keeps the seeds first.
+- `InstrumentSplits` selects the **effective** splits in range once, in a
+  materialized CTE, and uses it as both the seed and the result. Superseded
+  split versions are no longer starting points, so each chain is walked once
+  rather than once per version; the walk from an effective split still visits
+  its superseded predecessors as ancestors. The instrument list is bound once.
+- `TradeQuotePendingSplits` matches trade-implied observations to the
+  effective splits on their day once, in a materialized CTE, reading the
+  instrument's observations once and seeking each day's splits by index
+  (`CROSS JOIN`), then seeds the walk from those matches.
+- Migration `0012` adds `investment_split_facts_lookup_idx`
+  (`book_id, commodity_id, effective_on`). Neither read scans a book table;
+  the remaining scans are of the small seed, ancestry and match CTEs.
+
+Measured with the opt-in `TestSplitQueryCost` probe
+(`SPLIT_QUERY_COST=1`, `SPLIT_QUERY_OPS` buys, `SPLIT_QUERY_SPLITS` splits
+alternating 2:1 and 1:2, `SPLIT_QUERY_REPLACEMENTS` replacements of the last
+split; one holding, two instrument IDs). Each code version ran from its own
+clean worktree with the probe copied in: `main` at `22c4f913`, the first #562
+head `ead111ec`, and the final version `bcdb2467`. Medians of three
+alternating rounds per version and build on the four-CPU workspace:
+
+| Case | Read | `main` | `main` + QPSG | first #562 + QPSG | Final | Final + QPSG |
+|---|---|---:|---:|---:|---:|---:|
+| 2,000 buys, 3 splits | `InstrumentSplits` | 1,714 µs | 1,848 µs | 288 µs | 412 µs | **319 µs** |
+| | `TradeQuotePendingSplits` | 4,083 µs | 3,265 µs | 1,332 µs | 1,849 µs | **1,981 µs** |
+| 500 buys, 300 splits | `InstrumentSplits` | 1,243 µs | 1,425 µs | 1,012 µs | 1,441 µs | **1,077 µs** |
+| | `TradeQuotePendingSplits` | 1,636 µs | 1,485 µs | **21,363 µs** | 1,350 µs | **776 µs** |
+| 200 buys, 3 splits, 100 replacements | `InstrumentSplits` | 312 µs | 393 µs | **2,591 µs** | 545 µs | **518 µs** |
+| | `TradeQuotePendingSplits` | 697 µs | 851 µs | 630 µs | 976 µs | **662 µs** |
+
+The review of #562 and these measurements found two regressions in the
+first #562 version, both fixed in the final one:
+
+- **Replacement chains:** it seeded every split fact in range, including
+  superseded versions, so a chain of *k* replacements was walked *k* times
+  (2,591 µs against 393 µs on `main` for 100 replacements). It also bound
+  the instrument list twice, so 16,380 instruments exceeded SQLite's 32,766
+  bound parameters.
+- **Many splits:** its trade-quote match drove from split facts and rescanned
+  the instrument's observations once per split, about 14× slower than `main`
+  with 300 splits.
+
+Neither read now grows with the book's operation count; the split read grows
+instead with the length of the correction chains behind the effective splits
+in range, because the walk visits each superseded predecessor once. That
+trade-off is measured, not modelled: on the 100-replacement fixture (200
+buys, 3 splits and 100 replacements: 303 operations and 103 split facts, as
+the probe logs; one 101-version chain, about a third of the book) the final
+`InstrumentSplits` is slower than `main`, **518 µs against 393 µs** with QPSG
+and 545 µs against 312 µs without. No general crossover point is claimed.
+`TradeQuotePendingSplits` still reads the instrument's observations in range
+through `price_observations_lookup_idx`, as `main` did.
+
+Correctness:
+
+- `TestCorrectionRootsOfMatchesReplayOrderRoots` compares the new roots with
+  the book-wide replay order (`investmentReplayOrderOperationIDsQuery`)
+  through a two-step replacement chain, for one seed, duplicate seeds and an
+  unknown operation. It fails when the root or the chain walk is wrong; no
+  existing test did.
+- `TestTradeQuoteBeforeALaterDaySplitIsNotPending` pins that only splits on
+  the quote's own day are pending. Loosening that match passed every existing
+  test.
+- Dropping the trade seeds fails five existing split-day quote tests.
+- `TestBaselineIndexesKeepOrderedAndForeignKeyLookups` requires the new index
+  for split facts by instrument and date.
+- `TestSplitReadsBindTheirInstrumentListOnce` reads 16,380 instruments
+  through both split reads; it fails on the first #562 version with "too
+  many SQL variables".
 
 ## Limits
 
@@ -165,9 +268,6 @@ direction and size of the recovery but are not formal threshold evidence.
 - The plan scan covers statements the test suites execute, with their test
   values, on an unanalysed schema. Statements no test executes are not
   covered; the application never runs `ANALYZE`.
-- The `InstrumentSplits` change from a CTE scan to a table-wide
-  `investment_split_facts` scan is unmeasured; it grows with the number of
-  splits recorded, not with operations or transactions ([#561](https://github.com/sergeyfarin/rekenraam/issues/561)).
 - A build that does not source `scripts/native-sqlite-env.sh` loses QPSG; the
   fingerprint test catches this in the backend gate, not at runtime.
 - No statement cache, deadline, scheduling, durability, coverage or schema
