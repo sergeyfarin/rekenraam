@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -47,7 +48,12 @@ func TestArchivingAParentOrInstitutionWithDependentsIsRefused(t *testing.T) {
 	} {
 		res := referenceDataRequest(handler, cookie, csrf, http.MethodPost, refusal.path, `{}`)
 		require.Equalf(t, http.StatusConflict, res.Code, "%s: %s", refusal.name, res.Body.String())
-		assert.Equal(t, "CONFLICT", apiErrorCode(t, res), refusal.name)
+		want := "CONFLICT"
+		if strings.HasPrefix(refusal.path, "/api/v1/institutions/") {
+			// Institution archive names the account and date (#552).
+			want = "REFERENCE_DATED_CONFLICT"
+		}
+		assert.Equal(t, want, apiErrorCode(t, res), refusal.name)
 	}
 
 	// A closed dependent still counts: its next rename would be refused too.

@@ -47,7 +47,7 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Active payee with the same name exists on a date the restore governs; REFERENCE_VERSION_BACKDATED for a lifecycle change before the latest version or an update before the first version; CONFLICT when a version was added while the edit was prepared (reload and retry)
+      description: REFERENCE_DATED_CONFLICT (with conflict_rule, conflict_date and conflict_name) when an active payee has the same name on a date the restore governs; REFERENCE_VERSION_BACKDATED for a lifecycle change before the latest version or an update before the first version; CONFLICT when a version was added while the edit was prepared (reload and retry)
       content:
         application/json:
           schema:

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -307,7 +308,11 @@ func TestReferenceForwardEditNameUniquenessCoversTheWholeWindow(t *testing.T) {
 				updatePayeeVersion(t, f.referenceVersionFixture, v.ID, "Taken in September", "2026-09-01")
 				updatePayeeVersion(t, f.referenceVersionFixture, v.ID, "Free again", "2026-10-01")
 			}
-			for _, name := range []string{"Free again", "Taken in September"} {
+			rule := "category_name_taken"
+			if kind == "payee" {
+				rule = "payee_name_taken"
+			}
+			for name, date := range map[string]string{"Free again": "2026-10-01", "Taken in September": "2026-09-01"} {
 				before := f.counts(t)
 				_, err := f.rename(name, "2026-08-01")
 				require.Error(t, err, "%q is taken on a day the August version governs", name)
@@ -316,6 +321,7 @@ func TestReferenceForwardEditNameUniquenessCoversTheWholeWindow(t *testing.T) {
 				} else {
 					assert.ErrorIs(t, err, ErrPayeeExists)
 				}
+				requireReferenceConflict(t, err, rule, date, name)
 				assert.Equal(t, before, f.counts(t))
 			}
 			_, err := f.rename("Free again", "2026-06-01")
@@ -337,6 +343,7 @@ func TestCategoryForwardEditParentMustStayActiveThroughToday(t *testing.T) {
 	before := f.counts(t)
 	_, err = f.categories.UpdateCategory(ctx, UpdateCategoryInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "category.update", CategoryID: f.id, ParentCategoryID: &parent.ID, EffectiveFrom: "2026-08-01"})
 	require.ErrorIs(t, err, ErrCategoryParentInvalid, "the parent is archived on days the August version governs")
+	requireReferenceConflict(t, err, "category_parent_archived", "2026-09-01", "Parent")
 	assert.Equal(t, before, f.counts(t))
 	current, err := f.categories.Category(ctx, f.id)
 	require.NoError(t, err)
@@ -355,6 +362,7 @@ func TestCategoryForwardEditRefusesADatedParentCycle(t *testing.T) {
 	// On its own date the tree has no loop; from September it would.
 	_, err = f.categories.UpdateCategory(ctx, UpdateCategoryInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "category.update", CategoryID: f.id, ParentCategoryID: &other.ID, EffectiveFrom: "2026-08-01"})
 	require.ErrorIs(t, err, ErrCategoryParentInvalid)
+	requireReferenceConflict(t, err, "category_parent_cycle", "2026-09-01", "Other")
 	assert.Equal(t, before, f.counts(t))
 }
 
@@ -371,6 +379,7 @@ func TestReferenceLifecycleRulesCoverTheWholeWindow(t *testing.T) {
 		before := f.counts(t)
 		_, err = f.lifecycle("2026-08-01", true)
 		require.ErrorIs(t, err, ErrCategoryHasChildren, "the child is still active in August")
+		requireReferenceConflict(t, err, "category_active_child", "2026-08-01", "Child")
 		assert.Equal(t, before, f.counts(t))
 		_, err = f.lifecycle("2026-09-01", true)
 		require.NoError(t, err)
@@ -386,6 +395,7 @@ func TestReferenceLifecycleRulesCoverTheWholeWindow(t *testing.T) {
 		updateCategoryVersion(t, f.referenceVersionFixture, other.ID, "Other again", "2026-09-01")
 		_, err = f.lifecycle("2026-07-01", false)
 		require.ErrorIs(t, err, ErrCategoryExists)
+		requireReferenceConflict(t, err, "category_name_taken", "2026-08-01", "Original")
 		_, err = f.lifecycle("2026-09-01", false)
 		require.NoError(t, err)
 	})
@@ -400,6 +410,7 @@ func TestReferenceLifecycleRulesCoverTheWholeWindow(t *testing.T) {
 		updatePayeeVersion(t, f.referenceVersionFixture, other.ID, "Other again", "2026-09-01")
 		_, err = f.lifecycle("2026-07-01", false)
 		require.ErrorIs(t, err, ErrPayeeExists)
+		requireReferenceConflict(t, err, "payee_name_taken", "2026-08-01", "Original")
 		_, err = f.lifecycle("2026-09-01", false)
 		require.NoError(t, err)
 	})
@@ -420,6 +431,7 @@ func TestReferenceLifecycleRulesCoverTheWholeWindow(t *testing.T) {
 		before := f.counts(t)
 		_, err = f.lifecycle("2026-08-01", true)
 		require.ErrorIs(t, err, ErrInstitutionInUse, "the account still names the institution in August")
+		requireReferenceConflict(t, err, "institution_linked_account", "2026-08-01", "Linked")
 		assert.Equal(t, before, f.counts(t))
 		_, err = f.lifecycle("2026-09-01", true)
 		require.NoError(t, err)
@@ -504,4 +516,49 @@ func TestReferenceWriteRefusesAStaleBaseVersion(t *testing.T) {
 			assert.Equal(t, before, f.counts(t))
 		})
 	}
+}
+
+// requireReferenceConflict asserts the dated refusal the client explains: the
+// rule, the first date it fails, and the other entity's name.
+func requireReferenceConflict(t *testing.T, err error, rule, date, name string) {
+	t.Helper()
+	conflict, ok := errors.AsType[ReferenceRuleConflictError](err)
+	require.Truef(t, ok, "want a dated reference conflict, got %v", err)
+	assert.Equal(t, rule, conflict.Rule)
+	assert.Equal(t, date, conflict.Date)
+	assert.Equal(t, name, conflict.Name)
+}
+
+// An unnamed built-in or starter category is identified by its key, which the client
+// labels in its own locale.
+func TestReferenceConflictIdentifiesABuiltinCategoryByKey(t *testing.T) {
+	t.Parallel()
+	f := newReferenceBackdatingFixture(t, "category")
+	ctx := context.Background()
+	// Seed the built-ins through the repository: the service call also
+	// reloads setup status, which this fixture does not wire.
+	_, err := db.NewCategoryRepository(f.database).EnsureCategories(db.WithReferenceDate(ctx, "2026-10-15"), db.EnsureCategoriesParams{
+		BookID: BookID, ChangedByUserID: f.ownerUserID, OriginType: "browser_api", Operation: "category.ensure",
+		Specs: builtinCategorySpecs(), CreatedAt: "2026-10-15T12:00:00Z", EffectiveFrom: categoryGenesisDate,
+	})
+	require.NoError(t, err)
+	var builtin Category
+	all, err := f.categories.ListCategories(ctx, ListCategoriesInput{CategoryType: "expense"})
+	require.NoError(t, err)
+	for _, category := range all {
+		if category.BuiltinKey != "" && category.Name == "" {
+			if _, err := f.categories.DisableCategory(ctx, CategoryLifecycleInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", CategoryID: category.ID, EffectiveFrom: "2026-09-01"}); err == nil {
+				builtin = category
+				break
+			}
+		}
+	}
+	require.NotZero(t, builtin.ID, "an unnamed, childless built-in or starter category to disable")
+	_, err = f.categories.UpdateCategory(ctx, UpdateCategoryInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "category.update", CategoryID: f.id, ParentCategoryID: &builtin.ID, EffectiveFrom: "2026-08-01"})
+	conflict, ok := errors.AsType[ReferenceRuleConflictError](err)
+	require.Truef(t, ok, "want a dated reference conflict, got %v", err)
+	assert.Equal(t, "category_parent_archived", conflict.Rule)
+	assert.Equal(t, "2026-09-01", conflict.Date)
+	assert.Empty(t, conflict.Name)
+	assert.Equal(t, builtin.BuiltinKey, conflict.BuiltinKey)
 }

@@ -282,18 +282,22 @@ func (r *InstitutionRepository) UpdateInstitution(ctx context.Context, params Up
 		}
 		for _, date := range dates {
 			dated := WithReferenceDate(ctx, date)
-			var accounts int
-			if err := tx.QueryRowContext(dated, `
-				SELECT COUNT(1)
+			var account string
+			err := tx.QueryRowContext(dated, `
+				SELECT COALESCE(av.name, '')
 				FROM accounts a
 				JOIN `+CurrentReferenceVersions(dated, "account")+` av ON av.account_id = a.id
 				WHERE a.book_id = ? AND av.institution_id = ? AND av.status <> 'archived'
-			`, params.BookID, params.InstitutionID).Scan(&accounts); err != nil {
+				ORDER BY a.id
+				LIMIT 1
+			`, params.BookID, params.InstitutionID).Scan(&account)
+			if errors.Is(err, sql.ErrNoRows) {
+				continue
+			}
+			if err != nil {
 				return InstitutionRecord{}, fmt.Errorf("check institution accounts on %s: %w", date, err)
 			}
-			if accounts > 0 {
-				return InstitutionRecord{}, ErrInstitutionHasUnarchivedAccounts
-			}
+			return InstitutionRecord{}, ReferenceRuleConflictError{Rule: ReferenceRuleInstitutionLinkedAccount, Date: date, Name: account, Err: ErrInstitutionHasUnarchivedAccounts}
 		}
 	}
 

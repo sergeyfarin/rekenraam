@@ -16,6 +16,7 @@ ErrorBody:
         - PRICE_IMPACT_STALE
         - CONFLICT
         - REFERENCE_VERSION_BACKDATED
+        - REFERENCE_DATED_CONFLICT
         - CSRF_INVALID
         - RATE_LIMITED
         - MFA_AUTHENTICATOR_UNAVAILABLE
@@ -110,6 +111,38 @@ ErrorBody:
         "reconciliation override is required", or RECONCILIATION_IMPACT_STALE):
         the checkpoints the write would invalidate right now. A reorder, which
         has no preview, binds its override to this set (#296).
+    conflict_rule:
+      type: string
+      enum:
+        - category_name_taken
+        - payee_name_taken
+        - category_parent_archived
+        - category_parent_cycle
+        - category_active_child
+        - institution_linked_account
+      description: >
+        On REFERENCE_DATED_CONFLICT: the rule a dated category, payee or
+        institution write breaks on a date the new version governs, which may
+        lie between the requested date and today (#552).
+    conflict_date:
+      type: string
+      format: date
+      description: >
+        On REFERENCE_DATED_CONFLICT: the first date the rule fails. On
+        REFERENCE_VERSION_BACKDATED: the latest version's date, the earliest
+        date a lifecycle or structural change may take effect.
+    conflict_name:
+      type: string
+      description: >
+        On REFERENCE_DATED_CONFLICT: the other record's name on conflict_date
+        (the taken name, the parent, the active child or the linked account).
+        Absent for an unnamed built-in or starter category; see
+        conflict_builtin_key.
+    conflict_builtin_key:
+      type: string
+      description: >
+        On REFERENCE_DATED_CONFLICT about an unnamed built-in or starter
+        category: its built-in key, which the client labels in its locale.
 ErrorResponse:
   type: object
   required:

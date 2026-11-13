@@ -1,6 +1,9 @@
-import type { APIErrorCode } from '#lib/api/client.ts';
+import type { APIErrorCode, APIReferenceConflict } from '#lib/api/client.ts';
 import { APIClientError } from '#lib/api/client.ts';
+import { builtinCategoryLabel } from '#lib/categories/category-labels.ts';
+import { formatCalendarDate } from '#lib/dates/calendar-date.ts';
 import { m } from '#lib/paraglide/messages.js';
+import { getLocale } from '#lib/paraglide/runtime.js';
 
 const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   VALIDATION_FAILED: () => m.api_error_validation_failed(),
@@ -12,6 +15,7 @@ const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   PRICE_IMPACT_STALE: () => m.pricing_stale_review(),
   CONFLICT: () => m.api_error_conflict(),
   REFERENCE_VERSION_BACKDATED: () => m.api_error_reference_version_backdated(),
+  REFERENCE_DATED_CONFLICT: () => m.api_error_reference_dated_conflict(),
   CSRF_INVALID: () => m.api_error_csrf_invalid(),
   EXPORT_SCOPE_UNSUPPORTED: () => m.api_error_export_scope_unsupported(),
   RATE_LIMITED: () => m.api_error_rate_limited(),
@@ -100,10 +104,46 @@ export function getAPIErrorMessage(code: APIErrorCode): string {
   return apiErrorMessageByCode[code]?.() ?? m.api_error_generic();
 }
 
+/**
+ * Explains a dated reference-data refusal (#552). Its cause can sit on a day
+ * between the requested date and today, invisible in today's lists, so the
+ * message names the rule, the day and the other record. Without those details
+ * the code's own generic message is used.
+ */
+function referenceConflictMessage(code: APIErrorCode, conflict: APIReferenceConflict | undefined): string | undefined {
+  if (!conflict?.date) {
+    return undefined;
+  }
+  const date = formatCalendarDate(conflict.date, getLocale());
+  if (code === 'REFERENCE_VERSION_BACKDATED') {
+    return m.api_error_reference_version_backdated_from({ date });
+  }
+  const name = conflict.name?.trim() || (conflict.builtinKey ? builtinCategoryLabel(conflict.builtinKey) : '');
+  if (code !== 'REFERENCE_DATED_CONFLICT' || !name) {
+    return undefined;
+  }
+  switch (conflict.rule) {
+    case 'category_name_taken':
+      return m.api_error_reference_conflict_category_name_taken({ date, name });
+    case 'payee_name_taken':
+      return m.api_error_reference_conflict_payee_name_taken({ date, name });
+    case 'category_parent_archived':
+      return m.api_error_reference_conflict_category_parent_archived({ date, name });
+    case 'category_parent_cycle':
+      return m.api_error_reference_conflict_category_parent_cycle({ date, name });
+    case 'category_active_child':
+      return m.api_error_reference_conflict_category_active_child({ date, name });
+    case 'institution_linked_account':
+      return m.api_error_reference_conflict_institution_linked_account({ date, name });
+    default:
+      return undefined;
+  }
+}
+
 export function getAPIClientErrorMessage(error: unknown): string {
   if (error instanceof APIClientError) {
     if (error.code !== undefined) {
-      return getAPIErrorMessage(error.code);
+      return referenceConflictMessage(error.code, error.conflict) ?? getAPIErrorMessage(error.code);
     }
 
     if (error.status === 0) {

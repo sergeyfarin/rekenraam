@@ -289,14 +289,13 @@ func readInstitutionID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 }
 
 func writeInstitutionServiceError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, action string, err error) {
+	if writeReferenceVersionError(w, err) {
+		return
+	}
 	var validationError app.ValidationError
 	switch {
 	case errors.As(err, &validationError):
 		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationError.Error())
-	case errors.Is(err, app.ErrReferenceVersionBackdated):
-		writeAPIError(w, http.StatusConflict, "REFERENCE_VERSION_BACKDATED", err.Error())
-	case errors.Is(err, app.ErrReferenceVersionChanged):
-		writeAPIError(w, http.StatusConflict, "CONFLICT", err.Error())
 	case errors.Is(err, app.ErrInstitutionNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "institution not found")
 	case errors.Is(err, app.ErrInstitutionInUse):

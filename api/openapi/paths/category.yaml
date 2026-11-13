@@ -127,7 +127,7 @@ patch:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Active sibling category with the same name exists on a date the new version governs; REFERENCE_VERSION_BACKDATED for a lifecycle or structural change before the latest version or an update before the first version; CONFLICT when a version was added while the edit was prepared (reload and retry)
+      description: REFERENCE_DATED_CONFLICT (with conflict_rule, conflict_date and conflict_name) when an active sibling has the same name, the parent is archived, or the parent would form a loop, on a date the new version governs; REFERENCE_VERSION_BACKDATED for a lifecycle or structural change before the latest version or an update before the first version; CONFLICT when a version was added while the edit was prepared (reload and retry)
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"

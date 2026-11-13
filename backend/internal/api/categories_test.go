@@ -215,9 +215,10 @@ func TestCategoryValidationRejectsParentMismatchCycleAndAccountFields(t *testing
 		"category_type":"expense",
 		"icon":"No Spaces"
 	}`, http.StatusBadRequest)
+	// A loop is a dated refusal: it names the date and the other category.
 	patchCategory(t, handler, sessionCookie, csrfToken, expenseParent.ID, `{
 		"parent_category_id":`+strconvFormatInt(expenseChild.ID)+`
-	}`, http.StatusBadRequest)
+	}`, http.StatusConflict)
 	patchCategory(t, handler, sessionCookie, csrfToken, expenseChild.ID, `{
 		"category_type":"income"
 	}`, http.StatusBadRequest)

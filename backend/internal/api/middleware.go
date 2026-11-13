@@ -32,6 +32,14 @@ type errorBody struct {
 	// CheckpointIDs names the checkpoints a refused write would invalidate
 	// right now, on a reconciliation guard refusal (#296).
 	CheckpointIDs []int64 `json:"checkpoint_ids,omitempty"`
+	// The conflict_* fields explain a dated reference-data refusal (#552):
+	// on REFERENCE_DATED_CONFLICT, the broken rule, the first date it fails
+	// and the other entity; on REFERENCE_VERSION_BACKDATED, conflict_date is
+	// the latest version's date, the earliest a lifecycle change may take.
+	ConflictRule       string `json:"conflict_rule,omitempty"`
+	ConflictDate       string `json:"conflict_date,omitempty"`
+	ConflictName       string `json:"conflict_name,omitempty"`
+	ConflictBuiltinKey string `json:"conflict_builtin_key,omitempty"`
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

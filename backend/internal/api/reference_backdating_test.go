@@ -59,7 +59,7 @@ func TestReferenceBackdatedLifecycleReturnsCodedConflict(t *testing.T) {
 				require.NoError(t, database.QueryRow("SELECT COUNT(*) FROM audit_events").Scan(&before))
 				res := mutate(http.MethodPost, path+"/"+action, `{"effective_from":"2025-03-01"}`)
 				require.Equal(t, http.StatusConflict, res.Code, res.Body.String())
-				assert.JSONEq(t, `{"error":{"code":"REFERENCE_VERSION_BACKDATED","message":"reference version is backdated: reference lifecycle or structural changes must take effect on or after 2025-06-01"}}`, res.Body.String())
+				assert.JSONEq(t, `{"error":{"code":"REFERENCE_VERSION_BACKDATED","message":"reference version is backdated: reference lifecycle or structural changes must take effect on or after 2025-06-01","conflict_date":"2025-06-01"}}`, res.Body.String())
 				require.NoError(t, database.QueryRow("SELECT COUNT(*) FROM audit_events").Scan(&after))
 				assert.Equal(t, before, after)
 			}
@@ -94,4 +94,23 @@ func TestReferenceStaleBaseVersionReturnsConflict(t *testing.T) {
 			assert.Contains(t, res.Body.String(), `"code":"CONFLICT"`)
 		})
 	}
+}
+
+// A dated edit refused because of a day between its date and today names the
+// rule, the day and the other record, so the editor can explain a cause that
+// today's category list does not show (#552).
+func TestReferenceDatedConflictNamesTheRuleDateAndRecord(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	cookie, csrf, _ := setupAccountAPITest(t, handler)
+	mine := createCategoryForSession(t, handler, cookie, csrf, `{"name":"Mine","category_type":"expense"}`)
+	other := createCategoryForSession(t, handler, cookie, csrf, `{"name":"Other","category_type":"expense"}`)
+	otherPath := fmt.Sprintf("/api/v1/categories/%d", other.ID)
+	for _, body := range []string{`{"name":"Taken","effective_from":"2025-09-01"}`, `{"name":"Other again","effective_from":"2025-10-01"}`} {
+		res := referenceDataRequest(handler, cookie, csrf, http.MethodPatch, otherPath, body)
+		require.Equal(t, http.StatusOK, res.Code, res.Body.String())
+	}
+	res := referenceDataRequest(handler, cookie, csrf, http.MethodPatch, fmt.Sprintf("/api/v1/categories/%d", mine.ID), `{"name":"Taken","effective_from":"2025-08-01"}`)
+	require.Equal(t, http.StatusConflict, res.Code, res.Body.String())
+	assert.JSONEq(t, `{"error":{"code":"REFERENCE_DATED_CONFLICT","message":"category already exists on 2025-09-01","conflict_rule":"category_name_taken","conflict_date":"2025-09-01","conflict_name":"Taken"}}`, res.Body.String())
 }

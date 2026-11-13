@@ -581,15 +581,23 @@ func (s *CategoryService) newCategorySpec(ctx context.Context, input categorySpe
 		if err != nil {
 			return db.AccountSpec{}, ErrCategoryParentInvalid
 		}
-		if parent.Status == "archived" || parent.CategoryType != categoryType {
+		if parent.CategoryType != categoryType {
 			return db.AccountSpec{}, ErrCategoryParentInvalid
 		}
-		cycle, err := s.repository.WouldCreateCycle(ctx, BookID, input.CategoryID, parentID.Int64)
-		if err != nil {
-			return db.AccountSpec{}, fmt.Errorf("check category parent cycle: %w", err)
-		}
-		if cycle {
-			return db.AccountSpec{}, ErrCategoryParentInvalid
+		// An update's version can govern many dates; the write transaction
+		// checks the parent's status and loops on each of them and names the
+		// failing date (#552). A new category only needs today's tree.
+		if input.Current == nil {
+			if parent.Status == "archived" {
+				return db.AccountSpec{}, ErrCategoryParentInvalid
+			}
+			cycle, err := s.repository.WouldCreateCycle(ctx, BookID, input.CategoryID, parentID.Int64)
+			if err != nil {
+				return db.AccountSpec{}, fmt.Errorf("check category parent cycle: %w", err)
+			}
+			if cycle {
+				return db.AccountSpec{}, ErrCategoryParentInvalid
+			}
 		}
 	}
 

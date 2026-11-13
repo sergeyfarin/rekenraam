@@ -63,7 +63,7 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Active sibling category with the same name exists on a date the restore governs; REFERENCE_VERSION_BACKDATED for a lifecycle or structural change before the latest version or an update before the first version
+      description: REFERENCE_DATED_CONFLICT (with conflict_rule, conflict_date and conflict_name) when an active sibling has the same name on a date the restore governs; REFERENCE_VERSION_BACKDATED for a lifecycle or structural change before the latest version or an update before the first version
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"

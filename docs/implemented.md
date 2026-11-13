@@ -62,11 +62,13 @@ changes, and corrections before the first version, return
 lifecycle versions remain valid. Rules that involve other entities (sibling and
 payee name uniqueness, active category parent and dated cycles, disable with
 active children, institution archive with linked accounts) hold on every date
-the new version governs, through today for a version with no later one. A fill
+the new version governs, through today for a version with no later one. Such
+a refusal returns `409 REFERENCE_DATED_CONFLICT` naming the rule, the first
+failing date and the other record, and backdating refusals name the earliest
+allowed date. The category list, category editor and institution editor
+explain both in all six locales through the shared form error boundary. A fill
 from a version that changed before the write is refused with `409 CONFLICT`,
-and updates answer with today's state. The existing category and institution
-editors show translated refusal guidance in all six locales through their
-shared form error boundary. The
+and updates answer with today's state. The
 [per-kind contract and named regressions](design/accounts-system-design.md)
 record the field split, the window rule, and API and translation coverage.
 

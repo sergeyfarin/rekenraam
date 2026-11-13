@@ -289,6 +289,9 @@ func (r *PayeeRepository) UpdatePayee(ctx context.Context, params UpdatePayeePar
 		}
 		for _, date := range dates {
 			if err := ensurePayeeNameAvailable(WithReferenceDate(ctx, date), tx, params.BookID, params.Spec.NormalizedName, params.PayeeID); err != nil {
+				if errors.Is(err, ErrPayeeExists) {
+					return PayeeRecord{}, ReferenceRuleConflictError{Rule: ReferenceRulePayeeNameTaken, Date: date, Name: params.Spec.Name, Err: ErrPayeeExists}
+				}
 				return PayeeRecord{}, err
 			}
 		}

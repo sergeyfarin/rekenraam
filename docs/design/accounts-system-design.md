@@ -446,16 +446,33 @@ between those dates (`referenceWindowDatesTx`, the same approach as
 `requireNoDatedParentCycleTx`):
 
 - category sibling-name and normalized-payee-name uniqueness, for updates and
-  restore commands (`409 CONFLICT`);
-- the parent of an active category set by a forward edit must be an active
-  category of the same type (`400 VALIDATION_FAILED`, "category parent is
-  invalid"). The forward edit must also not make the category its own ancestor
-  on any later date;
-- category disable refuses a child that is active on any date in the window;
+  restore commands (`category_name_taken`, `payee_name_taken`);
+- a forward category edit's parent must be an active category on every date
+  (`category_parent_archived`) and must not make the category its own ancestor
+  on any later date (`category_parent_cycle`). This applies when the category
+  is active or the edit changes the parent. An archived category's unchanged
+  parent is not re-validated. A parent of another type, or a missing one,
+  stays `400 VALIDATION_FAILED`, and new categories keep today's check;
+- category disable refuses a child that is active on any date in the window
+  (`category_active_child`);
 - institution archive refuses an account that is not archived and names the
-  institution on any date in the window.
+  institution on any date in the window (`institution_linked_account`).
 
 Institutions have no unique-name requirement.
+
+**Refusals explain themselves.** The failing date may lie between the
+requested date and today, where today's lists do not show the cause. These
+refusals therefore return `409 REFERENCE_DATED_CONFLICT`, with
+`conflict_rule` (the value in parentheses above), `conflict_date` (the first
+failing date) and `conflict_name` (the taken name, the parent, the child or
+the account on that date). For an unnamed built-in or starter category,
+`conflict_builtin_key` replaces the name, and the client labels it in its own
+locale. `REFERENCE_VERSION_BACKDATED` carries the latest version's date as
+`conflict_date`. The service errors unwrap to the existing sentinels
+(`ErrCategoryExists`, `ErrPayeeExists`, `ErrCategoryParentInvalid`,
+`ErrCategoryHasChildren`, `ErrInstitutionInUse`). The form error boundary
+renders rule-specific copy in all six locales, with the date formatted for the
+reader. A refusal without details falls back to the code's generic message.
 
 **Stale fills are refused.** The service fills omitted PATCH fields, and
 lifecycle commands copy descriptive fields, from a read taken before the write
@@ -483,10 +500,12 @@ Named service regressions: `TestReferenceBackdatedDescriptionPreservesHistorical
 `TestReferenceLifecycleRulesCoverTheWholeWindow`,
 `TestPayeeForwardEditDefaultHintsMustBeValidToday`,
 `TestReferenceWriteRefusesAStaleBaseVersion`,
+`TestReferenceConflictIdentifiesABuiltinCategoryByKey`,
 `TestCategoryBackdatedPatchKeepsAsOfStructureAndParentValidation` and
 `TestPayeeBackdatedPatchKeepsAsOfDefaultsAndMetadata`.
 `TestReferenceBackdatedLifecycleReturnsCodedConflict` and
-`TestReferenceStaleBaseVersionReturnsConflict` cover the HTTP refusals.
+`TestReferenceStaleBaseVersionReturnsConflict` and
+`TestReferenceDatedConflictNamesTheRuleDateAndRecord` cover the HTTP refusals.
 `form-errors.test.ts` exercises the forms' translated error boundary in each
 locale.
 

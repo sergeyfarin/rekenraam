@@ -410,11 +410,12 @@ func (s *InstitutionService) changeInstitutionStatus(ctx context.Context, input 
 		if errors.Is(err, db.ErrNotFound) {
 			return Institution{}, ErrInstitutionNotFound
 		}
-		if errors.Is(err, db.ErrInstitutionHasUnarchivedAccounts) {
-			return Institution{}, ErrInstitutionInUse
-		}
+		// Before the plain in-use check: the dated refusal unwraps to it too.
 		if mapped, ok := referenceBackdatingError(err); ok {
 			return Institution{}, mapped
+		}
+		if errors.Is(err, db.ErrInstitutionHasUnarchivedAccounts) {
+			return Institution{}, ErrInstitutionInUse
 		}
 		return Institution{}, fmt.Errorf("persist institution status: %w", err)
 	}
