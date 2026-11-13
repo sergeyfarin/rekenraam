@@ -1269,6 +1269,8 @@
   "api_error_investment_exchange_changed": "Der Bestand hat sich seit der Vorschau des Umtauschs geändert. Rufen Sie die Vorschau erneut auf.",
   "api_error_reference_version_backdated": "Status- und Strukturänderungen können nicht vor der neuesten Version wirksam werden. Wählen Sie dieses Datum oder ein späteres. Eine historische Korrektur muss auf oder nach dem Datum der ersten Version liegen.",
   "api_error_reference_version_backdated_from": "Lebenszyklus- und Strukturänderungen können nicht vor dem {date} gelten, dem Datum der neuesten Version. Wählen Sie den {date} oder ein späteres Datum. Korrekturen von Namen und Beschreibungen dürfen früher gelten, aber nicht vor dem Bestehen des Eintrags.",
+  "api_error_reference_version_before_first": "Dieser Eintrag bestand an diesem Datum noch nicht. Wählen Sie ein Datum ab seiner ersten Version.",
+  "api_error_reference_version_before_first_from": "Dieser Eintrag besteht erst ab dem {date}, daher kann eine Änderung nicht früher gelten. Wählen Sie den {date} oder ein späteres Datum.",
   "api_error_reference_dated_conflict": "Diese Änderung steht an einem Tag, für den sie gelten würde, im Konflikt mit einem anderen Eintrag. Wählen Sie einen anderen Wert oder ein anderes Gültigkeitsdatum.",
   "api_error_reference_conflict_category_name_taken": "Am {date} heißt bereits eine andere Kategorie in derselben Gruppe „{name}“. Die Änderung würde an diesem Tag gelten. Wählen Sie daher einen anderen Namen oder ein anderes Gültigkeitsdatum.",
   "api_error_reference_conflict_payee_name_taken": "Am {date} heißt bereits ein anderer Empfänger „{name}“. Die Änderung würde an diesem Tag gelten. Wählen Sie daher einen anderen Namen oder ein anderes Gültigkeitsdatum.",

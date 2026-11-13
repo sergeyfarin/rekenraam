@@ -125,7 +125,7 @@ delete:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
 patch:
   summary: Update an institution by creating a new version
-  description: Earlier-dated descriptive corrections preserve the lifecycle in effect on their date. Lifecycle and structural changes must be dated on or after the latest version; dates before the first version are refused.
+  description: "Partial update: omitted fields keep the values of the version in effect on effective_from. Institution fields are descriptive, so any date on or after the first version is accepted; a correction dated before the latest version governs only until the next version and keeps the lifecycle in effect on its date. The response is the institution as it stands today, which for such a correction is not the version just written; the versions endpoint lists it."
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/InstitutionID"
     - in: header
@@ -139,7 +139,7 @@ patch:
     content:
       application/json:
         schema:
-          $ref: "../openapi.yaml#/components/schemas/InstitutionRequest"
+          $ref: "../openapi.yaml#/components/schemas/InstitutionUpdateRequest"
   responses:
     "413":
       $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
@@ -198,8 +198,5 @@ patch:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: REFERENCE_VERSION_BACKDATED for a lifecycle change before the latest version or an update before the first version
-      content:
-        application/json:
-          schema:
-            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+      $ref: "../openapi.yaml#/components/responses/ReferenceVersionConflict"
+      description: REFERENCE_VERSION_BEFORE_FIRST before the first version; CONFLICT for a stale edit.

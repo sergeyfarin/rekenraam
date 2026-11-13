@@ -4,6 +4,7 @@ import { APIClientError, apiClient, toAPIClientError, toNetworkError } from '#li
 export type InstitutionResponse = components['schemas']['InstitutionResponse'];
 export type InstitutionsResponse = components['schemas']['InstitutionsResponse'];
 export type InstitutionRequest = components['schemas']['InstitutionRequest'];
+export type InstitutionUpdateRequest = components['schemas']['InstitutionUpdateRequest'];
 
 export const institutionsQueryKey = ['api', 'institutions'] as const;
 
@@ -114,7 +115,7 @@ export async function createInstitution(input: InstitutionRequest, csrfToken: st
 
 export async function updateInstitution(
   institutionID: number,
-  input: InstitutionRequest,
+  input: InstitutionUpdateRequest,
   csrfToken: string
 ): Promise<InstitutionResponse> {
   try {

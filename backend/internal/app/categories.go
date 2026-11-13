@@ -263,6 +263,17 @@ func (s *CategoryService) CreateCategory(ctx context.Context, input CreateCatego
 	return toCategory(record), nil
 }
 
+func (s *CategoryService) versionBeforeFirst(ctx context.Context, categoryID int64) error {
+	err := s.repository.VersionBeforeFirst(ctx, categoryID)
+	if mapped, ok := referenceBackdatingError(err); ok {
+		return mapped
+	}
+	if errors.Is(err, db.ErrNotFound) {
+		return ErrCategoryNotFound
+	}
+	return fmt.Errorf("read category first version: %w", err)
+}
+
 func (s *CategoryService) UpdateCategory(ctx context.Context, input UpdateCategoryInput) (Category, error) {
 	ctx, referenceErr := s.settings.referenceContext(ctx, s.now())
 	if referenceErr != nil {
@@ -291,8 +302,12 @@ func (s *CategoryService) UpdateCategory(ctx context.Context, input UpdateCatego
 	// the transaction refuses the write if that version is no longer the one.
 	base, err := s.categoryRecord(historicalCtx, input.CategoryID)
 	if errors.Is(err, ErrCategoryNotFound) {
-		// The transaction returns the coded before-first-version refusal.
-		base, err = s.categoryRecord(ctx, input.CategoryID)
+		// Dated before the first version: refuse with the first date before
+		// filling or validating anything from today's version.
+		if _, todayErr := s.categoryRecord(ctx, input.CategoryID); todayErr != nil {
+			return Category{}, todayErr
+		}
+		return Category{}, s.versionBeforeFirst(ctx, input.CategoryID)
 	}
 	if err != nil {
 		return Category{}, err

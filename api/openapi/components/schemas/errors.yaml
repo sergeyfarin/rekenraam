@@ -16,6 +16,7 @@ ErrorBody:
         - PRICE_IMPACT_STALE
         - CONFLICT
         - REFERENCE_VERSION_BACKDATED
+        - REFERENCE_VERSION_BEFORE_FIRST
         - REFERENCE_DATED_CONFLICT
         - CSRF_INVALID
         - RATE_LIMITED
@@ -130,7 +131,9 @@ ErrorBody:
       description: >
         On REFERENCE_DATED_CONFLICT: the first date the rule fails. On
         REFERENCE_VERSION_BACKDATED: the latest version's date, the earliest
-        date a lifecycle or structural change may take effect.
+        date a lifecycle or structural change may take effect. On
+        REFERENCE_VERSION_BEFORE_FIRST: the first version's date, the earliest
+        date any change may take effect.
     conflict_name:
       type: string
       description: >

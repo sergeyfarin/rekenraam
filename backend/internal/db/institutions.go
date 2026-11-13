@@ -259,7 +259,7 @@ func (r *InstitutionRepository) UpdateInstitution(ctx context.Context, params Up
 	}
 	asOf, err := currentInstitutionByID(WithReferenceDate(ctx, params.EffectiveFrom), tx, params.BookID, params.InstitutionID)
 	if errors.Is(err, ErrNotFound) {
-		return InstitutionRecord{}, ReferenceVersionBackdatedError{LatestEffectiveFrom: latest}
+		return InstitutionRecord{}, referenceVersionBeforeFirst(ctx, tx, institutionVersionTable, params.InstitutionID)
 	}
 	if err != nil {
 		return InstitutionRecord{}, err
@@ -276,7 +276,7 @@ func (r *InstitutionRepository) UpdateInstitution(ctx context.Context, params Up
 	// archive dated in the past governs every day through today, so the
 	// accounts are checked on each date their versions change (#552).
 	if params.Status == "archived" {
-		dates, err := referenceWindowDatesTx(ctx, tx, institutionVersionTable, params.InstitutionID, params.EffectiveFrom, accountVersionTable)
+		dates, err := referenceWindowDatesTx(ctx, tx, institutionVersionTable, params.InstitutionID, params.EffectiveFrom, institutionAccountDates(params.InstitutionID))
 		if err != nil {
 			return InstitutionRecord{}, err
 		}

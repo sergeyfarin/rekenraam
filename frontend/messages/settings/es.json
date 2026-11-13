@@ -1269,6 +1269,8 @@
   "api_error_investment_exchange_changed": "La posición cambió después de la vista previa del canje. Vuelva a generar la vista previa.",
   "api_error_reference_version_backdated": "Los cambios de estado y estructura no pueden entrar en vigor antes de la última versión. Elija esa fecha o una posterior. Una corrección histórica debe tener una fecha igual o posterior a la primera versión.",
   "api_error_reference_version_backdated_from": "Los cambios de ciclo de vida y de estructura no pueden entrar en vigor antes del {date}, la fecha de la versión más reciente. Elija el {date} o una fecha posterior. Las correcciones de nombre y descripción pueden tener una fecha anterior, pero no anterior a la existencia del registro.",
+  "api_error_reference_version_before_first": "Este registro aún no existía en esa fecha. Elija una fecha igual o posterior a su primera versión.",
+  "api_error_reference_version_before_first_from": "Este registro existe desde el {date}, así que un cambio no puede entrar en vigor antes. Elija el {date} o una fecha posterior.",
   "api_error_reference_dated_conflict": "Este cambio entra en conflicto con otro registro en una fecha en la que se aplicaría. Elija otro valor u otra fecha de entrada en vigor.",
   "api_error_reference_conflict_category_name_taken": "El {date}, otra categoría del mismo grupo ya se llama «{name}». El cambio se aplicaría ese día, así que elija otro nombre u otra fecha de entrada en vigor.",
   "api_error_reference_conflict_payee_name_taken": "El {date}, otro beneficiario ya se llama «{name}». El cambio se aplicaría ese día, así que elija otro nombre u otra fecha de entrada en vigor.",

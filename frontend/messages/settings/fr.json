@@ -1269,6 +1269,8 @@
   "api_error_investment_exchange_changed": "La position a changé depuis l'aperçu de l'échange. Relancez l'aperçu.",
   "api_error_reference_version_backdated": "Les changements de statut et de structure ne peuvent pas prendre effet avant la dernière version. Choisissez cette date ou une date ultérieure. Une correction historique doit être datée au plus tôt de la première version.",
   "api_error_reference_version_backdated_from": "Les changements de cycle de vie et de structure ne peuvent pas prendre effet avant le {date}, date de la version la plus récente. Choisissez le {date} ou une date ultérieure. Les corrections de nom et de description peuvent être antérieures, mais pas avant l'existence de l'élément.",
+  "api_error_reference_version_before_first": "Cet élément n'existait pas encore à cette date. Choisissez une date à partir de sa première version.",
+  "api_error_reference_version_before_first_from": "Cet élément existe depuis le {date} : une modification ne peut donc pas prendre effet avant. Choisissez le {date} ou une date ultérieure.",
   "api_error_reference_dated_conflict": "Cette modification entre en conflit avec un autre élément à une date où elle s'appliquerait. Choisissez une autre valeur ou une autre date d'effet.",
   "api_error_reference_conflict_category_name_taken": "Le {date}, une autre catégorie du même groupe s'appelle déjà « {name} ». La modification s'appliquerait ce jour-là : choisissez un autre nom ou une autre date d'effet.",
   "api_error_reference_conflict_payee_name_taken": "Le {date}, un autre bénéficiaire s'appelle déjà « {name} ». La modification s'appliquerait ce jour-là : choisissez un autre nom ou une autre date d'effet.",

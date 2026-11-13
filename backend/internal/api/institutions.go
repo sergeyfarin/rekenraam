@@ -43,6 +43,20 @@ type institutionRequest struct {
 	ChangeReason    string          `json:"change_reason"`
 }
 
+// updateInstitutionRequest is a partial update: omitted fields keep the value
+// of the version in effect on effective_from (#552).
+type updateInstitutionRequest struct {
+	Name            *string         `json:"name"`
+	Kind            *string         `json:"kind"`
+	CountryCode     *string         `json:"country_code"`
+	Website         *string         `json:"website"`
+	Address         json.RawMessage `json:"address"`
+	CommentMarkdown *string         `json:"comment_markdown"`
+	Metadata        json.RawMessage `json:"metadata"`
+	EffectiveFrom   string          `json:"effective_from"`
+	ChangeReason    string          `json:"change_reason"`
+}
+
 type institutionLifecycleRequest struct {
 	EffectiveFrom string `json:"effective_from"`
 	ChangeReason  string `json:"change_reason"`
@@ -166,7 +180,7 @@ func updateInstitution(logger *slog.Logger, authService *app.AuthService, instit
 			return
 		}
 
-		var request institutionRequest
+		var request updateInstitutionRequest
 		if err := decodeJSONBody(r, &request); err != nil {
 			writeDecodeError(w, err)
 			return
@@ -183,9 +197,9 @@ func updateInstitution(logger *slog.Logger, authService *app.AuthService, instit
 			Kind:            request.Kind,
 			CountryCode:     request.CountryCode,
 			Website:         request.Website,
-			AddressJSON:     rawJSONText(request.Address),
+			AddressJSON:     rawJSONPointer(request.Address),
 			CommentMarkdown: request.CommentMarkdown,
-			MetadataJSON:    rawJSONText(request.Metadata),
+			MetadataJSON:    rawJSONPointer(request.Metadata),
 			EffectiveFrom:   request.EffectiveFrom,
 			ChangeReason:    request.ChangeReason,
 		})
@@ -321,6 +335,15 @@ func rawJSONText(raw json.RawMessage) string {
 	}
 
 	return string(raw)
+}
+
+// rawJSONPointer is nil for an omitted JSON field and its text otherwise.
+func rawJSONPointer(raw json.RawMessage) *string {
+	if raw == nil {
+		return nil
+	}
+	text := string(raw)
+	return &text
 }
 
 func toInstitutionResponse(institution app.Institution) institutionResponse {

@@ -31,6 +31,14 @@ func writeReferenceVersionError(w http.ResponseWriter, err error) bool {
 		}})
 		return true
 	}
+	if beforeFirst, ok := errors.AsType[app.ReferenceVersionBeforeFirstError](err); ok {
+		writeJSON(w, http.StatusConflict, errorResponse{Error: errorBody{
+			Code:         "REFERENCE_VERSION_BEFORE_FIRST",
+			Message:      beforeFirst.Error(),
+			ConflictDate: beforeFirst.FirstEffectiveFrom,
+		}})
+		return true
+	}
 	if errors.Is(err, app.ErrReferenceVersionChanged) {
 		writeAPIError(w, http.StatusConflict, "CONFLICT", err.Error())
 		return true

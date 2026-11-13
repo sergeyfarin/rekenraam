@@ -270,7 +270,7 @@ func (r *PayeeRepository) UpdatePayee(ctx context.Context, params UpdatePayeePar
 	}
 	asOf, err := payeeByID(WithReferenceDate(ctx, params.EffectiveFrom), tx, params.BookID, params.PayeeID)
 	if errors.Is(err, ErrNotFound) {
-		return PayeeRecord{}, ReferenceVersionBackdatedError{LatestEffectiveFrom: latest}
+		return PayeeRecord{}, referenceVersionBeforeFirst(ctx, tx, payeeVersionTable, params.PayeeID)
 	}
 	if err != nil {
 		return PayeeRecord{}, err
@@ -283,14 +283,14 @@ func (r *PayeeRepository) UpdatePayee(ctx context.Context, params UpdatePayeePar
 		status = asOf.Status
 	}
 	if status == "active" {
-		dates, err := referenceWindowDatesTx(ctx, tx, payeeVersionTable, params.PayeeID, params.EffectiveFrom, payeeVersionTable)
+		dates, err := referenceWindowDatesTx(ctx, tx, payeeVersionTable, params.PayeeID, params.EffectiveFrom, payeeNameDates(params.BookID, params.Spec.NormalizedName))
 		if err != nil {
 			return PayeeRecord{}, err
 		}
 		for _, date := range dates {
 			if err := ensurePayeeNameAvailable(WithReferenceDate(ctx, date), tx, params.BookID, params.Spec.NormalizedName, params.PayeeID); err != nil {
-				if errors.Is(err, ErrPayeeExists) {
-					return PayeeRecord{}, ReferenceRuleConflictError{Rule: ReferenceRulePayeeNameTaken, Date: date, Name: params.Spec.Name, Err: ErrPayeeExists}
+				if taken, ok := errors.AsType[payeeNameTakenError](err); ok {
+					return PayeeRecord{}, ReferenceRuleConflictError{Rule: ReferenceRulePayeeNameTaken, Date: date, Name: taken.name, Err: ErrPayeeExists}
 				}
 				return PayeeRecord{}, err
 			}
@@ -396,10 +396,17 @@ func insertPayeeVersion(ctx context.Context, tx *sql.Tx, params insertPayeeVersi
 	return record, nil
 }
 
+// payeeNameTakenError carries the other payee's stored name, which can differ
+// from the requested one after normalization. It unwraps to ErrPayeeExists.
+type payeeNameTakenError struct{ name string }
+
+func (e payeeNameTakenError) Error() string { return ErrPayeeExists.Error() }
+func (e payeeNameTakenError) Unwrap() error { return ErrPayeeExists }
+
 func ensurePayeeNameAvailable(ctx context.Context, tx *sql.Tx, bookID int64, normalizedName string, excludePayeeID int64) error {
-	var existingID int64
+	var existing string
 	err := tx.QueryRowContext(ctx, `
-		SELECT p.id
+		SELECT pv.name
 		FROM payees p
 		JOIN `+CurrentReferenceVersions(ctx, "payee")+` pv ON pv.payee_id = p.id
 		WHERE p.book_id = ?
@@ -407,9 +414,9 @@ func ensurePayeeNameAvailable(ctx context.Context, tx *sql.Tx, bookID int64, nor
 			AND pv.normalized_name = ?
 			AND p.id <> ?
 		LIMIT 1
-	`, bookID, normalizedName, excludePayeeID).Scan(&existingID)
+	`, bookID, normalizedName, excludePayeeID).Scan(&existing)
 	if err == nil {
-		return ErrPayeeExists
+		return payeeNameTakenError{name: existing}
 	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil

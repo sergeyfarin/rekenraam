@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -42,18 +41,14 @@ func TestArchivingAParentOrInstitutionWithDependentsIsRefused(t *testing.T) {
 	}
 
 	mutateAccountWithBody(t, handler, cookie, csrf, http.MethodPost, parentPath+"/close", `{}`, http.StatusOK)
-	for _, refusal := range []struct{ name, path string }{
-		{"parent with an active child", parentPath + "/archive"},
-		{"institution with an active account", "/api/v1/institutions/" + institutionText + "/archive"},
+	for _, refusal := range []struct{ name, path, code string }{
+		{"parent with an active child", parentPath + "/archive", "CONFLICT"},
+		// Institution archive names the account and date (#552).
+		{"institution with an active account", "/api/v1/institutions/" + institutionText + "/archive", "REFERENCE_DATED_CONFLICT"},
 	} {
 		res := referenceDataRequest(handler, cookie, csrf, http.MethodPost, refusal.path, `{}`)
 		require.Equalf(t, http.StatusConflict, res.Code, "%s: %s", refusal.name, res.Body.String())
-		want := "CONFLICT"
-		if strings.HasPrefix(refusal.path, "/api/v1/institutions/") {
-			// Institution archive names the account and date (#552).
-			want = "REFERENCE_DATED_CONFLICT"
-		}
-		assert.Equal(t, want, apiErrorCode(t, res), refusal.name)
+		assert.Equal(t, refusal.code, apiErrorCode(t, res), refusal.name)
 	}
 
 	// A closed dependent still counts: its next rename would be refused too.

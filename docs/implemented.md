@@ -55,18 +55,21 @@ governs the journal/subledger boundary and ADR 0013 the R16 operation model.
 ## Reference-data backdating — #552
 
 Category, payee and institution descriptive corrections preserve their dated
-lifecycle; category closure dates and omitted category/payee PATCH fields also
-come from that historical version. Earlier lifecycle or category structural
-changes, and corrections before the first version, return
-`409 REFERENCE_VERSION_BACKDATED` without version or audit writes. Same-date
+lifecycle; category closure dates and omitted PATCH fields (institution PATCH
+is now partial too) also come from that historical version. Earlier lifecycle
+or category structural changes return `409 REFERENCE_VERSION_BACKDATED` naming
+the latest version's date. Corrections before the first version return
+`409 REFERENCE_VERSION_BEFORE_FIRST` naming the first version's date. Neither
+writes a version or an audit row. Same-date
 lifecycle versions remain valid. Rules that involve other entities (sibling and
 payee name uniqueness, active category parent and dated cycles, disable with
 active children, institution archive with linked accounts) hold on every date
 the new version governs, through today for a version with no later one. Such
 a refusal returns `409 REFERENCE_DATED_CONFLICT` naming the rule, the first
-failing date and the other record, and backdating refusals name the earliest
-allowed date. The category list, category editor and institution editor
-explain both in all six locales through the shared form error boundary. A fill
+failing date and the other record as stored. The category list, category
+editor and institution editor explain each refusal in all six locales through
+the shared form error boundary. Both editors send only the fields the user
+changed, so an earlier-dated edit does not copy today's values into the past. A fill
 from a version that changed before the write is refused with `409 CONFLICT`,
 and updates answer with today's state. The
 [per-kind contract and named regressions](design/accounts-system-design.md)

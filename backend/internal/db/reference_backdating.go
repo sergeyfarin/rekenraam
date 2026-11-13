@@ -17,6 +17,18 @@ func (e ReferenceVersionBackdatedError) Error() string {
 	return fmt.Sprintf("reference lifecycle or structural changes must take effect on or after %s", e.LatestEffectiveFrom)
 }
 
+// ReferenceVersionBeforeFirstError refuses a write dated before the entity's
+// first version: no version is in effect on that date to correct. Unlike the
+// lifecycle refusal, any date on or after the first version is acceptable for
+// a descriptive correction, so it names the first date, not the latest.
+type ReferenceVersionBeforeFirstError struct {
+	FirstEffectiveFrom string
+}
+
+func (e ReferenceVersionBeforeFirstError) Error() string {
+	return fmt.Sprintf("reference record does not exist before %s", e.FirstEffectiveFrom)
+}
+
 // Reference rules a dated write can break on a day other than today. The
 // values are stable API identifiers (conflict_rule); the client explains each.
 const (
@@ -66,6 +78,19 @@ var (
 	institutionVersionTable = referenceVersionTable{table: "institution_versions", key: "institution_id"}
 )
 
+// referenceVersionBeforeFirst builds the before-first refusal for an entity
+// whose as-of read on the requested date found no version.
+func referenceVersionBeforeFirst(ctx context.Context, q rowQueryer, own referenceVersionTable, id int64) error {
+	var first sql.NullString
+	if err := q.QueryRowContext(ctx, `SELECT MIN(effective_from) FROM `+own.table+` WHERE `+own.key+` = ?`, id).Scan(&first); err != nil {
+		return fmt.Errorf("read first %s date: %w", own.table, err)
+	}
+	if !first.Valid {
+		return ErrNotFound
+	}
+	return ReferenceVersionBeforeFirstError{FirstEffectiveFrom: first.String}
+}
+
 func latestReferenceVersionDateTx(ctx context.Context, tx *sql.Tx, own referenceVersionTable, id int64) (string, error) {
 	var latest sql.NullString
 	if err := tx.QueryRowContext(ctx, `SELECT MAX(effective_from) FROM `+own.table+` WHERE `+own.key+` = ?`, id).Scan(&latest); err != nil {
@@ -74,23 +99,67 @@ func latestReferenceVersionDateTx(ctx context.Context, tx *sql.Tx, own reference
 	return latest.String, nil
 }
 
+// referenceDateSource selects the effective_from dates of other versions that
+// can make a rule fail: the versions that take effect with the state the rule
+// refuses (a sibling taking the name, the parent changing, a child pointing
+// here). The query selects a single effective_from column.
+type referenceDateSource struct {
+	query string
+	args  []any
+}
+
+// categoryNameDates: versions that give a category this name under this
+// parent, the only versions that can take the name on some date.
+func categoryNameDates(bookID int64, categoryType string, parentID sql.NullInt64, name string) referenceDateSource {
+	return referenceDateSource{query: `
+		SELECT av.effective_from FROM account_versions av JOIN accounts a ON a.id = av.account_id
+		WHERE a.book_id = ? AND av.account_class = ? AND av.parent_account_id IS ? AND lower(av.name) = lower(?)`,
+		args: []any{bookID, categoryType, parentID, name}}
+}
+
+// accountOwnDates: the versions of one account (or category), whose own
+// state is what the rule reads.
+func accountOwnDates(accountID int64) referenceDateSource {
+	return referenceDateSource{query: `SELECT effective_from FROM account_versions WHERE account_id = ?`, args: []any{accountID}}
+}
+
+// categoryChildDates: versions that place a category under this parent.
+func categoryChildDates(parentID int64) referenceDateSource {
+	return referenceDateSource{query: `SELECT effective_from FROM account_versions WHERE parent_account_id = ?`, args: []any{parentID}}
+}
+
+// payeeNameDates: versions that give a payee this normalized name.
+func payeeNameDates(bookID int64, normalizedName string) referenceDateSource {
+	return referenceDateSource{query: `
+		SELECT pv.effective_from FROM payee_versions pv JOIN payees p ON p.id = pv.payee_id
+		WHERE p.book_id = ? AND pv.normalized_name = ?`,
+		args: []any{bookID, normalizedName}}
+}
+
+// institutionAccountDates: versions that link an account to this institution.
+func institutionAccountDates(institutionID int64) referenceDateSource {
+	return referenceDateSource{query: `SELECT effective_from FROM account_versions WHERE institution_id = ?`, args: []any{institutionID}}
+}
+
 // referenceWindowDatesTx lists the dates on which a version of entityID dated
 // effectiveFrom must satisfy a rule that depends on other entities (#552). The
 // version governs from effectiveFrom until the entity's next later version, or
-// open-ended (through today) when there is none. Other entities' as-of state
-// changes only on the dates their versions take effect, so the version's own
-// date plus each such date inside the window covers every day it governs.
+// open-ended (through today) when there is none. A rule that holds on
+// effectiveFrom can only start failing on a date when another version takes
+// effect with the state the rule refuses, so the version's own date plus each
+// such date from the sources inside the window covers every day it governs.
 // Checking only effectiveFrom, or only today, misses the rest of the window.
 // Call it before the new version is inserted.
-func referenceWindowDatesTx(ctx context.Context, tx *sql.Tx, own referenceVersionTable, entityID int64, effectiveFrom string, others ...referenceVersionTable) ([]string, error) {
+func referenceWindowDatesTx(ctx context.Context, tx *sql.Tx, own referenceVersionTable, entityID int64, effectiveFrom string, sources ...referenceDateSource) ([]string, error) {
 	var end sql.NullString
 	if err := tx.QueryRowContext(ctx, `SELECT MIN(effective_from) FROM `+own.table+` WHERE `+own.key+` = ? AND effective_from > ?`, entityID, effectiveFrom).Scan(&end); err != nil {
 		return nil, fmt.Errorf("read %s window end: %w", own.table, err)
 	}
 	query := `SELECT ?`
 	args := []any{effectiveFrom}
-	for _, other := range others {
-		query += ` UNION SELECT effective_from FROM ` + other.table + ` WHERE effective_from > ? AND (? IS NULL OR effective_from < ?)`
+	for _, source := range sources {
+		query += ` UNION SELECT effective_from FROM (` + source.query + `) WHERE effective_from > ? AND (? IS NULL OR effective_from < ?)`
+		args = append(args, source.args...)
 		args = append(args, effectiveFrom, end, end)
 	}
 	rows, err := tx.QueryContext(ctx, query+` ORDER BY 1`, args...)
@@ -120,4 +189,23 @@ func requireBaseVersionTx(baseVersionID int64, asOfVersionID int64) error {
 		return ErrReferenceVersionChanged
 	}
 	return nil
+}
+
+// VersionBeforeFirst returns the before-first refusal for a category the
+// service found today but not on the requested date, so the coded 409 comes
+// before any validation of fields filled from today's version.
+func (r *CategoryRepository) VersionBeforeFirst(ctx context.Context, categoryID int64) error {
+	return referenceVersionBeforeFirst(ctx, r.database, accountVersionTable, categoryID)
+}
+
+// VersionBeforeFirst is the payee counterpart of
+// CategoryRepository.VersionBeforeFirst.
+func (r *PayeeRepository) VersionBeforeFirst(ctx context.Context, payeeID int64) error {
+	return referenceVersionBeforeFirst(ctx, r.database, payeeVersionTable, payeeID)
+}
+
+// VersionBeforeFirst is the institution counterpart of
+// CategoryRepository.VersionBeforeFirst.
+func (r *InstitutionRepository) VersionBeforeFirst(ctx context.Context, institutionID int64) error {
+	return referenceVersionBeforeFirst(ctx, r.database, institutionVersionTable, institutionID)
 }

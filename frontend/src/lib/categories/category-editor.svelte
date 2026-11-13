@@ -63,7 +63,9 @@
     return categories
       .filter(
         (candidate: CategoryResponse) =>
-          candidate.status === 'active' &&
+          // The current parent stays selectable even when archived, so
+          // opening the form does not silently move the category.
+          (candidate.status === 'active' || candidate.id === category?.parent_category_id) &&
           candidate.category_type === categoryType &&
           candidate.id !== categoryID
       )
@@ -86,15 +88,28 @@
         : m.categories_form_create()
   );
 
+  // The form as loaded; an edit sends only fields that differ from it.
+  let loaded: { name: string; code: string; parentCategoryID: string; allowsPostings: boolean; icon: CategoryIconName } | undefined;
+
   $effect(() => {
+    // Built from the prop, not read back from the fields: reading them here
+    // would make every keystroke rerun this reset.
+    const initial = {
+      name: category?.name ?? '',
+      code: category?.code ?? deriveRecordCode(category ? categoryDisplayName(category) : ''),
+      parentCategoryID: category?.parent_category_id ? String(category.parent_category_id) : '',
+      allowsPostings: category?.allows_postings ?? true,
+      icon: categoryIconName(category)
+    };
     categoryID = category?.id;
-    name = category?.name ?? '';
-    code = category?.code ?? deriveRecordCode(category ? categoryDisplayName(category) : '');
+    name = initial.name;
+    code = initial.code;
     codeEdited = mode === 'edit' && !!category?.code;
     categoryType = category?.category_type ?? 'expense';
-    parentCategoryID = category?.parent_category_id ? String(category.parent_category_id) : '';
-    allowsPostings = category?.allows_postings ?? true;
-    icon = categoryIconName(category);
+    parentCategoryID = initial.parentCategoryID;
+    allowsPostings = initial.allowsPostings;
+    icon = initial.icon;
+    loaded = initial;
     effectiveFrom = '';
     changeReason = '';
     formError = undefined;
@@ -147,22 +162,31 @@
     return request;
   }
 
+  // An edit sends only the fields the user changed. The server fills the rest
+  // from the version in effect on the chosen date, so an earlier-dated
+  // correction does not copy today's values into the past, nor assert today's
+  // parent or posting eligibility as a structural change (#552).
   function updateRequestFromForm(): UpdateCategoryRequest {
-    const request: UpdateCategoryRequest = {
-      name: name.trim(),
-      category_type: categoryType,
-      allows_postings: allowsPostings,
-      icon
-    };
+    const request: UpdateCategoryRequest = {};
 
-    if (!category?.is_builtin) {
+    if (name.trim() !== loaded?.name.trim()) {
+      request.name = name.trim();
+    }
+    if (!category?.is_builtin && code.trim() !== loaded?.code.trim()) {
       request.code = code.trim();
     }
-
-    if (parentCategoryID === '') {
-      request.clear_parent = true;
-    } else {
-      assignNumber(request, 'parent_category_id', parentCategoryID);
+    if (allowsPostings !== loaded?.allowsPostings) {
+      request.allows_postings = allowsPostings;
+    }
+    if (icon !== loaded?.icon) {
+      request.icon = icon;
+    }
+    if (parentCategoryID !== loaded?.parentCategoryID) {
+      if (parentCategoryID === '') {
+        request.clear_parent = true;
+      } else {
+        assignNumber(request, 'parent_category_id', parentCategoryID);
+      }
     }
 
     assignString(request, 'effective_from', effectiveFrom);

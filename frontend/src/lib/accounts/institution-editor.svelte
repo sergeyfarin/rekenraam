@@ -6,7 +6,8 @@
     createInstitution,
     updateInstitution,
     type InstitutionRequest,
-    type InstitutionResponse
+    type InstitutionResponse,
+    type InstitutionUpdateRequest
   } from '#lib/api/institutions.ts';
   import { m } from '#lib/paraglide/messages.js';
   import { institutionKindLabel, type InstitutionKind } from './account-labels';
@@ -81,11 +82,10 @@
     formError = undefined;
 
     try {
-      const input = requestFromForm();
       const saved =
         mode === 'edit' && institutionID
-          ? await updateInstitution(institutionID, input, csrfToken)
-          : await createInstitution(input, csrfToken);
+          ? await updateInstitution(institutionID, updateRequestFromForm(), csrfToken)
+          : await createInstitution(requestFromForm(), csrfToken);
 
       await onSaved(saved);
     } catch (error) {
@@ -106,6 +106,36 @@
     assignString(request, 'effective_from', effectiveFrom);
     assignString(request, 'change_reason', changeReason);
     assignString(request, 'comment_markdown', commentMarkdown);
+
+    return request;
+  }
+
+  // An edit sends only the fields the user changed. The server fills the rest
+  // from the version in effect on the chosen date, so an earlier-dated
+  // correction does not copy today's values into the past, and fields this
+  // form does not show (address, metadata) are kept (#552). A field emptied
+  // here is sent empty, which clears it.
+  function updateRequestFromForm(): InstitutionUpdateRequest {
+    const request: InstitutionUpdateRequest = {};
+    const changed = (value: string, original: string | null | undefined) => value.trim() !== (original ?? '').trim();
+
+    if (changed(name, institution?.name)) {
+      request.name = name.trim();
+    }
+    if (kind !== institution?.kind) {
+      request.kind = kind;
+    }
+    if (changed(countryCode.toUpperCase(), institution?.country_code)) {
+      request.country_code = countryCode.trim().toUpperCase();
+    }
+    if (changed(website, institution?.website)) {
+      request.website = website.trim();
+    }
+    if (changed(commentMarkdown, institution?.comment_markdown)) {
+      request.comment_markdown = commentMarkdown.trim();
+    }
+    assignString(request, 'effective_from', effectiveFrom);
+    assignString(request, 'change_reason', changeReason);
 
     return request;
   }

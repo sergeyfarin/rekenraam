@@ -77,7 +77,7 @@ func newReferenceBackdatingFixture(t *testing.T, kind string) referenceBackdatin
 		require.NoError(t, err)
 		b.id, b.table, b.key = item.ID, "institution_versions", "institution_id"
 		b.rename = func(name, date string) (string, error) {
-			v, err := f.institutions.UpdateInstitution(ctx, UpdateInstitutionInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "institution.update", InstitutionID: item.ID, Name: name, Kind: "bank", EffectiveFrom: date})
+			v, err := f.institutions.UpdateInstitution(ctx, UpdateInstitutionInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "institution.update", InstitutionID: item.ID, Name: new(name), EffectiveFrom: date})
 			return v.Status, err
 		}
 		b.lifecycle = func(date string, archive bool) (string, error) {
@@ -178,10 +178,61 @@ func TestReferenceCorrectionBeforeFirstVersionIsRefused(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			t.Parallel()
 			f := newReferenceBackdatingFixture(t, kind)
+			// A later version must not stand in for the first one: the
+			// refusal names the earliest date a correction may use.
+			_, err := f.rename("June name", "2026-06-01")
+			require.NoError(t, err)
 			before := f.counts(t)
-			_, err := f.rename("Before existence", "2025-01-01")
-			require.Error(t, err)
+			_, err = f.rename("Before existence", "2025-01-01")
+			require.ErrorIs(t, err, ErrReferenceVersionBeforeFirst)
+			beforeFirst, ok := errors.AsType[ReferenceVersionBeforeFirstError](err)
+			require.True(t, ok)
+			assert.Equal(t, "2026-01-01", beforeFirst.FirstEffectiveFrom)
 			assert.Equal(t, before, f.counts(t))
+		})
+	}
+}
+
+// A before-first edit is refused as such before any field filled from today's
+// version is validated: today's default account being closed must not turn
+// the coded refusal into a validation error.
+func TestPayeeBeforeFirstRefusalPrecedesHintValidation(t *testing.T) {
+	t.Parallel()
+	f := newReferenceBackdatingFixture(t, "payee")
+	ctx := context.Background()
+	account, err := f.accountService.CreateAccount(ctx, CreateAccountInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "account.create", Name: "Closing", AccountClass: "asset", AccountKind: "checking", DefaultCommodityID: &f.eurCommodityID, OpenedOn: "2026-01-01", EffectiveFrom: "2026-01-01"})
+	require.NoError(t, err)
+	_, err = f.payees.UpdatePayee(ctx, UpdatePayeeInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "payee.update", PayeeID: f.id, DefaultAccountID: &account.ID, EffectiveFrom: "2026-02-01"})
+	require.NoError(t, err)
+	_, err = f.accountService.CloseAccount(ctx, AccountLifecycleInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", AccountID: account.ID, EffectiveFrom: "2026-09-01", ClosedOn: "2026-09-01"})
+	require.NoError(t, err)
+
+	_, err = f.rename("Before existence", "2025-01-01")
+	require.ErrorIs(t, err, ErrReferenceVersionBeforeFirst)
+	var validation ValidationError
+	assert.False(t, errors.As(err, &validation))
+}
+
+// The conflict names the other record as stored, not the requested spelling:
+// uniqueness ignores case, so the two can differ.
+func TestReferenceNameConflictNamesTheOtherRecord(t *testing.T) {
+	t.Parallel()
+	for _, kind := range []string{"category", "payee"} {
+		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+			f := newReferenceBackdatingFixture(t, kind)
+			ctx := context.Background()
+			rule := "category_name_taken"
+			if kind == "category" {
+				_, err := f.categories.CreateCategory(ctx, CreateCategoryInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "category.create", Name: "ACME", CategoryType: "expense"})
+				require.NoError(t, err)
+			} else {
+				rule = "payee_name_taken"
+				_, err := f.payees.CreatePayee(ctx, CreatePayeeInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "payee.create", Name: "ACME", EffectiveFrom: "2026-01-01"})
+				require.NoError(t, err)
+			}
+			_, err := f.rename("Acme", "2026-08-01")
+			requireReferenceConflict(t, err, rule, "2026-08-01", "ACME")
 		})
 	}
 }

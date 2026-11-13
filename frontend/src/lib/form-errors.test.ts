@@ -89,4 +89,27 @@ describe('dated reference conflicts name the rule, day and record (#552)', () =>
     }));
     expect(state?.message).toBe(m.api_error_reference_version_backdated_from({ date: formatCalendarDate('2026-06-01', getLocale()) }));
   });
+
+  it.each(['en', 'es', 'fr', 'nl', 'de', 'ru'] as const)('names the first version date on a before-first refusal in %s', (locale) => {
+    const previous = getLocale;
+    try {
+      overwriteGetLocale(() => locale);
+      const state = getFormErrorState(new APIClientError({
+        status: 409,
+        code: 'REFERENCE_VERSION_BEFORE_FIRST',
+        conflict: { date: '2026-01-01' }
+      }));
+      const date = formatCalendarDate('2026-01-01', locale);
+      expect(state?.message).toBe(m.api_error_reference_version_before_first_from({ date }));
+      expect(state?.message).toContain(date);
+      expect(state?.message).not.toBe(m.api_error_reference_version_backdated_from({ date }));
+      if (locale !== 'en') {
+        expect(state?.message).not.toBe(m.api_error_reference_version_before_first_from({ date }, { locale: 'en' }));
+      }
+      const bare = getFormErrorState(new APIClientError({ status: 409, code: 'REFERENCE_VERSION_BEFORE_FIRST' }));
+      expect(bare?.message).toBe(m.api_error_reference_version_before_first());
+    } finally {
+      overwriteGetLocale(previous);
+    }
+  });
 });

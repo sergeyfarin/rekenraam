@@ -161,7 +161,7 @@ func TestUserCreatedCategoryOpensAtGenesisSoItTakesEarlierHistory(t *testing.T) 
 	), http.StatusCreated)
 }
 
-func TestCategoryValidationRejectsParentMismatchCycleAndAccountFields(t *testing.T) {
+func TestCategoryValidationRejectsParentMismatchAndAccountFields(t *testing.T) {
 	t.Parallel()
 
 	handler, _ := newSetupTestHandler(t)
@@ -215,13 +215,33 @@ func TestCategoryValidationRejectsParentMismatchCycleAndAccountFields(t *testing
 		"category_type":"expense",
 		"icon":"No Spaces"
 	}`, http.StatusBadRequest)
-	// A loop is a dated refusal: it names the date and the other category.
-	patchCategory(t, handler, sessionCookie, csrfToken, expenseParent.ID, `{
-		"parent_category_id":`+strconvFormatInt(expenseChild.ID)+`
-	}`, http.StatusConflict)
 	patchCategory(t, handler, sessionCookie, csrfToken, expenseChild.ID, `{
 		"category_type":"income"
 	}`, http.StatusBadRequest)
+}
+
+// A loop is not a field validation failure: it depends on another category's
+// parent on some date, so it is a dated 409 naming that date and category.
+func TestCategoryParentCycleIsADatedConflict(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, _ := setupAccountAPITest(t, handler)
+	parent := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Food","category_type":"expense"}`)
+	child := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Snacks",
+		"category_type":"expense",
+		"parent_category_id":`+strconvFormatInt(parent.ID)+`
+	}`)
+
+	res := referenceDataRequest(handler, sessionCookie, csrfToken, http.MethodPatch, "/api/v1/categories/"+strconvFormatInt(parent.ID), `{
+		"parent_category_id":`+strconvFormatInt(child.ID)+`
+	}`)
+	body := res.Body.String()
+	require.Equal(t, http.StatusConflict, res.Code, body)
+	assert.Contains(t, body, `"code":"REFERENCE_DATED_CONFLICT"`)
+	assert.Contains(t, body, `"conflict_rule":"category_parent_cycle"`)
+	assert.Contains(t, body, `"conflict_name":"Snacks"`)
 }
 
 func TestStarterCategoryCanBeRenamedDisabledAndDeleted(t *testing.T) {

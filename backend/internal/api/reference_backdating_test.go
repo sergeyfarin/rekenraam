@@ -50,7 +50,7 @@ func TestReferenceBackdatedLifecycleReturnsCodedConflict(t *testing.T) {
 				}
 				res := mutate(http.MethodPatch, path, body)
 				require.Equal(t, http.StatusConflict, res.Code, res.Body.String())
-				assert.Contains(t, res.Body.String(), `"code":"REFERENCE_VERSION_BACKDATED"`)
+				assert.JSONEq(t, `{"error":{"code":"REFERENCE_VERSION_BEFORE_FIRST","message":"reference version is dated before the record's first version: reference record does not exist before 2024-01-01","conflict_date":"2024-01-01"}}`, res.Body.String())
 			}
 			res := mutate(http.MethodPost, path+"/"+archive, `{"effective_from":"2025-06-01"}`)
 			require.Equal(t, http.StatusOK, res.Code, res.Body.String())

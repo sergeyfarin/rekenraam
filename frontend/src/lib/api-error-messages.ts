@@ -15,6 +15,7 @@ const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   PRICE_IMPACT_STALE: () => m.pricing_stale_review(),
   CONFLICT: () => m.api_error_conflict(),
   REFERENCE_VERSION_BACKDATED: () => m.api_error_reference_version_backdated(),
+  REFERENCE_VERSION_BEFORE_FIRST: () => m.api_error_reference_version_before_first(),
   REFERENCE_DATED_CONFLICT: () => m.api_error_reference_dated_conflict(),
   CSRF_INVALID: () => m.api_error_csrf_invalid(),
   EXPORT_SCOPE_UNSUPPORTED: () => m.api_error_export_scope_unsupported(),
@@ -117,6 +118,9 @@ function referenceConflictMessage(code: APIErrorCode, conflict: APIReferenceConf
   const date = formatCalendarDate(conflict.date, getLocale());
   if (code === 'REFERENCE_VERSION_BACKDATED') {
     return m.api_error_reference_version_backdated_from({ date });
+  }
+  if (code === 'REFERENCE_VERSION_BEFORE_FIRST') {
+    return m.api_error_reference_version_before_first_from({ date });
   }
   const name = conflict.name?.trim() || (conflict.builtinKey ? builtinCategoryLabel(conflict.builtinKey) : '');
   if (code !== 'REFERENCE_DATED_CONFLICT' || !name) {

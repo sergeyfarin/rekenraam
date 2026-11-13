@@ -36,7 +36,7 @@ get:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
 patch:
   summary: Update a payee
-  description: Earlier-dated descriptive corrections preserve the lifecycle in effect on their date. Lifecycle and structural changes must be dated on or after the latest version; dates before the first version are refused.
+  description: "Partial update: omitted fields keep the values of the version in effect on effective_from. Payee fields are descriptive, so any date on or after the first version is accepted; a correction dated before the latest version governs only until the next version and keeps the lifecycle in effect on its date. The response is the payee as it stands today, which for such a correction is not the version just written."
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/PayeeID"
     - in: header
@@ -84,8 +84,5 @@ patch:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: REFERENCE_DATED_CONFLICT (with conflict_rule, conflict_date and conflict_name) when an active payee has the same name on a date the new version governs; REFERENCE_VERSION_BACKDATED for a lifecycle or structural change before the latest version or an update before the first version; CONFLICT when a version was added while the edit was prepared (reload and retry)
-      content:
-        application/json:
-          schema:
-            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+      $ref: "../openapi.yaml#/components/responses/ReferenceVersionConflict"
+      description: REFERENCE_DATED_CONFLICT when an active payee holds the name on a date the new version governs; REFERENCE_VERSION_BEFORE_FIRST before the first version; CONFLICT for a stale edit.

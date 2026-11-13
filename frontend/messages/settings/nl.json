@@ -1269,6 +1269,8 @@
   "api_error_investment_exchange_changed": "De positie is gewijzigd sinds het voorbeeld van de omwisseling. Bekijk het voorbeeld opnieuw.",
   "api_error_reference_version_backdated": "Wijzigingen in status en structuur kunnen niet ingaan vóór de nieuwste versie. Kies die datum of een latere. Een historische correctie moet op of na de eerste versie zijn gedateerd.",
   "api_error_reference_version_backdated_from": "Wijzigingen in levenscyclus en structuur kunnen niet ingaan vóór {date}, de datum van de nieuwste versie. Kies {date} of later. Correcties van naam en omschrijving mogen eerder ingaan, maar niet voordat het record bestond.",
+  "api_error_reference_version_before_first": "Dit record bestond op die datum nog niet. Kies een datum op of na de eerste versie.",
+  "api_error_reference_version_before_first_from": "Dit record bestaat sinds {date}, dus een wijziging kan niet eerder ingaan. Kies {date} of later.",
   "api_error_reference_dated_conflict": "Deze wijziging botst met een ander record op een datum waarop ze zou gelden. Kies een andere waarde of ingangsdatum.",
   "api_error_reference_conflict_category_name_taken": "Op {date} heet een andere categorie in dezelfde groep al “{name}”. De wijziging zou op die dag gelden, dus kies een andere naam of ingangsdatum.",
   "api_error_reference_conflict_payee_name_taken": "Op {date} heet een andere begunstigde al “{name}”. De wijziging zou op die dag gelden, dus kies een andere naam of ingangsdatum.",

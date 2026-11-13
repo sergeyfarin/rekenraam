@@ -326,7 +326,7 @@ func (r *CategoryRepository) UpdateCategory(ctx context.Context, params UpdateCa
 	// historical one for an earlier-dated correction.
 	asOf, err := accountVersionAsOfTx(ctx, tx, params.BookID, params.CategoryID, params.EffectiveFrom)
 	if errors.Is(err, ErrNotFound) {
-		return AccountRecord{}, ReferenceVersionBackdatedError{LatestEffectiveFrom: latest}
+		return AccountRecord{}, referenceVersionBeforeFirst(ctx, tx, accountVersionTable, params.CategoryID)
 	}
 	if err != nil {
 		return AccountRecord{}, err
@@ -348,7 +348,14 @@ func (r *CategoryRepository) UpdateCategory(ctx context.Context, params UpdateCa
 	checkParent := !backdated && params.Spec.ParentAccountID.Valid &&
 		(status == "active" || params.Spec.ParentAccountID != asOf.ParentAccountID)
 	if checkName || checkParent {
-		dates, err := referenceWindowDatesTx(ctx, tx, accountVersionTable, params.CategoryID, params.EffectiveFrom, accountVersionTable)
+		var sources []referenceDateSource
+		if checkName {
+			sources = append(sources, categoryNameDates(params.BookID, params.Spec.AccountClass, params.Spec.ParentAccountID, params.Spec.Name))
+		}
+		if checkParent {
+			sources = append(sources, accountOwnDates(params.Spec.ParentAccountID.Int64))
+		}
+		dates, err := referenceWindowDatesTx(ctx, tx, accountVersionTable, params.CategoryID, params.EffectiveFrom, sources...)
 		if err != nil {
 			return AccountRecord{}, err
 		}
@@ -356,7 +363,7 @@ func (r *CategoryRepository) UpdateCategory(ctx context.Context, params UpdateCa
 			dated := WithReferenceDate(ctx, date)
 			if checkName {
 				if err := ensureActiveCategoryNameAvailable(dated, tx, params.BookID, params.Spec.AccountClass, params.Spec.ParentAccountID, params.Spec.Name, params.CategoryID); err != nil {
-					return AccountRecord{}, datedCategoryNameConflict(err, date, params.Spec.Name)
+					return AccountRecord{}, datedCategoryNameConflict(err, date)
 				}
 			}
 			if checkParent {
@@ -468,7 +475,11 @@ func (r *CategoryRepository) ChangeCategoryStatus(ctx context.Context, params Ca
 	}
 	// A lifecycle command dated in the past governs every day from its date
 	// through today, so its sibling rules hold on each of those days (#552).
-	dates, err := referenceWindowDatesTx(ctx, tx, accountVersionTable, params.CategoryID, params.EffectiveFrom, accountVersionTable)
+	source := categoryChildDates(params.CategoryID)
+	if params.Status == "active" {
+		source = categoryNameDates(params.BookID, current.AccountClass, current.ParentAccountID, current.Name.String)
+	}
+	dates, err := referenceWindowDatesTx(ctx, tx, accountVersionTable, params.CategoryID, params.EffectiveFrom, source)
 	if err != nil {
 		return AccountRecord{}, err
 	}
@@ -481,7 +492,7 @@ func (r *CategoryRepository) ChangeCategoryStatus(ctx context.Context, params Ca
 		}
 		if params.Status == "active" && current.Name.Valid {
 			if err := ensureActiveCategoryNameAvailable(dated, tx, params.BookID, current.AccountClass, current.ParentAccountID, current.Name.String, params.CategoryID); err != nil {
-				return AccountRecord{}, datedCategoryNameConflict(err, date, current.Name.String)
+				return AccountRecord{}, datedCategoryNameConflict(err, date)
 			}
 		}
 	}
@@ -791,7 +802,7 @@ func currentCategoryByCode(ctx context.Context, tx *sql.Tx, bookID int64, code s
 
 func ensureActiveCategoryNameAvailable(ctx context.Context, tx *sql.Tx, bookID int64, categoryType string, parentID sql.NullInt64, name string, exceptCategoryID int64) error {
 	query := `
-		SELECT a.id
+		SELECT av.name
 		FROM accounts a
 		JOIN ` + CurrentReferenceVersions(ctx, "account") + ` av ON av.account_id = a.id
 		WHERE a.book_id = ?
@@ -811,22 +822,29 @@ func ensureActiveCategoryNameAvailable(ctx context.Context, tx *sql.Tx, bookID i
 	}
 	query += " LIMIT 1"
 
-	var existingID int64
-	if err := tx.QueryRowContext(ctx, query, args...).Scan(&existingID); err != nil {
+	var existing string
+	if err := tx.QueryRowContext(ctx, query, args...).Scan(&existing); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
 		return fmt.Errorf("check category name availability: %w", err)
 	}
 
-	return ErrCategoryExists
+	return categoryNameTakenError{name: existing}
 }
 
-// datedCategoryNameConflict names the date and the taken name when a sibling
-// already holds it on a date the new version governs.
-func datedCategoryNameConflict(err error, date string, name string) error {
-	if errors.Is(err, ErrCategoryExists) {
-		return ReferenceRuleConflictError{Rule: ReferenceRuleCategoryNameTaken, Date: date, Name: name, Err: ErrCategoryExists}
+// categoryNameTakenError carries the sibling's stored name, which can differ
+// in case from the requested one. It unwraps to ErrCategoryExists.
+type categoryNameTakenError struct{ name string }
+
+func (e categoryNameTakenError) Error() string { return ErrCategoryExists.Error() }
+func (e categoryNameTakenError) Unwrap() error { return ErrCategoryExists }
+
+// datedCategoryNameConflict names the date and the sibling that already holds
+// the name on a date the new version governs.
+func datedCategoryNameConflict(err error, date string) error {
+	if taken, ok := errors.AsType[categoryNameTakenError](err); ok {
+		return ReferenceRuleConflictError{Rule: ReferenceRuleCategoryNameTaken, Date: date, Name: taken.name, Err: ErrCategoryExists}
 	}
 	return err
 }

@@ -84,19 +84,22 @@ type CreateInstitutionInput struct {
 }
 
 type UpdateInstitutionInput struct {
-	OwnerUserID     int64
-	AuthSessionID   int64
-	RequestID       string
-	OriginType      string
-	Operation       string
-	InstitutionID   int64
-	Name            string
-	Kind            string
-	CountryCode     string
-	Website         string
-	AddressJSON     string
-	CommentMarkdown string
-	MetadataJSON    string
+	OwnerUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	OriginType    string
+	Operation     string
+	InstitutionID int64
+	// Omitted (nil) fields keep the value of the version in effect on the
+	// effective date, so an earlier-dated correction changes only what it
+	// names (#552). An empty string clears an optional field.
+	Name            *string
+	Kind            *string
+	CountryCode     *string
+	Website         *string
+	AddressJSON     *string
+	CommentMarkdown *string
+	MetadataJSON    *string
 	EffectiveFrom   string
 	ChangeReason    string
 }
@@ -260,25 +263,43 @@ func (s *InstitutionService) UpdateInstitution(ctx context.Context, input Update
 		return Institution{}, ValidationError{Message: "institution id is required"}
 	}
 
-	spec, err := institutionSpec(institutionSpecInput{
-		Name:            input.Name,
-		Kind:            input.Kind,
-		CountryCode:     input.CountryCode,
-		Website:         input.Website,
-		AddressJSON:     input.AddressJSON,
-		CommentMarkdown: input.CommentMarkdown,
-		MetadataJSON:    input.MetadataJSON,
-	})
-	if err != nil {
-		return Institution{}, err
-	}
-
 	now := s.now().UTC()
 	today, err := s.settings.OwnerTodayAt(ctx, input.OwnerUserID, now)
 	if err != nil {
 		return Institution{}, err
 	}
 	effectiveFrom, err := cleanEffectiveFrom(input.EffectiveFrom, today)
+	if err != nil {
+		return Institution{}, err
+	}
+
+	// Omitted fields come from the version in effect on the requested date;
+	// the transaction refuses the write if that version is no longer the one.
+	stored, err := s.repository.CurrentInstitutionByID(db.WithReferenceDate(ctx, effectiveFrom), BookID, input.InstitutionID)
+	if errors.Is(err, db.ErrNotFound) {
+		if _, err := s.repository.CurrentInstitutionByID(ctx, BookID, input.InstitutionID); err != nil {
+			return Institution{}, mapInstitutionReadError(err)
+		}
+		// Dated before the first version: refuse with the first date.
+		err = s.repository.VersionBeforeFirst(ctx, input.InstitutionID)
+		if mapped, ok := referenceBackdatingError(err); ok {
+			return Institution{}, mapped
+		}
+		return Institution{}, mapInstitutionReadError(err)
+	}
+	if err != nil {
+		return Institution{}, mapInstitutionReadError(err)
+	}
+	base := toInstitution(stored)
+	spec, err := institutionSpec(institutionSpecInput{
+		Name:            valueOr(input.Name, base.Name),
+		Kind:            valueOr(input.Kind, base.Kind),
+		CountryCode:     valueOr(input.CountryCode, base.CountryCode),
+		Website:         valueOr(input.Website, base.Website),
+		AddressJSON:     valueOr(input.AddressJSON, base.AddressJSON),
+		CommentMarkdown: valueOr(input.CommentMarkdown, base.CommentMarkdown),
+		MetadataJSON:    valueOr(input.MetadataJSON, base.MetadataJSON),
+	})
 	if err != nil {
 		return Institution{}, err
 	}
@@ -295,6 +316,7 @@ func (s *InstitutionService) UpdateInstitution(ctx context.Context, input Update
 		OriginType:      input.OriginType,
 		Operation:       input.Operation,
 		Spec:            spec,
+		BaseVersionID:   stored.VersionID,
 		ChangeReason:    changeReason,
 		RecordedAt:      now.Format(time.RFC3339),
 		EffectiveFrom:   effectiveFrom,
@@ -421,6 +443,21 @@ func (s *InstitutionService) changeInstitutionStatus(ctx context.Context, input 
 	}
 
 	return toInstitution(record), nil
+}
+
+func mapInstitutionReadError(err error) error {
+	if errors.Is(err, db.ErrNotFound) {
+		return ErrInstitutionNotFound
+	}
+	return fmt.Errorf("read institution: %w", err)
+}
+
+// valueOr returns *value when the field was sent, otherwise fallback.
+func valueOr(value *string, fallback string) string {
+	if value != nil {
+		return *value
+	}
+	return fallback
 }
 
 type institutionSpecInput struct {

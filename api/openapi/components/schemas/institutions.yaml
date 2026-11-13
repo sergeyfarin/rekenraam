@@ -127,6 +127,48 @@ InstitutionRequest:
       maxLength: 500
       description: Omit to use the default reason for the operation.
   additionalProperties: false
+InstitutionUpdateRequest:
+  type: object
+  description: >-
+    Partial update. An omitted field keeps the value of the version in effect
+    on effective_from, so an earlier-dated correction changes only the fields
+    it sends. Send an empty string (or {} for address and metadata) to clear a
+    field.
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 200
+    kind:
+      $ref: "../../openapi.yaml#/components/schemas/InstitutionKind"
+    country_code:
+      type: string
+      maxLength: 2
+      description: Two letters, or empty to clear.
+    website:
+      type: string
+      maxLength: 500
+      description: An http(s) URL, or empty to clear.
+    address:
+      type: object
+      additionalProperties: true
+      description: Reserved structured address object; {} clears it.
+    comment_markdown:
+      type: string
+      maxLength: 5000
+    metadata:
+      type: object
+      additionalProperties: true
+      description: Reserved structured metadata object; {} clears it.
+    effective_from:
+      type: string
+      format: date
+      description: Omit to use today's date. Future dates are rejected.
+    change_reason:
+      type: string
+      maxLength: 500
+      description: Omit to use the default reason for the operation.
+  additionalProperties: false
 InstitutionLifecycleRequest:
   type: object
   properties:

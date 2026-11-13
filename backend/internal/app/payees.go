@@ -231,8 +231,12 @@ func (s *PayeeService) UpdatePayee(ctx context.Context, input UpdatePayeeInput) 
 
 	current, err := s.repository.PayeeByID(historicalCtx, BookID, input.PayeeID)
 	if errors.Is(err, db.ErrNotFound) {
-		// The transaction returns the coded before-first-version refusal.
-		current, err = s.repository.PayeeByID(ctx, BookID, input.PayeeID)
+		// Dated before the first version: refuse with the first date before
+		// filling or validating hints from today's version.
+		if _, err := s.repository.PayeeByID(ctx, BookID, input.PayeeID); err != nil {
+			return Payee{}, mapPayeeDBError(err)
+		}
+		return Payee{}, mapPayeeDBError(s.repository.VersionBeforeFirst(ctx, input.PayeeID))
 	}
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
