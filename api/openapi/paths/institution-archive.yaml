@@ -63,7 +63,7 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: An account that is not archived still uses the institution; REFERENCE_VERSION_BACKDATED for a lifecycle or structural change before the latest version or an update before the first version
+      description: An account that is not archived uses the institution on a date the archive governs; REFERENCE_VERSION_BACKDATED for a lifecycle or structural change before the latest version or an update before the first version; CONFLICT when a version was added while the edit was prepared (reload and retry)
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"

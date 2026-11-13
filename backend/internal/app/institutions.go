@@ -367,10 +367,14 @@ func (s *InstitutionService) changeInstitutionStatus(ctx context.Context, input 
 		return Institution{}, ValidationError{Message: "institution id is required"}
 	}
 
-	current, err := s.Institution(ctx, input.InstitutionID)
+	stored, err := s.repository.CurrentInstitutionByID(ctx, BookID, input.InstitutionID)
 	if err != nil {
-		return Institution{}, err
+		if errors.Is(err, db.ErrNotFound) {
+			return Institution{}, ErrInstitutionNotFound
+		}
+		return Institution{}, fmt.Errorf("read institution: %w", err)
 	}
+	current := toInstitution(stored)
 
 	now := s.now().UTC()
 	today, err := s.settings.OwnerTodayAt(ctx, input.OwnerUserID, now)
@@ -395,9 +399,12 @@ func (s *InstitutionService) changeInstitutionStatus(ctx context.Context, input 
 		Operation:       operation,
 		Spec:            institutionSpecFromStored(current),
 		Status:          status,
-		ChangeReason:    changeReason,
-		RecordedAt:      now.Format(time.RFC3339),
-		EffectiveFrom:   effectiveFrom,
+		// The descriptive fields are copied from this read; the
+		// transaction refuses the write if a version was added since.
+		BaseVersionID: stored.VersionID,
+		ChangeReason:  changeReason,
+		RecordedAt:    now.Format(time.RFC3339),
+		EffectiveFrom: effectiveFrom,
 	})
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {

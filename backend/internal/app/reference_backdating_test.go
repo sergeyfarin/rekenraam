@@ -116,7 +116,7 @@ func TestReferenceBackdatedDescriptionPreservesHistoricalLifecycle(t *testing.T)
 			require.NoError(t, err)
 			status, err := f.rename("March correction", "2026-03-01")
 			require.NoError(t, err)
-			assert.Equal(t, "active", status)
+			assert.Equal(t, "archived", status, "the response is today's state, not the past window's")
 			status, err = f.read("2026-04-01")
 			require.NoError(t, err)
 			assert.Equal(t, "active", status)
@@ -128,7 +128,7 @@ func TestReferenceBackdatedDescriptionPreservesHistoricalLifecycle(t *testing.T)
 			require.NoError(t, err)
 			status, err = f.rename("July correction", "2026-07-01")
 			require.NoError(t, err)
-			assert.Equal(t, "archived", status)
+			assert.Equal(t, "active", status, "the response is today's state, not the past window's")
 			status, err = f.read("2026-08-01")
 			require.NoError(t, err)
 			assert.Equal(t, "archived", status)
@@ -283,4 +283,225 @@ func TestPayeeBackdatedPatchKeepsAsOfDefaultsAndMetadata(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, sql.NullInt64{Int64: f.cashAccountID, Valid: true}, v.DefaultAccountID)
 	assert.JSONEq(t, `{"period":"old"}`, v.MetadataJSON)
+}
+
+// A forward edit dated in the past (no later version of its own) governs
+// every day through today. Its name must be free on each of those days, not
+// only on its own date (#552 review).
+func TestReferenceForwardEditNameUniquenessCoversTheWholeWindow(t *testing.T) {
+	t.Parallel()
+	for _, kind := range []string{"category", "payee"} {
+		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+			f := newReferenceBackdatingFixture(t, kind)
+			ctx := context.Background()
+			switch kind {
+			case "category":
+				v, err := f.categories.CreateCategory(ctx, CreateCategoryInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "category.create", Name: "Other", CategoryType: "expense"})
+				require.NoError(t, err)
+				updateCategoryVersion(t, f.referenceVersionFixture, v.ID, "Taken in September", "2026-09-01")
+				updateCategoryVersion(t, f.referenceVersionFixture, v.ID, "Free again", "2026-10-01")
+			case "payee":
+				v, err := f.payees.CreatePayee(ctx, CreatePayeeInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "payee.create", Name: "Other", EffectiveFrom: "2026-01-01"})
+				require.NoError(t, err)
+				updatePayeeVersion(t, f.referenceVersionFixture, v.ID, "Taken in September", "2026-09-01")
+				updatePayeeVersion(t, f.referenceVersionFixture, v.ID, "Free again", "2026-10-01")
+			}
+			for _, name := range []string{"Free again", "Taken in September"} {
+				before := f.counts(t)
+				_, err := f.rename(name, "2026-08-01")
+				require.Error(t, err, "%q is taken on a day the August version governs", name)
+				if kind == "category" {
+					assert.ErrorIs(t, err, ErrCategoryExists)
+				} else {
+					assert.ErrorIs(t, err, ErrPayeeExists)
+				}
+				assert.Equal(t, before, f.counts(t))
+			}
+			_, err := f.rename("Free again", "2026-06-01")
+			require.Error(t, err, "dated earlier still reaches today")
+			_, err = f.rename("Never taken", "2026-08-01")
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestCategoryForwardEditParentMustStayActiveThroughToday(t *testing.T) {
+	t.Parallel()
+	f := newReferenceBackdatingFixture(t, "category")
+	ctx := context.Background()
+	parent, err := f.categories.CreateCategory(ctx, CreateCategoryInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "category.create", Name: "Parent", CategoryType: "expense"})
+	require.NoError(t, err)
+	_, err = f.categories.DisableCategory(ctx, CategoryLifecycleInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", CategoryID: parent.ID, EffectiveFrom: "2026-09-01"})
+	require.NoError(t, err)
+	before := f.counts(t)
+	_, err = f.categories.UpdateCategory(ctx, UpdateCategoryInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "category.update", CategoryID: f.id, ParentCategoryID: &parent.ID, EffectiveFrom: "2026-08-01"})
+	require.ErrorIs(t, err, ErrCategoryParentInvalid, "the parent is archived on days the August version governs")
+	assert.Equal(t, before, f.counts(t))
+	current, err := f.categories.Category(ctx, f.id)
+	require.NoError(t, err)
+	assert.Nil(t, current.ParentCategoryID)
+}
+
+func TestCategoryForwardEditRefusesADatedParentCycle(t *testing.T) {
+	t.Parallel()
+	f := newReferenceBackdatingFixture(t, "category")
+	ctx := context.Background()
+	other, err := f.categories.CreateCategory(ctx, CreateCategoryInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "category.create", Name: "Other", CategoryType: "expense"})
+	require.NoError(t, err)
+	_, err = f.categories.UpdateCategory(ctx, UpdateCategoryInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "category.update", CategoryID: other.ID, ParentCategoryID: &f.id, EffectiveFrom: "2026-09-01"})
+	require.NoError(t, err)
+	before := f.counts(t)
+	// On its own date the tree has no loop; from September it would.
+	_, err = f.categories.UpdateCategory(ctx, UpdateCategoryInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "category.update", CategoryID: f.id, ParentCategoryID: &other.ID, EffectiveFrom: "2026-08-01"})
+	require.ErrorIs(t, err, ErrCategoryParentInvalid)
+	assert.Equal(t, before, f.counts(t))
+}
+
+func TestReferenceLifecycleRulesCoverTheWholeWindow(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	t.Run("category disable with a child active in the window", func(t *testing.T) {
+		t.Parallel()
+		f := newReferenceBackdatingFixture(t, "category")
+		child, err := f.categories.CreateCategory(ctx, CreateCategoryInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "category.create", Name: "Child", CategoryType: "expense", ParentCategoryID: &f.id})
+		require.NoError(t, err)
+		_, err = f.categories.DisableCategory(ctx, CategoryLifecycleInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", CategoryID: child.ID, EffectiveFrom: "2026-09-01"})
+		require.NoError(t, err)
+		before := f.counts(t)
+		_, err = f.lifecycle("2026-08-01", true)
+		require.ErrorIs(t, err, ErrCategoryHasChildren, "the child is still active in August")
+		assert.Equal(t, before, f.counts(t))
+		_, err = f.lifecycle("2026-09-01", true)
+		require.NoError(t, err)
+	})
+	t.Run("category restore with a name taken in the window", func(t *testing.T) {
+		t.Parallel()
+		f := newReferenceBackdatingFixture(t, "category")
+		_, err := f.lifecycle("2026-02-01", true)
+		require.NoError(t, err)
+		other, err := f.categories.CreateCategory(ctx, CreateCategoryInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "category.create", Name: "Other", CategoryType: "expense"})
+		require.NoError(t, err)
+		updateCategoryVersion(t, f.referenceVersionFixture, other.ID, "Original", "2026-08-01")
+		updateCategoryVersion(t, f.referenceVersionFixture, other.ID, "Other again", "2026-09-01")
+		_, err = f.lifecycle("2026-07-01", false)
+		require.ErrorIs(t, err, ErrCategoryExists)
+		_, err = f.lifecycle("2026-09-01", false)
+		require.NoError(t, err)
+	})
+	t.Run("payee restore with a name taken in the window", func(t *testing.T) {
+		t.Parallel()
+		f := newReferenceBackdatingFixture(t, "payee")
+		_, err := f.lifecycle("2026-02-01", true)
+		require.NoError(t, err)
+		other, err := f.payees.CreatePayee(ctx, CreatePayeeInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "payee.create", Name: "Other", EffectiveFrom: "2026-01-01"})
+		require.NoError(t, err)
+		updatePayeeVersion(t, f.referenceVersionFixture, other.ID, "Original", "2026-08-01")
+		updatePayeeVersion(t, f.referenceVersionFixture, other.ID, "Other again", "2026-09-01")
+		_, err = f.lifecycle("2026-07-01", false)
+		require.ErrorIs(t, err, ErrPayeeExists)
+		_, err = f.lifecycle("2026-09-01", false)
+		require.NoError(t, err)
+	})
+	t.Run("institution archive with an account linked in the window", func(t *testing.T) {
+		t.Parallel()
+		f := newReferenceBackdatingFixture(t, "institution")
+		institutionID := f.id
+		account, err := f.accountService.CreateAccount(ctx, CreateAccountInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "account.create", Name: "Linked", AccountClass: "asset", AccountKind: "checking", InstitutionID: &institutionID, DefaultCommodityID: &f.eurCommodityID, OpenedOn: "2026-01-01", EffectiveFrom: "2026-01-01"})
+		require.NoError(t, err)
+		allowsPostings := account.AllowsPostings
+		_, err = f.accountService.UpdateAccount(ctx, UpdateAccountInput{
+			OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "account.update", AccountID: account.ID,
+			Code: account.Code, Name: account.Name, AccountClass: account.AccountClass, AccountKind: account.AccountKind,
+			DefaultCommodityID: account.DefaultCommodityID, AllowsPostings: &allowsPostings, MetadataJSON: account.MetadataJSON,
+			OpenedOn: account.OpenedOn, CostBasisMethod: account.CostBasisMethod, EffectiveFrom: "2026-09-01",
+		})
+		require.NoError(t, err)
+		before := f.counts(t)
+		_, err = f.lifecycle("2026-08-01", true)
+		require.ErrorIs(t, err, ErrInstitutionInUse, "the account still names the institution in August")
+		assert.Equal(t, before, f.counts(t))
+		_, err = f.lifecycle("2026-09-01", true)
+		require.NoError(t, err)
+	})
+}
+
+func TestPayeeForwardEditDefaultHintsMustBeValidToday(t *testing.T) {
+	t.Parallel()
+	f := newReferenceBackdatingFixture(t, "payee")
+	ctx := context.Background()
+	account, err := f.accountService.CreateAccount(ctx, CreateAccountInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "account.create", Name: "Closing", AccountClass: "asset", AccountKind: "checking", DefaultCommodityID: &f.eurCommodityID, OpenedOn: "2026-01-01", EffectiveFrom: "2026-01-01"})
+	require.NoError(t, err)
+	_, err = f.accountService.CloseAccount(ctx, AccountLifecycleInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", AccountID: account.ID, EffectiveFrom: "2026-09-01", ClosedOn: "2026-09-01"})
+	require.NoError(t, err)
+	before := f.counts(t)
+	_, err = f.payees.UpdatePayee(ctx, UpdatePayeeInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "payee.update", PayeeID: f.id, DefaultAccountID: &account.ID, EffectiveFrom: "2026-08-01"})
+	require.Error(t, err, "the August version is today's payee, and the account is closed today")
+	assert.Equal(t, before, f.counts(t))
+
+	// A correction bounded by a later version only governs its past window.
+	_, err = f.rename("October name", "2026-10-01")
+	require.NoError(t, err)
+	_, err = f.payees.UpdatePayee(ctx, UpdatePayeeInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "payee.update", PayeeID: f.id, DefaultAccountID: &account.ID, EffectiveFrom: "2026-08-01"})
+	require.NoError(t, err)
+}
+
+// The service fills omitted fields from the version in effect on the
+// requested date before the write transaction opens. If a version is added in
+// between, the transaction refuses rather than writing a stale fill.
+func TestReferenceWriteRefusesAStaleBaseVersion(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	t.Run("category", func(t *testing.T) {
+		t.Parallel()
+		f := newReferenceBackdatingFixture(t, "category")
+		repository := db.NewCategoryRepository(f.database)
+		base, err := repository.CategoryByID(db.WithReferenceDate(ctx, "2026-10-15"), BookID, f.id)
+		require.NoError(t, err)
+		_, err = f.rename("Concurrent", "2026-10-15")
+		require.NoError(t, err)
+		current := toCategory(base)
+		spec, err := f.categories.newCategorySpec(ctx, categorySpecInput{CategoryID: f.id, Name: "Stale", CategoryType: current.CategoryType, AllowsPostings: &current.AllowsPostings, Current: &current})
+		require.NoError(t, err)
+		before := f.counts(t)
+		_, err = repository.UpdateCategory(db.WithReferenceDate(ctx, "2026-10-15"), db.UpdateCategoryParams{BookID: BookID, CategoryID: f.id, ChangedByUserID: f.ownerUserID, OriginType: "browser_api", Operation: "category.update", Spec: spec, BaseVersionID: base.VersionID, ChangeReason: "stale", RecordedAt: "2026-10-15T12:00:00Z", EffectiveFrom: "2026-10-15"})
+		require.ErrorIs(t, err, db.ErrReferenceVersionChanged)
+		assert.ErrorIs(t, categoryRepositoryError("persist", err), ErrReferenceVersionChanged)
+		assert.Equal(t, before, f.counts(t))
+	})
+	for _, kind := range []string{"payee", "institution"} {
+		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+			f := newReferenceBackdatingFixture(t, kind)
+			at := db.WithReferenceDate(ctx, "2026-10-15")
+			var baseVersionID int64
+			var write func() error
+			switch kind {
+			case "payee":
+				repository := db.NewPayeeRepository(f.database)
+				base, err := repository.PayeeByID(at, BookID, f.id)
+				require.NoError(t, err)
+				baseVersionID = base.VersionID
+				write = func() error {
+					_, err := repository.UpdatePayee(at, db.UpdatePayeeParams{BookID: BookID, PayeeID: f.id, ActorUserID: f.ownerUserID, OriginType: "browser_api", Operation: "payee.archive", Spec: db.PayeeSpec{Name: base.Name, NormalizedName: base.NormalizedName, MetadataJSON: base.MetadataJSON}, Status: "archived", BaseVersionID: baseVersionID, RecordedAt: "2026-10-15T12:00:00Z", EffectiveFrom: "2026-10-15", ChangeReason: "stale"})
+					assert.ErrorIs(t, mapPayeeDBError(err), ErrReferenceVersionChanged)
+					return err
+				}
+			case "institution":
+				repository := db.NewInstitutionRepository(f.database)
+				base, err := repository.CurrentInstitutionByID(at, BookID, f.id)
+				require.NoError(t, err)
+				baseVersionID = base.VersionID
+				write = func() error {
+					_, err := repository.UpdateInstitution(at, db.UpdateInstitutionParams{BookID: BookID, InstitutionID: f.id, ChangedByUserID: f.ownerUserID, OriginType: "browser_api", Operation: "institution.archive", Spec: institutionSpecFromStored(toInstitution(base)), Status: "archived", BaseVersionID: baseVersionID, ChangeReason: "stale", RecordedAt: "2026-10-15T12:00:00Z", EffectiveFrom: "2026-10-15"})
+					return err
+				}
+			}
+			_, err := f.rename("Concurrent", "2026-10-15")
+			require.NoError(t, err)
+			before := f.counts(t)
+			require.ErrorIs(t, write(), db.ErrReferenceVersionChanged)
+			assert.Equal(t, before, f.counts(t))
+		})
+	}
 }

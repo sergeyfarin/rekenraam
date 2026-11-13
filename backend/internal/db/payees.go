@@ -72,6 +72,9 @@ type UpdatePayeeParams struct {
 	Operation     string
 	Spec          PayeeSpec
 	Status        string
+	// BaseVersionID is the version the caller filled omitted fields from;
+	// zero skips the staleness check.
+	BaseVersionID int64
 	RecordedAt    string
 	EffectiveFrom string
 	ChangeReason  string
@@ -252,35 +255,42 @@ func (r *PayeeRepository) UpdatePayee(ctx context.Context, params UpdatePayeePar
 		return PayeeRecord{}, err
 	}
 
-	current, err := payeeByID(ctx, tx, params.BookID, params.PayeeID)
-	if err != nil {
+	// An unknown payee is not found, before any date comparison.
+	if _, err := payeeByID(ctx, tx, params.BookID, params.PayeeID); err != nil {
 		return PayeeRecord{}, err
 	}
 
-	status := params.Status
-	if status == "" {
-		status = current.Status
-	}
-	latest, err := latestReferenceVersionDateTx(ctx, tx, "payee", params.PayeeID)
+	latest, err := latestReferenceVersionDateTx(ctx, tx, payeeVersionTable, params.PayeeID)
 	if err != nil {
 		return PayeeRecord{}, err
 	}
-	if params.EffectiveFrom < latest {
-		if params.Status != "" {
-			return PayeeRecord{}, ReferenceVersionBackdatedError{LatestEffectiveFrom: latest}
-		}
-		asOf, err := payeeByID(WithReferenceDate(ctx, params.EffectiveFrom), tx, params.BookID, params.PayeeID)
-		if errors.Is(err, ErrNotFound) {
-			return PayeeRecord{}, ReferenceVersionBackdatedError{LatestEffectiveFrom: latest}
-		}
-		if err != nil {
-			return PayeeRecord{}, err
-		}
+	backdated := params.EffectiveFrom < latest
+	if backdated && params.Status != "" {
+		return PayeeRecord{}, ReferenceVersionBackdatedError{LatestEffectiveFrom: latest}
+	}
+	asOf, err := payeeByID(WithReferenceDate(ctx, params.EffectiveFrom), tx, params.BookID, params.PayeeID)
+	if errors.Is(err, ErrNotFound) {
+		return PayeeRecord{}, ReferenceVersionBackdatedError{LatestEffectiveFrom: latest}
+	}
+	if err != nil {
+		return PayeeRecord{}, err
+	}
+	if err := requireBaseVersionTx(params.BaseVersionID, asOf.VersionID); err != nil {
+		return PayeeRecord{}, err
+	}
+	status := params.Status
+	if status == "" {
 		status = asOf.Status
 	}
 	if status == "active" {
-		if err := ensurePayeeNameAvailable(WithReferenceDate(ctx, params.EffectiveFrom), tx, params.BookID, params.Spec.NormalizedName, params.PayeeID); err != nil {
+		dates, err := referenceWindowDatesTx(ctx, tx, payeeVersionTable, params.PayeeID, params.EffectiveFrom, payeeVersionTable)
+		if err != nil {
 			return PayeeRecord{}, err
+		}
+		for _, date := range dates {
+			if err := ensurePayeeNameAvailable(WithReferenceDate(ctx, date), tx, params.BookID, params.Spec.NormalizedName, params.PayeeID); err != nil {
+				return PayeeRecord{}, err
+			}
 		}
 	}
 
@@ -315,6 +325,14 @@ func (r *PayeeRepository) UpdatePayee(ctx context.Context, params UpdatePayeePar
 	})
 	if err != nil {
 		return PayeeRecord{}, err
+	}
+	// An earlier-dated correction governs only its past window; answer with
+	// the payee as it stands on the caller's reference date.
+	if backdated {
+		record, err = payeeByID(ctx, tx, params.BookID, params.PayeeID)
+		if err != nil {
+			return PayeeRecord{}, err
+		}
 	}
 
 	if err := tx.Commit(); err != nil {

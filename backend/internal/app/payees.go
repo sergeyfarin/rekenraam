@@ -262,14 +262,28 @@ func (s *PayeeService) UpdatePayee(ctx context.Context, input UpdatePayeeInput) 
 		metadataJSON = *input.MetadataJSON
 	}
 
-	spec, err := s.payeeSpec(historicalCtx, payeeSpecInput{
+	specInput := payeeSpecInput{
 		Name:                     name,
 		DefaultAccountID:         defaultAccountID,
 		DefaultCategoryAccountID: defaultCategoryAccountID,
 		MetadataJSON:             metadataJSON,
-	})
+	}
+	spec, err := s.payeeSpec(historicalCtx, specInput)
 	if err != nil {
 		return Payee{}, err
+	}
+	// A version with no later one governs through today, so its default
+	// hints must also be valid today: the payee as it stands today is what
+	// offers them. Checking only the requested date would let an edit dated
+	// before an account's archive point today's payee at that account.
+	latest, err := s.repository.PayeeByID(ctx, BookID, input.PayeeID)
+	if err != nil {
+		return Payee{}, mapPayeeDBError(err)
+	}
+	if latest.VersionID == current.VersionID {
+		if _, err := s.payeeSpec(ctx, specInput); err != nil {
+			return Payee{}, err
+		}
 	}
 
 	changeReason, err := cleanChangeReason(input.ChangeReason, "updated payee")
@@ -290,6 +304,7 @@ func (s *PayeeService) UpdatePayee(ctx context.Context, input UpdatePayeeInput) 
 		OriginType:    input.OriginType,
 		Operation:     operation,
 		Spec:          spec,
+		BaseVersionID: current.VersionID,
 		RecordedAt:    now.Format(time.RFC3339),
 		EffectiveFrom: effectiveFrom,
 		ChangeReason:  changeReason,
@@ -360,6 +375,7 @@ func (s *PayeeService) changePayeeStatus(ctx context.Context, input PayeeLifecyc
 			MetadataJSON:             current.MetadataJSON,
 		},
 		Status:        status,
+		BaseVersionID: current.VersionID,
 		RecordedAt:    now.Format(time.RFC3339),
 		EffectiveFrom: effectiveFrom,
 		ChangeReason:  changeReason,

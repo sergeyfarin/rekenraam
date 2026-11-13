@@ -4638,7 +4638,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description An account that is not archived still uses the institution; REFERENCE_VERSION_BACKDATED for a lifecycle or structural change before the latest version or an update before the first version */
+                /** @description An account that is not archived uses the institution on a date the archive governs; REFERENCE_VERSION_BACKDATED for a lifecycle or structural change before the latest version or an update before the first version; CONFLICT when a version was added while the edit was prepared (reload and retry) */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -4745,7 +4745,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description REFERENCE_VERSION_BACKDATED for a lifecycle change before the latest version or an update before the first version */
+                /** @description REFERENCE_VERSION_BACKDATED for a lifecycle change before the latest version or an update before the first version; CONFLICT when a version was added while the edit was prepared (reload and retry) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -7827,7 +7827,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Active sibling category with the same name already exists; REFERENCE_VERSION_BACKDATED for a lifecycle or structural change before the latest version or an update before the first version */
+                /** @description Active sibling category with the same name exists on a date the new version governs; REFERENCE_VERSION_BACKDATED for a lifecycle or structural change before the latest version or an update before the first version; CONFLICT when a version was added while the edit was prepared (reload and retry) */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -7933,7 +7933,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Category has active child categories; REFERENCE_VERSION_BACKDATED for a lifecycle or structural change before the latest version or an update before the first version */
+                /** @description Category has active child categories on a date the disable governs; REFERENCE_VERSION_BACKDATED for a lifecycle or structural change before the latest version or an update before the first version */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -8040,7 +8040,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Active sibling category with the same name already exists; REFERENCE_VERSION_BACKDATED for a lifecycle or structural change before the latest version or an update before the first version */
+                /** @description Active sibling category with the same name exists on a date the restore governs; REFERENCE_VERSION_BACKDATED for a lifecycle or structural change before the latest version or an update before the first version */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -8867,7 +8867,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Payee already exists; REFERENCE_VERSION_BACKDATED for a lifecycle or structural change before the latest version or an update before the first version */
+                /** @description Active payee with the same name exists on a date the new version governs; REFERENCE_VERSION_BACKDATED for a lifecycle or structural change before the latest version or an update before the first version; CONFLICT when a version was added while the edit was prepared (reload and retry) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -8953,7 +8953,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description REFERENCE_VERSION_BACKDATED for a lifecycle change before the latest version or an update before the first version */
+                /** @description REFERENCE_VERSION_BACKDATED for a lifecycle change before the latest version or an update before the first version; CONFLICT when a version was added while the edit was prepared (reload and retry) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -9043,7 +9043,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description REFERENCE_VERSION_BACKDATED for a lifecycle change before the latest version or an update before the first version */
+                /** @description Active payee with the same name exists on a date the restore governs; REFERENCE_VERSION_BACKDATED for a lifecycle change before the latest version or an update before the first version; CONFLICT when a version was added while the edit was prepared (reload and retry) */
                 409: {
                     headers: {
                         [name: string]: unknown;

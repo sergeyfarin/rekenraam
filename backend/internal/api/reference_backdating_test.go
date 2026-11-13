@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"rekenraam/backend/internal/app"
 )
 
 func TestReferenceBackdatedLifecycleReturnsCodedConflict(t *testing.T) {
@@ -68,6 +71,27 @@ func TestReferenceBackdatedLifecycleReturnsCodedConflict(t *testing.T) {
 			res = mutate(http.MethodPost, path+"/"+restore, `{"effective_from":"2025-06-01"}`)
 			require.Equal(t, http.StatusOK, res.Code, res.Body.String())
 			assert.Contains(t, res.Body.String(), `"status":"active"`)
+		})
+	}
+}
+
+// A stale base version (a version added between the service's read and its
+// write transaction) is a retryable 409 CONFLICT, distinct from the coded
+// backdating refusal.
+func TestReferenceStaleBaseVersionReturnsConflict(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.DiscardHandler)
+	for name, write := range map[string]func(http.ResponseWriter, *http.Request, *slog.Logger, string, error){
+		"category":    writeCategoryServiceError,
+		"payee":       writePayeeServiceError,
+		"institution": writeInstitutionServiceError,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			res := httptest.NewRecorder()
+			write(res, httptest.NewRequest(http.MethodPatch, "/", nil), logger, "update", app.ErrReferenceVersionChanged)
+			require.Equal(t, http.StatusConflict, res.Code)
+			assert.Contains(t, res.Body.String(), `"code":"CONFLICT"`)
 		})
 	}
 }

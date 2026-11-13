@@ -323,6 +323,8 @@ func writeCategoryServiceError(w http.ResponseWriter, r *http.Request, logger *s
 		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationError.Error())
 	case errors.Is(err, app.ErrReferenceVersionBackdated):
 		writeAPIError(w, http.StatusConflict, "REFERENCE_VERSION_BACKDATED", err.Error())
+	case errors.Is(err, app.ErrReferenceVersionChanged):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", err.Error())
 	case errors.Is(err, app.ErrCategoryNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "category not found")
 	case errors.Is(err, app.ErrCategoryExists):

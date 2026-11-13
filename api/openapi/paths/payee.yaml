@@ -84,7 +84,7 @@ patch:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Payee already exists; REFERENCE_VERSION_BACKDATED for a lifecycle or structural change before the latest version or an update before the first version
+      description: Active payee with the same name exists on a date the new version governs; REFERENCE_VERSION_BACKDATED for a lifecycle or structural change before the latest version or an update before the first version; CONFLICT when a version was added while the edit was prepared (reload and retry)
       content:
         application/json:
           schema:

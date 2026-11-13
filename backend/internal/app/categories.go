@@ -186,24 +186,34 @@ func (s *CategoryService) ListCategories(ctx context.Context, input ListCategori
 }
 
 func (s *CategoryService) Category(ctx context.Context, categoryID int64) (Category, error) {
+	record, err := s.categoryRecord(ctx, categoryID)
+	if err != nil {
+		return Category{}, err
+	}
+	return toCategory(record), nil
+}
+
+// categoryRecord reads the version in effect on the context's reference date
+// (owner-today unless the caller pinned one), keeping its version ID.
+func (s *CategoryService) categoryRecord(ctx context.Context, categoryID int64) (db.AccountRecord, error) {
 	ctx, referenceErr := s.settings.referenceContext(ctx, s.now())
 	if referenceErr != nil {
-		return Category{}, referenceErr
+		return db.AccountRecord{}, referenceErr
 	}
 
 	if categoryID <= 0 {
-		return Category{}, ValidationError{Message: "category id is required"}
+		return db.AccountRecord{}, ValidationError{Message: "category id is required"}
 	}
 
 	record, err := s.repository.CategoryByID(ctx, BookID, categoryID)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
-			return Category{}, ErrCategoryNotFound
+			return db.AccountRecord{}, ErrCategoryNotFound
 		}
-		return Category{}, fmt.Errorf("read category: %w", err)
+		return db.AccountRecord{}, fmt.Errorf("read category: %w", err)
 	}
 
-	return toCategory(record), nil
+	return record, nil
 }
 
 func (s *CategoryService) CreateCategory(ctx context.Context, input CreateCategoryInput) (Category, error) {
@@ -277,14 +287,17 @@ func (s *CategoryService) UpdateCategory(ctx context.Context, input UpdateCatego
 	}
 	historicalCtx := db.WithReferenceDate(ctx, effectiveFrom)
 
-	current, err := s.Category(historicalCtx, input.CategoryID)
+	// Omitted fields come from the version in effect on the requested date;
+	// the transaction refuses the write if that version is no longer the one.
+	base, err := s.categoryRecord(historicalCtx, input.CategoryID)
 	if errors.Is(err, ErrCategoryNotFound) {
 		// The transaction returns the coded before-first-version refusal.
-		current, err = s.Category(ctx, input.CategoryID)
+		base, err = s.categoryRecord(ctx, input.CategoryID)
 	}
 	if err != nil {
 		return Category{}, err
 	}
+	current := toCategory(base)
 	if current.IsBuiltin {
 		return Category{}, ErrCategoryBuiltInProtected
 	}
@@ -344,6 +357,7 @@ func (s *CategoryService) UpdateCategory(ctx context.Context, input UpdateCatego
 		OriginType:      input.OriginType,
 		Operation:       input.Operation,
 		Spec:            spec,
+		BaseVersionID:   base.VersionID,
 		ChangeReason:    changeReason,
 		RecordedAt:      now.Format(time.RFC3339),
 		EffectiveFrom:   effectiveFrom,
@@ -783,6 +797,8 @@ func categoryRepositoryError(action string, err error) error {
 		return ErrCategoryExists
 	case errors.Is(err, db.ErrCategoryHasChildren):
 		return ErrCategoryHasChildren
+	case errors.Is(err, db.ErrCategoryParentInvalid):
+		return ErrCategoryParentInvalid
 	case errors.Is(err, db.ErrCategoryBuiltIn):
 		return ErrCategoryBuiltInProtected
 	case errors.Is(err, db.ErrCategoryUsed):

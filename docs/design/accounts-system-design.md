@@ -421,34 +421,74 @@ row. Same-date changes remain allowed, ordered by `MAX(version_seq) + 1`.
   posting eligibility and opened date are structural and must equal their
   as-of values for an earlier correction. Category type remains immutable at
   every date (`400 VALIDATION_FAILED` for an attempted type change). Omitted
-  PATCH fields are filled from the version in effect on the requested date;
-  parent validation uses that date, including a parent archived later.
+  PATCH fields are filled from the version in effect on the requested date.
+  An earlier correction keeps its as-of parent, so it is not re-validated
+  against a parent archived later in history.
 - Payees: name, default account/category hints and metadata are descriptive;
   these hints change future entry defaults, never existing postings. Omitted
-  PATCH fields keep their as-of values. Status is lifecycle state.
+  PATCH fields keep their as-of values. Status is lifecycle state. Hints are
+  validated on the requested date and, when no later version exists (so the
+  new version is today's payee), also today.
 - Institutions: name, kind, country, website, address, comment and metadata are
   descriptive; none rewrites an account's institution link. The update request
   is a full descriptive snapshot. Status is lifecycle state. The existing
   unarchived-account guard applies to archive commands, not descriptive
   corrections in an already archived historical window.
-- Category sibling-name and normalized-payee-name uniqueness for updates is
-  checked among active versions **on the requested effective date**, inside
-  the write transaction. These are date-local checks, not a new interval-wide
-  uniqueness guarantee. Creation and forward lifecycle commands retain their
-  existing owner-today checks. Institutions have no unique-name requirement.
-- The shared form error boundary presents this refusal in all six locales;
-  no version is moved, deleted or voided by this workflow.
+
+**Rules that involve other entities hold on every date the new version
+governs.** A version governs from its `effective_from` until the entity's
+next later version. With no later version, it governs through today, even
+when it is dated in the past. Checking only `effective_from` misses later
+days, and checking only today misses earlier ones. The write transaction
+therefore checks the version's own date plus every date inside the window on
+which another relevant version takes effect, because as-of state is constant
+between those dates (`referenceWindowDatesTx`, the same approach as
+`requireNoDatedParentCycleTx`):
+
+- category sibling-name and normalized-payee-name uniqueness, for updates and
+  restore commands (`409 CONFLICT`);
+- the parent of an active category set by a forward edit must be an active
+  category of the same type (`400 VALIDATION_FAILED`, "category parent is
+  invalid"). The forward edit must also not make the category its own ancestor
+  on any later date;
+- category disable refuses a child that is active on any date in the window;
+- institution archive refuses an account that is not archived and names the
+  institution on any date in the window.
+
+Institutions have no unique-name requirement.
+
+**Stale fills are refused.** The service fills omitted PATCH fields, and
+lifecycle commands copy descriptive fields, from a read taken before the write
+transaction. The transaction re-reads the version in effect on the requested
+date. If that is no longer the version the fill came from, the write is
+refused with a retryable `409 CONFLICT`. A full institution update is a
+snapshot and has no fill to go stale.
+
+**The response is today's state.** A successful update answers with the entity
+as it stands today, not the inserted version. An earlier correction governs
+only its past window, so returning it would report, for example, `active` for
+a category that is archived today.
+
+The shared form error boundary presents the backdating refusal in all six
+locales. No version is moved, deleted or voided by this workflow.
 
 Named service regressions: `TestReferenceBackdatedDescriptionPreservesHistoricalLifecycle`,
 `TestReferenceBackdatedLifecycleRefusesWithoutWritesAndSameDateWorks`,
 `TestReferenceCorrectionBeforeFirstVersionIsRefused`,
 `TestCategoryBackdatedStructureIsRefused`,
 `TestReferenceBackdatedNameUniquenessUsesTheEffectiveDate`,
+`TestReferenceForwardEditNameUniquenessCoversTheWholeWindow`,
+`TestCategoryForwardEditParentMustStayActiveThroughToday`,
+`TestCategoryForwardEditRefusesADatedParentCycle`,
+`TestReferenceLifecycleRulesCoverTheWholeWindow`,
+`TestPayeeForwardEditDefaultHintsMustBeValidToday`,
+`TestReferenceWriteRefusesAStaleBaseVersion`,
 `TestCategoryBackdatedPatchKeepsAsOfStructureAndParentValidation` and
 `TestPayeeBackdatedPatchKeepsAsOfDefaultsAndMetadata`.
-`TestReferenceBackdatedLifecycleReturnsCodedConflict` covers the authenticated
-HTTP refusal. `form-errors.test.ts` exercises the forms' translated error
-boundary in each locale.
+`TestReferenceBackdatedLifecycleReturnsCodedConflict` and
+`TestReferenceStaleBaseVersionReturnsConflict` cover the HTTP refusals.
+`form-errors.test.ts` exercises the forms' translated error boundary in each
+locale.
 
 Earlier-dated instrument versions (#549). Instrument creation always dates v1
 at the commodity genesis; `effective_from` is update-only and is ignored on

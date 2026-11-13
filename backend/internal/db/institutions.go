@@ -81,9 +81,12 @@ type UpdateInstitutionParams struct {
 	Operation       string
 	Spec            InstitutionSpec
 	Status          string
-	ChangeReason    string
-	RecordedAt      string
-	EffectiveFrom   string
+	// BaseVersionID is the version the caller copied the spec from; zero
+	// (a complete descriptive snapshot) skips the staleness check.
+	BaseVersionID int64
+	ChangeReason  string
+	RecordedAt    string
+	EffectiveFrom string
 }
 
 type DeleteInstitutionParams struct {
@@ -247,41 +250,50 @@ func (r *InstitutionRepository) UpdateInstitution(ctx context.Context, params Up
 		return InstitutionRecord{}, err
 	}
 
-	status := params.Status
-	if status == "" {
-		status = current.Status
-	}
-	latest, err := latestReferenceVersionDateTx(ctx, tx, "institution", params.InstitutionID)
+	latest, err := latestReferenceVersionDateTx(ctx, tx, institutionVersionTable, params.InstitutionID)
 	if err != nil {
 		return InstitutionRecord{}, err
 	}
-	if params.EffectiveFrom < latest {
-		if params.Status != "" {
-			return InstitutionRecord{}, ReferenceVersionBackdatedError{LatestEffectiveFrom: latest}
-		}
-		asOf, err := currentInstitutionByID(WithReferenceDate(ctx, params.EffectiveFrom), tx, params.BookID, params.InstitutionID)
-		if errors.Is(err, ErrNotFound) {
-			return InstitutionRecord{}, ReferenceVersionBackdatedError{LatestEffectiveFrom: latest}
-		}
-		if err != nil {
-			return InstitutionRecord{}, err
-		}
+	if params.EffectiveFrom < latest && params.Status != "" {
+		return InstitutionRecord{}, ReferenceVersionBackdatedError{LatestEffectiveFrom: latest}
+	}
+	asOf, err := currentInstitutionByID(WithReferenceDate(ctx, params.EffectiveFrom), tx, params.BookID, params.InstitutionID)
+	if errors.Is(err, ErrNotFound) {
+		return InstitutionRecord{}, ReferenceVersionBackdatedError{LatestEffectiveFrom: latest}
+	}
+	if err != nil {
+		return InstitutionRecord{}, err
+	}
+	if err := requireBaseVersionTx(params.BaseVersionID, asOf.VersionID); err != nil {
+		return InstitutionRecord{}, err
+	}
+	status := params.Status
+	if status == "" {
 		status = asOf.Status
 	}
 	// An archived institution cannot be kept by an account write, so archiving
-	// one that an account still uses would strand that account (#294).
+	// one that an account still uses would strand that account (#294). An
+	// archive dated in the past governs every day through today, so the
+	// accounts are checked on each date their versions change (#552).
 	if params.Status == "archived" {
-		var accounts int
-		if err := tx.QueryRowContext(ctx, `
-			SELECT COUNT(1)
-			FROM accounts a
-			JOIN `+CurrentReferenceVersions(ctx, "account")+` av ON av.account_id = a.id
-			WHERE a.book_id = ? AND av.institution_id = ? AND av.status <> 'archived'
-		`, params.BookID, params.InstitutionID).Scan(&accounts); err != nil {
-			return InstitutionRecord{}, fmt.Errorf("check institution accounts: %w", err)
+		dates, err := referenceWindowDatesTx(ctx, tx, institutionVersionTable, params.InstitutionID, params.EffectiveFrom, accountVersionTable)
+		if err != nil {
+			return InstitutionRecord{}, err
 		}
-		if accounts > 0 {
-			return InstitutionRecord{}, ErrInstitutionHasUnarchivedAccounts
+		for _, date := range dates {
+			dated := WithReferenceDate(ctx, date)
+			var accounts int
+			if err := tx.QueryRowContext(dated, `
+				SELECT COUNT(1)
+				FROM accounts a
+				JOIN `+CurrentReferenceVersions(dated, "account")+` av ON av.account_id = a.id
+				WHERE a.book_id = ? AND av.institution_id = ? AND av.status <> 'archived'
+			`, params.BookID, params.InstitutionID).Scan(&accounts); err != nil {
+				return InstitutionRecord{}, fmt.Errorf("check institution accounts on %s: %w", date, err)
+			}
+			if accounts > 0 {
+				return InstitutionRecord{}, ErrInstitutionHasUnarchivedAccounts
+			}
 		}
 	}
 
@@ -323,6 +335,14 @@ func (r *InstitutionRepository) UpdateInstitution(ctx context.Context, params Up
 	})
 	if err != nil {
 		return InstitutionRecord{}, err
+	}
+	// An earlier-dated correction governs only its past window; answer with
+	// the institution as it stands on the caller's reference date.
+	if params.EffectiveFrom < latest {
+		record, err = currentInstitutionByID(ctx, tx, params.BookID, params.InstitutionID)
+		if err != nil {
+			return InstitutionRecord{}, err
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
