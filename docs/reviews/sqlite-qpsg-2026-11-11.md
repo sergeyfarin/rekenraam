@@ -225,9 +225,29 @@ Only three exist so far:
 | 3 | `ad3a2968` | [43175502690](https://github.com/sergeyfarin/rekenraam/actions/runs/43175502690/job/131038672028) | 220.818 s |
 
 Their median is **220.818 s**, above the **210 s investigate threshold**, but
-three runs are not the six-run method (b) result. Method (a) needs the ten-CPU
-reference host, which this six-CPU host is not. Investigate therefore remains
-open pending three more successful push-to-main runs.
+three runs are not the six-run method (b) result. Method (a) needs the
+documented ten-CPU reference host, which this local host is not (it was
+resized to 10 vCPUs afterward; see the supplementary observation below).
+Investigate therefore remains open pending three more successful push-to-main
+runs.
+
+### Supplementary 10-vCPU parallel-VM observation (2026-11-13)
+
+The local threshold host was resized from 6 to 10 vCPUs after the act
+measurement. It is a parallel VM of the same EPYC 3251 class and close to the
+reference host, but it is not the exact documented reference host (the
+architecture audit records 19 GiB RAM and Linux 6.8; this host reported 9.2 GiB
+at batch start, Linux 7.0.0, and 6.1 GiB afterward). This is therefore a
+supplementary observation, not ADR 0016 method (a) threshold evidence.
+
+Three uncached single-package runs of `./internal/app` at code `ad3a2968`
+(`go test -race -count=1 -timeout=10m -json ./internal/app`, test binary
+prebuilt) measured **202.953 / 243.625 / 258.336 s**, median **243.625 s**.
+All three passed with 2,700 leaves. The median is above the **210 s
+investigate line**, consistent with the three-run CI median of 220.818 s. The
+202.953–258.336 s spread is wider than #402's 13–16% same-source spread, and
+the VM's reported memory changed around the batch, so the host is noisy; this
+does not replace method (b)'s six-run median.
 
 ## Follow-up: split reads (#561)
 

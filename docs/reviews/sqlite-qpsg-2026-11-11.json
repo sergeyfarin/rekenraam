@@ -249,7 +249,7 @@
     "failure_reason": "workspace runs as root; unwritable-destination tests cannot fail; identical in all four runs"
   },
   "follow_up_issues": {
-    "560": "act measured 2026-11-12: does not fire with QPSG; investigate method (b) pending three more successful push-to-main CI runs",
+    "560": "act measured 2026-11-12: does not fire with QPSG; investigate method (b) pending three more successful push-to-main CI runs; supplementary 10-vCPU parallel-VM observation median 243.625 s (not threshold evidence)",
     "561": "measure the investment_split_facts scan in InstrumentSplits; index or rewrite if slower"
   },
   "hosted_ci_observations": {
@@ -318,7 +318,7 @@
   "adr_0016_threshold_methods": {
     "act": "two uncached -p 2 full gates on the six-CPU threshold host, both > 270 s for any package",
     "investigate": "internal/app median > 210 s: three interleaved uncached single-package runs on the ten-CPU reference host, or CI per-package time over the latest six successful main runs",
-    "status": "act does not fire with QPSG (measured 2026-11-12 at ad3a2968); investigate method (b) has 3/6 main runs and remains open"
+    "status": "act does not fire with QPSG (measured 2026-11-12 at ad3a2968); investigate method (b) has 3/6 main runs and remains open; a supplementary 10-vCPU parallel-VM observation (2026-11-13) median is 243.625 s, not threshold evidence"
   },
   "adr_0016_threshold_results": {
     "issue": "560",
@@ -460,6 +460,52 @@
       "available_median_exceeds_threshold": true,
       "complete": false,
       "result": "Not yet a threshold result: three more successful push-to-main CI runs are needed. Method (a) requires the ten-CPU reference host, which this six-CPU host is not."
+    },
+    "supplementary_10vcpu_observation": {
+      "date": "2026-11-13",
+      "threshold_evidence": false,
+      "reason": "resized local host is a parallel VM close to, but not the exact documented reference ten-CPU host",
+      "host": {
+        "description": "parallel VM of the same EPYC 3251 class",
+        "cpus": 10,
+        "cpu_model": "AMD EPYC 3251 8-Core Processor",
+        "memory_at_start": "9.2 GiB",
+        "memory_after": "6.1 GiB",
+        "kernel": "7.0.0-43-generic",
+        "go": "1.27.4"
+      },
+      "code_commit": "ad3a2968",
+      "worktree_head": "997f39ef",
+      "configuration": "go test -race -count=1 -timeout=10m -json ./internal/app; test binary prebuilt with -exec /bin/true; no test cache",
+      "runs": [
+        {
+          "run": 1,
+          "wall_seconds": 202.953,
+          "leaves": 2700,
+          "leaf_work_seconds": 1990.43,
+          "parallelism": 9.81,
+          "failures": []
+        },
+        {
+          "run": 2,
+          "wall_seconds": 243.625,
+          "leaves": 2700,
+          "leaf_work_seconds": 2397.53,
+          "parallelism": 9.84,
+          "failures": []
+        },
+        {
+          "run": 3,
+          "wall_seconds": 258.336,
+          "leaves": 2700,
+          "leaf_work_seconds": 2522.34,
+          "parallelism": 9.76,
+          "failures": []
+        }
+      ],
+      "median_wall_seconds": 243.625,
+      "median_exceeds_210": true,
+      "result": "Above the 210 s investigate line and consistent with the three-run CI median; not formal method (a) evidence because the host is a parallel VM, not the exact documented reference host."
     }
   },
   "follow_up_561": {
