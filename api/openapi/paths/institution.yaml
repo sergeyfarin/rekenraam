@@ -125,6 +125,7 @@ delete:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
 patch:
   summary: Update an institution by creating a new version
+  description: Earlier-dated descriptive corrections preserve the lifecycle in effect on their date. Lifecycle and structural changes must be dated on or after the latest version; dates before the first version are refused.
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/InstitutionID"
     - in: header
@@ -192,6 +193,12 @@ patch:
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: REFERENCE_VERSION_BACKDATED for a lifecycle change before the latest version or an update before the first version
       content:
         application/json:
           schema:

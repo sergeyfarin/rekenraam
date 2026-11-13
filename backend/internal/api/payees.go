@@ -249,6 +249,8 @@ func writePayeeServiceError(w http.ResponseWriter, r *http.Request, logger *slog
 	switch {
 	case errors.As(err, &validationError):
 		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationError.Error())
+	case errors.Is(err, app.ErrReferenceVersionBackdated):
+		writeAPIError(w, http.StatusConflict, "REFERENCE_VERSION_BACKDATED", err.Error())
 	case errors.Is(err, app.ErrPayeeNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "payee not found")
 	case errors.Is(err, app.ErrPayeeExists):

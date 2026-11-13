@@ -52,6 +52,19 @@ R12a closed 2026-08-30; ADR 0012
 governs the journal/subledger boundary and ADR 0013 the R16 operation model.
 
 
+## Reference-data backdating — #552
+
+Category, payee and institution descriptive corrections preserve their dated
+lifecycle; category closure dates and omitted category/payee PATCH fields also
+come from that historical version. Earlier lifecycle or category structural
+changes, and corrections before the first version, return
+`409 REFERENCE_VERSION_BACKDATED` without version or audit writes. Same-date
+lifecycle versions remain valid. Category/payee update-name checks use the
+requested date. The existing category and institution editors show translated
+refusal guidance in all six locales through their shared form error boundary.
+The [per-kind contract and named regressions](design/accounts-system-design.md)
+record the field split, API and translation coverage, and retained limits.
+
 ## Project website source
 
 The independently built [public website](../website/README.md) implements the

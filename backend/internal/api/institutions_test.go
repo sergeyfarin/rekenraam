@@ -91,7 +91,9 @@ func TestUpdateInstitutionCreatesAppendOnlyVersion(t *testing.T) {
 	handler, database := newSetupTestHandler(t)
 	sessionCookie, csrfToken := createOwnerSession(t, handler)
 	createBookForSession(t, handler, sessionCookie, csrfToken, "Personal")
-	institution := createInstitutionForSession(t, handler, sessionCookie, csrfToken, `{"name":"Old Bank","kind":"bank"}`)
+	// #552: an update cannot precede the institution's first version. Give
+	// this fixture an explicit history before the dated correction below.
+	institution := createInstitutionForSession(t, handler, sessionCookie, csrfToken, `{"name":"Old Bank","kind":"bank","effective_from":"2020-01-01"}`)
 
 	req := httptest.NewRequest(http.MethodPatch, "/api/v1/institutions/"+strconvFormatInt(institution.ID), strings.NewReader(`{
 		"name": "Renamed Bank",

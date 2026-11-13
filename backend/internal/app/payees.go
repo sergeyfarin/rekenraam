@@ -218,7 +218,22 @@ func (s *PayeeService) UpdatePayee(ctx context.Context, input UpdatePayeeInput) 
 		return Payee{}, ValidationError{Message: "payee id is required"}
 	}
 
-	current, err := s.repository.PayeeByID(ctx, BookID, input.PayeeID)
+	now := s.now().UTC()
+	today, err := s.settings.OwnerTodayAt(ctx, input.OwnerUserID, now)
+	if err != nil {
+		return Payee{}, err
+	}
+	effectiveFrom, err := cleanEffectiveFrom(input.EffectiveFrom, today)
+	if err != nil {
+		return Payee{}, err
+	}
+	historicalCtx := db.WithReferenceDate(ctx, effectiveFrom)
+
+	current, err := s.repository.PayeeByID(historicalCtx, BookID, input.PayeeID)
+	if errors.Is(err, db.ErrNotFound) {
+		// The transaction returns the coded before-first-version refusal.
+		current, err = s.repository.PayeeByID(ctx, BookID, input.PayeeID)
+	}
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
 			return Payee{}, ErrPayeeNotFound
@@ -247,7 +262,7 @@ func (s *PayeeService) UpdatePayee(ctx context.Context, input UpdatePayeeInput) 
 		metadataJSON = *input.MetadataJSON
 	}
 
-	spec, err := s.payeeSpec(ctx, payeeSpecInput{
+	spec, err := s.payeeSpec(historicalCtx, payeeSpecInput{
 		Name:                     name,
 		DefaultAccountID:         defaultAccountID,
 		DefaultCategoryAccountID: defaultCategoryAccountID,
@@ -257,15 +272,6 @@ func (s *PayeeService) UpdatePayee(ctx context.Context, input UpdatePayeeInput) 
 		return Payee{}, err
 	}
 
-	now := s.now().UTC()
-	today, err := s.settings.OwnerTodayAt(ctx, input.OwnerUserID, now)
-	if err != nil {
-		return Payee{}, err
-	}
-	effectiveFrom, err := cleanEffectiveFrom(input.EffectiveFrom, today)
-	if err != nil {
-		return Payee{}, err
-	}
 	changeReason, err := cleanChangeReason(input.ChangeReason, "updated payee")
 	if err != nil {
 		return Payee{}, err
@@ -441,6 +447,9 @@ func cleanPayeeName(value string) (string, string, error) {
 }
 
 func mapPayeeDBError(err error) error {
+	if mapped, ok := referenceBackdatingError(err); ok {
+		return mapped
+	}
 	switch {
 	case errors.Is(err, db.ErrNotFound):
 		return ErrPayeeNotFound

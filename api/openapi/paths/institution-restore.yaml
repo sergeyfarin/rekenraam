@@ -71,3 +71,9 @@ post:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: REFERENCE_VERSION_BACKDATED for a lifecycle change before the latest version or an update before the first version
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

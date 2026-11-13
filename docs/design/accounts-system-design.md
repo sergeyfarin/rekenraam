@@ -407,6 +407,49 @@ therefore enforces this contract inside its transaction:
   on which any account version changes, refusing a cycle
   (`400 VALIDATION_FAILED`, "account parent is invalid").
 
+Earlier-dated categories, payees and institutions (#552) follow the account
+contract inside each write transaction. An earlier descriptive correction keeps
+the status in effect on its date; categories also keep that version's
+`closed_on`. Disable/restore or archive/reactivate commands dated before the
+latest version are refused, even when the requested status matches today's.
+An update before the first version is refused rather than inventing an earlier
+lifecycle (the same choice as instruments). Refusals return
+`409 REFERENCE_VERSION_BACKDATED` and append neither a version nor an audit
+row. Same-date changes remain allowed, ordered by `MAX(version_seq) + 1`.
+
+- Categories: name, code and icon are descriptive. Class/type, kind, parent,
+  posting eligibility and opened date are structural and must equal their
+  as-of values for an earlier correction. Category type remains immutable at
+  every date (`400 VALIDATION_FAILED` for an attempted type change). Omitted
+  PATCH fields are filled from the version in effect on the requested date;
+  parent validation uses that date, including a parent archived later.
+- Payees: name, default account/category hints and metadata are descriptive;
+  these hints change future entry defaults, never existing postings. Omitted
+  PATCH fields keep their as-of values. Status is lifecycle state.
+- Institutions: name, kind, country, website, address, comment and metadata are
+  descriptive; none rewrites an account's institution link. The update request
+  is a full descriptive snapshot. Status is lifecycle state. The existing
+  unarchived-account guard applies to archive commands, not descriptive
+  corrections in an already archived historical window.
+- Category sibling-name and normalized-payee-name uniqueness for updates is
+  checked among active versions **on the requested effective date**, inside
+  the write transaction. These are date-local checks, not a new interval-wide
+  uniqueness guarantee. Creation and forward lifecycle commands retain their
+  existing owner-today checks. Institutions have no unique-name requirement.
+- The shared form error boundary presents this refusal in all six locales;
+  no version is moved, deleted or voided by this workflow.
+
+Named service regressions: `TestReferenceBackdatedDescriptionPreservesHistoricalLifecycle`,
+`TestReferenceBackdatedLifecycleRefusesWithoutWritesAndSameDateWorks`,
+`TestReferenceCorrectionBeforeFirstVersionIsRefused`,
+`TestCategoryBackdatedStructureIsRefused`,
+`TestReferenceBackdatedNameUniquenessUsesTheEffectiveDate`,
+`TestCategoryBackdatedPatchKeepsAsOfStructureAndParentValidation` and
+`TestPayeeBackdatedPatchKeepsAsOfDefaultsAndMetadata`.
+`TestReferenceBackdatedLifecycleReturnsCodedConflict` covers the authenticated
+HTTP refusal. `form-errors.test.ts` exercises the forms' translated error
+boundary in each locale.
+
 Earlier-dated instrument versions (#549). Instrument creation always dates v1
 at the commodity genesis; `effective_from` is update-only and is ignored on
 create, after the usual shape and future-date validation. Instruments follow the same

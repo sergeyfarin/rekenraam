@@ -251,9 +251,26 @@ func (r *InstitutionRepository) UpdateInstitution(ctx context.Context, params Up
 	if status == "" {
 		status = current.Status
 	}
+	latest, err := latestReferenceVersionDateTx(ctx, tx, "institution", params.InstitutionID)
+	if err != nil {
+		return InstitutionRecord{}, err
+	}
+	if params.EffectiveFrom < latest {
+		if params.Status != "" {
+			return InstitutionRecord{}, ReferenceVersionBackdatedError{LatestEffectiveFrom: latest}
+		}
+		asOf, err := currentInstitutionByID(WithReferenceDate(ctx, params.EffectiveFrom), tx, params.BookID, params.InstitutionID)
+		if errors.Is(err, ErrNotFound) {
+			return InstitutionRecord{}, ReferenceVersionBackdatedError{LatestEffectiveFrom: latest}
+		}
+		if err != nil {
+			return InstitutionRecord{}, err
+		}
+		status = asOf.Status
+	}
 	// An archived institution cannot be kept by an account write, so archiving
 	// one that an account still uses would strand that account (#294).
-	if status == "archived" {
+	if params.Status == "archived" {
 		var accounts int
 		if err := tx.QueryRowContext(ctx, `
 			SELECT COUNT(1)

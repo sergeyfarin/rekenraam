@@ -315,8 +315,31 @@ func (r *CategoryRepository) UpdateCategory(ctx context.Context, params UpdateCa
 	if status == "" {
 		status = current.Status
 	}
+	latest, err := latestAccountVersionDateTx(ctx, tx, params.CategoryID)
+	if err != nil {
+		return AccountRecord{}, err
+	}
+	if params.EffectiveFrom < latest {
+		if params.Status != "" {
+			return AccountRecord{}, ReferenceVersionBackdatedError{LatestEffectiveFrom: latest}
+		}
+		asOf, err := accountVersionAsOfTx(ctx, tx, params.BookID, params.CategoryID, params.EffectiveFrom)
+		if errors.Is(err, ErrNotFound) {
+			return AccountRecord{}, ReferenceVersionBackdatedError{LatestEffectiveFrom: latest}
+		}
+		if err != nil {
+			return AccountRecord{}, err
+		}
+		if accountStructureDiffers(asOf, params.Spec) {
+			return AccountRecord{}, ReferenceVersionBackdatedError{LatestEffectiveFrom: latest}
+		}
+		status = asOf.Status
+		params.Spec.ClosedOn = asOf.ClosedOn
+	} else if params.Status == "" {
+		params.Spec.ClosedOn = current.ClosedOn
+	}
 	if status == "active" && params.Spec.Name != "" {
-		if err := ensureActiveCategoryNameAvailable(ctx, tx, params.BookID, params.Spec.AccountClass, params.Spec.ParentAccountID, params.Spec.Name, params.CategoryID); err != nil {
+		if err := ensureActiveCategoryNameAvailable(WithReferenceDate(ctx, params.EffectiveFrom), tx, params.BookID, params.Spec.AccountClass, params.Spec.ParentAccountID, params.Spec.Name, params.CategoryID); err != nil {
 			return AccountRecord{}, err
 		}
 	}
@@ -385,6 +408,13 @@ func (r *CategoryRepository) ChangeCategoryStatus(ctx context.Context, params Ca
 	current, err := currentCategoryByID(ctx, tx, params.BookID, params.CategoryID)
 	if err != nil {
 		return AccountRecord{}, err
+	}
+	latest, err := latestAccountVersionDateTx(ctx, tx, params.CategoryID)
+	if err != nil {
+		return AccountRecord{}, err
+	}
+	if params.EffectiveFrom < latest {
+		return AccountRecord{}, ReferenceVersionBackdatedError{LatestEffectiveFrom: latest}
 	}
 	if current.Status == params.Status {
 		return current, nil

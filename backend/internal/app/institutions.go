@@ -303,6 +303,9 @@ func (s *InstitutionService) UpdateInstitution(ctx context.Context, input Update
 		if errors.Is(err, db.ErrNotFound) {
 			return Institution{}, ErrInstitutionNotFound
 		}
+		if mapped, ok := referenceBackdatingError(err); ok {
+			return Institution{}, mapped
+		}
 		return Institution{}, fmt.Errorf("persist institution update: %w", err)
 	}
 
@@ -402,6 +405,9 @@ func (s *InstitutionService) changeInstitutionStatus(ctx context.Context, input 
 		}
 		if errors.Is(err, db.ErrInstitutionHasUnarchivedAccounts) {
 			return Institution{}, ErrInstitutionInUse
+		}
+		if mapped, ok := referenceBackdatingError(err); ok {
+			return Institution{}, mapped
 		}
 		return Institution{}, fmt.Errorf("persist institution status: %w", err)
 	}

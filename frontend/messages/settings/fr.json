@@ -1267,6 +1267,7 @@
   "api_error_investment_exchange_no_holdings": "Rien de cet instrument n'est détenu dans ce compte à la date de l'échange.",
   "api_error_investment_exchange_fraction_unrepresentable": "L'échange laisserait une fraction que le nouvel instrument ne peut pas enregistrer exactement. Un échange n'est jamais arrondi.",
   "api_error_investment_exchange_changed": "La position a changé depuis l'aperçu de l'échange. Relancez l'aperçu.",
+  "api_error_reference_version_backdated": "Les changements de statut et de structure ne peuvent pas prendre effet avant la dernière version. Choisissez cette date ou une date ultérieure. Une correction historique doit être datée au plus tôt de la première version.",
   "api_error_investment_instrument_version_backdated": "Les modifications structurelles de l'instrument ne peuvent pas prendre effet avant la dernière version. Choisissez cette date ou une date ultérieure.",
   "api_error_investment_exchange_already_corrected": "Cet échange d’actions a déjà été corrigé.",
   "investments_capital_return_correct": "Corriger le remboursement de capital",

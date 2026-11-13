@@ -63,7 +63,7 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Active sibling category with the same name already exists
+      description: Active sibling category with the same name already exists; REFERENCE_VERSION_BACKDATED for a lifecycle or structural change before the latest version or an update before the first version
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"

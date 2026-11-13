@@ -266,7 +266,22 @@ func (s *CategoryService) UpdateCategory(ctx context.Context, input UpdateCatego
 		return Category{}, ValidationError{Message: "category id is required"}
 	}
 
-	current, err := s.Category(ctx, input.CategoryID)
+	now := s.now().UTC()
+	today, err := s.settings.OwnerTodayAt(ctx, input.OwnerUserID, now)
+	if err != nil {
+		return Category{}, err
+	}
+	effectiveFrom, err := cleanEffectiveFrom(input.EffectiveFrom, today)
+	if err != nil {
+		return Category{}, err
+	}
+	historicalCtx := db.WithReferenceDate(ctx, effectiveFrom)
+
+	current, err := s.Category(historicalCtx, input.CategoryID)
+	if errors.Is(err, ErrCategoryNotFound) {
+		// The transaction returns the coded before-first-version refusal.
+		current, err = s.Category(ctx, input.CategoryID)
+	}
 	if err != nil {
 		return Category{}, err
 	}
@@ -301,8 +316,7 @@ func (s *CategoryService) UpdateCategory(ctx context.Context, input UpdateCatego
 		icon = *input.Icon
 	}
 
-	now := s.now().UTC()
-	spec, err := s.newCategorySpec(ctx, categorySpecInput{
+	spec, err := s.newCategorySpec(historicalCtx, categorySpecInput{
 		CategoryID:       input.CategoryID,
 		Code:             code,
 		Name:             name,
@@ -313,14 +327,6 @@ func (s *CategoryService) UpdateCategory(ctx context.Context, input UpdateCatego
 		Now:              now,
 		Current:          &current,
 	})
-	if err != nil {
-		return Category{}, err
-	}
-	today, err := s.settings.OwnerTodayAt(ctx, input.OwnerUserID, now)
-	if err != nil {
-		return Category{}, err
-	}
-	effectiveFrom, err := cleanEffectiveFrom(input.EffectiveFrom, today)
 	if err != nil {
 		return Category{}, err
 	}
@@ -767,6 +773,9 @@ func builtinCategorySpecs() []db.CategorySeedSpec {
 }
 
 func categoryRepositoryError(action string, err error) error {
+	if mapped, ok := referenceBackdatingError(err); ok {
+		return mapped
+	}
 	switch {
 	case errors.Is(err, db.ErrNotFound):
 		return ErrCategoryNotFound

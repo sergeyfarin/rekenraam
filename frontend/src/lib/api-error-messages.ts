@@ -11,6 +11,7 @@ const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   NOT_FOUND: () => m.api_error_not_found(),
   PRICE_IMPACT_STALE: () => m.pricing_stale_review(),
   CONFLICT: () => m.api_error_conflict(),
+  REFERENCE_VERSION_BACKDATED: () => m.api_error_reference_version_backdated(),
   CSRF_INVALID: () => m.api_error_csrf_invalid(),
   EXPORT_SCOPE_UNSUPPORTED: () => m.api_error_export_scope_unsupported(),
   RATE_LIMITED: () => m.api_error_rate_limited(),

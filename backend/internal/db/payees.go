@@ -261,8 +261,25 @@ func (r *PayeeRepository) UpdatePayee(ctx context.Context, params UpdatePayeePar
 	if status == "" {
 		status = current.Status
 	}
+	latest, err := latestReferenceVersionDateTx(ctx, tx, "payee", params.PayeeID)
+	if err != nil {
+		return PayeeRecord{}, err
+	}
+	if params.EffectiveFrom < latest {
+		if params.Status != "" {
+			return PayeeRecord{}, ReferenceVersionBackdatedError{LatestEffectiveFrom: latest}
+		}
+		asOf, err := payeeByID(WithReferenceDate(ctx, params.EffectiveFrom), tx, params.BookID, params.PayeeID)
+		if errors.Is(err, ErrNotFound) {
+			return PayeeRecord{}, ReferenceVersionBackdatedError{LatestEffectiveFrom: latest}
+		}
+		if err != nil {
+			return PayeeRecord{}, err
+		}
+		status = asOf.Status
+	}
 	if status == "active" {
-		if err := ensurePayeeNameAvailable(ctx, tx, params.BookID, params.Spec.NormalizedName, params.PayeeID); err != nil {
+		if err := ensurePayeeNameAvailable(WithReferenceDate(ctx, params.EffectiveFrom), tx, params.BookID, params.Spec.NormalizedName, params.PayeeID); err != nil {
 			return PayeeRecord{}, err
 		}
 	}

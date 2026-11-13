@@ -63,6 +63,7 @@ get:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
 patch:
   summary: Update a category
+  description: Earlier-dated descriptive corrections preserve the lifecycle in effect on their date. Lifecycle and structural changes must be dated on or after the latest version; dates before the first version are refused.
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/CategoryID"
     - in: header
@@ -126,7 +127,7 @@ patch:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Active sibling category with the same name already exists
+      description: Active sibling category with the same name already exists; REFERENCE_VERSION_BACKDATED for a lifecycle or structural change before the latest version or an update before the first version
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"

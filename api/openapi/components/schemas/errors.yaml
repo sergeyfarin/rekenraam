@@ -15,6 +15,7 @@ ErrorBody:
         - NOT_FOUND
         - PRICE_IMPACT_STALE
         - CONFLICT
+        - REFERENCE_VERSION_BACKDATED
         - CSRF_INVALID
         - RATE_LIMITED
         - MFA_AUTHENTICATOR_UNAVAILABLE
