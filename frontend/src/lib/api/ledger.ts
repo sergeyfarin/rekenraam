@@ -129,3 +129,33 @@ export async function getNetWorth(options: NetWorthOptions = {}): Promise<NetWor
     throw toNetworkError(error);
   }
 }
+
+export type LedgerOverview = components['schemas']['LedgerOverviewResponse'];
+export type LedgerAccount = components['schemas']['LedgerAccount'];
+async function readLedger(accountID?: number, asOf?: string, cursor?: string): Promise<LedgerOverview> {
+  try {
+    const result = accountID
+      ? await apiClient.GET('/api/v1/ledger/accounts/{account_id}', { params: { path: { account_id: accountID }, query: { as_of: asOf } } })
+      : await apiClient.GET('/api/v1/ledger/overview', { params: { query: { as_of: asOf, cursor } } });
+    if (result.data !== undefined) return result.data;
+    throw toAPIClientError(result.response, result.error);
+  } catch (error) { if (error instanceof APIClientError) throw error; throw toNetworkError(error); }
+}
+export function ledgerAccountQueryOptions(accountID: number, asOf?: string) {
+  return { queryKey: [...ledgerQueryKey, 'account', accountID, asOf], queryFn: () => readLedger(accountID, asOf), staleTime: 10_000 };
+}
+export function ledgerOverviewQueryOptions(asOf?: string) {
+  return { queryKey: [...ledgerQueryKey, 'overview', asOf], queryFn: async () => {
+    const first = await readLedger(undefined, asOf);
+    const result = { ...first, accounts: [...first.accounts] };
+    let cursor = first.next_cursor;
+    const seen = new Set(first.accounts.map(row => row.account.id));
+    while (cursor) {
+      const next = await readLedger(undefined, first.as_of, cursor);
+      for (const row of next.accounts) if (!seen.has(row.account.id)) { seen.add(row.account.id); result.accounts.push(row); }
+      if (next.next_cursor === cursor) throw new APIClientError({ status: 500, code: 'INTERNAL_ERROR' });
+      cursor = next.next_cursor;
+    }
+    return { ...result, next_cursor: null };
+  }, staleTime: 10_000 };
+}

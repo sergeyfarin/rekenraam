@@ -25,6 +25,7 @@ func NewAttentionService(repository attentionReader, pricing attentionPricing) *
 }
 
 type AttentionSource struct {
+	DividendReviewCount     *int
 	ID, Unit, State, Status string
 	Count                   *int
 	Failed                  bool
@@ -65,6 +66,7 @@ func (s *AttentionService) Read(ctx context.Context) Attention {
 		if err != nil {
 			source.State, source.Err = "error", err
 		} else {
+			source.DividendReviewCount = record.DividendReviewCount
 			source.Status = record.Status
 			source.Failed = record.Status == "failed"
 			switch source.ID {

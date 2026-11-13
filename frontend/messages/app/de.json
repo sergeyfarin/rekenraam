@@ -2061,5 +2061,9 @@
   "statement_links_cancel": "Abbrechen",
   "statement_links_confirm_reassign": "Verknüpfung verschieben",
   "statement_links_confirm_unlink": "Verknüpfung lösen",
-  "statement_links_already_unlinked": "Diese Auszugszeile ist bereits nicht mehr verknüpft."
+  "statement_links_already_unlinked": "Diese Auszugszeile ist bereits nicht mehr verknüpft.",
+  "import_view_files": "Dateien",
+  "import_view_rules": "Regeln und Profile",
+  "import_view_dividends": "Dividenden",
+  "import_profiles_help": "Verwalten Sie gespeicherte CSV-Zuordnungen. Eine neue Zuordnung erstellen Sie durch Auswahl einer CSV-Datei unter Dateien."
 }

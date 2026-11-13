@@ -1,4 +1,6 @@
 <script lang="ts">
+  import LedgerValue from './ledger-value.svelte';
+  import type { LedgerOverview, LedgerAccount } from '#lib/api/ledger.ts';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import Archive from '@lucide/svelte/icons/archive';
   import BuildingComplex from '@lucide/svelte/icons/building-complex';
@@ -38,6 +40,8 @@
 
   let {
     accounts,
+    values = new Map(),
+    commodities = [],
     institutions,
     currenciesByID,
     countryNames,
@@ -54,6 +58,8 @@
     actionPendingKey
   }: {
     accounts: AccountResponse[];
+    values?: ReadonlyMap<number, LedgerAccount['value']>;
+    commodities?: LedgerOverview['commodities'];
     institutions: InstitutionResponse[];
     currenciesByID: ReadonlyMap<number, CurrencyResponse>;
     countryNames: Intl.DisplayNames;
@@ -343,7 +349,7 @@
             </div>
 
             <div class="min-w-0 text-sm">
-              <p class="truncate text-foreground">{accountCommodityLabel(account, currenciesByID)}</p>
+              <LedgerValue value={values.get(account.id) ?? null} {commodities} />
               {#if account.number_last4}
                 <p class="mt-1 truncate text-xs text-muted">{m.accounts_number_hint({ last4: account.number_last4 })}</p>
               {:else}

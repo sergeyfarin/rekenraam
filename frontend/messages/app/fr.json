@@ -2061,5 +2061,9 @@
   "statement_links_cancel": "Annuler",
   "statement_links_confirm_reassign": "Déplacer le lien",
   "statement_links_confirm_unlink": "Délier la ligne",
-  "statement_links_already_unlinked": "Cette ligne de relevé est déjà déliée."
+  "statement_links_already_unlinked": "Cette ligne de relevé est déjà déliée.",
+  "import_view_files": "Fichiers",
+  "import_view_rules": "Règles et profils",
+  "import_view_dividends": "Dividendes",
+  "import_profiles_help": "Gérez les correspondances CSV enregistrées. Pour en créer une, choisissez un fichier CSV dans Fichiers."
 }

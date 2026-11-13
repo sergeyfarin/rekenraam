@@ -17,7 +17,7 @@ test('an empty book starts with an account, not a briefing of zeroes', async ({ 
   } }));
   await page.goto('/app');
   await expect(page.getByRole('heading', { name: 'Start with an account' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Add an account' })).toHaveAttribute('href', '/app/ledger/accounts');
+  await expect(page.getByRole('link', { name: 'Add an account' })).toHaveAttribute('href', '/app/ledger');
   await expect(page.getByTestId('home-headline')).toHaveCount(0);
   await expect(page.getByTestId('home-status')).toHaveCount(0);
   // Widgets say there is nothing yet rather than showing zeros or failures (#478).

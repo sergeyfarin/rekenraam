@@ -57,7 +57,7 @@ export function cashflowWidget(home: Home, locale: string): WidgetView {
   if (home.empty_book) return noData('cashflow', title, open);
   if (widget.status === 'failed' || !summary) return failed('cashflow', title, open);
   if (summary.account_count === 0) {
-    return view('cashflow', title, open, { state: 'not_set_up', fact: m.home_cashflow_no_accounts(), action: { text: m.home_cashflow_add_account(), href: '/app/ledger/accounts' } });
+    return view('cashflow', title, open, { state: 'not_set_up', fact: m.home_cashflow_no_accounts(), action: { text: m.home_cashflow_add_account(), href: '/app/ledger' } });
   }
   const commodities = commodityMap(home);
   const period = range(summary.start_date, summary.end_date, locale, { day: 'numeric', month: 'short' });

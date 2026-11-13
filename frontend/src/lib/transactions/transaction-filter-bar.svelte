@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isSubledgerManagedAccountKind } from '#lib/accounts/subledger-accounts.ts';
   import { createQuery } from '@tanstack/svelte-query';
   import { m } from '#lib/paraglide/messages.js';
   import { accountsQueryOptions } from '#lib/api/accounts.ts';
@@ -70,7 +71,7 @@
   );
 
   const visibleAccounts = $derived(
-    accountsQuery?.data?.accounts?.filter((a) => a.status === 'active') ?? []
+    accountsQuery?.data?.accounts?.filter((a) => a.status === 'active' && !isSubledgerManagedAccountKind(a.account_kind)) ?? []
   );
 
   const visiblePayees = $derived(payeesQuery?.data?.payees ?? []);

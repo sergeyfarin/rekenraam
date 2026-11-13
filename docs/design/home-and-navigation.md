@@ -1003,6 +1003,54 @@ attention destinations use canonical paths directly. Registry tests check all
 aliases; route and subview sweeps exercise the canonical screens, while browser
 coverage checks old links, filter consumption, reload, sharing and Back/forward.
 
+### Import views (#447)
+
+Import uses `?view=files|connections|rules|dividends`. The default is Files;
+old `?tab=connections` links still select Connections. View navigation keeps
+all other query parameters and the fragment and participates in Back/Forward.
+`batch_id` opens or resumes the batch, follows every row cursor, and survives
+reload. Switching views preserves the mounted Files working copy. Both old
+dividend routes redirect directly to `?view=dividends`, keeping `batch_id`.
+Files contains upload, review, commit and cursor-paged history; Connections
+contains provider configuration and refresh state; Rules and profiles contains
+rule management and editing/deleting reusable CSV mappings without uploading a
+file. New CSV mappings are still created from a file’s analysed headers.
+An active batch write retains its batch identity through its whole command
+chain: view changes are allowed, but changing the selected batch, leaving the
+page or starting another import waits for the write to finish. New imports
+start with a fresh working copy; older reads and polls cannot replace it.
+
+### Ledger account index (#448)
+
+Ledger Overview replaces the Accounts tab. Both `/app/accounts` and
+`/app/ledger/accounts` redirect directly to `/app/ledger`, preserving query and
+fragment; register detail paths remain unchanged. Accounts and Institutions
+are URL-selected views. The index groups ordinary accounts by institution and
+country, with active/closed/all filters and exact values in the default
+currency. Pins and the object switcher remain #442.
+
+`GET /api/v1/ledger/overview` and `GET /api/v1/ledger/accounts/{account_id}`
+compose metadata and financial summaries. The index follows the response's
+cursor, keeping its first page’s date. Financial quantities and unsettled
+investment cash come from one ledger snapshot per response; valuation uses Net
+worth’s `live_raw_v1` policy and seven-day window. Missing prices/rates or an
+unclassified negative position leave the converted value unavailable.
+
+A brokerage is one index row, including cash children and hidden holding
+accounts. Its page shows combined cash (with unsettled amounts disclosed),
+links to the cash registers, position quantities/values and instrument links.
+Instruments link back to their brokerages. Holdings remain available to
+investment commands and explicit register links, but are excluded from the
+account index, search's account results and ordinary entry/reconcile/report
+pickers. Other ordinary children retain their own index rows to avoid counting
+their balances twice.
+
+Institutions support add, edit, archive and restore; the existing server
+refusal protects institutions still used by unarchived accounts. Source labels
+state configured online settlement connections and observed committed
+file/profile imports, never inferred provider coverage. No recorded source is
+an explicit state. None of these reads contacts a provider or writes a ledger.
+
 ### Page header
 
 Breadcrumb on detail pages, the title or the object switcher, a scope line
@@ -1114,8 +1162,9 @@ on.
   the pins, as GitHub, Linear and Raycast do. Kept per browser.
 - **Ledger overview** is the complete account index, grouped by institution,
   with a filter and active / closed / all.
-- **Holdings** are left out of the account switcher and pins by default and
-  reached through Instruments and their broker; typing still finds them.
+- **Holdings** are reached through Instruments and their broker. They remain
+  available to investment commands and explicit register links, and are never
+  offered as ordinary accounts in lists, search, pins or account pickers.
 - **Closed and archived** objects are hidden by default and one control away.
 - **Breadcrumbs** follow the hierarchy (*Ledger › Brokerage*,
   *Categories › Housing › Energy*). A holding's register and its instrument
@@ -1247,7 +1296,7 @@ book snapshot. `checked_at` is the UTC start time of that read. Source units are
 | Drafts | Each undeleted current draft transaction, once regardless of posting count. |
 | Transaction review | Each undeleted current posted transaction with `needs_review`, once. Drafts are excluded. |
 | Blocked recurring | Each blocked occurrence identity; generated and skipped occurrences are excluded. |
-| Imports | Each previewing/partially committed batch with actionable pending/failed rows, or failed batch (including parse failure without rows), once. Duplicate/excluded-only previews and committed/discarded batches are excluded. Dividend rows pending in a batch are included here, not counted again as suggestions. |
+| Imports | Each previewing/partially committed batch with actionable pending/failed rows, or failed batch (including parse failure without rows), once. Duplicate/excluded-only previews and discarded batches are excluded. A committed batch with a historical dividend needing repair also counts once. `dividend_review_count` is the global Dividends queue’s row count, using the same membership and identity deduplication as the queue; it is shown on that view and never added to the batch count or `total_known`. |
 | Suggestions | Each provider event with a suggested/failed investment event suggestion, once; accepted, linked, ignored, auto-posted and superseded suggestions are excluded. |
 | Connections | Each connection whose latest fetch failed, once. |
 | Refresh | Each market-data source with an unresolved refresh-state error or a failed/partial latest ingest run, once across pairs and runs. |

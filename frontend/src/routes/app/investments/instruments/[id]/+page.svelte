@@ -21,6 +21,12 @@
   const accountsQuery = createQuery(() => accountsQueryOptions(false, false));
   const instrument = $derived(instrumentsQuery.data?.instruments.find((item) => item.commodity_id === commodityID));
 
+  const brokerages = $derived.by(() => {
+    const accounts = accountsQuery.data?.accounts ?? [];
+    const ids = new Set(accounts.filter(account => account.default_commodity_id === commodityID && (account.account_kind === 'security_holding' || account.account_kind === 'fund_holding')).map(account => account.parent_account_id));
+    return accounts.filter(account => ids.has(account.id) && account.account_kind === 'brokerage');
+  });
+
   // New transaction opens on its Investment tab with this instrument (#506).
   const create = $derived<TransactionWorkspaceCreate>({
     kind: 'entry',
@@ -52,6 +58,9 @@
     {#snippet header()}
       {@render back()}
       <h2 class="text-sm font-semibold text-foreground">{instrument.display_name} ({instrument.symbol || instrument.commodity_code})</h2>
+      <div class="flex flex-wrap gap-3">
+        {#each brokerages as brokerage (brokerage.id)}<a class="inline-flex min-h-11 items-center text-sm font-semibold underline" href={`/app/ledger/accounts/${brokerage.id}/register`}>{brokerage.name || brokerage.code}</a>{/each}
+      </div>
       <InstrumentIncomeSummary {commodityID} />
     {/snippet}
     {#snippet list(actions, csrfToken)}

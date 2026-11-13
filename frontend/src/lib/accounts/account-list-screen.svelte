@@ -1,4 +1,11 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
+  import { page } from '$app/state';
+  import { ledgerOverviewQueryOptions } from '#lib/api/ledger.ts';
+  import PageHeader from '#lib/components/page-header.svelte';
+  import SegmentedControl from '#lib/components/segmented-control.svelte';
+  import LedgerInstitutions from './ledger-institutions.svelte';
+  import { addTransaction, addTransfer } from '#lib/transactions/add-transaction.svelte.ts';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import BuildingComplex from '@lucide/svelte/icons/building-complex';
@@ -12,7 +19,7 @@
   import { currentBookQueryOptions } from '#lib/api/books.ts';
   import { forecastQueryKey } from '#lib/api/forecast.ts';
   import {
-    accountsQueryOptions,
+    accountsQueryKey,
     archiveAccount,
     closeAccount,
     deleteAccount,
@@ -21,7 +28,8 @@
   import { currenciesQueryOptions, currencyCatalogQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import {
     deleteInstitution,
-    institutionsQueryOptions,
+    archiveInstitution,
+    restoreInstitution,
     type InstitutionResponse
   } from '#lib/api/institutions.ts';
   import { m } from '#lib/paraglide/messages.js';
@@ -50,22 +58,29 @@
     | { type: 'institution-create' }
     | { type: 'institution-edit'; institution: InstitutionResponse };
 
-  const accountsQuery = createQuery(() => accountsQueryOptions(true, false));
-  const institutionsQuery = createQuery(() => institutionsQueryOptions(true));
-  const currenciesQuery = createQuery(() => currenciesQueryOptions());
-  const currencyCatalogQuery = createQuery(() => currencyCatalogQueryOptions());
-  const currentBookQuery = createQuery(() => currentBookQueryOptions());
+  let editor = $state<EditorState>({ type: 'none' });
+
+  const overview = createQuery(() => ledgerOverviewQueryOptions());
+  const accountsQuery = $derived({ data: overview.data ? { accounts: overview.data.accounts.map(row => row.account) } : undefined, error: overview.error, isError: overview.isError, isPending: overview.isPending, refetch: () => overview.refetch() });
+  const institutionsQuery = $derived({ data: overview.data ? { institutions: overview.data.institutions } : undefined, error: overview.error, isError: overview.isError, isPending: overview.isPending, refetch: () => overview.refetch() });
+  const currenciesQuery = createQuery(() => ({ ...currenciesQueryOptions(), enabled: editor.type === 'account-create' || editor.type === 'account-edit' }));
+  const currencyCatalogQuery = createQuery(() => ({ ...currencyCatalogQueryOptions(), enabled: editor.type === 'account-create' || editor.type === 'account-edit' }));
+  const currentBookQuery = createQuery(() => ({ ...currentBookQueryOptions(), enabled: editor.type === 'account-create' || editor.type === 'account-edit' }));
   const sessionQuery = createQuery(() => authSessionQueryOptions());
   const queryClient = useQueryClient();
 
-  let statusFilter = $state<StatusFilter>('all');
+  let statusFilter = $state<StatusFilter>('active');
   let accountTypeFilter = $state<AccountTypeFilter>('all');
   let query = $state('');
-  let editor = $state<EditorState>({ type: 'none' });
   let actionError = $state<unknown>(undefined);
   let actionPendingKey = $state('');
   let collapsedNodeIDs = $state<Set<string>>(new Set());
 
+  const view = $derived(page.url.searchParams.get('view') === 'institutions' ? 'institutions' : 'accounts');
+  function changeView(value: string) { const url = new URL(page.url.href); url.searchParams.set('view', value); void goto(url, { reset: false }); }
+  async function institutionAction(institution: InstitutionResponse, restore = false) {
+    await runAccountAction(`institution:${institution.id}`, async token => { if (restore) await restoreInstitution(institution.id, token); else await archiveInstitution(institution.id, token); });
+  }
   const countryNames = $derived(new Intl.DisplayNames(getLocale(), { type: 'region' }));
   const currencyDisplayNames = $derived(new Intl.DisplayNames(getLocale(), { type: 'currency' }));
 
@@ -91,7 +106,7 @@
   });
 
   const manageableAccounts = $derived.by(() => {
-    return userAccounts.filter((account) => account.status !== 'archived');
+    return userAccounts;
   });
 
   const activeInstitutions = $derived.by(() => {
@@ -168,9 +183,6 @@
     if (
       accountsQuery.isPending ||
       institutionsQuery.isPending ||
-      currenciesQuery.isPending ||
-      currencyCatalogQuery.isPending ||
-      currentBookQuery.isPending ||
       sessionQuery.isPending
     ) {
       return 'loading';
@@ -179,15 +191,12 @@
     if (
       accountsQuery.isError ||
       institutionsQuery.isError ||
-      currenciesQuery.isError ||
-      currencyCatalogQuery.isError ||
-      currentBookQuery.isError ||
       sessionQuery.isError
     ) {
       return 'error';
     }
 
-    if (manageableAccounts.length === 0 && activeInstitutions.length === 0) {
+    if (manageableAccounts.length === 0 && (institutionsQuery.data?.institutions.length ?? 0) === 0) {
       return 'empty';
     }
 
@@ -278,7 +287,7 @@
   async function refreshAccounts() {
     await Promise.all([
       accountsQuery.refetch(),
-      institutionsQuery.refetch(),
+      queryClient.invalidateQueries({ queryKey: accountsQueryKey }),
       currenciesQuery.refetch(),
       currencyCatalogQuery.refetch(),
       currentBookQuery.refetch(),
@@ -363,13 +372,24 @@
   }
 </script>
 
+<PageHeader title={m.nav_ledger()}>
+  {#snippet actions()}
+    <button type="button" class="min-h-11 rounded-(--radius-control) bg-accent px-4 text-sm font-semibold text-accent-foreground" onclick={() => addTransaction()}>{m.transactions_form_create_title()}</button>
+    <button type="button" class="min-h-11 rounded-(--radius-control) border border-border bg-control px-3 text-sm" onclick={() => addTransfer()}>{m.home_shortcut_transfer()}</button>
+    <a class="inline-flex min-h-11 items-center rounded-(--radius-control) border border-border bg-control px-3 text-sm" href="/app/ledger/import">{m.import_title()}</a>
+    <a class="inline-flex min-h-11 items-center rounded-(--radius-control) border border-border bg-control px-3 text-sm" href="/app/ledger/reconcile">{m.reconcile_title()}</a>
+  {/snippet}
+</PageHeader>
+<div class="mb-4 overflow-x-auto pb-1"><SegmentedControl legend={m.nav_ledger()} label="" value={view} onChange={changeView} options={[{ value: 'accounts', label: m.accounts_title() }, { value: 'institutions', label: m.ledger_institutions() }]} /></div>
 <div class="space-y-4">
   <Panel variant="toolbar">
     <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+      {#if view === 'accounts'}
       <AccountSummaryStats {activeCount} {closedCount} {visibleCount} />
       <div class="min-w-0 flex-1">
         <AccountFilterBar bind:query bind:statusFilter bind:accountTypeFilter />
       </div>
+      {/if}
       <div class="flex flex-wrap gap-2 xl:justify-end">
         <button
           type="button"
@@ -395,7 +415,12 @@
 
   {#if editor.type !== 'none'}
     <Panel>
-      {#if editor.type === 'account-create'}
+      {#if (editor.type === 'account-create' || editor.type === 'account-edit') && (currenciesQuery.isPending || currencyCatalogQuery.isPending || currentBookQuery.isPending)}
+        <p role="status" class="text-sm text-muted">{m.accounts_loading_copy()}</p>
+      {:else if (editor.type === 'account-create' || editor.type === 'account-edit') && (currenciesQuery.isError || currencyCatalogQuery.isError || currentBookQuery.isError)}
+        <APIFormError error={currenciesQuery.error ?? currencyCatalogQuery.error ?? currentBookQuery.error} />
+        <button type="button" class="min-h-11 text-sm underline" onclick={refreshAccounts}>{m.accounts_retry()}</button>
+      {:else if editor.type === 'account-create'}
         <AccountEditor
           mode="create"
           accounts={manageableAccounts}
@@ -455,7 +480,7 @@
         {m.accounts_retry()}
       </button>
     </StatePanel>
-  {:else if screenState === 'empty'}
+  {:else if screenState === 'empty' && view !== 'institutions'}
     <StatePanel title={m.accounts_empty_title()} copy={m.accounts_empty_copy()}>
       <div class="flex flex-wrap justify-center gap-2">
         <button
@@ -476,11 +501,15 @@
         </button>
       </div>
     </StatePanel>
+  {:else if view === 'institutions'}
+    <LedgerInstitutions institutions={institutionsQuery.data?.institutions ?? []} accounts={overview.data?.accounts ?? []} onEdit={(institution) => (editor = { type: 'institution-edit', institution })} onArchive={(institution) => institutionAction(institution)} onRestore={(institution) => institutionAction(institution, true)} pending={actionPendingKey} />
   {:else if visibleAccounts.length === 0 && visibleInstitutions.length === 0}
     <StatePanel title={m.accounts_no_results_title()} copy={m.accounts_no_results_copy()} />
   {:else}
     <AccountTreeSection
       accounts={visibleAccounts}
+      values={new Map(overview.data?.accounts.map(row => [row.account.id, row.value]) ?? [])}
+      commodities={overview.data?.commodities ?? []}
       institutions={visibleInstitutions}
       {currenciesByID}
       {countryNames}

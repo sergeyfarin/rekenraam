@@ -34,6 +34,17 @@ func TestImportDividendReviewAPIAccountsEconomicsAuthAndExport(t *testing.T) {
 	instrument := createInstrumentForSession(t, handler, f, "APIPAYER")
 	batch, rowID := seedAPIDividendRow(t, database, `{"date":"2026-03-01","amount":"85.00","commodity_hint":"USD","memo":"API dividend","external_ref":"api-div"}`)
 	base := fmt.Sprintf("/api/v1/imports/%d/rows/%d/review-dividend", batch, rowID)
+	attentionResult := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, "/api/v1/attention", nil, http.StatusOK)
+	var attention attentionResponse
+	require.NoError(t, json.NewDecoder(attentionResult.Body).Decode(&attention))
+	for _, source := range attention.Sources {
+		if source.ID == "imports" {
+			require.NotNil(t, source.DividendReviewCount)
+			require.Equal(t, 1, *source.DividendReviewCount)
+			require.Equal(t, 1, *source.Count)
+		}
+	}
+
 	doInvestmentRequest(t, handler, nil, "", http.MethodGet, "/api/v1/import-dividends", nil, http.StatusUnauthorized)
 	read := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, "/api/v1/import-dividends?limit=1", nil, http.StatusOK)
 	var reviews app.ImportDividendReviews
@@ -67,6 +78,16 @@ func TestImportDividendReviewAPIAccountsEconomicsAuthAndExport(t *testing.T) {
 	var transaction transactionResponse
 	require.NoError(t, json.NewDecoder(recorded.Body).Decode(&transaction))
 	require.Equal(t, "investment", transaction.TransactionKind)
+	attentionResult = doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, "/api/v1/attention", nil, http.StatusOK)
+	require.NoError(t, json.NewDecoder(attentionResult.Body).Decode(&attention))
+	for _, source := range attention.Sources {
+		if source.ID == "imports" {
+			require.NotNil(t, source.DividendReviewCount)
+			require.Zero(t, *source.DividendReviewCount)
+			require.Zero(t, *source.Count)
+		}
+	}
+
 	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, base, request, http.StatusConflict)
 	activity := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, "/api/v1/transactions?commodity_id="+strconv.FormatInt(instrument.CommodityID, 10), nil, http.StatusOK)
 	var listed struct {

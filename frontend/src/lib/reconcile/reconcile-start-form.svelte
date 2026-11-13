@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isSubledgerManagedAccountKind } from '#lib/accounts/subledger-accounts.ts';
   import { formatEditableAmount } from '#lib/money/amount.ts';
   import { createQuery } from '@tanstack/svelte-query';
   import { m } from '#lib/paraglide/messages.js';
@@ -36,7 +37,7 @@
       (a: AccountResponse) =>
         (a.account_class === 'asset' || a.account_class === 'liability') &&
         a.status === 'active' &&
-        a.allows_postings
+        a.allows_postings && !isSubledgerManagedAccountKind(a.account_kind)
     )
   );
 

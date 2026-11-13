@@ -1,3 +1,4 @@
+import { ledgerQueryKey } from '#lib/api/ledger.ts';
 import type { QueryClient } from '@tanstack/svelte-query';
 import { priceManagementQueryKey } from '#lib/api/price-management.ts';
 import { forecastQueryKey } from '#lib/api/forecast.ts';
@@ -11,6 +12,7 @@ import { accountRegisterQueryKey, transactionsQueryKey } from '#lib/api/transact
 // restate earlier lots and realized gains (replay), and an import can create
 // instruments, so one list serves every investment mutation (T-138).
 export const investmentMutationQueryKeys = [
+  ledgerQueryKey,
   transactionsQueryKey,
   accountRegisterQueryKey,
   forecastQueryKey,
