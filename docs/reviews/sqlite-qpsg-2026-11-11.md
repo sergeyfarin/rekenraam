@@ -159,8 +159,8 @@ These are isolated single-package runs on a four-CPU host, not ADR 0016's
 direction and size of the recovery but are not formal threshold evidence.
 
 Hosted CI observations (Go test cache enabled, the `internal/app` package
-executed). The `main` run is the first of the six that investigate method (b)
-needs; the pull-request runs do not count toward it:
+executed). The three `main` rows are the first three of the six that
+investigate method (b) needs; the pull-request runs do not count toward it:
 
 | Build | Commit | Run | `internal/app` |
 |---|---|---|---:|
@@ -170,12 +170,84 @@ needs; the pull-request runs do not count toward it:
 | 3.54.1 + QPSG | `5e5cf679` | [42985705399](https://github.com/sergeyfarin/rekenraam/actions/runs/42985705399/job/130406232475) | **167.1 s** |
 | 3.54.1 + QPSG | `f95eabcb` | [42991474105](https://github.com/sergeyfarin/rekenraam/actions/runs/42991474105/job/130425311729) | **182.2 s** |
 | 3.54.1 + QPSG, first `main` run | `22c4f913` | [42995068138](https://github.com/sergeyfarin/rekenraam/actions/runs/42995068138/job/130436983504) | 216.6 s |
+| 3.54.1 + QPSG, second `main` run | `d1e7757a` | [43172981137](https://github.com/sergeyfarin/rekenraam/actions/runs/43172981137/job/131030422678) | 231.9 s |
+| 3.54.1 + QPSG, third `main` run | `ad3a2968` | [43175502690](https://github.com/sergeyfarin/rekenraam/actions/runs/43175502690/job/131038672028) | 220.8 s |
 
 ADR 0016 measures its thresholds differently, so neither table is threshold
 evidence. Act needs two uncached `-p 2` full gates on the six-CPU threshold
 host. Investigate needs the `internal/app` median of three interleaved
 uncached runs on the ten-CPU reference host, or of CI's latest six successful
-`main` runs. [#560](https://github.com/sergeyfarin/rekenraam/issues/560) owns both.
+`main` runs. [#560](https://github.com/sergeyfarin/rekenraam/issues/560) owns
+both; the [threshold results](#adr-0016-threshold-results-560) below record
+the 2026-11-12 outcome.
+
+## ADR 0016 threshold results (#560)
+
+Measured on 2026-11-12 at `ad3a2968` on the six-CPU threshold host: 6 vCPU AMD
+EPYC 3251, 5.2 GiB RAM, Linux 7.0.0-43-generic, Go 1.27.4. Both runs used
+`GOFLAGS=-count=1 GO_PHASE_TIMINGS=1 ./scripts/test-backend.sh` (`-race -p 2
+-timeout=5m`) from a clean worktree with no other load. Both gates passed and
+no package reported `(cached)`. The engine fingerprint test passed with
+`ENABLE_QPSG` and `ENABLE_FTS5` in `PRAGMA compile_options`.
+
+| Package | Act run 1 | Act run 2 |
+|---|---:|---:|
+| `internal/app` | 192.409 s | 212.753 s |
+| `internal/api` | 123.386 s | 132.832 s |
+| `internal/db` | 114.667 s | 122.518 s |
+| `cmd/rekenraam` | 55.429 s | 58.229 s |
+| `internal/testdb` | 3.706 s | 3.752 s |
+| `internal/appruntime` | 3.374 s | 3.602 s |
+| `internal/marketdata` | 1.065 s | 1.075 s |
+| `internal/onlinesource/trading212` | 1.057 s | 1.080 s |
+| `internal/web` | 1.030 s | 1.033 s |
+| `internal/recur` | 1.023 s | 1.030 s |
+| `internal/secretbox` | 1.013 s | 1.027 s |
+| `internal/exact` | 1.022 s | 1.025 s |
+| `internal/config` | 1.018 s | 1.018 s |
+| `internal/totp` | 1.018 s | 1.016 s |
+| `migrations` | 1.013 s | 1.015 s |
+
+Both runs are below the **270 s act threshold** in every package, so act does
+not fire with QPSG. The same host measured the 3.54.1 candidate without QPSG
+at 245.657 / 293.578 / 271.254 s, two of them over 270 s; QPSG removes that
+breach and is faster than the 3.53.4 baseline (225.121 / 232.339 s). The gate
+and race-test phase walls are longer than any single package time because
+packages run two at a time; the threshold is per package.
+
+Investigate method (b) needs six successful push-to-main CI runs with QPSG.
+Only three exist so far:
+
+| # | Commit | Run | `internal/app` |
+|---|---|---|---:|
+| 1 | `22c4f913` | [42995068138](https://github.com/sergeyfarin/rekenraam/actions/runs/42995068138/job/130436983504) | 216.623 s |
+| 2 | `d1e7757a` | [43172981137](https://github.com/sergeyfarin/rekenraam/actions/runs/43172981137/job/131030422678) | 231.921 s |
+| 3 | `ad3a2968` | [43175502690](https://github.com/sergeyfarin/rekenraam/actions/runs/43175502690/job/131038672028) | 220.818 s |
+
+Their median is **220.818 s**, above the **210 s investigate threshold**, but
+three runs are not the six-run method (b) result. Method (a) needs the
+documented ten-CPU reference host, which this local host is not (it was
+resized to 10 vCPUs afterward; see the supplementary observation below).
+Investigate therefore remains open pending three more successful push-to-main
+runs.
+
+### Supplementary 10-vCPU parallel-VM observation (2026-11-13)
+
+The local threshold host was resized from 6 to 10 vCPUs after the act
+measurement. It is a parallel VM of the same EPYC 3251 class and close to the
+reference host, but it is not the exact documented reference host (the
+architecture audit records 19 GiB RAM and Linux 6.8; this host reported 9.2 GiB
+at batch start, Linux 7.0.0, and 6.1 GiB afterward). This is therefore a
+supplementary observation, not ADR 0016 method (a) threshold evidence.
+
+Three uncached single-package runs of `./internal/app` at code `ad3a2968`
+(`go test -race -count=1 -timeout=10m -json ./internal/app`, test binary
+prebuilt) measured **202.953 / 243.625 / 258.336 s**, median **243.625 s**.
+All three passed with 2,700 leaves. The median is above the **210 s
+investigate line**, consistent with the three-run CI median of 220.818 s. The
+202.953–258.336 s spread is wider than #402's 13–16% same-source spread, and
+the VM's reported memory changed around the batch, so the host is noisy; this
+does not replace method (b)'s six-run median.
 
 ## Follow-up: split reads (#561)
 

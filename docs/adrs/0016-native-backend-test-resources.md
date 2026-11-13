@@ -204,9 +204,22 @@ with QPSG ran the package in **167.1 s** (`5e5cf679`) and **182.2 s**
 of these is threshold evidence. Act needs two uncached `-p 2` full gates on
 the six-CPU threshold host. Investigate needs the `internal/app` median of
 three interleaved uncached runs on the ten-CPU reference host, or of CI's
-latest six successful `main` runs. Both remain open under [#560](https://github.com/sergeyfarin/rekenraam/issues/560). Remedy order,
-deadline, scheduling, cache, durability and coverage policy are unchanged. See
-the [QPSG review](../reviews/sqlite-qpsg-2026-11-11.md).
+latest six successful `main` runs. Both were open under
+[#560](https://github.com/sergeyfarin/rekenraam/issues/560) when this note was
+written. Remedy order, deadline, scheduling, cache, durability and coverage
+policy are unchanged. See the [QPSG review](../reviews/sqlite-qpsg-2026-11-11.md).
+
+**#560 result (2026-11-12).** Two uncached `-p 2` full gates on the six-CPU
+threshold host at `ad3a2968` measured the application package at **192.409 s**
+and **212.753 s**; no package exceeded **270 s** in either run, so the act
+threshold does not fire with QPSG. The same host's 3.54.1 candidate runs
+without QPSG were 245.657 / 293.578 / 271.254 s, so QPSG removes the breach.
+Investigate method (b) has **3 of 6** successful push-to-main CI runs with
+QPSG (216.623 / 231.921 / 220.818 s; median **220.818 s**, above 210 s); the
+six-run median is not yet available, and method (a) needs the ten-CPU
+reference host. Investigate therefore remains open. No deadline, scheduling,
+cache, durability, coverage or schema policy changes. See the [QPSG
+review](../reviews/sqlite-qpsg-2026-11-11.md#adr-0016-threshold-results-560).
 
 ## References
 

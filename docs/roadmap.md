@@ -77,7 +77,11 @@ below continue alongside it and do not block it.
    The follow-up builds the engine with `SQLITE_ENABLE_QPSG`, which removes
    3.54.1's double compilation of joined lookups
    ([QPSG review](reviews/sqlite-qpsg-2026-11-11.md): production paths 39–55%
-   faster, application race package 16–17% faster on one host). Release remains on hold; these gates do not block accepted
+   faster, application race package 16–17% faster on one host). With QPSG, two
+   uncached full gates on the six-CPU threshold host measured the application
+   package at 192.4 / 212.8 s, so the act threshold no longer fires; the
+   investigate median waits for six successful `main` CI runs
+   ([#560](https://github.com/sergeyfarin/rekenraam/issues/560)). Release remains on hold; these gates do not block accepted
    maintenance. Adoption assets #335 stay P3 for later release preparation.
    See [Public-release gates](#public-release-gates) for the remaining evidence.
 2. **Track the remaining bounded maintenance follow-ups.**
