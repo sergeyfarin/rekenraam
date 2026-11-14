@@ -99,6 +99,8 @@ test('a dividend recorded in the Dividends view refreshes the Files batch and th
   await requested;
   try {
     await expect(page.getByRole('button', { name: 'Commit to ledger' })).toBeDisabled();
+    // The reconciliation override saves the working copy, so it waits too.
+    await expect(page.getByRole('checkbox', { name: 'Override reconciliation guards', exact: true })).toBeDisabled();
   } finally { release(); }
   expect(new URL(page.url()).searchParams.get('batch_id')).toBe(batch);
   await expect(page.getByRole('button', { name: 'Commit to ledger' })).toHaveCount(0);

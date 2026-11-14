@@ -114,6 +114,15 @@
     return userAccounts.filter((account) => account.status !== 'archived');
   });
 
+  // Archived accounts have no tree root (their institution may be archived
+  // too), so the Archived filter lists them flat, each linking to the
+  // register where it is restored or deleted (#567 review).
+  const archivedAccounts = $derived.by(() => {
+    if (statusFilter !== 'archived') return [];
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    return allUserAccounts.filter((account) => account.status === 'archived' && !isCategoryAccount(account) && account.account_class !== 'equity' && accountMatchesFilters(account, normalizedQuery));
+  });
+
   // A brokerage row folds in its holdings, cash and other children, so they
   // are never tree rows. They are still children of their parent and members
   // of their institution: the server refuses to archive or delete a parent or
@@ -175,7 +184,7 @@
         return institutionMatchesQuery(institution, normalizedQuery);
       }
 
-      return accountTypeFilter === 'all' && statusFilter !== 'closed';
+      return accountTypeFilter === 'all' && statusFilter !== 'closed' && statusFilter !== 'archived';
     });
   });
 
@@ -209,8 +218,10 @@
       return 'error';
     }
 
-    // A book whose only accounts are unparented holdings still shows them.
-    if (manageableAccounts.length === 0 && allUnparentedHoldings.length === 0 && (institutionsQuery.data?.institutions.length ?? 0) === 0) {
+    // A book whose only accounts are unparented holdings still shows them,
+    // and one whose accounts are all archived still offers the Archived filter.
+    const anyAccount = allUserAccounts.some((account) => !isCategoryAccount(account) && account.account_class !== 'equity');
+    if (!anyAccount && (institutionsQuery.data?.institutions.length ?? 0) === 0) {
       return 'empty';
     }
 
@@ -517,6 +528,23 @@
     </StatePanel>
   {:else if view === 'institutions'}
     <LedgerInstitutions institutions={institutionsQuery.data?.institutions ?? []} accounts={overview.data?.accounts ?? []} onEdit={(institution) => (editor = { type: 'institution-edit', institution })} onArchive={(institution) => institutionAction(institution)} onRestore={(institution) => institutionAction(institution, true)} pending={actionPendingKey} />
+  {:else if statusFilter === 'archived'}
+    {#if archivedAccounts.length === 0}
+      <StatePanel title={m.accounts_no_results_title()} copy={m.accounts_no_results_copy()} />
+    {:else}
+      <Panel>
+        <h2 class="font-semibold">{m.ledger_archived_accounts()}</h2>
+        <p class="mt-1 text-sm text-muted">{m.ledger_archived_accounts_copy()}</p>
+        <ul class="mt-3 divide-y divide-border">
+          {#each archivedAccounts as account (account.id)}
+            <li class="flex min-w-0 flex-wrap items-center justify-between gap-3 py-2 text-sm">
+              <a class="inline-flex min-h-11 items-center wrap-anywhere font-semibold underline" href={`/app/ledger/accounts/${account.id}/register`}>{accountDisplayName(account)}</a>
+              <span class="text-muted">{accountKindLabel(account.account_kind)}</span>
+            </li>
+          {/each}
+        </ul>
+      </Panel>
+    {/if}
   {:else if visibleAccounts.length === 0 && visibleInstitutions.length === 0 && unparentedHoldings.length > 0}
     <!-- Only unparented holdings match: they are listed below. -->
   {:else if visibleAccounts.length === 0 && visibleInstitutions.length === 0}

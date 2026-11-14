@@ -109,6 +109,7 @@
   } from '#lib/api/connections.ts';
   import { m } from '#lib/paraglide/messages.js';
   import { invalidateInvestmentReads } from '#lib/investments/invalidate.ts';
+  import { mergeResync } from './resync.ts';
   import { invalidateImportReads } from '#lib/imports/invalidate.ts';
 
   const view = $derived(importView(page.url.searchParams));
@@ -185,7 +186,7 @@
   let resyncing = $state(false);
   let resyncRequest = 0;
   $effect(() => {
-    if (view !== 'files' || !filesStale || batchWriting) return;
+    if (view !== 'files' || !filesStale || batchWriting || reviewedCheckpointsPending) return;
     untrack(() => {
       filesStale = false;
       if (batchId && previewData && (step === 'preview' || step === 'result')) void resyncBatch(batchId);
@@ -198,17 +199,15 @@
     try {
       const refreshed = await getFullImportBatch(id);
       if (request !== resyncRequest || id !== batchId || !previewData) return;
-      const pending = new Set(refreshed.rows.filter((row) => row.commit_status === 'pending' || row.commit_status === 'failed').map((row) => row.id));
-      const changed = previewData.rows.some((row) => (row.commit_status === 'pending' || row.commit_status === 'failed') && !pending.has(row.id));
+      const merged = mergeResync(previewData.rows, refreshed.rows, rowResolutions, matchChoices, parseResolution);
       previewData = { ...previewData, batch: refreshed.batch, rows: refreshed.rows, warnings: refreshed.warnings };
-      const kept = rowResolutions;
-      rowResolutions = new Map(refreshed.rows.map((row) => [row.id, pending.has(row.id) ? (kept.get(row.id) ?? parseResolution(row)) : parseResolution(row)]));
-      if (changed) {
+      rowResolutions = merged.resolutions;
+      matchChoices = merged.choices;
+      if (merged.changed) {
         // Reviews computed for the old row set no longer apply; the owner's
         // match choices for rows still pending are kept for the next check.
-        const choices = new Map([...matchChoices].filter(([rowID]) => pending.has(rowID)));
         resetMatchReview();
-        matchChoices = choices;
+        matchChoices = merged.choices;
         reviewedCheckpoints = null;
         reconciliationOverride = false;
         gainReview = null;
@@ -827,6 +826,10 @@
   // (T-122, #245).
   async function handleOperationLinked(rowId: number) {
     if (!previewData?.rows.some(row => row.id === rowId)) return;
+    // The re-read below supersedes a resync still in flight: both replace the
+    // working copy, and this one already includes the link.
+    resyncRequest++;
+    resyncing = false;
     splitLinkRowID = null;
     shortLinkRowID = null;
     if (previewData) {
@@ -996,6 +999,8 @@
     reviewedCheckpoints = null;
     reviewedCheckpointsChanged = false;
     reviewedCheckpointsError = undefined;
+    // Its review saves the working copy, so it waits for a resync (#567).
+    if (batchBusy) { reconciliationOverride = false; return; }
     if (!reconciliationOverride || !batchId) return;
     reviewedCheckpointsPending = true;
     try {
@@ -2149,7 +2154,7 @@
               {#if splitLinkRowID === row.id && batchId}
                 <tr class="border-b border-border bg-control">
                   <td colspan="9" class="px-4 py-4">
-                    <SplitLinkPanel batchId={batchId} rowId={row.id} {csrfToken} {accounts} onLinked={() => handleOperationLinked(row.id)} />
+                    <SplitLinkPanel batchId={batchId} rowId={row.id} {csrfToken} {accounts} disabled={batchBusy} onLinked={() => handleOperationLinked(row.id)} />
                   </td>
                 </tr>
               {/if}
@@ -2158,7 +2163,7 @@
                   <td colspan="9" class="px-4 py-4">
                     <!-- Pinned to the visible width so the review stays readable inside the scrolling table on a phone. -->
                     <div class="sticky left-4 max-w-[calc(100vw-4rem)]">
-                      <ShortLinkPanel batchId={batchId} rowId={row.id} {csrfToken} {accounts} onLinked={() => handleOperationLinked(row.id)} />
+                      <ShortLinkPanel batchId={batchId} rowId={row.id} {csrfToken} {accounts} disabled={batchBusy} onLinked={() => handleOperationLinked(row.id)} />
                     </div>
                   </td>
                 </tr>
@@ -2252,6 +2257,7 @@
           <input
             type="checkbox"
             bind:checked={reconciliationOverride}
+            disabled={batchBusy}
             onchange={() => void handleReconciliationOverrideChange()}
             aria-describedby="commit-reconciliation-checkpoints"
             class="h-4 w-4 rounded border-border focus:ring-foreground"

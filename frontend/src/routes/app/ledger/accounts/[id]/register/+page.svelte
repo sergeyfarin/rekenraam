@@ -6,6 +6,7 @@
   import { accountQueryOptions, accountsQueryKey, getAccount } from '#lib/api/accounts.ts';
   import { ledgerAccountQueryOptions } from '#lib/api/ledger.ts';
   import { findBrokerageAncestor, isHoldingAccount } from '#lib/accounts/brokerage.ts';
+  import { isCategoryAccount } from '#lib/accounts/account-labels.ts';
   import BrokerageSummary from '#lib/accounts/brokerage-summary.svelte';
   import AccountLifecycleActions from '#lib/accounts/account-lifecycle-actions.svelte';
   import AccountRegister from '#lib/transactions/account-register.svelte';
@@ -38,9 +39,18 @@
     enabled: !!account?.parent_account_id && account.account_kind !== 'brokerage',
     staleTime: 10_000
   }));
-  // Accounts folded into a brokerage row, and holdings listed apart from the
-  // tree, have no row actions in the index; their register offers them.
-  const folded = $derived(!!account && !account.is_system && (holding || !!brokerageQuery.data));
+  // Every account the Ledger index manages has its lifecycle actions here:
+  // folded and unparented accounts have no tree row, and a closed or archived
+  // account is reopened or restored here (#567 review). Categories and equity
+  // keep their own management.
+  const managed = $derived(!!account && !account.is_system && !isCategoryAccount(account) && account.account_class !== 'equity');
+  // After a delete, the page goes to the brokerage the account was folded
+  // into, else to its parent, else to the Ledger index.
+  const afterDelete = $derived(
+    brokerageQuery.data ? `/app/ledger/accounts/${brokerageQuery.data.id}/register`
+      : account?.parent_account_id ? `/app/ledger/accounts/${account.parent_account_id}/register`
+      : '/app/ledger'
+  );
   const pageBreadcrumbs = $derived.by(() => {
     const base = breadcrumbs(routeFor(page.url.pathname));
     const brokerage = brokerageQuery.data;
@@ -88,9 +98,9 @@
         {#if account.status === 'active'}<a class="inline-flex min-h-11 items-center text-sm font-semibold underline" href={`/app/ledger/reconcile?account=${account.id}`}>{m.ledger_holding_reconcile()}</a>{/if}
       </div>
     {/if}
-    {#if folded && account}
+    {#if managed && account}
       <div class="mb-4">
-        <AccountLifecycleActions {account} {csrfToken} afterDelete={brokerageQuery.data ? `/app/ledger/accounts/${brokerageQuery.data.id}/register` : '/app/ledger'} />
+        <AccountLifecycleActions {account} {csrfToken} {afterDelete} />
       </div>
     {/if}
     <AccountRegister {accountID} {csrfToken} {actions} onRowClick={(entry) => actions.showTransaction(entry.transaction_id)} />

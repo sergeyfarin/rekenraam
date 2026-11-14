@@ -195,6 +195,7 @@ test('folded children are closed and archived from their registers, which frees 
     await page.getByRole('link', { name, exact: true }).click();
     await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
     const actions = page.getByRole('region', { name: 'Account actions', exact: true });
+    await actions.locator('summary').click();
     await actions.getByRole('button', { name: `Close ${name}`, exact: true }).click();
     await expect(actions.getByText('Status: Closed', { exact: true })).toBeVisible();
     await actions.getByRole('button', { name: `Archive ${name}`, exact: true }).click();
@@ -212,6 +213,80 @@ test('folded children are closed and archived from their registers, which frees 
   await expect(page.getByRole('button', { name: `Delete ${brokerName}`, exact: true })).toBeDisabled();
   await page.getByRole('button', { name: `Archive ${brokerName}`, exact: true }).click();
   await expect.poll(async () => (await apiJSON<{ status: string }>(page, 'GET', `/api/v1/accounts/${broker.id}`)).status).toBe('archived');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('every register follows the index child rules, labels a closed holding and brings a top-level account back (#567 review)', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const today = todayISO();
+  const broker = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/accounts', csrfToken, {
+    name: 'Rules brokerage', account_class: 'asset', account_kind: 'brokerage', allows_postings: false, opened_on: today
+  });
+  const cash = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/accounts', csrfToken, {
+    name: 'Rules cash', account_class: 'asset', account_kind: 'brokerage_cash', allows_postings: true,
+    parent_account_id: broker.id, default_commodity_id: currencyID, opened_on: today
+  });
+  const instrument = await apiJSON<{ id: number; commodity_id: number }>(page, 'POST', '/api/v1/investments/instruments', csrfToken, {
+    commodity_code: 'RULES', display_name: 'Rules stock', instrument_type: 'stock', quantity_scale: 0, price_scale: 2, quote_commodity_id: currencyID, identifiers: {}, metadata: {}
+  });
+  // The holding sits under the cash child, so the cash account has an active child.
+  const holding = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/holding-accounts', csrfToken, {
+    instrument_id: instrument.id, name: 'Rules holding', parent_account_id: cash.id, opened_on: today
+  });
+  await apiJSON(page, 'POST', '/api/v1/investments/buy', csrfToken, {
+    transaction_date: today, commodity_id: instrument.commodity_id, holding_account_id: holding.id,
+    cash_account_id: cash.id, cash_commodity_id: currencyID, quantity_value: '3', quantity_scale: 0, cash_amount_value: '3000', cash_amount_scale: 2
+  });
+  await page.setViewportSize({ width: 390, height: 900 });
+  const actions = page.getByRole('region', { name: 'Account actions', exact: true });
+  // The actions are collapsed under their summary on every register.
+  const openActions = () => actions.locator('summary').click();
+
+  // A folded account with an active child cannot be closed from its register either.
+  await page.goto(`/app/ledger/accounts/${cash.id}/register`);
+  await openActions();
+  await expect(actions.getByRole('button', { name: 'Close Rules cash', exact: true })).toBeDisabled();
+  await expect(actions.getByRole('button', { name: 'Delete Rules cash', exact: true })).toBeDisabled();
+  await expect(actions.getByText(/Accounts under this one hold back some actions/)).toBeVisible();
+  await page.goto(`/app/ledger/accounts/${holding.id}/register`);
+  await openActions();
+  await actions.getByRole('button', { name: 'Close Rules holding', exact: true }).click();
+  await expect(actions.getByText('Status: Closed', { exact: true })).toBeVisible();
+  await page.goto(`/app/ledger/accounts/${cash.id}/register`);
+  await openActions();
+  await expect(actions.getByRole('button', { name: 'Close Rules cash', exact: true })).toBeEnabled();
+
+  // A closed holding with units is labelled with its status on its position.
+  await page.goto(`/app/ledger/accounts/${broker.id}/register`);
+  await expect(page.getByRole('link', { name: 'Rules holding (Closed)', exact: true })).toHaveAttribute('href', `/app/ledger/accounts/${holding.id}/register`);
+
+  // A top-level account closes and reopens, archives and restores on its register.
+  const top = await createCashAccount(page, csrfToken, 'Rules top account', currencyID);
+  await page.goto(`/app/ledger/accounts/${top.id}/register`);
+  await openActions();
+  await actions.getByRole('button', { name: /^Close Rules top account/ }).click();
+  await expect(actions.getByText('Status: Closed', { exact: true })).toBeVisible();
+  await actions.getByRole('button', { name: /^Reopen Rules top account/ }).click();
+  await expect(actions.getByText('Status: Active', { exact: true })).toBeVisible();
+  await actions.getByRole('button', { name: /^Close Rules top account/ }).click();
+  await actions.getByRole('button', { name: /^Archive Rules top account/ }).click();
+  await expect(actions.getByText('Status: Archived', { exact: true })).toBeVisible();
+
+  // Archived accounts leave the tree; the Archived filter leads back to them.
+  await page.goto('/app/ledger');
+  await expect(page.getByRole('link', { name: /Rules top account/ })).toHaveCount(0);
+  await page.getByRole('combobox', { name: /^Status/ }).selectOption('archived');
+  await expect(page.getByRole('heading', { name: 'Archived accounts', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: /Rules top account/ }).click();
+  await expect(page).toHaveURL(`/app/ledger/accounts/${top.id}/register`);
+  await openActions();
+  await actions.getByRole('button', { name: /^Restore Rules top account/ }).click();
+  await expect(actions.getByText('Status: Closed', { exact: true })).toBeVisible();
+  await actions.getByRole('button', { name: /^Reopen Rules top account/ }).click();
+  await expect(actions.getByText('Status: Active', { exact: true })).toBeVisible();
+  await page.goto('/app/ledger');
+  await expect(page.getByRole('link', { name: /Rules top account/ })).toBeVisible();
+  await expectNoAccessibilityViolations(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 

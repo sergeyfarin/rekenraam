@@ -1024,8 +1024,10 @@ import write (upload, commit, discard, source correction, split/short link,
 dividend review) and every finished online fetch refreshes attention, Home,
 batch history, the Dividends queue and Ledger reads itself. A dividend
 recorded in the Dividends view marks the Files working copy stale; returning
-to Files re-reads the batch, and no batch write can start until that read
-lands. Resolutions and match choices for rows still pending are kept; reviews
+to Files re-reads the batch, and no batch write (upload, fetch, commit,
+discard, source correction, match check, gain review, split/short link,
+reconciliation-override review) can start until that read lands; a link that
+finishes meanwhile supersedes it with its own re-read. Resolutions and match choices for rows still pending are kept; reviews
 computed for the old row set (match check, checkpoints, gain review) are
 cleared when a row stopped being pending.
 
@@ -1036,7 +1038,9 @@ Ledger Overview replaces the Accounts tab. Both `/app/accounts` and
 fragment; register detail paths remain unchanged. Accounts and Institutions
 are URL-selected views. The index groups ordinary accounts by institution and
 country, with active/closed/all filters and exact values in the default
-currency. Pins and the object switcher remain #442.
+currency. Archived accounts have no tree root (their institution may be
+archived too), so an Archived filter lists them flat, each linking to its
+register. Pins and the object switcher remain #442.
 
 `GET /api/v1/ledger/overview` and `GET /api/v1/ledger/accounts/{account_id}`
 compose metadata and financial summaries. The index follows the response's
@@ -1054,9 +1058,20 @@ as a credit card or receivable reports no cash), links to the cash registers, ot
 accounts (counted in value, never shown as cash), and position
 quantities/values with links to the instrument and to the holding's own
 register, and lists holdings with no units and closed or archived children so
-every folded account stays reachable. Folded accounts and unparented holdings
-have no tree row, so their own register offers close, reopen, archive,
-restore and delete (the server keeps every rule). Each row lists the
+every folded account stays reachable; a closed or archived account is
+labelled with its status wherever it is listed, a position's holding
+included. Every account the index manages (not categories, equity or system
+accounts) has close, reopen, archive, restore and delete on its own register:
+folded accounts and unparented holdings have no tree row, and a closed or
+archived top-level account comes back there. They sit in a collapsed
+*Account actions* disclosure, so close and delete never sit one tap from the
+transactions; once opened, they read the full account catalog and apply the
+index's child rules below, so a register never offers what the index
+withholds; the server keeps every rule it owns. After a
+delete the page goes to the account's brokerage, else its parent, else the
+index. The brokerage walk, like the server's owner walk, has no depth limit;
+only a loop stops it. Editing (rename, re-parent) a folded account is not on
+its register yet. Each row lists the
 holdings, cash and other accounts it folds in, so index actions count them as
 dependents, each action by its own rule: archive waits for unarchived children
 (the server's rule), delete for any child (archived children still reference

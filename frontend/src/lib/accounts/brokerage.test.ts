@@ -29,4 +29,12 @@ describe('brokerage ancestry', () => {
     expect(await findBrokerageAncestor(orphan, read)).toBeNull();
     expect(await findBrokerageAncestor(looped, read)).toBeNull();
   });
+
+  it('follows a chain deeper than any fixed limit, as the server owner walk does', async () => {
+    const chain = [broker, ...Array.from({ length: 40 }, (_, i) => account(100 + i, 'other_asset', i === 0 ? 1 : 99 + i))];
+    const deep = account(200, 'security_holding', 139);
+    const deepByID = new Map([...chain, deep].map(a => [a.id, a]));
+    expect(nearestBrokerage(deep, deepByID)?.id).toBe(1);
+    expect((await findBrokerageAncestor(deep, async id => deepByID.get(id)!))?.id).toBe(1);
+  });
 });

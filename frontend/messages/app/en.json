@@ -2094,5 +2094,8 @@
   "ledger_account_status": "Status: {status}",
   "ledger_account_reopen": "Reopen {name}",
   "ledger_account_restore": "Restore {name}",
-  "ledger_empty_holdings": "Holdings with no units"
+  "ledger_empty_holdings": "Holdings with no units",
+  "ledger_account_children_block": "Accounts under this one hold back some actions until they are closed, archived or deleted.",
+  "ledger_archived_accounts": "Archived accounts",
+  "ledger_archived_accounts_copy": "Archived accounts are left out of the tree. Open one to restore or delete it."
 }

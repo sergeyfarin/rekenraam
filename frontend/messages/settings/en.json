@@ -1765,5 +1765,6 @@
   "investments_activity_position_unavailable_option": "Earlier choice, not available on this date",
   "investments_activity_position_unavailable": "The position chosen earlier is not available on this date. Choose another one, or change the date.",
   "investments_activity_lots_unavailable": "Quantities entered earlier include lots this position does not hold on this date. They are not used: remove them, or change the date back.",
-  "investments_activity_lots_unavailable_remove": "Remove those quantities"
+  "investments_activity_lots_unavailable_remove": "Remove those quantities",
+  "accounts_filter_status_archived": "Archived"
 }

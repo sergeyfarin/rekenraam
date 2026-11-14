@@ -1,8 +1,8 @@
 {
   "counts": {
-    "es": 147,
-    "fr": 147,
-    "de": 147
+    "es": 150,
+    "fr": 150,
+    "de": 150
   },
   "keys": {
     "es": [
@@ -122,10 +122,13 @@
       "investments_trade_unit_price_non_positive",
       "investments_trade_unit_price_precision",
       "ledger_account_actions",
+      "ledger_account_children_block",
       "ledger_account_reopen",
       "ledger_account_restore",
       "ledger_account_status",
       "ledger_archive_institution",
+      "ledger_archived_accounts",
+      "ledger_archived_accounts_copy",
       "ledger_brokerage_value",
       "ledger_cash",
       "ledger_edit_institution",
@@ -271,10 +274,13 @@
       "investments_trade_unit_price_non_positive",
       "investments_trade_unit_price_precision",
       "ledger_account_actions",
+      "ledger_account_children_block",
       "ledger_account_reopen",
       "ledger_account_restore",
       "ledger_account_status",
       "ledger_archive_institution",
+      "ledger_archived_accounts",
+      "ledger_archived_accounts_copy",
       "ledger_brokerage_value",
       "ledger_cash",
       "ledger_edit_institution",
@@ -420,10 +426,13 @@
       "investments_trade_unit_price_non_positive",
       "investments_trade_unit_price_precision",
       "ledger_account_actions",
+      "ledger_account_children_block",
       "ledger_account_reopen",
       "ledger_account_restore",
       "ledger_account_status",
       "ledger_archive_institution",
+      "ledger_archived_accounts",
+      "ledger_archived_accounts_copy",
       "ledger_brokerage_value",
       "ledger_cash",
       "ledger_edit_institution",

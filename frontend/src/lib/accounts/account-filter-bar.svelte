@@ -35,6 +35,7 @@
       <option value="active">{m.accounts_filter_status_active()}</option>
       <option value="closed">{m.accounts_filter_status_closed()}</option>
       <option value="all">{m.accounts_filter_status_all()}</option>
+      <option value="archived">{m.accounts_filter_status_archived()}</option>
     </select>
   </label>
 

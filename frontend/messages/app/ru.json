@@ -2158,5 +2158,8 @@
   "ledger_account_status": "Статус: {status}",
   "ledger_account_reopen": "Открыть заново {name}",
   "ledger_account_restore": "Восстановить {name}",
-  "ledger_empty_holdings": "Позиции без бумаг"
+  "ledger_empty_holdings": "Позиции без бумаг",
+  "ledger_account_children_block": "Счета внутри этого счёта блокируют некоторые действия, пока их не закроют, не архивируют или не удалят.",
+  "ledger_archived_accounts": "Архивные счета",
+  "ledger_archived_accounts_copy": "Архивные счета не показываются в дереве. Откройте счёт, чтобы восстановить или удалить его."
 }

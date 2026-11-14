@@ -4,8 +4,8 @@ import { isSubledgerManagedAccountKind } from './subledger-accounts.ts';
 // A holding may sit directly under its brokerage or under one of the
 // brokerage's children (a cash account, a group). Ledger Overview owns it by
 // its nearest brokerage ancestor, so links back to the broker walk the same
-// ancestry rather than trusting the direct parent (#567 review).
-const MAX_DEPTH = 16;
+// ancestry rather than trusting the direct parent (#567 review). Like the
+// server's owner walk, it has no depth limit; only a loop stops it.
 
 export function isHoldingAccount(account: Pick<AccountResponse, 'account_kind'> | undefined | null): boolean {
   return isSubledgerManagedAccountKind(account?.account_kind);
@@ -18,7 +18,7 @@ export function nearestBrokerage(
 ): AccountResponse | undefined {
   const seen = new Set<number>([account.id]);
   let parentID = account.parent_account_id;
-  for (let depth = 0; parentID && depth < MAX_DEPTH && !seen.has(parentID); depth++) {
+  while (parentID && !seen.has(parentID)) {
     seen.add(parentID);
     const parent = byID.get(parentID);
     if (!parent) return undefined;
@@ -38,7 +38,7 @@ export async function findBrokerageAncestor(
 ): Promise<AccountResponse | null> {
   const seen = new Set<number>([account.id]);
   let parentID = account.parent_account_id;
-  for (let depth = 0; parentID && depth < MAX_DEPTH && !seen.has(parentID); depth++) {
+  while (parentID && !seen.has(parentID)) {
     seen.add(parentID);
     const parent = await read(parentID);
     if (parent.account_kind === 'brokerage') return parent;
