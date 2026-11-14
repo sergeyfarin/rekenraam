@@ -9,11 +9,8 @@ import (
 
 var ErrImportDividendReviewUnavailable = errors.New("import dividend review is no longer available")
 
-// ListImportDividendReviewRows composes the queue from durable source identities.
-// A historical identity is offered once globally, or in its requested batch.
-func (r *ImportRepository) ListImportDividendReviewRows(ctx context.Context, bookID, batchID, afterID int64, limit int) ([]ImportStagedRowRecord, error) {
-	rows, err := r.database.QueryContext(ctx, `SELECT `+importStagedRowSelect+`
- FROM import_staged_rows s
+// Shared membership for both the queue and its attention count (#447).
+const importDividendReviewFromSQL = ` FROM import_staged_rows s
  JOIN import_batches b ON b.id = s.batch_id AND b.book_id = s.book_id
  LEFT JOIN import_commit_identities i ON i.book_id = s.book_id AND i.dedupe_fingerprint = s.dedupe_fingerprint
  LEFT JOIN transactions t ON t.id = (SELECT e.transaction_id FROM import_commit_identity_effects e
@@ -27,7 +24,13 @@ func (r *ImportRepository) ListImportDividendReviewRows(ctx context.Context, boo
    OR (i.id IS NOT NULL AND i.source_kind = 'trading212' AND v.status = 'posted'
        AND v.transaction_kind = 'ordinary' AND t.deleted_at IS NULL
        AND NOT EXISTS (SELECT 1 FROM investment_operation_journal_links l JOIN transaction_versions lv ON lv.id = l.transaction_version_id WHERE lv.transaction_id = t.id)
-       AND (? > 0 OR s.id = (SELECT MIN(original.id) FROM import_staged_rows original WHERE original.committed_identity_id = i.id AND original.commit_status = 'committed'))))
+       AND (? > 0 OR s.id = (SELECT MIN(original.id) FROM import_staged_rows original WHERE original.committed_identity_id = i.id AND original.commit_status = 'committed'))))`
+
+// ListImportDividendReviewRows composes the queue from durable source identities.
+// A historical identity is offered once globally, or in its requested batch.
+func (r *ImportRepository) ListImportDividendReviewRows(ctx context.Context, bookID, batchID, afterID int64, limit int) ([]ImportStagedRowRecord, error) {
+	rows, err := r.database.QueryContext(ctx, `SELECT `+importStagedRowSelect+`
+`+importDividendReviewFromSQL+`
  ORDER BY s.id LIMIT ?`, bookID, afterID, batchID, batchID, batchID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list dividend review rows: %w", err)

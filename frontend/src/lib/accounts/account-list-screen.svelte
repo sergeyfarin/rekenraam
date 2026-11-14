@@ -1,4 +1,14 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
+  import { page } from '$app/state';
+  import { ledgerOverviewQueryOptions } from '#lib/api/ledger.ts';
+  import PageHeader from '#lib/components/page-header.svelte';
+  import SegmentedControl from '#lib/components/segmented-control.svelte';
+  import LedgerInstitutions from './ledger-institutions.svelte';
+  import LedgerValue from './ledger-value.svelte';
+  import { isHoldingAccount } from './brokerage.ts';
+  import { childDependents } from './dependents.ts';
+  import { addTransaction, addTransfer } from '#lib/transactions/add-transaction.svelte.ts';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import BuildingComplex from '@lucide/svelte/icons/building-complex';
@@ -12,7 +22,7 @@
   import { currentBookQueryOptions } from '#lib/api/books.ts';
   import { forecastQueryKey } from '#lib/api/forecast.ts';
   import {
-    accountsQueryOptions,
+    accountsQueryKey,
     archiveAccount,
     closeAccount,
     deleteAccount,
@@ -21,7 +31,8 @@
   import { currenciesQueryOptions, currencyCatalogQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import {
     deleteInstitution,
-    institutionsQueryOptions,
+    archiveInstitution,
+    restoreInstitution,
     type InstitutionResponse
   } from '#lib/api/institutions.ts';
   import { m } from '#lib/paraglide/messages.js';
@@ -50,22 +61,29 @@
     | { type: 'institution-create' }
     | { type: 'institution-edit'; institution: InstitutionResponse };
 
-  const accountsQuery = createQuery(() => accountsQueryOptions(true, false));
-  const institutionsQuery = createQuery(() => institutionsQueryOptions(true));
-  const currenciesQuery = createQuery(() => currenciesQueryOptions());
-  const currencyCatalogQuery = createQuery(() => currencyCatalogQueryOptions());
-  const currentBookQuery = createQuery(() => currentBookQueryOptions());
+  let editor = $state<EditorState>({ type: 'none' });
+
+  const overview = createQuery(() => ledgerOverviewQueryOptions());
+  const accountsQuery = $derived({ data: overview.data ? { accounts: overview.data.accounts.map(row => row.account) } : undefined, error: overview.error, isError: overview.isError, isPending: overview.isPending, refetch: () => overview.refetch() });
+  const institutionsQuery = $derived({ data: overview.data ? { institutions: overview.data.institutions } : undefined, error: overview.error, isError: overview.isError, isPending: overview.isPending, refetch: () => overview.refetch() });
+  const currenciesQuery = createQuery(() => ({ ...currenciesQueryOptions(), enabled: editor.type === 'account-create' || editor.type === 'account-edit' }));
+  const currencyCatalogQuery = createQuery(() => ({ ...currencyCatalogQueryOptions(), enabled: editor.type === 'account-create' || editor.type === 'account-edit' }));
+  const currentBookQuery = createQuery(() => ({ ...currentBookQueryOptions(), enabled: editor.type === 'account-create' || editor.type === 'account-edit' }));
   const sessionQuery = createQuery(() => authSessionQueryOptions());
   const queryClient = useQueryClient();
 
-  let statusFilter = $state<StatusFilter>('all');
+  let statusFilter = $state<StatusFilter>('active');
   let accountTypeFilter = $state<AccountTypeFilter>('all');
   let query = $state('');
-  let editor = $state<EditorState>({ type: 'none' });
   let actionError = $state<unknown>(undefined);
   let actionPendingKey = $state('');
   let collapsedNodeIDs = $state<Set<string>>(new Set());
 
+  const view = $derived(page.url.searchParams.get('view') === 'institutions' ? 'institutions' : 'accounts');
+  function changeView(value: string) { const url = new URL(page.url.href); url.searchParams.set('view', value); void goto(url, { reset: false }); }
+  async function institutionAction(institution: InstitutionResponse, restore = false) {
+    await runAccountAction(`institution:${institution.id}`, async token => { if (restore) await restoreInstitution(institution.id, token); else await archiveInstitution(institution.id, token); });
+  }
   const countryNames = $derived(new Intl.DisplayNames(getLocale(), { type: 'region' }));
   const currencyDisplayNames = $derived(new Intl.DisplayNames(getLocale(), { type: 'currency' }));
 
@@ -87,11 +105,38 @@
   });
 
   const userAccounts = $derived.by(() => {
-    return allUserAccounts.filter((account) => !isCategoryAccount(account) && account.account_class !== 'equity');
+    return allUserAccounts.filter((account) => !isCategoryAccount(account) && account.account_class !== 'equity' && !isHoldingAccount(account));
   });
 
+  // Archived accounts stay out of every status filter, as before #448: their
+  // institutions may be archived too, and the tree has no root for them.
   const manageableAccounts = $derived.by(() => {
     return userAccounts.filter((account) => account.status !== 'archived');
+  });
+
+  // Archived accounts have no tree root (their institution may be archived
+  // too), so the Archived filter lists them flat, each linking to the
+  // register where it is restored or deleted (#567 review).
+  const archivedAccounts = $derived.by(() => {
+    if (statusFilter !== 'archived') return [];
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    return allUserAccounts.filter((account) => account.status === 'archived' && !isCategoryAccount(account) && account.account_class !== 'equity' && accountMatchesFilters(account, normalizedQuery));
+  });
+
+  // A brokerage row folds in its holdings, cash and other children, so they
+  // are never tree rows. They are still children of their parent and members
+  // of their institution: the server refuses to archive or delete a parent or
+  // institution they depend on, so the actions must count them (#567 review).
+  const foldedAccounts = $derived(overview.data?.accounts.flatMap((row) => [...row.holding_accounts, ...row.cash_accounts, ...row.other_accounts]) ?? []);
+  // A holding with no parent account is its own Ledger row; it is shown
+  // apart from the institution tree so its value is never missing.
+  const allUnparentedHoldings = $derived(
+    overview.data?.accounts.filter((row) => isHoldingAccount(row.account) && row.account.status !== 'archived') ?? []
+  );
+  // The panel follows the same search, status and type filters as the tree.
+  const unparentedHoldings = $derived.by(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    return allUnparentedHoldings.filter((row) => accountMatchesFilters(row.account, normalizedQuery));
   });
 
   const activeInstitutions = $derived.by(() => {
@@ -101,7 +146,7 @@
   const institutionAccountCounts = $derived.by(() => {
     const counts = new Map<number, number>();
 
-    for (const account of allUserAccounts) {
+    for (const account of [...allUserAccounts, ...foldedAccounts]) {
       if (account.institution_id) {
         counts.set(account.institution_id, (counts.get(account.institution_id) ?? 0) + 1);
       }
@@ -110,17 +155,9 @@
     return counts;
   });
 
-  const allAccountChildCounts = $derived.by(() => {
-    const counts = new Map<number, number>();
-
-    for (const account of userAccounts) {
-      if (account.parent_account_id) {
-        counts.set(account.parent_account_id, (counts.get(account.parent_account_id) ?? 0) + 1);
-      }
-    }
-
-    return counts;
-  });
+  // Every child of a parent, including the accounts folded into brokerage
+  // rows and the holdings listed apart (they are in allUserAccounts).
+  const childDependentCounts = $derived(childDependents([...allUserAccounts, ...foldedAccounts]));
 
   const visibleAccounts = $derived.by(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -147,7 +184,7 @@
         return institutionMatchesQuery(institution, normalizedQuery);
       }
 
-      return accountTypeFilter === 'all' && statusFilter !== 'closed';
+      return accountTypeFilter === 'all' && statusFilter !== 'closed' && statusFilter !== 'archived';
     });
   });
 
@@ -168,9 +205,6 @@
     if (
       accountsQuery.isPending ||
       institutionsQuery.isPending ||
-      currenciesQuery.isPending ||
-      currencyCatalogQuery.isPending ||
-      currentBookQuery.isPending ||
       sessionQuery.isPending
     ) {
       return 'loading';
@@ -179,15 +213,15 @@
     if (
       accountsQuery.isError ||
       institutionsQuery.isError ||
-      currenciesQuery.isError ||
-      currencyCatalogQuery.isError ||
-      currentBookQuery.isError ||
       sessionQuery.isError
     ) {
       return 'error';
     }
 
-    if (manageableAccounts.length === 0 && activeInstitutions.length === 0) {
+    // A book whose only accounts are unparented holdings still shows them,
+    // and one whose accounts are all archived still offers the Archived filter.
+    const anyAccount = allUserAccounts.some((account) => !isCategoryAccount(account) && account.account_class !== 'equity');
+    if (!anyAccount && (institutionsQuery.data?.institutions.length ?? 0) === 0) {
       return 'empty';
     }
 
@@ -278,7 +312,7 @@
   async function refreshAccounts() {
     await Promise.all([
       accountsQuery.refetch(),
-      institutionsQuery.refetch(),
+      queryClient.invalidateQueries({ queryKey: accountsQueryKey }),
       currenciesQuery.refetch(),
       currencyCatalogQuery.refetch(),
       currentBookQuery.refetch(),
@@ -363,13 +397,24 @@
   }
 </script>
 
+<PageHeader title={m.nav_ledger()}>
+  {#snippet actions()}
+    <button type="button" class="min-h-11 rounded-(--radius-control) bg-accent px-4 text-sm font-semibold text-accent-foreground" onclick={() => addTransaction()}>{m.transactions_form_create_title()}</button>
+    <button type="button" class="min-h-11 rounded-(--radius-control) border border-border bg-control px-3 text-sm" onclick={() => addTransfer()}>{m.home_shortcut_transfer()}</button>
+    <a class="inline-flex min-h-11 items-center rounded-(--radius-control) border border-border bg-control px-3 text-sm" href="/app/ledger/import">{m.import_title()}</a>
+    <a class="inline-flex min-h-11 items-center rounded-(--radius-control) border border-border bg-control px-3 text-sm" href="/app/ledger/reconcile">{m.reconcile_title()}</a>
+  {/snippet}
+</PageHeader>
+<div class="mb-4 overflow-x-auto pb-1"><SegmentedControl legend={m.nav_ledger()} label="" value={view} onChange={changeView} options={[{ value: 'accounts', label: m.accounts_title() }, { value: 'institutions', label: m.ledger_institutions() }]} /></div>
 <div class="space-y-4">
   <Panel variant="toolbar">
     <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+      {#if view === 'accounts'}
       <AccountSummaryStats {activeCount} {closedCount} {visibleCount} />
       <div class="min-w-0 flex-1">
         <AccountFilterBar bind:query bind:statusFilter bind:accountTypeFilter />
       </div>
+      {/if}
       <div class="flex flex-wrap gap-2 xl:justify-end">
         <button
           type="button"
@@ -395,7 +440,12 @@
 
   {#if editor.type !== 'none'}
     <Panel>
-      {#if editor.type === 'account-create'}
+      {#if (editor.type === 'account-create' || editor.type === 'account-edit') && (currenciesQuery.isPending || currencyCatalogQuery.isPending || currentBookQuery.isPending)}
+        <p role="status" class="text-sm text-muted">{m.accounts_loading_copy()}</p>
+      {:else if (editor.type === 'account-create' || editor.type === 'account-edit') && (currenciesQuery.isError || currencyCatalogQuery.isError || currentBookQuery.isError)}
+        <APIFormError error={currenciesQuery.error ?? currencyCatalogQuery.error ?? currentBookQuery.error} />
+        <button type="button" class="min-h-11 text-sm underline" onclick={refreshAccounts}>{m.accounts_retry()}</button>
+      {:else if editor.type === 'account-create'}
         <AccountEditor
           mode="create"
           accounts={manageableAccounts}
@@ -455,7 +505,7 @@
         {m.accounts_retry()}
       </button>
     </StatePanel>
-  {:else if screenState === 'empty'}
+  {:else if screenState === 'empty' && view !== 'institutions'}
     <StatePanel title={m.accounts_empty_title()} copy={m.accounts_empty_copy()}>
       <div class="flex flex-wrap justify-center gap-2">
         <button
@@ -476,11 +526,34 @@
         </button>
       </div>
     </StatePanel>
+  {:else if view === 'institutions'}
+    <LedgerInstitutions institutions={institutionsQuery.data?.institutions ?? []} accounts={overview.data?.accounts ?? []} onEdit={(institution) => (editor = { type: 'institution-edit', institution })} onArchive={(institution) => institutionAction(institution)} onRestore={(institution) => institutionAction(institution, true)} pending={actionPendingKey} />
+  {:else if statusFilter === 'archived'}
+    {#if archivedAccounts.length === 0}
+      <StatePanel title={m.accounts_no_results_title()} copy={m.accounts_no_results_copy()} />
+    {:else}
+      <Panel>
+        <h2 class="font-semibold">{m.ledger_archived_accounts()}</h2>
+        <p class="mt-1 text-sm text-muted">{m.ledger_archived_accounts_copy()}</p>
+        <ul class="mt-3 divide-y divide-border">
+          {#each archivedAccounts as account (account.id)}
+            <li class="flex min-w-0 flex-wrap items-center justify-between gap-3 py-2 text-sm">
+              <a class="inline-flex min-h-11 items-center wrap-anywhere font-semibold underline" href={`/app/ledger/accounts/${account.id}/register`}>{accountDisplayName(account)}</a>
+              <span class="text-muted">{accountKindLabel(account.account_kind)}</span>
+            </li>
+          {/each}
+        </ul>
+      </Panel>
+    {/if}
+  {:else if visibleAccounts.length === 0 && visibleInstitutions.length === 0 && unparentedHoldings.length > 0}
+    <!-- Only unparented holdings match: they are listed below. -->
   {:else if visibleAccounts.length === 0 && visibleInstitutions.length === 0}
     <StatePanel title={m.accounts_no_results_title()} copy={m.accounts_no_results_copy()} />
   {:else}
     <AccountTreeSection
       accounts={visibleAccounts}
+      values={new Map(overview.data?.accounts.map(row => [row.account.id, row.value]) ?? [])}
+      commodities={overview.data?.commodities ?? []}
       institutions={visibleInstitutions}
       {currenciesByID}
       {countryNames}
@@ -493,8 +566,22 @@
       onEditInstitution={(institution) => (editor = { type: 'institution-edit', institution })}
       onDeleteInstitution={handleDeleteInstitution}
       {institutionAccountCounts}
-      {allAccountChildCounts}
+      {childDependentCounts}
       {actionPendingKey}
     />
+  {/if}
+  {#if view === 'accounts' && screenState === 'ready' && unparentedHoldings.length > 0}
+    <Panel>
+      <h2 class="font-semibold">{m.ledger_unparented_holdings()}</h2>
+      <p class="mt-1 text-sm text-muted">{m.ledger_unparented_holdings_copy()}</p>
+      <ul class="mt-3 divide-y divide-border">
+        {#each unparentedHoldings as row (row.account.id)}
+          <li class="flex min-w-0 flex-wrap items-center justify-between gap-3 py-2 text-sm">
+            <a class="inline-flex min-h-11 items-center wrap-anywhere font-semibold underline" href={`/app/ledger/accounts/${row.account.id}/register`}>{accountDisplayName(row.account)}</a>
+            <LedgerValue value={row.value} commodities={overview.data?.commodities ?? []} />
+          </li>
+        {/each}
+      </ul>
+    </Panel>
   {/if}
 </div>

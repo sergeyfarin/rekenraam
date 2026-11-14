@@ -4,6 +4,184 @@
  */
 
 export interface paths {
+    "/api/v1/ledger/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ledger overview
+         * @description One composed ledger read, with institution metadata, exact balances and brokerage positions. Holding accounts are hidden from the index but valued with their nearest non-holding parent. Values use Net worth's live_raw_v1 policy, default currency and seven-day rate window, including unsettled investment cash. Unpriced or unclassified negative positions leave value null, never zero. No provider requests or writes. Session-only.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Owner-local today by default. */
+                    as_of?: string;
+                    /** @description Opaque continuation returned by next_cursor. Keep as_of when continuing. */
+                    cursor?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Ledger accounts and institutions; at most 100 account rows per page. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LedgerOverviewResponse"];
+                    };
+                };
+                /** @description Invalid query */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Account not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Ledger overflow */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Read failed */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/accounts/{account_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Account and brokerage summary
+         * @description One composed ledger read, with institution metadata, exact balances and brokerage positions. Holding accounts are hidden from the index but valued with their nearest non-holding parent. Values use Net worth's live_raw_v1 policy, default currency and seven-day rate window, including unsettled investment cash. Unpriced or unclassified negative positions leave value null, never zero. No provider requests or writes. Session-only.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Owner-local today by default. */
+                    as_of?: string;
+                };
+                header?: never;
+                path: {
+                    account_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Ledger accounts and institutions; at most 100 account rows per page. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LedgerOverviewResponse"];
+                    };
+                };
+                /** @description Invalid query */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Account not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Ledger overflow */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Read failed */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/tokens": {
         parameters: {
             query?: never;
@@ -28309,6 +28487,45 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        LedgerImportSource: {
+            /** @enum {string} */
+            kind: "file" | "profile" | "online";
+            name: string;
+        };
+        LedgerPosition: {
+            /** Format: int64 */
+            holding_account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            quantity: components["schemas"]["BalanceQuantity"];
+            value: components["schemas"]["BalanceQuantity"] | null;
+        };
+        LedgerAccount: {
+            account: components["schemas"]["AccountResponse"];
+            balances: components["schemas"]["BalanceQuantity"][];
+            /** @description Currency held by a brokerage or cash-kind row itself and by its cash-kind children. Empty for other rows; holdings and other accounts are never cash. */
+            cash: components["schemas"]["BalanceQuantity"][];
+            unsettled: components["schemas"]["BalanceQuantity"][];
+            positions: components["schemas"]["LedgerPosition"][];
+            value: components["schemas"]["BalanceQuantity"] | null;
+            valuation: components["schemas"]["Valuation"] | null;
+            unclassified_short: boolean;
+            sources: components["schemas"]["LedgerImportSource"][];
+            /** @description Cash-kind child registers (cash, checking, savings, brokerage cash) whose currency balances make up `cash`. */
+            cash_accounts: components["schemas"]["AccountResponse"][];
+            /** @description Other ordinary child accounts counted in this row's value but not presented as cash. */
+            other_accounts: components["schemas"]["AccountResponse"][];
+            /** @description Hidden holding accounts in this row's scope, whatever their status. They are never index rows; clients use them for holding register links and archive/delete dependency checks. */
+            holding_accounts: components["schemas"]["AccountResponse"][];
+        };
+        LedgerOverviewResponse: {
+            /** Format: date */
+            as_of: string;
+            accounts: components["schemas"]["LedgerAccount"][];
+            institutions: components["schemas"]["InstitutionResponse"][];
+            commodities: components["schemas"]["HomeReportingCurrency"][];
+            next_cursor: string | null;
+        };
         CreatePersonalAccessTokenResponse: {
             /** @description Returned only by successful creation. Never persisted by the browser or returned by listing. */
             token: string;
@@ -29376,6 +29593,8 @@ export interface components {
             count: number | null;
             /** @description A durable operation failed and requires attention; cannot be muted. */
             failed: boolean;
+            /** @description Import source only. Global Dividends view row count from its canonical queue membership. Those batches count once in imports, including historical repairs; never sum this row count into total_known. */
+            dividend_review_count?: number | null;
             /** @enum {string} */
             error_code?: "INTERNAL_ERROR";
         };

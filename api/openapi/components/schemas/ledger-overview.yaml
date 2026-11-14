@@ -1,0 +1,126 @@
+LedgerImportSource:
+  type: object
+  required:
+  - kind
+  - name
+  properties:
+    kind:
+      type: string
+      enum:
+      - file
+      - profile
+      - online
+    name:
+      type: string
+LedgerPosition:
+  type: object
+  required:
+  - holding_account_id
+  - commodity_id
+  - quantity
+  - value
+  properties:
+    holding_account_id:
+      type: integer
+      format: int64
+    commodity_id:
+      type: integer
+      format: int64
+    quantity:
+      $ref: ../../openapi.yaml#/components/schemas/BalanceQuantity
+    value:
+      oneOf:
+      - $ref: ../../openapi.yaml#/components/schemas/BalanceQuantity
+      - type: 'null'
+LedgerAccount:
+  type: object
+  required:
+  - account
+  - balances
+  - cash
+  - unsettled
+  - positions
+  - value
+  - valuation
+  - unclassified_short
+  - sources
+  - cash_accounts
+  - other_accounts
+  - holding_accounts
+  properties:
+    account:
+      $ref: ../../openapi.yaml#/components/schemas/AccountResponse
+    balances:
+      type: array
+      items:
+        $ref: ../../openapi.yaml#/components/schemas/BalanceQuantity
+    cash:
+      description: Currency held by a brokerage or cash-kind row itself and by its cash-kind children. Empty for other rows; holdings and other accounts are never cash.
+      type: array
+      items:
+        $ref: ../../openapi.yaml#/components/schemas/BalanceQuantity
+    unsettled:
+      type: array
+      items:
+        $ref: ../../openapi.yaml#/components/schemas/BalanceQuantity
+    positions:
+      type: array
+      items:
+        $ref: ../../openapi.yaml#/components/schemas/LedgerPosition
+    value:
+      oneOf:
+      - $ref: ../../openapi.yaml#/components/schemas/BalanceQuantity
+      - type: 'null'
+    valuation:
+      oneOf:
+      - $ref: ../../openapi.yaml#/components/schemas/Valuation
+      - type: 'null'
+    unclassified_short:
+      type: boolean
+    sources:
+      type: array
+      items:
+        $ref: ../../openapi.yaml#/components/schemas/LedgerImportSource
+    cash_accounts:
+      description: Cash-kind child registers (cash, checking, savings, brokerage cash) whose currency balances make up `cash`.
+      type: array
+      items:
+        $ref: ../../openapi.yaml#/components/schemas/AccountResponse
+    other_accounts:
+      description: Other ordinary child accounts counted in this row's value but not presented as cash.
+      type: array
+      items:
+        $ref: ../../openapi.yaml#/components/schemas/AccountResponse
+    holding_accounts:
+      description: Hidden holding accounts in this row's scope, whatever their status. They are never index rows; clients use them for holding register links and archive/delete dependency checks.
+      type: array
+      items:
+        $ref: ../../openapi.yaml#/components/schemas/AccountResponse
+LedgerOverviewResponse:
+  type: object
+  required:
+  - as_of
+  - accounts
+  - institutions
+  - commodities
+  - next_cursor
+  properties:
+    as_of:
+      type: string
+      format: date
+    accounts:
+      type: array
+      items:
+        $ref: ../../openapi.yaml#/components/schemas/LedgerAccount
+    institutions:
+      type: array
+      items:
+        $ref: ../../openapi.yaml#/components/schemas/InstitutionResponse
+    commodities:
+      type: array
+      items:
+        $ref: ../../openapi.yaml#/components/schemas/HomeReportingCurrency
+    next_cursor:
+      type:
+      - string
+      - 'null'

@@ -1765,5 +1765,6 @@
   "investments_activity_position_unavailable_option": "Eerdere keuze, niet beschikbaar op deze datum",
   "investments_activity_position_unavailable": "De eerder gekozen positie is op deze datum niet beschikbaar. Kies een andere of wijzig de datum.",
   "investments_activity_lots_unavailable": "Eerder ingevoerde aantallen bevatten lots die deze positie op deze datum niet heeft. Ze worden niet gebruikt: verwijder ze of zet de datum terug.",
-  "investments_activity_lots_unavailable_remove": "Die aantallen verwijderen"
+  "investments_activity_lots_unavailable_remove": "Die aantallen verwijderen",
+  "accounts_filter_status_archived": "Gearchiveerd"
 }

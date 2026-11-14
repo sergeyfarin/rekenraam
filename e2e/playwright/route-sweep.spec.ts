@@ -47,15 +47,13 @@ type Route = {
 const routes: Route[] = [
   { name: 'review', route: '/app/review', path: () => '/app/review', data: true },
   { name: 'home', route: '/app', path: () => '/app', data: false },
-  { name: 'ledger overview', route: '/app/ledger', path: () => '/app/ledger', data: false },
-  { name: 'accounts', route: '/app/ledger/accounts', path: () => '/app/ledger/accounts', data: true },
+  { name: 'ledger overview', route: '/app/ledger', path: () => '/app/ledger', data: true },
   { name: 'account register', route: '/app/ledger/accounts/[id]/register', path: (ids) => `/app/ledger/accounts/${ids.get('checking')}/register`, data: true },
   { name: 'categories', route: '/app/ledger/categories', path: () => '/app/ledger/categories', data: true },
   { name: 'category detail', route: '/app/ledger/categories/[id]', path: (ids) => `/app/ledger/categories/${ids.get('groceries')}`, data: true },
   { name: 'transactions', route: '/app/ledger/transactions', path: () => '/app/ledger/transactions', data: true },
   { name: 'reconcile', route: '/app/ledger/reconcile', path: () => '/app/ledger/reconcile', data: true },
   { name: 'import', route: '/app/ledger/import', path: () => '/app/ledger/import', data: true },
-  { name: 'dividend repair', route: '/app/ledger/import/dividends', path: () => '/app/ledger/import/dividends', data: true },
   { name: 'investments', route: '/app/investments', path: () => '/app/investments', data: true },
   { name: 'instruments', route: '/app/investments/instruments', path: () => '/app/investments/instruments', data: true },
   { name: 'instrument', route: '/app/investments/instruments/[id]', path: (ids) => `/app/investments/instruments/${ids.get('REF')}`, data: true },
@@ -83,9 +81,9 @@ const routes: Route[] = [
 // Old paths only redirect (#436/#460); shell-navigation tests the browser
 // transition and routes.test.ts checks every parameter and fragment.
 const legacyRoutes = new Set([
-  '/app/pricing', '/app/accounts', '/app/accounts/[id]/register',
+  '/app/pricing', '/app/accounts', '/app/ledger/accounts', '/app/accounts/[id]/register',
   '/app/transactions', '/app/categories', '/app/categories/[id]',
-  '/app/import', '/app/import/dividends', '/app/reconcile',
+  '/app/import', '/app/import/dividends', '/app/ledger/import/dividends', '/app/reconcile',
   '/app/budgets', '/app/recurring', '/app/forecast',
   '/app/settings/appearance', '/app/settings/language', '/app/settings/trash'
 ]);

@@ -3,7 +3,12 @@
   import { createQuery } from '@tanstack/svelte-query';
   import { m } from '#lib/paraglide/messages.js';
   import { breadcrumbs, routeFor } from '#lib/navigation/routes.ts';
-  import { accountQueryOptions } from '#lib/api/accounts.ts';
+  import { accountQueryOptions, accountsQueryKey, getAccount } from '#lib/api/accounts.ts';
+  import { ledgerAccountQueryOptions } from '#lib/api/ledger.ts';
+  import { findBrokerageAncestor, isHoldingAccount } from '#lib/accounts/brokerage.ts';
+  import { isCategoryAccount } from '#lib/accounts/account-labels.ts';
+  import BrokerageSummary from '#lib/accounts/brokerage-summary.svelte';
+  import AccountLifecycleActions from '#lib/accounts/account-lifecycle-actions.svelte';
   import AccountRegister from '#lib/transactions/account-register.svelte';
   import TransactionWorkspace, { type TransactionWorkspaceCreate } from '#lib/transactions/transaction-workspace.svelte';
   import { accountEntryKind } from '#lib/transactions/entry-account.ts';
@@ -14,8 +19,43 @@
 
   // The register's own account, read by id: an archived account or one far
   // down a large catalog still names the page and seeds New transaction (#518).
+  // Every register, including income, equity and system accounts, needs only
+  // this one-account read.
   const accountQuery = createQuery(() => ({ ...accountQueryOptions(accountID), enabled: Number.isInteger(accountID) && accountID > 0 }));
   const account = $derived(accountQuery.data);
+  const loadError = $derived(accountQuery.isError);
+  const holding = $derived(isHoldingAccount(account));
+  // The composed Ledger read (cash, positions, values) is a book-wide
+  // valuation, so only a brokerage register, whose summary needs it, asks
+  // for it; an ordinary register never pays for it or refetches it on writes.
+  const summaryQuery = createQuery(() => ({ ...ledgerAccountQueryOptions(accountID), enabled: account?.account_kind === 'brokerage' }));
+  const summary = $derived(summaryQuery.data?.accounts[0]);
+  // A register of an account inside a brokerage (a holding, a cash or other
+  // child) leads back to that brokerage: the nearest brokerage ancestor, as
+  // Ledger Overview owns it. Usually one read, the direct parent.
+  const brokerageQuery = createQuery(() => ({
+    queryKey: [...accountsQueryKey, 'brokerage-of', accountID] as const,
+    queryFn: () => findBrokerageAncestor(account!, getAccount),
+    enabled: !!account?.parent_account_id && account.account_kind !== 'brokerage',
+    staleTime: 10_000
+  }));
+  // Every account the Ledger index manages has its lifecycle actions here:
+  // folded and unparented accounts have no tree row, and a closed or archived
+  // account is reopened or restored here (#567 review). Categories and equity
+  // keep their own management.
+  const managed = $derived(!!account && !account.is_system && !isCategoryAccount(account) && account.account_class !== 'equity');
+  // After a delete, the page goes to the brokerage the account was folded
+  // into, else to its parent, else to the Ledger index.
+  const afterDelete = $derived(
+    brokerageQuery.data ? `/app/ledger/accounts/${brokerageQuery.data.id}/register`
+      : account?.parent_account_id ? `/app/ledger/accounts/${account.parent_account_id}/register`
+      : '/app/ledger'
+  );
+  const pageBreadcrumbs = $derived.by(() => {
+    const base = breadcrumbs(routeFor(page.url.pathname));
+    const brokerage = brokerageQuery.data;
+    return brokerage ? [...base, { label: brokerage.name || brokerage.code || String(brokerage.id), href: `/app/ledger/accounts/${brokerage.id}/register` }] : base;
+  });
   // The h1 names the account once it has loaded; until then, the page.
   const accountName = $derived(account?.name || account?.code || m.accounts_title());
   const instrumentsQuery = createQuery(() => ({
@@ -43,8 +83,26 @@
   });
 </script>
 
-<TransactionWorkspace title={accountName} breadcrumbs={breadcrumbs(routeFor(page.url.pathname))} {create}>
+<TransactionWorkspace title={accountName} breadcrumbs={pageBreadcrumbs} {create}>
   {#snippet list(actions, csrfToken)}
+    {#if loadError}<p role="alert" class="mb-4 text-sm text-warning">{m.accounts_error_copy()}</p>{/if}
+    {#if summary && summaryQuery.data}
+      <div class="mb-4"><BrokerageSummary {summary} commodities={summaryQuery.data.commodities} asOf={summaryQuery.data.as_of} /></div>
+    {:else if summaryQuery.isError}
+      <p role="alert" class="mb-4 text-sm text-warning">{m.accounts_error_copy()}</p>
+    {/if}
+    {#if holding && account}
+      <div class="mb-4 flex flex-wrap gap-x-4">
+        {#if account.default_commodity_id}<a class="inline-flex min-h-11 items-center text-sm font-semibold underline" href={`/app/investments/instruments/${account.default_commodity_id}`}>{m.ledger_holding_instrument()}</a>{/if}
+        <!-- Reconcile starts only for active accounts. -->
+        {#if account.status === 'active'}<a class="inline-flex min-h-11 items-center text-sm font-semibold underline" href={`/app/ledger/reconcile?account=${account.id}`}>{m.ledger_holding_reconcile()}</a>{/if}
+      </div>
+    {/if}
+    {#if managed && account}
+      <div class="mb-4">
+        <AccountLifecycleActions {account} {csrfToken} {afterDelete} />
+      </div>
+    {/if}
     <AccountRegister {accountID} {csrfToken} {actions} onRowClick={(entry) => actions.showTransaction(entry.transaction_id)} />
   {/snippet}
 </TransactionWorkspace>

@@ -162,7 +162,7 @@ Deliver incrementally, tracked in #441, in this order:
    report-specific conversion coverage remains the
    consumer's responsibility.
    Section-owned Ledger and Planning paths #460 are delivered with legacy
-   redirects; #448 still replaces the temporary Accounts list with Ledger
+   redirects; #448 has replaced the temporary Accounts list with Ledger
    Overview. Page actions, widths and `?` help #459 are delivered and closed;
    the shared Home → register → reconciliation journey is #442's acceptance.
    The last acceptance item, menus and search passing axe in every locale,
@@ -206,10 +206,9 @@ Deliver incrementally, tracked in #441, in this order:
    paths.
 4. **Pages in their new places**, in any order after #436: settings in five
    pages with Trash moved to Transactions › Deleted and export to Reports
-   (#446) delivered 2026-10-31; Import views (#447); Ledger overview with
-   accounts by institution, an Institutions view and brokerages as one account
-   (#448); Planning and Reports overviews (#450); Payees page (#443); Tags view
-   (#444).
+   (#446) delivered 2026-10-31; Import views (#447) and Ledger overview,
+   Institutions and brokerages (#448) delivered 2026-11-13. Remaining:
+   Planning and Reports overviews (#450); Payees page (#443); Tags view (#444).
 5. **Object navigation (#442):** the switcher as scoped search, pinned
    accounts and breadcrumbs, after #448 and the owner-run real-book count
    (#449).

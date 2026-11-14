@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { page } from '$app/state';
   import { createQuery } from '@tanstack/svelte-query';
   import ArrowLeft from '@lucide/svelte/icons/arrow-left';
   import { m } from '#lib/paraglide/messages.js';
@@ -16,6 +17,10 @@
 
   // ── Accounts (for resolving the active account's label) ───────────
   const accountsQuery = createQuery(() => accountsQueryOptions(false, false));
+
+  // `?account=` preselects an account, including a holding, which the
+  // default picker leaves out.
+  const requestedAccountID = $derived(Number(page.url.searchParams.get('account')) || undefined);
 
   // ── View state machine ────────────────────────────────────────────
   type View =
@@ -66,7 +71,7 @@
   <div class="lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-6 xl:grid-cols-[minmax(0,1fr)_26rem]">
     <div class="min-w-0">
       <Panel>
-        <ReconcileStartForm {csrfToken} onStarted={handleStarted} onAccountChange={handleAccountChange} />
+        <ReconcileStartForm {csrfToken} requestedAccountID={requestedAccountID} onStarted={handleStarted} onAccountChange={handleAccountChange} />
       </Panel>
     </div>
     {#if startSelection}

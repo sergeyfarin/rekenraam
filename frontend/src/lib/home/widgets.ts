@@ -226,7 +226,7 @@ export function budgetsWidget(home: Home, locale: string): WidgetView {
 
 export function accountsWidget(home: Home, locale: string): WidgetView {
   const title = m.home_accounts_title();
-  const open = { text: m.home_accounts_open(), href: '/app/ledger/accounts' };
+  const open = { text: m.home_accounts_open(), href: '/app/ledger' };
   if (home.empty_book) return noData('accounts', title, open);
   const widget = home.widgets.accounts;
   const summary = widget.summary;

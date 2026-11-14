@@ -202,8 +202,14 @@ test('[acceptance] a write-off of a holding sold since names the refused depende
 test('[acceptance] write-off reviews and explicitly invalidates a holding checkpoint at 390 px', async ({ page }) => {
   const s = await setup(page, 'worc');
   await s.trade('buy', 40, '3', '3000');
+  // Holdings are left out of the default reconcile picker; a holding's own
+  // register asks for its checkpoint explicitly.
   await page.goto('/app/ledger/reconcile');
-  await page.getByLabel('Account', { exact: true }).selectOption(String(s.holding.id));
+  await expect(page.getByLabel('Account', { exact: true }).locator(`option[value="${s.holding.id}"]`)).toHaveCount(0);
+  await page.goto(`/app/ledger/accounts/${s.holding.id}/register`);
+  await page.getByRole('link', { name: 'Reconcile this holding', exact: true }).click();
+  await expect(page).toHaveURL(`/app/ledger/reconcile?account=${s.holding.id}`);
+  await expect(page.getByLabel('Account', { exact: true }).locator('option:checked')).toHaveText(s.holding.name);
   await page.getByLabel('Statement closing date').fill(todayISO());
   await page.getByLabel('Statement ending balance').fill('3');
   await page.getByRole('button', { name: 'Start reconciling' }).click();

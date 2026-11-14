@@ -7,12 +7,14 @@
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
 
-  let { batchId, rowId, csrfToken, accounts, onLinked }: {
+  let { batchId, rowId, csrfToken, accounts, onLinked, disabled = false }: {
     batchId: number;
     rowId: number;
     csrfToken: string;
     accounts: AccountResponse[];
     onLinked: () => void | Promise<void>;
+    // The import screen holds writes while it re-reads the batch (#567).
+    disabled?: boolean;
   } = $props();
 
   const candidatesQuery = createQuery(() => ({
@@ -28,7 +30,7 @@
 
   async function link(event: SubmitEvent) {
     event.preventDefault();
-    if (!selected || pending || !csrfToken) return;
+    if (!selected || pending || disabled || !csrfToken) return;
     pending = true;
     linkError = undefined;
     try {
@@ -72,7 +74,7 @@
       {/each}
     </fieldset>
     <APIFormError error={linkError} id={`split-link-error-${rowId}`} />
-    <button type="submit" disabled={!selected || pending || !csrfToken}
+    <button type="submit" disabled={!selected || pending || disabled || !csrfToken}
       class="rounded-(--radius-control) bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60">
       {pending ? m.import_preview_split_link_pending() : m.import_preview_split_link_submit()}
     </button>
