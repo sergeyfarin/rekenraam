@@ -300,10 +300,10 @@ func TestCategoryBackdatedPatchKeepsAsOfStructureAndParentValidation(t *testing.
 	ctx := context.Background()
 	parent, err := f.categories.CreateCategory(ctx, CreateCategoryInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "category.create", Name: "Historical parent", CategoryType: "expense"})
 	require.NoError(t, err)
-	_, err = f.categories.UpdateCategory(ctx, UpdateCategoryInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "category.update", CategoryID: f.id, ParentCategoryID: &parent.ID, EffectiveFrom: "2026-01-01"})
+	_, err = f.categories.UpdateCategory(ctx, UpdateCategoryInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "category.update", CategoryID: f.id, ParentCategoryID: &parent.ID, Code: new("HIST-CODE"), Icon: new("basket"), EffectiveFrom: "2026-01-01"})
 	require.NoError(t, err)
 	noPostings := false
-	_, err = f.categories.UpdateCategory(ctx, UpdateCategoryInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "category.update", CategoryID: f.id, ClearParent: true, AllowsPostings: &noPostings, EffectiveFrom: "2026-06-01"})
+	_, err = f.categories.UpdateCategory(ctx, UpdateCategoryInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "category.update", CategoryID: f.id, ClearParent: true, AllowsPostings: &noPostings, Code: new("TODAY-CODE"), Icon: new("car"), EffectiveFrom: "2026-06-01"})
 	require.NoError(t, err)
 	_, err = f.categories.DisableCategory(ctx, CategoryLifecycleInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", CategoryID: parent.ID, EffectiveFrom: "2026-06-01"})
 	require.NoError(t, err)
@@ -313,10 +313,17 @@ func TestCategoryBackdatedPatchKeepsAsOfStructureAndParentValidation(t *testing.
 	require.NoError(t, err)
 	assert.Equal(t, sql.NullInt64{Int64: parent.ID, Valid: true}, v.ParentAccountID)
 	assert.True(t, v.AllowsPostings)
+	// Code and icon were part of the original silent rewrite: omitted, they
+	// keep the correction date's values, not today's.
+	assert.Equal(t, sql.NullString{String: "HIST-CODE", Valid: true}, v.Code)
+	assert.Equal(t, "basket", parseCategoryMetadata(v.MetadataJSON).Icon)
+	assert.Equal(t, sql.NullString{String: "Historical rename", Valid: true}, v.Name)
 	current, err := f.categories.Category(ctx, f.id)
 	require.NoError(t, err)
 	assert.Nil(t, current.ParentCategoryID)
 	assert.False(t, current.AllowsPostings)
+	assert.Equal(t, "TODAY-CODE", current.Code)
+	assert.Equal(t, "car", current.Icon)
 }
 
 func TestPayeeBackdatedPatchKeepsAsOfDefaultsAndMetadata(t *testing.T) {

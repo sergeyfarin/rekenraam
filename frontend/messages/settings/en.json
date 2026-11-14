@@ -227,6 +227,7 @@
   "categories_field_allows_postings": "Allow postings",
   "categories_field_code": "Code",
   "categories_field_effective_from": "Effective from",
+  "reference_edit_earlier_date_hint": "The form shows today's values. For an earlier date, only the fields you change are saved; the others keep the values in effect on that date.",
   "categories_field_icon": "Icon",
   "categories_field_name": "Name",
   "categories_field_name_override": "Name override",

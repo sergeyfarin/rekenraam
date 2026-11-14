@@ -333,7 +333,7 @@ func writeCategoryServiceError(w http.ResponseWriter, r *http.Request, logger *s
 	case errors.Is(err, app.ErrCategoryHasChildren):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "category has active child categories")
 	case errors.Is(err, app.ErrCategoryBuiltInProtected):
-		writeAPIError(w, http.StatusConflict, "CONFLICT", "built-in categories can only be disabled")
+		writeAPIError(w, http.StatusConflict, "CONFLICT", "built-in categories cannot be edited, disabled or deleted")
 	case errors.Is(err, app.ErrCategoryUsed):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "category is used by financial records")
 	case errors.Is(err, app.ErrSetupAlreadyComplete):

@@ -227,6 +227,7 @@
   "categories_field_allows_postings": "Autoriser les écritures",
   "categories_field_code": "Code",
   "categories_field_effective_from": "En vigueur à partir du",
+  "reference_edit_earlier_date_hint": "Le formulaire affiche les valeurs d'aujourd'hui. Pour une date antérieure, seuls les champs que vous modifiez sont enregistrés ; les autres conservent les valeurs en vigueur à cette date.",
   "categories_field_icon": "Icône",
   "categories_field_name": "Nom",
   "categories_field_name_override": "Nom personnalisé",

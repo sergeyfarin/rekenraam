@@ -88,6 +88,12 @@
         : m.categories_form_create()
   );
 
+  // An edit dated before the current version corrects an earlier window. The
+  // form still shows today's values, so say what an untouched field keeps.
+  const correctsEarlierVersion = $derived(
+    mode === 'edit' && effectiveFrom !== '' && !!category?.effective_from && effectiveFrom < category.effective_from
+  );
+
   // The form as loaded; an edit sends only fields that differ from it.
   let loaded: { name: string; code: string; parentCategoryID: string; allowsPostings: boolean; icon: CategoryIconName } | undefined;
 
@@ -304,8 +310,18 @@
       {#if mode === 'edit'}
         <label>
           <span class={labelClass}>{m.categories_field_effective_from()}</span>
-          <input bind:value={effectiveFrom} class={inputClass} type="date" />
+          <input
+            bind:value={effectiveFrom}
+            class={inputClass}
+            type="date"
+            aria-describedby={correctsEarlierVersion ? 'category-earlier-date-hint' : undefined}
+          />
         </label>
+        {#if correctsEarlierVersion}
+          <p id="category-earlier-date-hint" class="text-sm text-muted sm:col-span-2">
+            {m.reference_edit_earlier_date_hint()}
+          </p>
+        {/if}
       {/if}
 
       <label>

@@ -7903,7 +7903,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description REFERENCE_DATED_CONFLICT when a child category is active on a date the disable governs; REFERENCE_VERSION_BACKDATED when dated before the latest version. */
+                /** @description REFERENCE_DATED_CONFLICT when a child category is active on a date the disable governs; REFERENCE_VERSION_BACKDATED when dated before the latest version; CONFLICT for a built-in category, which cannot be disabled. */
                 409: components["responses"]["ReferenceVersionConflict"];
                 413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
@@ -29236,7 +29236,7 @@ export interface components {
             /** @description Omit to use the default reason for the operation. */
             change_reason?: string;
         };
-        /** @description Partial update. An omitted field keeps the value of the version in effect on effective_from, so an earlier-dated correction changes only the fields it sends. Send an empty string (or {} for address and metadata) to clear a field. */
+        /** @description Partial update. An omitted field keeps the value of the version in effect on effective_from, so an earlier-dated correction changes only the fields it sends. To clear an optional field, send an empty string for country_code, website or comment_markdown, or {} for address or metadata. name and kind cannot be cleared. */
         InstitutionUpdateRequest: {
             name?: string;
             kind?: components["schemas"]["InstitutionKind"];
@@ -29248,6 +29248,7 @@ export interface components {
             address?: {
                 [key: string]: unknown;
             };
+            /** @description Markdown text, or empty to clear. */
             comment_markdown?: string;
             /** @description Reserved structured metadata object; {} clears it. */
             metadata?: {

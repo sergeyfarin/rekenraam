@@ -433,7 +433,9 @@ Same-date changes remain allowed, ordered by `MAX(version_seq) + 1`.
   these hints change future entry defaults, never existing postings. Omitted
   PATCH fields keep their as-of values. Status is lifecycle state. Hints are
   validated on the requested date and, when no later version exists (so the
-  new version is today's payee), also today.
+  new version is today's payee), also today. Nothing reads the hints yet, and
+  archiving an account or category does not check payees that name it. So the
+  first feature that reads them must treat an archived default as absent.
 - Institutions: name, kind, country, website, address, comment and metadata are
   descriptive; none rewrites an account's institution link. PATCH is partial
   (`InstitutionUpdateRequest`): omitted fields keep their as-of values, and an
@@ -443,7 +445,11 @@ Same-date changes remain allowed, ordered by `MAX(version_seq) + 1`.
   corrections in an already archived historical window.
 
 **Rules that involve other entities hold on every date the new version
-governs.** A version governs from its `effective_from` until the entity's
+governs.** This applies to updates and lifecycle commands. Creates still check
+today only: a category starts at the book's genesis date, so a check over its
+window would forbid reusing a name another category held in the past. The
+decision for categories and payees created with a past date is #569.
+A version governs from its `effective_from` until the entity's
 next later version. With no later version, it governs through today, even
 when it is dated in the past. Checking only `effective_from` misses later
 days, and checking only today misses earlier ones. A rule that holds on
@@ -503,7 +509,12 @@ the whole form would copy today's values into an earlier window, and for
 categories would assert today's parent or posting eligibility as a backdated
 structural change, which is refused. The category editor keeps the current
 parent selectable even when it is archived, so opening the form never moves a
-category.
+category. The form still shows today's values, not the version being
+corrected. When the chosen date is earlier than the current version, a hint
+says that unchanged fields keep the values in effect on that date. Two cases
+remain out of reach: setting a field to the value it has today, and clearing
+a field that is empty today but set on that date. Both look unchanged, so they
+are not sent. #568 loads the as-of values into the form.
 
 **The response is today's state.** A successful update answers with the entity
 as it stands today, not the inserted version. An earlier correction governs
@@ -543,9 +554,13 @@ Named service regressions: `TestReferenceBackdatedDescriptionPreservesHistorical
 `TestUpdateInstitutionCanClearOptionalFields` cover partial institution
 updates. `form-errors.test.ts` exercises the forms' translated error boundary
 in each locale. In `reference-data-management.spec.ts`, two browser journeys
-make earlier-dated renames through the category and institution editors. They
-assert the request carries only the name, and that the earlier window keeps
-that date's parent or kind and the fields the form does not show.
+at 390 px make earlier-dated renames through the category and institution
+editors. Both assert the hint, that the request carries only the name, and
+that today's version is unchanged. The institution journey also triggers the
+before-first refusal in the form, then reads the earlier window back through
+`/versions`: it keeps that date's kind, address and metadata. Categories have
+no version read, so `TestCategoryBackdatedPatchKeepsAsOfStructureAndParentValidation`
+pins the earlier window's parent, posting eligibility, code and icon.
 
 Earlier-dated instrument versions (#549). Instrument creation always dates v1
 at the commodity genesis; `effective_from` is update-only and is ignored on

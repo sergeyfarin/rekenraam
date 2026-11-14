@@ -14,7 +14,7 @@ type ReferenceVersionBackdatedError struct {
 }
 
 func (e ReferenceVersionBackdatedError) Error() string {
-	return fmt.Sprintf("reference lifecycle or structural changes must take effect on or after %s", e.LatestEffectiveFrom)
+	return fmt.Sprintf("lifecycle or structural changes must take effect on or after %s", e.LatestEffectiveFrom)
 }
 
 // ReferenceVersionBeforeFirstError refuses a write dated before the entity's
@@ -26,7 +26,7 @@ type ReferenceVersionBeforeFirstError struct {
 }
 
 func (e ReferenceVersionBeforeFirstError) Error() string {
-	return fmt.Sprintf("reference record does not exist before %s", e.FirstEffectiveFrom)
+	return fmt.Sprintf("the record starts on %s", e.FirstEffectiveFrom)
 }
 
 // Reference rules a dated write can break on a day other than today. The

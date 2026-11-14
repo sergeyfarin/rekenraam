@@ -132,8 +132,9 @@ InstitutionUpdateRequest:
   description: >-
     Partial update. An omitted field keeps the value of the version in effect
     on effective_from, so an earlier-dated correction changes only the fields
-    it sends. Send an empty string (or {} for address and metadata) to clear a
-    field.
+    it sends. To clear an optional field, send an empty string for
+    country_code, website or comment_markdown, or {} for address or
+    metadata. name and kind cannot be cleared.
   properties:
     name:
       type: string
@@ -156,6 +157,7 @@ InstitutionUpdateRequest:
     comment_markdown:
       type: string
       maxLength: 5000
+      description: Markdown text, or empty to clear.
     metadata:
       type: object
       additionalProperties: true

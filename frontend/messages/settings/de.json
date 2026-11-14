@@ -227,6 +227,7 @@
   "categories_field_allows_postings": "Buchungen zulassen",
   "categories_field_code": "Code",
   "categories_field_effective_from": "Gültig ab",
+  "reference_edit_earlier_date_hint": "Das Formular zeigt die heutigen Werte. Für ein früheres Datum werden nur die Felder gespeichert, die Sie ändern; die übrigen behalten die an diesem Datum gültigen Werte.",
   "categories_field_icon": "Symbol",
   "categories_field_name": "Name",
   "categories_field_name_override": "Abweichender Name",

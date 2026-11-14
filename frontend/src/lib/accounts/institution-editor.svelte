@@ -58,6 +58,12 @@
         : m.institutions_form_create()
   );
 
+  // An edit dated before the current version corrects an earlier window. The
+  // form still shows today's values, so say what an untouched field keeps.
+  const correctsEarlierVersion = $derived(
+    mode === 'edit' && effectiveFrom !== '' && !!institution?.effective_from && effectiveFrom < institution.effective_from
+  );
+
   $effect(() => {
     institutionID = institution?.id;
     name = institution?.name ?? '';
@@ -209,13 +215,24 @@
 
     <label>
       <span class={labelClass}>{m.accounts_field_effective_from()}</span>
-      <input bind:value={effectiveFrom} class={inputClass} type="date" />
+      <input
+        bind:value={effectiveFrom}
+        class={inputClass}
+        type="date"
+        aria-describedby={correctsEarlierVersion ? 'institution-earlier-date-hint' : undefined}
+      />
     </label>
 
     <label>
       <span class={labelClass}>{m.accounts_field_reason()}</span>
       <input bind:value={changeReason} class={inputClass} maxlength="500" />
     </label>
+
+    {#if correctsEarlierVersion}
+      <p id="institution-earlier-date-hint" class="text-sm text-muted sm:col-span-2">
+        {m.reference_edit_earlier_date_hint()}
+      </p>
+    {/if}
   </div>
 
   <label>

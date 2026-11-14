@@ -69,7 +69,9 @@ a refusal returns `409 REFERENCE_DATED_CONFLICT` naming the rule, the first
 failing date and the other record as stored. The category list, category
 editor and institution editor explain each refusal in all six locales through
 the shared form error boundary. Both editors send only the fields the user
-changed, so an earlier-dated edit does not copy today's values into the past. A fill
+changed, so an earlier-dated edit does not copy today's values into the past;
+they still show today's values, with a hint, until #568 loads the as-of
+values. A fill
 from a version that changed before the write is refused with `409 CONFLICT`,
 and updates answer with today's state. The
 [per-kind contract and named regressions](design/accounts-system-design.md)

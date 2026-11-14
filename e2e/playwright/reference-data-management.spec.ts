@@ -105,8 +105,11 @@ test('[acceptance] categories can be created under a parent and archived at 390 
 // #552. An edit dated before the latest version governs only its past window.
 // The editors start from today's values, so they must send just the fields
 // the user changed: anything else would copy today's values into the past,
-// or assert today's parent as a backdated structural change (refused).
-test('[acceptance] an earlier-dated category rename sends only the name and keeps that date\'s parent', async ({ page }) => {
+// or assert today's parent as a backdated structural change (refused). There
+// is no category version read, so the earlier window's own values are pinned
+// by TestCategoryBackdatedPatchKeepsAsOfStructureAndParentValidation.
+test('[acceptance] an earlier-dated category rename sends only the name and leaves today\'s version alone at 390 px', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   const { csrfToken } = await readyForLedger(page);
   const suffix = Date.now();
   const create = (name: string, extra: Record<string, unknown> = {}) =>
@@ -125,6 +128,8 @@ test('[acceptance] an earlier-dated category rename sends only the name and keep
   await form.getByLabel('Name', { exact: true }).fill(`Spring name ${suffix}`);
   await form.getByText('Advanced').click();
   await form.getByLabel('Effective from').fill('2024-03-01');
+  await expect(form.getByLabel('Effective from')).toHaveAccessibleDescription(/only the fields you change are saved/);
+  await expectNoHorizontalScroll(page);
   const sent = page.waitForRequest(
     (request) => request.method() === 'PATCH' && request.url().endsWith(`/api/v1/categories/${child.id}`)
   );
@@ -142,7 +147,8 @@ test('[acceptance] an earlier-dated category rename sends only the name and keep
   expect(today.parent_category_id).toBe(newParent.id);
 });
 
-test('[acceptance] an earlier-dated institution rename keeps that date\'s kind and the unshown fields', async ({ page }) => {
+test('[acceptance] an earlier-dated institution rename keeps that date\'s kind and the unshown fields at 390 px', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   const { csrfToken, currencyID } = await readyForLedger(page);
   const suffix = Date.now();
   const name = `History bank ${suffix}`;
@@ -170,7 +176,14 @@ test('[acceptance] an earlier-dated institution rename keeps that date\'s kind a
   await page.getByRole('button', { name: `Edit ${name}` }).click();
   const form = page.locator('form').filter({ has: page.getByRole('button', { name: 'Save institution' }) });
   await form.getByLabel('Name', { exact: true }).fill(`Spring bank ${suffix}`);
+  // Before the first version there is nothing to correct: the refusal says
+  // where the record starts, and nothing is written.
+  await form.getByLabel('Effective from').fill('2023-12-01');
+  await form.getByRole('button', { name: 'Save institution' }).click();
+  await expect(form.getByRole('alert')).toContainText('This record starts on');
+  await expectNoHorizontalScroll(page);
   await form.getByLabel('Effective from').fill('2024-03-01');
+  await expect(form.getByLabel('Effective from')).toHaveAccessibleDescription(/only the fields you change are saved/);
   const sent = page.waitForRequest(
     (request) => request.method() === 'PATCH' && request.url().endsWith(`/api/v1/institutions/${institution.id}`)
   );

@@ -227,6 +227,7 @@
   "categories_field_allows_postings": "Разрешить проводки",
   "categories_field_code": "Код",
   "categories_field_effective_from": "Действует с",
+  "reference_edit_earlier_date_hint": "Форма показывает текущие значения. Для более ранней даты сохраняются только изменённые поля; остальные сохраняют значения, действовавшие на эту дату.",
   "categories_field_icon": "Значок",
   "categories_field_name": "Название",
   "categories_field_name_override": "Своё название",
