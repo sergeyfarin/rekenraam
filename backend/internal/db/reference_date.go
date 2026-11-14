@@ -33,37 +33,62 @@ func WithReferenceDate(ctx context.Context, date string) context.Context {
 	return context.WithValue(ctx, referenceDateKey{}, value)
 }
 
-// ReferenceDate returns the pinned reference date, or "" when none is pinned.
+// invalidReferenceDate is what ReferenceDate reports for a malformed pin. It is
+// non-empty so callers such as app.referenceContext still see a pin and do not
+// silently re-pin to today, and it keeps the rejected text out of error
+// messages built from ReferenceDate.
+const invalidReferenceDate = "invalid-date"
+
+// ReferenceDate returns the pinned reference date, "" when none is pinned, or
+// invalidReferenceDate when the pinned value was not a YYYY-MM-DD date.
 func ReferenceDate(ctx context.Context) string {
 	value, ok := ctx.Value(referenceDateKey{}).(referenceDay)
-	if !ok {
+	switch {
+	case !ok || value.raw == "":
 		return ""
+	case !value.valid:
+		return invalidReferenceDate
+	default:
+		return value.literal()
 	}
-	if !value.valid {
-		return value.raw
-	}
-	return value.literal()
 }
 
 func (d referenceDay) literal() string {
 	return fmt.Sprintf("%04d-%02d-%02d", d.year, d.month, d.day)
 }
 
+// invalidReferenceDateSQL fails the statement at prepare time ("no such
+// column: candidate.invalid_reference_date"). It is qualified by the helper's
+// own candidate alias, so it resolves only against the version tables in
+// referenceVersionSources, never against a caller's tables;
+// TestCurrentReferenceVersionsFailsClosedOnInvalidDate proves none of them has
+// that column.
+const invalidReferenceDateSQL = "candidate.invalid_reference_date"
+
 // referenceDateSQL is the SQL expression for the reference date. Unpinned
 // repository callers (and an empty pinned date) retain UTC selection. An
-// invalid pinned date renders an unknown identifier so the statement fails to
-// prepare ("no such column: invalid_reference_date") rather than comparing
-// against a malformed value.
+// invalid pinned date fails the statement rather than comparing against a
+// malformed value or falling back to another day.
 func referenceDateSQL(ctx context.Context) string {
 	value, ok := ctx.Value(referenceDateKey{}).(referenceDay)
 	switch {
 	case !ok || value.raw == "":
 		return "date('now')"
 	case !value.valid:
-		return "invalid_reference_date"
+		return invalidReferenceDateSQL
 	default:
 		return "'" + value.literal() + "'"
 	}
+}
+
+// referenceVersionSources is the closed set of versioned reference kinds, so
+// CurrentReferenceVersions never builds a table or column name from its input.
+var referenceVersionSources = map[string]struct{ table, key string }{
+	"account":               {"account_versions", "account_id"},
+	"commodity":             {"commodity_versions", "commodity_id"},
+	"institution":           {"institution_versions", "institution_id"},
+	"investment_instrument": {"investment_instrument_versions", "instrument_id"},
+	"payee":                 {"payee_versions", "payee_id"},
 }
 
 // CurrentReferenceVersions supplies the same effective-date/version-sequence
@@ -71,11 +96,14 @@ func referenceDateSQL(ctx context.Context) string {
 // Unwired repository callers retain UTC selection; application operations
 // establish their reference date before opening a transaction or read snapshot.
 func CurrentReferenceVersions(ctx context.Context, kind string) string {
-	dateSQL := referenceDateSQL(ctx)
-	table, key := kind+"_versions", kind+"_id"
-	if kind == "investment_instrument" {
-		key = "instrument_id"
+	source, ok := referenceVersionSources[kind]
+	if !ok {
+		// Every caller passes a constant kind; an unknown one is a programming
+		// error that any test reaching the call site surfaces.
+		panic(fmt.Sprintf("db: unknown reference version kind %q", kind))
 	}
+	dateSQL := referenceDateSQL(ctx)
+	table, key := source.table, source.key
 	return `(SELECT reference_version.* FROM ` + table + ` reference_version
 		WHERE reference_version.id = (
 			SELECT candidate.id FROM ` + table + ` candidate
