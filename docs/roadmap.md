@@ -59,16 +59,21 @@ product initiative (owner decision 2026-10-29); its shell #436 closed on
 below continue alongside it and do not block it.
 
 1. **Resolve the remaining owner/release gates in parallel with maintenance.**
+   The open gate issues are collected in the
+   [`v0.1.0` milestone](https://github.com/sergeyfarin/rekenraam/milestone/1).
+   The milestone records which issues gate the release; this document keeps
+   their order.
    [#260](https://github.com/sergeyfarin/rekenraam/issues/260) remains open for
    actual owner deployment/household evidence
    [#336](https://github.com/sergeyfarin/rekenraam/issues/336) and owner
    image-advisory disposition
    [#337](https://github.com/sergeyfarin/rekenraam/issues/337). Signing
    [#333](https://github.com/sergeyfarin/rekenraam/issues/333) (signing decision
-   accepted; candidate validation remains) and the upstream
-   driver prerequisite
-   [#356](https://github.com/sergeyfarin/rekenraam/issues/356) retain separate
-   acceptance. #356's released candidate, go-sqlite3 v1.14.53 / SQLite 3.54.1,
+   accepted; candidate validation remains) retains separate acceptance. The
+   upstream driver prerequisite
+   [#356](https://github.com/sergeyfarin/rekenraam/issues/356) closed on
+   2026-11-11 with the owner's acceptance below and is no longer a release
+   gate. Its released candidate, go-sqlite3 v1.14.53 / SQLite 3.54.1,
    has an
    [admission review](reviews/sqlite-driver-admission-2026-11-10.md). The clean
    uncached race pair fires ADR 0016's 270 s act threshold (two candidate runs
@@ -84,6 +89,24 @@ below continue alongside it and do not block it.
    ([#560](https://github.com/sergeyfarin/rekenraam/issues/560)). Release remains on hold; these gates do not block accepted
    maintenance. Adoption assets #335 stay P3 for later release preparation.
    See [Public-release gates](#public-release-gates) for the remaining evidence.
+
+   **Release shape, proposed 2026-11-14
+   ([#572](https://github.com/sergeyfarin/rekenraam/issues/572)):** freeze the
+   schema baseline on a date ahead of the tag, so the household dry run (#336)
+   uses a database that later work must upgrade, and add a container image to
+   the release artifacts. Its four owner decisions are open; until they are
+   accepted the freeze-at-the-tag rule below stands. If accepted, the order
+   follows the dependencies: single-book triggers
+   [#573](https://github.com/sergeyfarin/rekenraam/issues/573) and the
+   enumeration-CHECK review
+   [#574](https://github.com/sergeyfarin/rekenraam/issues/574), then the final
+   baseline consolidation
+   [#576](https://github.com/sergeyfarin/rekenraam/issues/576) on the freeze
+   date. The candidate image
+   [#575](https://github.com/sergeyfarin/rekenraam/issues/575) is independent
+   and gives the dry run a container to use; publication to GHCR
+   [#577](https://github.com/sergeyfarin/rekenraam/issues/577) waits for the
+   release cut.
 2. **Track the remaining bounded maintenance follow-ups.**
 
    - [#414](https://github.com/sergeyfarin/rekenraam/issues/414), P3:
@@ -324,19 +347,28 @@ candidate needs fresh evidence for its actual baseline.
 
 ### Before the v0.1.0 tag
 
+Open gate issues carry the
+[`v0.1.0` milestone](https://github.com/sergeyfarin/rekenraam/milestone/1).
+
 - Run the documented release preflight and record candidate/deployment identity.
 - Complete the actual owner household dry run, including import, entry,
   reconciliation, reports, export, backup and tested restore (#336).
   Synthetic automated acceptance does not substitute for that dry run.
 - Record an explicit list of investment limits and resolve the retained
-  image-advisory disposition (#337); track the driver prerequisite (#356)
-  separately with its admission evidence.
+  image-advisory disposition (#337). The driver prerequisite (#356) closed on
+  2026-11-11.
 - Complete or hide the partial locales (`es`, `fr`, `de`): no message may
-  fall back to English in a shipped locale (#493), and native review (#102)
-  covers the batch.
+  fall back to English in a shipped locale, and native review (#102) covers
+  the batch. #493 delivered the maintained/partial split and closed on
+  2026-11-01; the catch-up itself has no issue yet, and
+  `frontend/src/lib/i18n/missing.json` lists what is missing.
 - Freeze installed-release migrations as append-only at the tag. The
   [baseline and reset contract](implemented.md) records the schema consolidation;
   later schema changes follow the release lifecycle in `docs/conventions.md`.
+  #572 proposes freezing on a date ahead of the tag (#573, #574, #576); this
+  rule stands until that decision is accepted.
+- If #572's image decision is accepted, build the container image from the
+  candidate binary (#575).
 
 ### Public repository hygiene
 
@@ -363,6 +395,9 @@ runtime-image disposition remains #337.
    all migration checksums frozen and installed-release policies activated.
    Future Wails/Windows packaging can add Authenticode before final checksums;
    no desktop implementation or Windows signing-provider choice is implied.
+   #572 proposes a published multi-architecture image
+   ([#577](https://github.com/sergeyfarin/rekenraam/issues/577)) as the
+   artifact marketplace listings consume; it is not accepted yet.
 3. Prepare adoption assets [#335](https://github.com/sergeyfarin/rekenraam/issues/335):
    seeded demo, README screenshots and a short migration walkthrough, leading
    with exact decimals, append-only versions and trial balance for the
