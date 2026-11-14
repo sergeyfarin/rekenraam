@@ -5,6 +5,22 @@ import { apiJSON } from './support/api';
 import { seedBulkAccounts } from './support/bulk-accounts';
 import { expectNoAccessibilityViolations } from './support/a11y';
 import { requireTrading212Stub, setTrading212Fills } from './support/trading212';
+import type { Page } from '@playwright/test';
+
+// readyForLedger's system-account setup also creates an ordinary starter cash
+// account per currency, so a book with "no user accounts" must archive it.
+async function archiveEveryUserAccount(page: Page, csrfToken: string) {
+  const { accounts } = await apiJSON<{ accounts: Array<{ id: number; status: string; account_class: string }> }>(page, 'GET', '/api/v1/accounts?limit=500');
+  const ordinary = accounts.filter(item => item.account_class === 'asset' || item.account_class === 'liability');
+  for (const account of ordinary) {
+    if (account.status === 'active') await apiJSON(page, 'POST', `/api/v1/accounts/${account.id}/close`, csrfToken);
+    if (account.status !== 'archived') await apiJSON(page, 'POST', `/api/v1/accounts/${account.id}/archive`, csrfToken);
+  }
+  return ordinary.length;
+}
+
+const summaryCount = (page: Page, label: 'Active' | 'Closed' | 'Visible') =>
+  page.locator('p', { hasText: new RegExp(`^${label}$`) }).locator('xpath=following-sibling::p');
 
 for (const width of [320, 1280]) {
   test(`Import views keep a staged batch through navigation, reload and old dividend links at ${width}px (#447)`, async ({ page }) => {
@@ -350,17 +366,28 @@ test('an archived holding under an ordinary account stays reachable until it is 
 
 test('a book whose accounts are all archived still offers the Archived filter (#567 review)', async ({ page }) => {
   const { csrfToken, currencyID } = await readyForLedger(page);
-  const account = await createCashAccount(page, csrfToken, 'Only archived', currencyID);
-  await apiJSON(page, 'POST', `/api/v1/accounts/${account.id}/close`, csrfToken);
-  await apiJSON(page, 'POST', `/api/v1/accounts/${account.id}/archive`, csrfToken);
+  await createCashAccount(page, csrfToken, 'Only archived', currencyID);
+  // Every ordinary account, the starter cash included, ends up archived.
+  const archivedCount = await archiveEveryUserAccount(page, csrfToken);
+  expect(archivedCount).toBeGreaterThan(1);
   await page.goto('/app/ledger');
   await expect(page.getByText('No user accounts yet', { exact: true })).toHaveCount(0);
+  await expect(summaryCount(page, 'Active')).toHaveText('0');
+  await expect(summaryCount(page, 'Closed')).toHaveText('0');
+  await expect(page.getByText('No matching accounts', { exact: true })).toBeVisible();
+  await page.getByRole('combobox', { name: /^Status/ }).selectOption('closed');
+  await expect(page.getByText('No matching accounts', { exact: true })).toBeVisible();
   await page.getByRole('combobox', { name: /^Status/ }).selectOption('archived');
-  await expect(page.getByRole('link', { name: /Only archived/ })).toHaveAttribute('href', `/app/ledger/accounts/${account.id}/register`);
+  const list = page.getByRole('heading', { name: 'Archived accounts', exact: true }).locator('xpath=..').getByRole('listitem');
+  await expect(list).toHaveCount(archivedCount);
+  await expect(page.getByRole('link', { name: /Only archived/ })).toBeVisible();
+  await expect(summaryCount(page, 'Visible')).toHaveText(String(archivedCount));
 });
 
 test('a book whose only account is an unparented holding still lists it, under the filters (#567 review)', async ({ page }) => {
   const { csrfToken, currencyID } = await readyForLedger(page);
+  // No other ordinary account may stay active, the starter cash included.
+  await archiveEveryUserAccount(page, csrfToken);
   const instrument = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/instruments', csrfToken, {
     commodity_code: 'ALONE', display_name: 'Alone stock', instrument_type: 'stock', quantity_scale: 0, price_scale: 2, quote_commodity_id: currencyID, identifiers: {}, metadata: {}
   });

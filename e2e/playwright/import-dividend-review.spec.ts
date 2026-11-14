@@ -10,7 +10,7 @@ import { linkLegacyCashDividend } from './support/legacy-dividend';
 requireTrading212Stub();
 test.use({ viewport: { width: 390, height: 844 } });
 
-async function dividendSource(page: Page) {
+async function dividendSource(page: Page, payments = 1) {
   const { csrfToken, currencyID } = await readyForLedger(page);
   const suffix = Date.now();
   const ticker = `DIV${suffix}`;
@@ -26,7 +26,8 @@ async function dividendSource(page: Page) {
     quote_commodity_id: currencyID, trading_commodity_id: currencyID, quantity_scale: 0, price_scale: 2, effective_from: todayISO()
   });
   const apiKey = `dividend-${suffix}`;
-  await setTrading212Dividends(apiKey, { ticker, isin: '', currency: 'USD' }, [{ reference: `dividend-${suffix}`, amount: 85, date: todayISO() }]);
+  await setTrading212Dividends(apiKey, { ticker, isin: '', currency: 'USD' },
+    Array.from({ length: payments }, (_, i) => ({ reference: `dividend-${suffix}-${i}`, amount: 85 + i, date: todayISO() })));
   const connectionName = `Dividend broker ${suffix}`;
   await apiJSON(page, 'POST', '/api/v1/import-connections', csrfToken, {
     source: 'trading212', display_name: connectionName, api_key: apiKey, cash_account_id: cash.id
@@ -105,6 +106,49 @@ test('a dividend recorded in the Dividends view refreshes the Files batch and th
   expect(new URL(page.url()).searchParams.get('batch_id')).toBe(batch);
   await expect(page.getByRole('button', { name: 'Commit to ledger' })).toHaveCount(0);
   expect((await f.activity()).transactions).toHaveLength(1);
+});
+
+test('a failed Files re-read keeps the working copy, holds writes and retries the re-read (#567 review)', async ({ page }) => {
+  const f = await dividendSource(page, 2);
+  const batch = new URL(page.url()).searchParams.get('batch_id')!;
+  const commit = page.getByRole('button', { name: 'Commit to ledger' });
+  const override = page.getByRole('checkbox', { name: 'Override reconciliation guards', exact: true });
+  await expect(commit).toBeEnabled();
+  await page.getByRole('button', { name: /^Dividends/ }).click();
+  const first = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Pending dividend', exact: true }) }).first();
+  await first.getByRole('combobox', { name: 'Income account', exact: true }).selectOption(String(f.income.id));
+  await first.getByRole('combobox', { name: 'Withholding account', exact: true }).selectOption(String(f.tax.id));
+  await first.getByLabel('Dividend amount', { exact: true }).fill('100.00');
+  await first.getByLabel('Withholding amount', { exact: true }).fill('15.00');
+  await first.getByRole('button', { name: 'Record reviewed dividend', exact: true }).click();
+  await expect(page.getByText('Dividend recorded.', { exact: true })).toBeVisible();
+
+  // The re-read fails: the working copy stays, with no restore from scratch,
+  // and every batch write waits for a re-read that lands.
+  let failures = 0;
+  const reads: string[] = [];
+  await page.route(`**/api/v1/imports/${batch}?*`, async route => {
+    reads.push(route.request().url());
+    if (failures++ === 0) await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'SERVICE_UNAVAILABLE', message: 'Try again' } }) });
+    else await route.continue();
+  });
+  await page.getByRole('button', { name: 'Files', exact: true }).click();
+  const retry = page.getByRole('button', { name: 'Retry', exact: true });
+  await expect(retry).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Import another file', exact: true })).toBeEnabled();
+  await expect(commit).toBeVisible();
+  await expect(commit).toBeDisabled();
+  await expect(override).toBeDisabled();
+  expect(reads).toHaveLength(1);
+
+  // Retry re-reads the batch; one payment is still pending, so commit returns.
+  await retry.click();
+  await expect(retry).toHaveCount(0);
+  await expect(commit).toBeEnabled();
+  await expect(override).toBeEnabled();
+  expect(reads).toHaveLength(2);
+  expect(new URL(page.url()).searchParams.get('batch_id')).toBe(batch);
+  await expectNoAccessibilityViolations(page, 'Files after a retried re-read');
 });
 
 test('[acceptance] historical cash dividend repair keeps the original payment and owner note on a phone', async ({ page }) => {

@@ -15,7 +15,9 @@
   import { m } from '#lib/paraglide/messages.js';
   // onSaved tells an embedding Import screen that a batch row changed under
   // its Files working copy.
-  let { batchID, embedded = false, onSaved: onRowSaved }: { batchID?: number; embedded?: boolean; onSaved?: () => void } = $props();
+  // held and onPending serialize its saves with the embedding screen's other
+  // batch writes (#567 review).
+  let { batchID, embedded = false, onSaved: onRowSaved, held = false, onPending }: { batchID?: number; embedded?: boolean; onSaved?: () => void; held?: boolean; onPending?: (pending: boolean) => void } = $props();
   const client = useQueryClient();
   const session = createQuery(() => authSessionQueryOptions());
   const accounts = createQuery(() => accountsQueryOptions());
@@ -30,6 +32,9 @@
   const loadError = $derived(reviews.error ?? accounts.error ?? currencies.error ?? instruments.error);
   let saved = $state<{ id: number; repaired: boolean } | null>(null);
   const finished = new SvelteSet<number>();
+  // Rows with a save in flight: one row's save holds the others.
+  const saving = new SvelteSet<number>();
+  $effect(() => onPending?.(saving.size > 0));
   async function onSaved(rowID: number, id: number, repaired: boolean) {
     saved = { id, repaired }; finished.add(rowID);
     onRowSaved?.();
@@ -57,7 +62,7 @@
     <Panel><p role="status" class="text-sm text-muted">{m.import_dividend_empty()}</p></Panel>
   {:else}
     {#each rows.filter(row => !finished.has(row.row_id)) as review (review.row_id)}
-      <DividendReviewRow {review} accounts={accounts.data?.accounts ?? []} currencies={currencies.data?.currencies ?? []} instruments={instruments.data?.instruments ?? []} csrfToken={session.data?.csrf_token ?? ''} onSaved={(id, repaired) => onSaved(review.row_id, id, repaired)} />
+      <DividendReviewRow {review} accounts={accounts.data?.accounts ?? []} currencies={currencies.data?.currencies ?? []} instruments={instruments.data?.instruments ?? []} csrfToken={session.data?.csrf_token ?? ''} held={held || (saving.size > 0 && !saving.has(review.row_id))} onPending={(value) => { if (value) saving.add(review.row_id); else saving.delete(review.row_id); }} onSaved={(id, repaired) => onSaved(review.row_id, id, repaired)} />
     {/each}
   {/if}
   {#if reviews.hasNextPage}

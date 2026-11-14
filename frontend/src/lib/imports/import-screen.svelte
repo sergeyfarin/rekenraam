@@ -186,8 +186,10 @@
   let resyncing = $state(false);
   let resyncError = $state<unknown>(undefined);
   let resyncRequest = 0;
-  // A split or short link in flight is a batch write the panels own.
+  // A split or short link in flight is a batch write the panels own; a
+  // Dividends save is one the Dividends view owns.
   let linkPending = $state(false);
+  let dividendPending = $state(false);
   $effect(() => {
     if (view !== 'files' || !filesStale || batchBusy) return;
     untrack(() => {
@@ -331,7 +333,10 @@
 
   // Every batch write, including the override review (it saves resolutions)
   // and a split/short link: each holds navigation and every other write.
-  const batchWriting = $derived(uploading || startingOnlineConnectionId !== null || committing || discarding || sourceCorrectionPending || matchCheckPending || reviewedCheckpointsPending || linkPending);
+  // Files writes hold a Dividends save, and a Dividends save holds them, so
+  // the two views of one batch never write at once.
+  const filesWriting = $derived(uploading || startingOnlineConnectionId !== null || committing || discarding || sourceCorrectionPending || matchCheckPending || reviewedCheckpointsPending || linkPending);
+  const batchWriting = $derived(filesWriting || dividendPending);
   // A resync or a result-view re-read replaces the working copy, so no batch
   // write may start from the stale one until it lands, nor after a resync
   // failed until it is retried. Reads do not hold navigation.
@@ -1451,7 +1456,7 @@
   ]} />
 </div>
 {#if view === 'dividends'}
-  <DividendReview batchID={linkedBatchID} embedded onSaved={() => (filesStale = true)} />
+  <DividendReview batchID={linkedBatchID} embedded held={filesWriting} onPending={(value) => (dividendPending = value)} onSaved={() => (filesStale = true)} />
 {:else if view === 'connections'}
   <div class="max-w-3xl space-y-6">
     <!-- Online connections panel -->
@@ -1730,7 +1735,12 @@
        a retry lands; it never falls back to restoring the batch afresh. -->
   <div class="mb-4 space-y-2">
     <APIFormError error={resyncError} />
-    <button type="button" class="min-h-11 text-sm underline" disabled={resyncing} onclick={() => batchId && resyncBatch(batchId)}>{m.install_gate_retry()}</button>
+    <div class="flex flex-wrap gap-x-4">
+      <button type="button" class="min-h-11 text-sm underline" disabled={resyncing} onclick={() => batchId && resyncBatch(batchId)}>{m.install_gate_retry()}</button>
+      <!-- An escape when the re-read keeps failing: leave this batch as it is
+           on the server and start another import. -->
+      <button type="button" class="min-h-11 text-sm underline" disabled={batchWriting} onclick={() => handleImportAnother()}>{m.import_result_import_another()}</button>
+    </div>
   </div>
 {/if}
 <!-- Upload step -->

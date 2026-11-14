@@ -71,7 +71,7 @@
           {#each holdings as { account, brokerage } (account.id)}
             <li class="flex min-w-0 flex-wrap items-center gap-x-3">
               <a class="inline-flex min-h-11 items-center text-sm font-semibold underline" href={`/app/ledger/accounts/${account.id}/register`}>{accountLabelWithStatus(account)}</a>
-              {#if brokerage}<a class="inline-flex min-h-11 items-center text-sm text-muted underline" href={`/app/ledger/accounts/${brokerage.id}/register`}>{brokerage.name || brokerage.code}</a>{/if}
+              {#if brokerage}<a class="inline-flex min-h-11 items-center text-sm text-muted underline" href={`/app/ledger/accounts/${brokerage.id}/register`}>{accountLabelWithStatus(brokerage)}</a>{/if}
             </li>
           {/each}
         </ul>

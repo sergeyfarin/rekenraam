@@ -1028,11 +1028,15 @@ to Files re-reads the batch, and no batch write (upload, fetch, commit,
 discard, source correction, match check, gain review, split/short link,
 reconciliation-override review) can start until that read lands. The same
 holds for the result view's re-reads, and every write (a link and the
-override review included) holds the others and navigation. A link that
+override review included) holds the others and navigation away from the
+batch. Across views of one batch, a Files write holds the Dividends view's
+saves and a Dividends save holds Files writes, so the two never write at
+once; switching views stays allowed. A link that
 finishes supersedes any re-read in flight with its own, and a later re-read
 supersedes it in turn. A failed re-read keeps the working copy and its
-choices, holds writes and offers a retry of the re-read; it never restores
-the batch afresh. Resolutions and match choices for rows still pending are kept; reviews
+choices, holds writes and offers a retry of the re-read, or *Import another
+file* to leave the batch as it is on the server; it never restores the batch
+afresh. Resolutions and match choices for rows still pending are kept; reviews
 computed for the old row set (match check, checkpoints, gain review) are
 cleared when a row stopped being pending.
 
@@ -1047,7 +1051,8 @@ currency. Archived accounts have no tree root (their institution may be
 archived too), so an Archived filter lists them flat, each linking to its
 register, including archived accounts folded into another row (a holding
 under a cash account). The status filter is kept in the URL (`?status=`), so
-Back from a register returns to the same list. Pins and the object switcher remain #442.
+Back from a register returns to the same list; the generic Ledger breadcrumb
+leads to the default view. Pins and the object switcher remain #442.
 
 `GET /api/v1/ledger/overview` and `GET /api/v1/ledger/accounts/{account_id}`
 compose metadata and financial summaries. The index follows the response's
@@ -1080,8 +1085,9 @@ the server also refuses an account referenced by a past version's parent,
 postings, payee defaults or reconciliation, and its refusal is shown. After a
 delete the page goes to the account's brokerage, else its parent, else the
 index. The brokerage walk, like the server's owner walk, has no depth limit
-(only a loop stops it) and costs at most two reads: the direct parent, then
-the catalog once for a deeper chain. Editing (rename, re-parent) a folded account is not on
+(only a loop stops it) and makes at most two calls: the direct parent, then
+one cached catalog read (itself as many pages as the catalog has) for a
+deeper chain. Editing (rename, re-parent) a folded account is not on
 its register yet. Each row lists the
 holdings, cash and other accounts it folds in, so index actions count them as
 dependents, each action by its own rule: archive waits for unarchived children
