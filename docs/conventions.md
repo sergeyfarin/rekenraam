@@ -970,11 +970,13 @@ has actual installations, its migration files are immutable.
   `Rnn` codes identify roadmap initiatives, not a second issue-number system.
 - The roadmap owns execution order and current focus. GitHub priority labels
   express urgency, not sequence. A GitHub release milestone (`v0.1.0`) lists
-  the open issues that gate that release; it records membership, not
-  sequence. Add an issue to it when the roadmap names it as a release gate,
-  and remove it when it stops being one. Record actual prerequisites and the
-  reason they are required on the issue; a later roadmap slot alone is not a
-  blocker.
+  the open issues the owner has accepted as gates for that release; it
+  records membership, not sequence. Add an issue when the roadmap names it as
+  an accepted gate and remove it when it stops being one. A proposal, or work
+  that depends on an owner decision still open, stays out of the milestone
+  until accepted, so creating an issue never changes release scope. Record
+  actual prerequisites and the reason they are required on the issue; a later
+  roadmap slot alone is not a blocker.
   A `blocked` issue names the missing prerequisite or evidence and what would
   unblock it. Recheck active blockers when the initiative or evidence changes.
 - A provider evidence/availability blocker applies only to that adapter's

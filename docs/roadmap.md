@@ -59,10 +59,11 @@ product initiative (owner decision 2026-10-29); its shell #436 closed on
 below continue alongside it and do not block it.
 
 1. **Resolve the remaining owner/release gates in parallel with maintenance.**
-   The open gate issues are collected in the
+   The accepted gate issues are collected in the
    [`v0.1.0` milestone](https://github.com/sergeyfarin/rekenraam/milestone/1).
    The milestone records which issues gate the release; this document keeps
-   their order.
+   their order. Proposals are not gates and stay out of the milestone until
+   the owner accepts them.
    [#260](https://github.com/sergeyfarin/rekenraam/issues/260) remains open for
    actual owner deployment/household evidence
    [#336](https://github.com/sergeyfarin/rekenraam/issues/336) and owner
@@ -90,23 +91,24 @@ below continue alongside it and do not block it.
    maintenance. Adoption assets #335 stay P3 for later release preparation.
    See [Public-release gates](#public-release-gates) for the remaining evidence.
 
-   **Release shape, proposed 2026-11-14
-   ([#572](https://github.com/sergeyfarin/rekenraam/issues/572)):** freeze the
-   schema baseline on a date ahead of the tag, so the household dry run (#336)
-   uses a database that later work must upgrade, and add a container image to
-   the release artifacts. Its four owner decisions are open; until they are
-   accepted the freeze-at-the-tag rule below stands. If accepted, the order
-   follows the dependencies: single-book triggers
-   [#573](https://github.com/sergeyfarin/rekenraam/issues/573) and the
-   enumeration-CHECK review
-   [#574](https://github.com/sergeyfarin/rekenraam/issues/574), then the final
-   baseline consolidation
-   [#576](https://github.com/sergeyfarin/rekenraam/issues/576) on the freeze
-   date. The candidate image
-   [#575](https://github.com/sergeyfarin/rekenraam/issues/575) is independent
-   and gives the dry run a container to use; publication to GHCR
-   [#577](https://github.com/sergeyfarin/rekenraam/issues/577) waits for the
-   release cut.
+   **Proposed, not a gate: release shape
+   ([#572](https://github.com/sergeyfarin/rekenraam/issues/572), 2026-11-14).**
+   Its essential decision is that the household database of the dry run (#336)
+   is a supported installation, so migrations become append-only from the
+   commit the owner names instead of at the tag. Freezing the existing chain
+   ([#576](https://github.com/sergeyfarin/rekenraam/issues/576)) is enough; a
+   target date and a last consolidation are separate optional choices. Two
+   preparations do not block it: single-book triggers
+   [#573](https://github.com/sergeyfarin/rekenraam/issues/573), and proving
+   SQLite's CHECK-change procedure while moving only individually justified
+   constraints
+   [#574](https://github.com/sergeyfarin/rekenraam/issues/574). It also
+   proposes a container image: built from the candidate binary
+   [#575](https://github.com/sergeyfarin/rekenraam/issues/575), which the dry
+   run can use, and published to GHCR at the release cut
+   [#577](https://github.com/sergeyfarin/rekenraam/issues/577). All four owner
+   decisions are open. Nothing here changes the gates below or pauses the UI
+   overhaul.
 2. **Track the remaining bounded maintenance follow-ups.**
 
    - [#414](https://github.com/sergeyfarin/rekenraam/issues/414), P3:
@@ -347,7 +349,7 @@ candidate needs fresh evidence for its actual baseline.
 
 ### Before the v0.1.0 tag
 
-Open gate issues carry the
+Accepted gate issues carry the
 [`v0.1.0` milestone](https://github.com/sergeyfarin/rekenraam/milestone/1).
 
 - Run the documented release preflight and record candidate/deployment identity.
@@ -360,15 +362,13 @@ Open gate issues carry the
 - Complete or hide the partial locales (`es`, `fr`, `de`): no message may
   fall back to English in a shipped locale, and native review (#102) covers
   the batch. #493 delivered the maintained/partial split and closed on
-  2026-11-01; the catch-up itself has no issue yet, and
-  `frontend/src/lib/i18n/missing.json` lists what is missing.
+  2026-11-01; the catch-up or hiding itself is
+  [#579](https://github.com/sergeyfarin/rekenraam/issues/579).
 - Freeze installed-release migrations as append-only at the tag. The
   [baseline and reset contract](implemented.md) records the schema consolidation;
   later schema changes follow the release lifecycle in `docs/conventions.md`.
-  #572 proposes freezing on a date ahead of the tag (#573, #574, #576); this
+  #572 proposes freezing earlier, once the household database exists; this
   rule stands until that decision is accepted.
-- If #572's image decision is accepted, build the container image from the
-  candidate binary (#575).
 
 ### Public repository hygiene
 
@@ -395,9 +395,9 @@ runtime-image disposition remains #337.
    all migration checksums frozen and installed-release policies activated.
    Future Wails/Windows packaging can add Authenticode before final checksums;
    no desktop implementation or Windows signing-provider choice is implied.
-   #572 proposes a published multi-architecture image
-   ([#577](https://github.com/sergeyfarin/rekenraam/issues/577)) as the
-   artifact marketplace listings consume; it is not accepted yet.
+   Proposed in #572 and not accepted: a public multi-architecture image
+   ([#577](https://github.com/sergeyfarin/rekenraam/issues/577)), published at
+   the release cut, as the artifact marketplace listings consume.
 3. Prepare adoption assets [#335](https://github.com/sergeyfarin/rekenraam/issues/335):
    seeded demo, README screenshots and a short migration walkthrough, leading
    with exact decimals, append-only versions and trial balance for the
