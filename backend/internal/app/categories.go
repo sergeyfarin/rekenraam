@@ -34,13 +34,17 @@ const (
 )
 
 var (
-	ErrCategoryNotFound         = errors.New("category not found")
-	ErrCategoryExists           = errors.New("category already exists")
-	ErrCategoryParentInvalid    = errors.New("category parent is invalid")
-	ErrCategoryHasChildren      = errors.New("category has active child categories")
-	ErrCategoryBuiltInProtected = errors.New("built-in category cannot be edited, disabled or deleted")
-	ErrCategoryUsed             = errors.New("category is used by financial records")
-	categoryIconPattern         = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
+	ErrCategoryNotFound      = errors.New("category not found")
+	ErrCategoryExists        = errors.New("category already exists")
+	ErrCategoryParentInvalid = errors.New("category parent is invalid")
+	// ErrCategoryHasChildren refuses a delete: any child, archived or not.
+	ErrCategoryHasChildren = errors.New("category has child categories")
+	// ErrCategoryHasActiveChildren refuses a disable: a child active on a date
+	// the disable governs. It reaches callers inside ReferenceRuleConflictError.
+	ErrCategoryHasActiveChildren = errors.New("category has active child categories")
+	ErrCategoryBuiltInProtected  = errors.New("built-in category cannot be edited, disabled or deleted")
+	ErrCategoryUsed              = errors.New("category is used by financial records")
+	categoryIconPattern          = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 )
 
 var categoryTypes = map[string]bool{

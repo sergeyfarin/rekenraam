@@ -46,7 +46,7 @@ func (e ReferenceVersionBeforeFirstError) Unwrap() error { return ErrReferenceVe
 // ReferenceRuleConflictError is a refusal by a rule that involves another
 // entity, on a date the new version governs (#552). It unwraps to the rule's
 // existing service error (ErrCategoryExists, ErrPayeeExists,
-// ErrCategoryParentInvalid, ErrCategoryHasChildren, ErrInstitutionInUse).
+// ErrCategoryParentInvalid, ErrCategoryHasActiveChildren, ErrInstitutionInUse).
 type ReferenceRuleConflictError struct {
 	Rule       string
 	Date       string
@@ -66,7 +66,7 @@ var referenceRuleErrors = map[string]error{
 	db.ReferenceRulePayeeNameTaken:           ErrPayeeExists,
 	db.ReferenceRuleCategoryParentArchived:   ErrCategoryParentInvalid,
 	db.ReferenceRuleCategoryParentCycle:      ErrCategoryParentInvalid,
-	db.ReferenceRuleCategoryActiveChild:      ErrCategoryHasChildren,
+	db.ReferenceRuleCategoryActiveChild:      ErrCategoryHasActiveChildren,
 	db.ReferenceRuleInstitutionLinkedAccount: ErrInstitutionInUse,
 }
 

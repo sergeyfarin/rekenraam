@@ -493,9 +493,9 @@ client labels it in its own locale. The backdated and before-first refusals
 carry their dates as described above. These rules use
 `REFERENCE_DATED_CONFLICT` whether the first failing date is today or earlier,
 so one rule has one code and one explanation; creates check today only and
-keep `409 CONFLICT`. The service errors unwrap to the existing sentinels
+keep `409 CONFLICT`. The service errors unwrap to the service sentinels
 (`ErrCategoryExists`, `ErrPayeeExists`, `ErrCategoryParentInvalid`,
-`ErrCategoryHasChildren`, `ErrInstitutionInUse`). The form error boundary
+`ErrCategoryHasActiveChildren`, `ErrInstitutionInUse`). The form error boundary
 renders rule-specific copy in all six locales, with the date formatted for the
 reader. A refusal without details falls back to the code's generic message.
 
