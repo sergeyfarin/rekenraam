@@ -318,6 +318,10 @@ func TestCategoryDeleteRefusesAParentWithOnlyArchivedChildren(t *testing.T) {
 	res := categoryRequest(t, handler, sessionCookie, csrfToken, http.MethodDelete, "/api/v1/categories/"+strconvFormatInt(parent.ID), "")
 	require.Equal(t, http.StatusConflict, res.Code)
 	assert.JSONEq(t, `{"error":{"code":"CONFLICT","message":"category has child categories"}}`, res.Body.String())
+
+	// No child is active, so disabling is the documented alternative.
+	disabled := mutateCategory(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/categories/"+strconvFormatInt(parent.ID)+"/disable", `{}`, http.StatusOK)
+	assert.Equal(t, "archived", disabled.Status)
 }
 
 func categoryRequest(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, method string, path string, body string) *httptest.ResponseRecorder {

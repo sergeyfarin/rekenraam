@@ -7709,7 +7709,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description CONFLICT. A built-in category cannot be edited, disabled or deleted. A category with any child category, archived or not, cannot be deleted until its children are moved or deleted. A category with financial references (postings, reconciliation, payee defaults) cannot be deleted; disable it instead. */
+                /** @description CONFLICT. A built-in category cannot be edited, disabled or deleted. A category with any child category, archived or not, cannot be deleted until its children are moved or deleted. When none of those children is active, disabling the category is allowed instead. A category with financial references (postings, reconciliation, payee defaults) cannot be deleted; disable it instead. */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
