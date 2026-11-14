@@ -28532,7 +28532,12 @@ export interface components {
             valuation: components["schemas"]["Valuation"] | null;
             unclassified_short: boolean;
             sources: components["schemas"]["LedgerImportSource"][];
+            /** @description Cash-kind child registers (cash, checking, savings, brokerage cash) whose currency balances make up `cash`. */
             cash_accounts: components["schemas"]["AccountResponse"][];
+            /** @description Other ordinary child accounts counted in this row's value but not presented as cash. */
+            other_accounts: components["schemas"]["AccountResponse"][];
+            /** @description Hidden holding accounts in this row's scope, whatever their status. They are never index rows; clients use them for holding register links and archive/delete dependency checks. */
+            holding_accounts: components["schemas"]["AccountResponse"][];
         };
         LedgerOverviewResponse: {
             /** Format: date */

@@ -21,6 +21,8 @@ type ledgerImportSourceResponse struct {
 }
 type ledgerAccountResponse struct {
 	CashAccounts      []accountResponse            `json:"cash_accounts"`
+	OtherAccounts     []accountResponse            `json:"other_accounts"`
+	HoldingAccounts   []accountResponse            `json:"holding_accounts"`
 	Sources           []ledgerImportSourceResponse `json:"sources"`
 	Account           accountResponse              `json:"account"`
 	Balances          []balanceQuantityResponse    `json:"balances"`
@@ -71,7 +73,7 @@ func ledgerOverview(logger *slog.Logger, auth *app.AuthService, service *app.Led
 			response.Commodities = append(response.Commodities, homeReportingCurrencyResponse{CommodityID: c.ID, Code: c.Code, Kind: c.Kind, Symbol: c.DisplaySymbol, Scale: c.StandardScale})
 		}
 		for _, row := range result.Accounts {
-			item := ledgerAccountResponse{Account: toAccountResponse(row.Account), CashAccounts: toAccountResponses(row.CashAccounts), Balances: toBalanceQuantityResponses(row.Balances), Cash: toBalanceQuantityResponses(row.Cash), Unsettled: toBalanceQuantityResponses(row.Unsettled), Positions: []ledgerPositionResponse{}, Value: optionalBalanceQuantity(row.Value), Valuation: toValuationResponse(row.Valuation), UnclassifiedShort: row.UnclassifiedShort}
+			item := ledgerAccountResponse{Account: toAccountResponse(row.Account), CashAccounts: toAccountResponses(row.CashAccounts), OtherAccounts: toAccountResponses(row.OtherAccounts), HoldingAccounts: toAccountResponses(row.HoldingAccounts), Balances: toBalanceQuantityResponses(row.Balances), Cash: toBalanceQuantityResponses(row.Cash), Unsettled: toBalanceQuantityResponses(row.Unsettled), Positions: []ledgerPositionResponse{}, Value: optionalBalanceQuantity(row.Value), Valuation: toValuationResponse(row.Valuation), UnclassifiedShort: row.UnclassifiedShort}
 			for _, p := range row.Positions {
 				item.Positions = append(item.Positions, ledgerPositionResponse{HoldingAccountID: p.HoldingAccountID, CommodityID: p.CommodityID, Quantity: toBalanceQuantityResponse(p.Quantity), Value: optionalBalanceQuantity(p.Value)})
 			}

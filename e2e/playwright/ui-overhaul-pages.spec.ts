@@ -110,6 +110,74 @@ test('brokerage → instrument → brokerage on a phone keeps holdings inside on
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+test('holding registers stay reachable and hidden children still guard archive and delete (#567 review)', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const today = todayISO();
+  const suffix = Date.now();
+  const broker = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/accounts', csrfToken, {
+    name: `Guarded brokerage ${suffix}`, account_class: 'asset', account_kind: 'brokerage', allows_postings: false, opened_on: today
+  });
+  const cash = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/accounts', csrfToken, {
+    name: `Guarded cash ${suffix}`, account_class: 'asset', account_kind: 'brokerage_cash', allows_postings: true,
+    parent_account_id: broker.id, default_commodity_id: currencyID, opened_on: today
+  });
+  const instrument = await apiJSON<{ id: number; commodity_id: number }>(page, 'POST', '/api/v1/investments/instruments', csrfToken, {
+    commodity_code: `GUARD${suffix}`, display_name: `Guarded stock ${suffix}`, instrument_type: 'stock', quantity_scale: 0, price_scale: 2, quote_commodity_id: currencyID, identifiers: {}, metadata: {}
+  });
+  const holdingName = `Guarded holding ${suffix}`;
+  const holding = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/holding-accounts', csrfToken, {
+    instrument_id: instrument.id, name: holdingName, parent_account_id: broker.id, opened_on: today
+  });
+  // A holding with no parent at all is still listed with its value.
+  const orphanName = `Unparented holding ${suffix}`;
+  const orphan = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/holding-accounts', csrfToken, {
+    instrument_id: instrument.id, name: orphanName, opened_on: today
+  });
+  for (const target of [holding.id, orphan.id]) {
+    await apiJSON(page, 'POST', '/api/v1/investments/buy', csrfToken, {
+      transaction_date: today, commodity_id: instrument.commodity_id, holding_account_id: target,
+      cash_account_id: cash.id, cash_commodity_id: currencyID, quantity_value: '1', quantity_scale: 0, cash_amount_value: '1000', cash_amount_scale: 2
+    });
+  }
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto('/app/ledger');
+  // Its cash child and holding are folded into the brokerage row, but they
+  // are still children: the server would refuse to delete or close it.
+  await expect(page.getByRole('button', { name: `Delete Guarded brokerage ${suffix}`, exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: `Close Guarded brokerage ${suffix}`, exact: true })).toBeDisabled();
+  await expect(page.getByRole('heading', { name: 'Holdings outside a brokerage', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: orphanName, exact: true })).toHaveAttribute('href', `/app/ledger/accounts/${orphan.id}/register`);
+
+  // Brokerage → holding register → instrument → holding register.
+  await page.getByRole('link', { name: new RegExp(`Guarded brokerage ${suffix}`) }).click();
+  await page.getByRole('link', { name: holdingName, exact: true }).click();
+  await expect(page).toHaveURL(`/app/ledger/accounts/${holding.id}/register`);
+  await expect(page.getByRole('heading', { level: 1, name: holdingName })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: `Guarded brokerage ${suffix}`, exact: true }))
+    .toHaveAttribute('href', `/app/ledger/accounts/${broker.id}/register`);
+  await page.getByRole('link', { name: 'Instrument page', exact: true }).click();
+  await expect(page.getByRole('heading', { name: new RegExp(`Guarded stock ${suffix}`) })).toBeVisible();
+  const holdings = page.getByRole('list', { name: 'Holdings', exact: true });
+  await expect(holdings.getByRole('link', { name: orphanName, exact: true })).toBeVisible();
+  await holdings.getByRole('link', { name: holdingName, exact: true }).click();
+  await expect(page).toHaveURL(`/app/ledger/accounts/${holding.id}/register`);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('an ordinary register never asks for the book-wide Ledger read (#567 review)', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const account = await createCashAccount(page, csrfToken, `Light register ${Date.now()}`, currencyID);
+  const ledgerReads: string[] = [];
+  page.on('request', request => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith('/api/v1/ledger/accounts/') || path === '/api/v1/ledger/overview') ledgerReads.push(path);
+  });
+  await page.goto(`/app/ledger/accounts/${account.id}/register`);
+  await expect(page.getByRole('heading', { level: 1, name: /Light register/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Positions', exact: true })).toHaveCount(0);
+  expect(ledgerReads).toEqual([]);
+});
+
 
 test('an existing non-money account register still names its account (#448)', async ({ page }) => {
   const { csrfToken, currencyID } = await readyForLedger(page);

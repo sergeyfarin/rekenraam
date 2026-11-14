@@ -5,6 +5,8 @@
   import PageHeader from '#lib/components/page-header.svelte';
   import SegmentedControl from '#lib/components/segmented-control.svelte';
   import LedgerInstitutions from './ledger-institutions.svelte';
+  import LedgerValue from './ledger-value.svelte';
+  import { isHoldingAccount } from './brokerage.ts';
   import { addTransaction, addTransfer } from '#lib/transactions/add-transaction.svelte.ts';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
@@ -102,12 +104,25 @@
   });
 
   const userAccounts = $derived.by(() => {
-    return allUserAccounts.filter((account) => !isCategoryAccount(account) && account.account_class !== 'equity');
+    return allUserAccounts.filter((account) => !isCategoryAccount(account) && account.account_class !== 'equity' && !isHoldingAccount(account));
   });
 
+  // Archived accounts stay out of every status filter, as before #448: their
+  // institutions may be archived too, and the tree has no root for them.
   const manageableAccounts = $derived.by(() => {
-    return userAccounts;
+    return userAccounts.filter((account) => account.status !== 'archived');
   });
+
+  // A brokerage row folds in its holdings, cash and other children, so they
+  // are never tree rows. They are still children of their parent and members
+  // of their institution: the server refuses to archive or delete a parent or
+  // institution they depend on, so the actions must count them (#567 review).
+  const foldedAccounts = $derived(overview.data?.accounts.flatMap((row) => [...row.holding_accounts, ...row.cash_accounts, ...row.other_accounts]) ?? []);
+  // A holding with no parent account is its own Ledger row; it is shown
+  // apart from the institution tree so its value is never missing.
+  const unparentedHoldings = $derived(
+    overview.data?.accounts.filter((row) => isHoldingAccount(row.account) && row.account.status !== 'archived' && (statusFilter === 'all' || row.account.status === statusFilter)) ?? []
+  );
 
   const activeInstitutions = $derived.by(() => {
     return institutionsQuery.data?.institutions.filter((institution) => institution.status === 'active') ?? [];
@@ -116,7 +131,7 @@
   const institutionAccountCounts = $derived.by(() => {
     const counts = new Map<number, number>();
 
-    for (const account of allUserAccounts) {
+    for (const account of [...allUserAccounts, ...foldedAccounts]) {
       if (account.institution_id) {
         counts.set(account.institution_id, (counts.get(account.institution_id) ?? 0) + 1);
       }
@@ -128,7 +143,7 @@
   const allAccountChildCounts = $derived.by(() => {
     const counts = new Map<number, number>();
 
-    for (const account of userAccounts) {
+    for (const account of [...userAccounts, ...foldedAccounts]) {
       if (account.parent_account_id) {
         counts.set(account.parent_account_id, (counts.get(account.parent_account_id) ?? 0) + 1);
       }
@@ -525,5 +540,19 @@
       {allAccountChildCounts}
       {actionPendingKey}
     />
+  {/if}
+  {#if view === 'accounts' && screenState === 'ready' && unparentedHoldings.length > 0}
+    <Panel>
+      <h2 class="font-semibold">{m.ledger_unparented_holdings()}</h2>
+      <p class="mt-1 text-sm text-muted">{m.ledger_unparented_holdings_copy()}</p>
+      <ul class="mt-3 divide-y divide-border">
+        {#each unparentedHoldings as row (row.account.id)}
+          <li class="flex min-w-0 flex-wrap items-center justify-between gap-3 py-2 text-sm">
+            <a class="inline-flex min-h-11 items-center wrap-anywhere font-semibold underline" href={`/app/ledger/accounts/${row.account.id}/register`}>{accountDisplayName(row.account)}</a>
+            <LedgerValue value={row.value} commodities={overview.data?.commodities ?? []} />
+          </li>
+        {/each}
+      </ul>
+    </Panel>
   {/if}
 </div>

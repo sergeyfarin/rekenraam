@@ -8,6 +8,10 @@
   let { summary, commodities, asOf }: { summary: LedgerAccount; commodities: LedgerOverview['commodities']; asOf: string } = $props();
   const dateLabel = $derived(new Intl.DateTimeFormat(getLocale(), { year: 'numeric', month: 'short', day: 'numeric' }).format(parseISO(asOf)));
   const code = (id: number) => commodities.find(c => c.commodity_id === id)?.code ?? '';
+  const holdings = $derived(new Map(summary.holding_accounts.map(account => [account.id, account])));
+  // Each position links to its instrument and to its holding's own register.
+  const holdingName = (id: number) => { const account = holdings.get(id); return account?.name || account?.code || String(id); };
+  const link = 'inline-flex min-h-11 items-center text-sm font-semibold underline';
 </script>
 <Panel>
   <div class="flex flex-wrap items-center justify-between gap-3">
@@ -18,8 +22,12 @@
   {#if summary.valuation?.rates_used.some(rate => rate.stale)}<p class="mt-3 text-sm text-muted">{m.ledger_outdated()}</p>{/if}
   <h3 class="mt-4 text-sm font-semibold">{m.ledger_cash()}</h3>
   {#each summary.cash as value}<p class="mt-2 text-sm"><LedgerValue {value} {commodities} /></p>{/each}
-  {#each summary.cash_accounts as account (account.id)}<a class="mr-3 inline-flex min-h-11 items-center text-sm font-semibold underline" href={`/app/ledger/accounts/${account.id}/register`}>{account.name || account.code}</a>{/each}
+  {#each summary.cash_accounts as account (account.id)}<a class="mr-3 {link}" href={`/app/ledger/accounts/${account.id}/register`}>{account.name || account.code}</a>{/each}
   {#if summary.cash.length === 0}<p class="mt-2 text-sm text-muted">{m.ledger_no_cash()}</p>{/if}
+  {#if summary.other_accounts.length > 0}
+    <h3 class="mt-4 text-sm font-semibold">{m.ledger_other_accounts()}</h3>
+    {#each summary.other_accounts as account (account.id)}<a class="mr-3 {link}" href={`/app/ledger/accounts/${account.id}/register`}>{account.name || account.code}</a>{/each}
+  {/if}
   {#if summary.unsettled.length > 0}
     <p class="mt-3 text-sm text-muted">{m.ledger_unsettled()}</p>
     {#each summary.unsettled as value}<p class="text-sm"><LedgerValue {value} {commodities} /></p>{/each}
@@ -29,7 +37,10 @@
   <ul class="mt-2 divide-y divide-border">
     {#each summary.positions as position (`${position.holding_account_id}:${position.commodity_id}`)}
       <li class="flex min-w-0 flex-wrap items-center justify-between gap-3 py-3 text-sm">
-        <a class="inline-flex min-h-11 items-center font-semibold underline" href={`/app/investments/instruments/${position.commodity_id}`}>{code(position.commodity_id)}</a>
+        <span class="flex min-w-0 flex-wrap items-center gap-x-3">
+          <a class={link} href={`/app/investments/instruments/${position.commodity_id}`}>{code(position.commodity_id)}</a>
+          <a class="{link} font-normal text-muted" href={`/app/ledger/accounts/${position.holding_account_id}/register`}>{holdingName(position.holding_account_id)}</a>
+        </span>
         <LedgerValue value={position.quantity} {commodities} />
         <LedgerValue value={position.value} {commodities} />
       </li>

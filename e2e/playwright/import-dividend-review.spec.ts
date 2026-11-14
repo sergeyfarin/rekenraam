@@ -66,6 +66,35 @@ test('[acceptance] imported dividend waits for owner facts and records its known
   expect((await f.activity()).transactions).toHaveLength(1);
 });
 
+test('a dividend recorded in the Dividends view refreshes the Files batch and the Dividends count (#567 review)', async ({ page }) => {
+  const f = await dividendSource(page);
+  const batch = new URL(page.url()).searchParams.get('batch_id')!;
+  const pendingDividends = async () => (await apiJSON<{ sources: Array<{ id: string; dividend_review_count?: number }> }>(page, 'GET', '/api/v1/attention'))
+    .sources.find(source => source.id === 'imports')?.dividend_review_count ?? 0;
+  const label = (count: number) => (count ? `Dividends (${count})` : 'Dividends');
+  const before = await pendingDividends();
+  expect(before).toBeGreaterThan(0);
+  await expect(page.getByRole('button', { name: label(before), exact: true })).toBeVisible();
+  await page.getByRole('button', { name: label(before), exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Pending dividend', exact: true })).toBeVisible();
+  await page.getByRole('combobox', { name: 'Income account', exact: true }).selectOption(String(f.income.id));
+  await page.getByRole('combobox', { name: 'Withholding account', exact: true }).selectOption(String(f.tax.id));
+  await page.getByLabel('Dividend amount', { exact: true }).fill('100.00');
+  await page.getByLabel('Withholding amount', { exact: true }).fill('15.00');
+  await page.getByRole('button', { name: 'Record reviewed dividend', exact: true }).click();
+  await expect(page.getByText('Dividend recorded.', { exact: true })).toBeVisible();
+  // The count follows the write at once, not at the next attention poll.
+  const after = await pendingDividends();
+  expect(after).toBe(before - 1);
+  await expect(page.getByRole('button', { name: label(after), exact: true })).toBeVisible();
+  // Its only row is now recorded, so the batch is committed: Files re-reads
+  // it and offers no commit for the stale working copy.
+  await page.getByRole('button', { name: 'Files', exact: true }).click();
+  expect(new URL(page.url()).searchParams.get('batch_id')).toBe(batch);
+  await expect(page.getByRole('button', { name: 'Commit to ledger' })).toHaveCount(0);
+  expect((await f.activity()).transactions).toHaveLength(1);
+});
+
 test('[acceptance] historical cash dividend repair keeps the original payment and owner note on a phone', async ({ page }) => {
   test.skip(Boolean(process.env.E2E_BASE_URL), 'historical source-link fixture needs the disposable local e2e database');
   const f = await dividendSource(page);

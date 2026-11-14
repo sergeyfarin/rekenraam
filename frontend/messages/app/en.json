@@ -2083,5 +2083,11 @@
   "ledger_source_online": "Online: {name}",
   "ledger_source_none": "No recorded file import or online connection.",
   "ledger_no_institution_accounts": "No accounts at this institution.",
-  "ledger_outdated": "Some prices or rates are from an earlier day."
+  "ledger_outdated": "Some prices or rates are from an earlier day.",
+  "ledger_other_accounts": "Other linked accounts",
+  "ledger_holding_instrument": "Instrument page",
+  "ledger_holding_reconcile": "Reconcile this holding",
+  "ledger_unparented_holdings": "Holdings outside a brokerage",
+  "ledger_unparented_holdings_copy": "These holdings have no brokerage or parent account. Their value is included in your totals.",
+  "investments_instrument_holdings": "Holdings"
 }

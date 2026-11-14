@@ -53,6 +53,12 @@ func TestLedgerOverviewBrokerageIncludesHiddenHoldingsAndUnavailablePrices(t *te
 	// Both units are priced: 1300 cash + 10*60 + 2*120 = 2140.
 	require.Len(t, row.CashAccounts, 1)
 	assert.Equal(t, cashChild, row.CashAccounts[0].ID)
+	assert.Empty(t, row.OtherAccounts)
+	holdings := []int64{}
+	for _, account := range row.HoldingAccounts {
+		holdings = append(holdings, account.ID)
+	}
+	assert.ElementsMatch(t, []int64{f.holdingAccountID, hold.ID}, holdings, "hidden holdings are disclosed for links and dependency checks")
 	f.price(t, f.stockCommodityID, "2026-10-15", "60")
 	f.price(t, other.CommodityID, "2026-10-15", "120")
 	result = read()
@@ -72,7 +78,7 @@ func TestLedgerOverviewBrokerageIncludesHiddenHoldingsAndUnavailablePrices(t *te
 	assert.Equal(t, row, detail.Accounts[0])
 }
 
-func TestLedgerOverviewFollowsLargeCatalogAndNeverListsHoldings(t *testing.T) {
+func TestLedgerOverviewFollowsLargeCatalogAndListsOnlyUnparentedHoldings(t *testing.T) {
 	t.Parallel()
 	f := newHomeWidgetFixture(t)
 	for range 120 {
@@ -90,9 +96,46 @@ func TestLedgerOverviewFollowsLargeCatalogAndNeverListsHoldings(t *testing.T) {
 	for _, row := range append(first.Accounts, second.Accounts...) {
 		assert.False(t, ids[row.Account.ID])
 		ids[row.Account.ID] = true
-		assert.False(t, homeHoldingAccountKinds[row.Account.AccountKind])
+		// The fixture's holding has no parent, so it is its own row.
+		assert.Equal(t, row.Account.ID == f.holdingAccountID, homeHoldingAccountKinds[row.Account.AccountKind])
 	}
-	assert.Len(t, ids, 121, "120 added accounts and the original cash account")
+	assert.Len(t, ids, 122, "120 added accounts, the original cash account and the unparented holding")
 	_, err = service.Overview(context.Background(), LedgerOverviewInput{OwnerUserID: 1, Cursor: "bad"})
 	require.ErrorAs(t, err, new(ValidationError))
+}
+
+// A holding outside any ordinary parent is its own row (it cannot belong to
+// another), so the index still shows the value Net worth counts. A non-cash
+// child is linked, counted in value, and never presented as cash.
+func TestLedgerOverviewShowsOrphanHoldingAndSeparatesNonCashChildren(t *testing.T) {
+	t.Parallel()
+	f := newHomeWidgetFixture(t)
+	f.buyTen(t)
+	f.price(t, f.stockCommodityID, "2026-10-15", "60")
+	broker := f.account(t, "Broker", "asset", "brokerage")
+	f.move(t, "2026-09-10", broker, f.eurCommodityID, 100000)
+	receivable := f.account(t, "Broker receivable", "asset", "receivable")
+	reviseHomeAccount(t, f.homeFixture, receivable, "Broker receivable", &broker)
+	f.move(t, "2026-09-10", receivable, f.eurCommodityID, 25000)
+	service := NewLedgerService(f.transactionService, f.accountService, NewInstitutionService(db.NewInstitutionRepository(f.database)))
+	result, err := service.Overview(context.Background(), LedgerOverviewInput{OwnerUserID: 1, AsOf: "2026-10-15"})
+	require.NoError(t, err)
+	byID := map[int64]LedgerAccount{}
+	for _, row := range result.Accounts {
+		byID[row.Account.ID] = row
+	}
+	orphan, ok := byID[f.holdingAccountID]
+	require.True(t, ok, "an unparented holding keeps a row")
+	require.Len(t, orphan.Positions, 1)
+	assert.Equal(t, f.holdingAccountID, orphan.Positions[0].HoldingAccountID)
+	requireHomeCents(t, 60000, orphan.Value, "ten units at 60")
+	_, listed := byID[receivable]
+	assert.False(t, listed, "a brokerage child belongs to the brokerage row")
+	row := byID[broker]
+	assert.Empty(t, row.CashAccounts)
+	require.Len(t, row.OtherAccounts, 1)
+	assert.Equal(t, receivable, row.OtherAccounts[0].ID)
+	requireAmount(t, row.Cash, f.eurCommodityID, 100000, 2, "the receivable is not cash")
+	requireHomeCents(t, 125000, row.Value, "the receivable still counts in the row's value")
+	assert.Empty(t, row.HoldingAccounts)
 }

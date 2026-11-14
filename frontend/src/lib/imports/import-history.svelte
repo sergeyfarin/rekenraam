@@ -1,12 +1,12 @@
 <script lang="ts">
   import { createInfiniteQuery } from '@tanstack/svelte-query';
-  import { listImportBatches } from '#lib/api/imports.ts';
+  import { importHistoryQueryKey, listImportBatches } from '#lib/api/imports.ts';
   import Panel from '#lib/components/panel.svelte';
   import APIFormError from '#lib/components/api-form-error.svelte';
   import { m } from '#lib/paraglide/messages.js';
   let { onSelect }: { onSelect: (id: number) => void } = $props();
   const query = createInfiniteQuery(() => ({
-    queryKey: ['api', 'import-batches'], initialPageParam: undefined as string | undefined,
+    queryKey: importHistoryQueryKey, initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) => listImportBatches({ cursor: pageParam }),
     getNextPageParam: last => last.next_cursor ?? undefined
   }));

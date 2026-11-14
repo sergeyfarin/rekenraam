@@ -2147,5 +2147,11 @@
   "ledger_source_online": "Онлайн: {name}",
   "ledger_source_none": "Импорт из файла или онлайн-подключение не зарегистрированы.",
   "ledger_no_institution_accounts": "В этой организации нет счетов.",
-  "ledger_outdated": "Некоторые цены или курсы относятся к предыдущим дням."
+  "ledger_outdated": "Некоторые цены или курсы относятся к предыдущим дням.",
+  "ledger_other_accounts": "Другие связанные счета",
+  "ledger_holding_instrument": "Страница инструмента",
+  "ledger_holding_reconcile": "Сверить эту позицию",
+  "ledger_unparented_holdings": "Позиции вне брокерского счёта",
+  "ledger_unparented_holdings_copy": "У этих позиций нет брокерского или родительского счёта. Их стоимость включена в итоги.",
+  "investments_instrument_holdings": "Позиции"
 }

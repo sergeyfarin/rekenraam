@@ -10,9 +10,12 @@
   import { investmentInstrumentsQueryOptions } from '#lib/api/investments.ts';
   import { invalidateInvestmentReads } from '#lib/investments/invalidate.ts';
   import { getImportDividendReviews, importDividendReviewsQueryKey } from '#lib/api/imports.ts';
+  import { invalidateImportReads } from './invalidate.ts';
   import DividendReviewRow from './dividend-review-row.svelte';
   import { m } from '#lib/paraglide/messages.js';
-  let { batchID, embedded = false }: { batchID?: number; embedded?: boolean } = $props();
+  // onSaved tells an embedding Import screen that a batch row changed under
+  // its Files working copy.
+  let { batchID, embedded = false, onSaved: onRowSaved }: { batchID?: number; embedded?: boolean; onSaved?: () => void } = $props();
   const client = useQueryClient();
   const session = createQuery(() => authSessionQueryOptions());
   const accounts = createQuery(() => accountsQueryOptions());
@@ -29,8 +32,11 @@
   const finished = new SvelteSet<number>();
   async function onSaved(rowID: number, id: number, repaired: boolean) {
     saved = { id, repaired }; finished.add(rowID);
-    await invalidateInvestmentReads(client);
-    await client.invalidateQueries({ queryKey: importDividendReviewsQueryKey });
+    onRowSaved?.();
+    // A recorded dividend changes the batch row, the attention counts and
+    // Home as well as the queue; the import helpers bypass the shell's write
+    // middleware, so refresh them here.
+    await Promise.all([invalidateInvestmentReads(client), invalidateImportReads(client)]);
   }
 </script>
 {#if embedded}<h2 class="text-lg font-semibold">{m.import_dividend_title()}</h2><p class="mt-2 text-sm text-muted">{m.import_dividend_help()}</p>{:else}<PageHeader title={m.import_dividend_title()} copy={m.import_dividend_help()} />{/if}

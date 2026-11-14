@@ -23,7 +23,13 @@ type LedgerOverview struct {
 	NextCursor   string
 }
 type LedgerAccount struct {
+	// CashAccounts are the row's cash-kind child registers; OtherAccounts its
+	// remaining ordinary children. HoldingAccounts are the hidden holdings in
+	// its scope, whatever their status, so dependency checks and holding
+	// register links do not depend on a separate catalog read.
 	CashAccounts      []Account
+	OtherAccounts     []Account
+	HoldingAccounts   []Account
 	Account           Account
 	Balances          []BalanceQuantity
 	Cash              []BalanceQuantity
@@ -140,6 +146,8 @@ func (s *LedgerService) Overview(ctx context.Context, input LedgerOverviewInput)
 	}
 	// Cash children belong to their brokerage too. A brokerage is one index
 	// row, while the explicit cash account remains a legal entry/reconcile target.
+	// A holding with no non-holding ancestor owns itself and becomes its own
+	// row, so its value is never missing from the index (#567 review).
 	ownerFor := func(id int64) int64 {
 		fallback := id
 		seen := map[int64]bool{}
@@ -153,6 +161,11 @@ func (s *LedgerService) Overview(ctx context.Context, input LedgerOverviewInput)
 			}
 		}
 		return fallback
+	}
+	scopes := map[int64][]int64{}
+	for id := range parent {
+		owner := ownerFor(id)
+		scopes[owner] = append(scopes[owner], id)
 	}
 	metadataByID := map[int64]Account{}
 	for _, account := range metadata {
@@ -193,7 +206,7 @@ func (s *LedgerService) Overview(ctx context.Context, input LedgerOverviewInput)
 	}
 	slices.SortFunc(metadata, func(a, b Account) int { return compareLedgerID(a.ID, b.ID) })
 	for _, a := range metadata {
-		if a.IsSystem || (input.AccountID == 0 && homeHoldingAccountKinds[a.AccountKind]) || (a.AccountClass != "asset" && a.AccountClass != "liability") {
+		if a.IsSystem || (a.AccountClass != "asset" && a.AccountClass != "liability") {
 			continue
 		}
 		if input.AccountID > 0 && a.ID != input.AccountID {
@@ -207,27 +220,58 @@ func (s *LedgerService) Overview(ctx context.Context, input LedgerOverviewInput)
 			break
 		}
 		scope := []int64{a.ID}
-		for id := range parent {
-			if id != a.ID && ownerFor(id) == a.ID {
+		for _, id := range scopes[a.ID] {
+			if id != a.ID {
 				scope = append(scope, id)
 			}
 		}
 		slices.Sort(scope)
+		// Cash is the row's own currency plus its cash-kind children and
+		// holdings; another ordinary child (a receivable, say) is linked
+		// but never presented as cash.
+		row := LedgerAccount{Account: a, CashAccounts: []Account{}, OtherAccounts: []Account{}, HoldingAccounts: []Account{}}
+		cashScope := []int64{}
+		for _, id := range scope {
+			account, known := metadataByID[id]
+			switch {
+			case id == a.ID:
+				cashScope = append(cashScope, id)
+			case holding[id]:
+				cashScope = append(cashScope, id)
+				if known {
+					row.HoldingAccounts = append(row.HoldingAccounts, account)
+				}
+			case known && defaultCashAccountKinds[account.AccountKind]:
+				cashScope = append(cashScope, id)
+				row.CashAccounts = append(row.CashAccounts, account)
+			case known:
+				row.OtherAccounts = append(row.OtherAccounts, account)
+			}
+		}
 
 		bucket, err := netWorthBucketTotals(accounts, running, pending, unsettled.accounts, kinds, ReportFilters{AccountIDs: scope}, shorts)
 		if err != nil {
 			return result, err
 		}
-		row := LedgerAccount{Account: a, Balances: bucket.totals, Cash: []BalanceQuantity{}, Unsettled: []BalanceQuantity{}, Positions: []LedgerPosition{}, UnclassifiedShort: len(bucket.unclassifiedShorts) > 0}
+		cash := bucket
+		if len(cashScope) != len(scope) {
+			cash, err = netWorthBucketTotals(accounts, running, pending, unsettled.accounts, kinds, ReportFilters{AccountIDs: cashScope}, shorts)
+			if err != nil {
+				return result, err
+			}
+		}
+		row.Balances, row.Cash, row.Unsettled, row.Positions = bucket.totals, []BalanceQuantity{}, []BalanceQuantity{}, []LedgerPosition{}
+		row.UnclassifiedShort = len(bucket.unclassifiedShorts) > 0
 		slices.SortFunc(row.Balances, func(a, b BalanceQuantity) int { return compareLedgerID(a.CommodityID, b.CommodityID) })
-		for _, amount := range bucket.unsettled {
+		for _, amount := range cash.unsettled {
 			row.Unsettled = append(row.Unsettled, amount.Amount)
 		}
-		for _, quantity := range bucket.totals {
+		for _, quantity := range cash.totals {
 			if kinds[quantity.CommodityID] == "currency" {
 				row.Cash = append(row.Cash, quantity)
 			}
 		}
+		slices.SortFunc(row.Cash, func(a, b BalanceQuantity) int { return compareLedgerID(a.CommodityID, b.CommodityID) })
 		for _, id := range scope {
 			for commodityID, quantity := range running[id] {
 				if kinds[commodityID] == "currency" || quantity.Sign() == 0 {
@@ -258,14 +302,6 @@ func (s *LedgerService) Overview(ctx context.Context, input LedgerOverviewInput)
 			}
 			coverage := local.Coverage("")
 			row.Valuation = &coverage
-		}
-		row.CashAccounts = []Account{}
-		for _, id := range scope {
-			if id != a.ID && !holding[id] {
-				if account, ok := metadataByID[id]; ok {
-					row.CashAccounts = append(row.CashAccounts, account)
-				}
-			}
 		}
 		row.Sources = []db.LedgerImportSource{}
 		for _, source := range sources {

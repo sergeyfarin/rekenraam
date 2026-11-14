@@ -2083,5 +2083,11 @@
   "ledger_source_online": "Online: {name}",
   "ledger_source_none": "Geen geregistreerde bestandsimport of onlineverbinding.",
   "ledger_no_institution_accounts": "Geen rekeningen bij deze instelling.",
-  "ledger_outdated": "Sommige prijzen of koersen zijn van een eerdere dag."
+  "ledger_outdated": "Sommige prijzen of koersen zijn van een eerdere dag.",
+  "ledger_other_accounts": "Andere gekoppelde rekeningen",
+  "ledger_holding_instrument": "Instrumentpagina",
+  "ledger_holding_reconcile": "Deze positie afstemmen",
+  "ledger_unparented_holdings": "Posities buiten een beleggingsrekening",
+  "ledger_unparented_holdings_copy": "Deze posities hebben geen beleggingsrekening of bovenliggende rekening. Hun waarde telt mee in je totalen.",
+  "investments_instrument_holdings": "Posities"
 }

@@ -45,6 +45,8 @@ LedgerAccount:
   - unclassified_short
   - sources
   - cash_accounts
+  - other_accounts
+  - holding_accounts
   properties:
     account:
       $ref: ../../openapi.yaml#/components/schemas/AccountResponse
@@ -79,6 +81,17 @@ LedgerAccount:
       items:
         $ref: ../../openapi.yaml#/components/schemas/LedgerImportSource
     cash_accounts:
+      description: Cash-kind child registers (cash, checking, savings, brokerage cash) whose currency balances make up `cash`.
+      type: array
+      items:
+        $ref: ../../openapi.yaml#/components/schemas/AccountResponse
+    other_accounts:
+      description: Other ordinary child accounts counted in this row's value but not presented as cash.
+      type: array
+      items:
+        $ref: ../../openapi.yaml#/components/schemas/AccountResponse
+    holding_accounts:
+      description: Hidden holding accounts in this row's scope, whatever their status. They are never index rows; clients use them for holding register links and archive/delete dependency checks.
       type: array
       items:
         $ref: ../../openapi.yaml#/components/schemas/AccountResponse

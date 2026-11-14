@@ -15,10 +15,14 @@
 
   let {
     csrfToken,
+    requestedAccountID,
     onStarted,
     onAccountChange
   }: {
     csrfToken: string | undefined;
+    // An account named by the page URL (`?account=`), such as a holding's
+    // register link. A holding is reconciled only when asked for this way.
+    requestedAccountID?: number;
     onStarted: (session: ReconciliationSessionResponse) => void;
     // Lets the page show the selected account's checkpoints beside the form.
     onAccountChange?: (accountID: number | undefined, commodityID: number | undefined) => void;
@@ -32,12 +36,16 @@
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
 
   // Only cash/liability accounts that accept postings can be reconciled.
+  // Investment holdings are left out of the default list but stay
+  // reconcilable when explicitly requested: a holding statement checkpoint is
+  // a legitimate flow the investment commands review (#567 review).
   const reconcilableAccounts = $derived(
     (accountsQuery.data?.accounts ?? []).filter(
       (a: AccountResponse) =>
         (a.account_class === 'asset' || a.account_class === 'liability') &&
         a.status === 'active' &&
-        a.allows_postings && !isSubledgerManagedAccountKind(a.account_kind)
+        a.allows_postings &&
+        (!isSubledgerManagedAccountKind(a.account_kind) || a.id === requestedAccountID)
     )
   );
 
@@ -49,6 +57,16 @@
   );
 
   let accountID = $state<number | undefined>(undefined);
+  // Select the requested account once the list holds it; the owner may still
+  // change it afterwards.
+  let appliedRequest: number | undefined;
+  $effect(() => {
+    if (requestedAccountID === undefined || appliedRequest === requestedAccountID) return;
+    if (reconcilableAccounts.some((a) => a.id === requestedAccountID)) {
+      appliedRequest = requestedAccountID;
+      accountID = requestedAccountID;
+    }
+  });
   let statementDate = $state('');
   let balanceStr = $state('');
   let pending = $state(false);

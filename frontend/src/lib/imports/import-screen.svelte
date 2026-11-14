@@ -7,7 +7,6 @@
   import DividendReview from '#lib/imports/dividend-review.svelte';
   import ImportHistory from '#lib/imports/import-history.svelte';
   import { importView, importViewURL } from '#lib/imports/views.ts';
-  import { attentionQueryKey } from '#lib/api/attention.ts';
   import { isSubledgerManagedAccountKind } from '#lib/accounts/subledger-accounts.ts';
   import { useAttention } from '#lib/attention/context.ts';
 
@@ -110,6 +109,7 @@
   } from '#lib/api/connections.ts';
   import { m } from '#lib/paraglide/messages.js';
   import { invalidateInvestmentReads } from '#lib/investments/invalidate.ts';
+  import { invalidateImportReads } from '#lib/imports/invalidate.ts';
 
   const view = $derived(importView(page.url.searchParams));
   const attention = useAttention();
@@ -130,8 +130,7 @@
   }
 
   function rememberBatch(id: number | null, files = false) {
-    void queryClient.invalidateQueries({ queryKey: attentionQueryKey });
-    void queryClient.invalidateQueries({ queryKey: ['api', 'import-batches'] });
+    void invalidateImportReads(queryClient);
     const url = new URL(page.url.href);
     if (id) url.searchParams.set('batch_id', String(id));
     else url.searchParams.delete('batch_id');
@@ -175,6 +174,42 @@
       if (request === restoreRequest) restoreError = error;
     } finally {
       if (request === restoreRequest) restoring = false;
+    }
+  }
+
+  // A dividend recorded in the Dividends view changes rows of the batch the
+  // hidden Files view still holds. Returning to Files re-reads the batch, so
+  // it never offers to commit a row that is no longer pending; choices the
+  // owner made for rows that are still pending are kept.
+  let filesStale = $state(false);
+  let resyncRequest = 0;
+  $effect(() => {
+    if (view !== 'files' || !filesStale || batchWriting) return;
+    untrack(() => {
+      filesStale = false;
+      if (batchId && previewData && (step === 'preview' || step === 'result')) void resyncBatch(batchId);
+    });
+  });
+
+  async function resyncBatch(id: number) {
+    const request = ++resyncRequest;
+    try {
+      const refreshed = await getFullImportBatch(id);
+      if (request !== resyncRequest || id !== batchId || !previewData) return;
+      const pending = new Set(refreshed.rows.filter((row) => row.commit_status === 'pending' || row.commit_status === 'failed').map((row) => row.id));
+      const changed = previewData.rows.some((row) => (row.commit_status === 'pending' || row.commit_status === 'failed') && !pending.has(row.id));
+      previewData = { ...previewData, batch: refreshed.batch, rows: refreshed.rows, warnings: refreshed.warnings };
+      const kept = rowResolutions;
+      rowResolutions = new Map(refreshed.rows.map((row) => [row.id, pending.has(row.id) ? (kept.get(row.id) ?? parseResolution(row)) : parseResolution(row)]));
+      if (changed) {
+        // Reviews computed for the old row set no longer apply.
+        resetMatchReview();
+        reviewedCheckpoints = null;
+        reconciliationOverride = false;
+        gainReview = null;
+      }
+    } catch (error) {
+      if (request === resyncRequest) restoreError = error;
     }
   }
 
@@ -593,10 +628,15 @@
         };
         rowResolutions = new Map(result.rows.map((row) => [row.id, parseResolution(row)]));
         step = 'preview';
+        // The server staged the fetched rows after the start request
+        // returned, so counts read then (attention, the Dividends badge,
+        // history) are refreshed now.
+        void invalidateImportReads(queryClient);
         return;
       }
       if (meta.fetch_status === 'failed') {
         fetchFailed = true;
+        void invalidateImportReads(queryClient);
         return;
       }
       pollTimer = setTimeout(pollFetchStatus, 2000);
@@ -1001,8 +1041,8 @@
       csrfToken
     );
     commitResult = result;
-    void queryClient.invalidateQueries({ queryKey: attentionQueryKey });
-    void queryClient.invalidateQueries({ queryKey: ['api', 'import-batches'] });
+    // A commit can hold new dividend rows for the Dividends view.
+    void invalidateImportReads(queryClient);
     // An override covers one reviewed commit; held rows are reviewed afresh.
     reconciliationOverride = false;
     reviewedCheckpoints = null;
@@ -1380,7 +1420,7 @@
   ]} />
 </div>
 {#if view === 'dividends'}
-  <DividendReview batchID={linkedBatchID} embedded />
+  <DividendReview batchID={linkedBatchID} embedded onSaved={() => (filesStale = true)} />
 {:else if view === 'connections'}
   <div class="max-w-3xl space-y-6">
     <!-- Online connections panel -->

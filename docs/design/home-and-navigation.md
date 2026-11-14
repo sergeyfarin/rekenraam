@@ -1019,6 +1019,12 @@ An active batch write retains its batch identity through its whole command
 chain: view changes are allowed, but changing the selected batch, leaving the
 page or starting another import waits for the write to finish. New imports
 start with a fresh working copy; older reads and polls cannot replace it.
+Import writes use raw `fetch`, outside the shell's write middleware, so every
+import write (upload, commit, discard, dividend review) refreshes attention,
+Home, batch history, the Dividends queue and Ledger reads itself. A dividend
+recorded in the Dividends view marks the Files working copy stale; returning
+to Files re-reads the batch, keeping the owner's choices for rows still
+pending, so it never offers to commit a row that is no longer pending.
 
 ### Ledger account index (#448)
 
@@ -1036,14 +1042,32 @@ investment cash come from one ledger snapshot per response; valuation uses Net
 worth’s `live_raw_v1` policy and seven-day window. Missing prices/rates or an
 unclassified negative position leave the converted value unavailable.
 
-A brokerage is one index row, including cash children and hidden holding
-accounts. Its page shows combined cash (with unsettled amounts disclosed),
-links to the cash registers, position quantities/values and instrument links.
-Instruments link back to their brokerages. Holdings remain available to
-investment commands and explicit register links, but are excluded from the
-account index, search's account results and ordinary entry/reconcile/report
-pickers. Other ordinary children retain their own index rows to avoid counting
-their balances twice.
+A brokerage is one index row, including all its descendants: cash-kind
+children (cash, checking, savings, brokerage cash), other ordinary children
+and hidden holding accounts, each holding owned by its nearest brokerage
+ancestor. Its page shows cash (its own and its cash-kind children's currency,
+with unsettled amounts disclosed), links to the cash registers, other linked
+accounts (counted in value, never shown as cash), and position
+quantities/values with links to the instrument and to the holding's own
+register. Each row lists the holdings, cash and other accounts it folds in,
+so archive/close/delete and institution actions count them as dependents just
+as the server does. A holding with no non-holding ancestor is its own row,
+shown apart from the institution tree as "Holdings outside a brokerage", so
+its value is never missing. Outside brokerages, ordinary children keep their
+own rows to avoid counting their balances twice.
+
+A holding's register links to its instrument and to reconciliation for that
+holding; its breadcrumb adds its brokerage. The instrument page lists each
+holding of the instrument with its register and its brokerage (the nearest
+brokerage ancestor). Holdings remain available to investment commands, but
+are excluded from the account index, search's account results and ordinary
+entry/report pickers. Reconcile leaves holdings out of its default picker and
+selects one only when asked explicitly (`?account=` from the holding's
+register), because a holding statement checkpoint is a legitimate flow.
+
+Only a brokerage register reads the composed ledger detail, which values the
+whole book; every other register reads its one account, so ordinary registers
+never pay for or refetch the book-wide read after writes.
 
 Institutions support add, edit, archive and restore; the existing server
 refusal protects institutions still used by unarchived accounts. Source labels

@@ -38,7 +38,7 @@ test.describe('on a phone', () => {
 
     await page.goto(`/app/ledger/accounts/${account.id}/register`);
     await expect(pageHeader(page).getByRole('heading', { level: 1, name: account.name })).toBeVisible();
-    await expect(pageHeader(page).getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Accounts', exact: true }))
+    await expect(pageHeader(page).getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Overview', exact: true }))
       .toHaveAttribute('href', '/app/ledger');
     await noSidewaysScroll();
     await pageHeader(page).getByRole('button', { name: 'New transaction', exact: true }).tap();
