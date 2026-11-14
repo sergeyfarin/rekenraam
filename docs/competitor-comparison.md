@@ -209,16 +209,19 @@ What this means for Rekenraam:
   [public-release gates](roadmap.md#public-release-gates), not feature parity,
   are what stand between the delivered core and any outside user.
 
-Proposals raised by this review. None is accepted, and the roadmap is
-unchanged:
+Proposals raised by this review. The roadmap is unchanged; the owner confirmed
+the first on 2026-11-14 and the others await a decision:
 
 1. Keep the `v0.1.0` and announcement gates ahead of further investment depth.
-   This agrees with the roadmap's current order.
+   Confirmed by the owner; it agrees with the roadmap's current order.
 2. Consider importers for Firefly III, Actual and Sure exports as migration
    paths when R6 is scheduled.
 3. Decide explicitly whether a read-only MCP server fits the read-only stance
    toward outside systems. The October recheck above did not authorize one;
-   this review only shows that the 2026 field treats it as expected.
+   this review only shows that the 2026 field treats it as expected. The
+   proposal and its bounds are in
+   [#582](https://github.com/sergeyfarin/rekenraam/issues/582), outside the
+   `v0.1.0` milestone.
 4. Set a checkpoint some months after announcement. If no outside use appears,
    weigh keeping Rekenraam as the owner's own tool against further
    public-facing work.
