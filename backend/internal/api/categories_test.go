@@ -306,7 +306,7 @@ func TestBuiltInCategoryCannotBeEditedDisabledOrDeleted(t *testing.T) {
 
 // Delete refuses any child, archived or not; disabling is checked against
 // active children only, with its own dated code.
-func TestCategoryDeleteRefusesAParentWithOnlyArchivedChildren(t *testing.T) {
+func TestCategoryWithOnlyArchivedChildrenCannotBeDeletedButCanBeDisabled(t *testing.T) {
 	t.Parallel()
 
 	handler, _ := newSetupTestHandler(t)
