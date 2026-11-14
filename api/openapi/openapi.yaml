@@ -614,6 +614,26 @@ paths:
 
 components:
   responses:
+    ReferenceVersionConflict:
+      description: >-
+        A dated category, payee or institution write was refused (#552).
+        REFERENCE_DATED_CONFLICT — a rule involving another record fails on a
+        date the new version governs; conflict_rule, conflict_date and
+        conflict_name (or conflict_builtin_key) say which rule, the first
+        failing date and the other record. REFERENCE_VERSION_BACKDATED — a
+        lifecycle or structural change dated before the latest version;
+        conflict_date is that version's date. REFERENCE_VERSION_BEFORE_FIRST —
+        dated before the record's first version; conflict_date is the first
+        version's date. CONFLICT — a version was added while the edit was
+        prepared; reload and retry. Which of these an operation can return is
+        in its own description. No audit event or version is written.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
     JSONBodyTooLarge:
       description: >-
         REQUEST_TOO_LARGE — the JSON request body exceeds 1 MiB (1,048,576 bytes),
@@ -912,6 +932,8 @@ components:
       $ref: "./components/schemas/institutions.yaml#/InstitutionsResponse"
     InstitutionRequest:
       $ref: "./components/schemas/institutions.yaml#/InstitutionRequest"
+    InstitutionUpdateRequest:
+      $ref: "./components/schemas/institutions.yaml#/InstitutionUpdateRequest"
     InstitutionLifecycleRequest:
       $ref: "./components/schemas/institutions.yaml#/InstitutionLifecycleRequest"
     AccountClass:

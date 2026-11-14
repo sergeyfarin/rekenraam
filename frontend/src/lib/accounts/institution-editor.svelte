@@ -6,7 +6,8 @@
     createInstitution,
     updateInstitution,
     type InstitutionRequest,
-    type InstitutionResponse
+    type InstitutionResponse,
+    type InstitutionUpdateRequest
   } from '#lib/api/institutions.ts';
   import { m } from '#lib/paraglide/messages.js';
   import { institutionKindLabel, type InstitutionKind } from './account-labels';
@@ -57,6 +58,12 @@
         : m.institutions_form_create()
   );
 
+  // An edit dated before the current version corrects an earlier window. The
+  // form still shows today's values, so say what an untouched field keeps.
+  const correctsEarlierVersion = $derived(
+    mode === 'edit' && effectiveFrom !== '' && !!institution?.effective_from && effectiveFrom < institution.effective_from
+  );
+
   $effect(() => {
     institutionID = institution?.id;
     name = institution?.name ?? '';
@@ -81,11 +88,10 @@
     formError = undefined;
 
     try {
-      const input = requestFromForm();
       const saved =
         mode === 'edit' && institutionID
-          ? await updateInstitution(institutionID, input, csrfToken)
-          : await createInstitution(input, csrfToken);
+          ? await updateInstitution(institutionID, updateRequestFromForm(), csrfToken)
+          : await createInstitution(requestFromForm(), csrfToken);
 
       await onSaved(saved);
     } catch (error) {
@@ -106,6 +112,36 @@
     assignString(request, 'effective_from', effectiveFrom);
     assignString(request, 'change_reason', changeReason);
     assignString(request, 'comment_markdown', commentMarkdown);
+
+    return request;
+  }
+
+  // An edit sends only the fields the user changed. The server fills the rest
+  // from the version in effect on the chosen date, so an earlier-dated
+  // correction does not copy today's values into the past, and fields this
+  // form does not show (address, metadata) are kept (#552). A field emptied
+  // here is sent empty, which clears it.
+  function updateRequestFromForm(): InstitutionUpdateRequest {
+    const request: InstitutionUpdateRequest = {};
+    const changed = (value: string, original: string | null | undefined) => value.trim() !== (original ?? '').trim();
+
+    if (changed(name, institution?.name)) {
+      request.name = name.trim();
+    }
+    if (kind !== institution?.kind) {
+      request.kind = kind;
+    }
+    if (changed(countryCode.toUpperCase(), institution?.country_code)) {
+      request.country_code = countryCode.trim().toUpperCase();
+    }
+    if (changed(website, institution?.website)) {
+      request.website = website.trim();
+    }
+    if (changed(commentMarkdown, institution?.comment_markdown)) {
+      request.comment_markdown = commentMarkdown.trim();
+    }
+    assignString(request, 'effective_from', effectiveFrom);
+    assignString(request, 'change_reason', changeReason);
 
     return request;
   }
@@ -179,13 +215,24 @@
 
     <label>
       <span class={labelClass}>{m.accounts_field_effective_from()}</span>
-      <input bind:value={effectiveFrom} class={inputClass} type="date" />
+      <input
+        bind:value={effectiveFrom}
+        class={inputClass}
+        type="date"
+        aria-describedby={correctsEarlierVersion ? 'institution-earlier-date-hint' : undefined}
+      />
     </label>
 
     <label>
       <span class={labelClass}>{m.accounts_field_reason()}</span>
       <input bind:value={changeReason} class={inputClass} maxlength="500" />
     </label>
+
+    {#if correctsEarlierVersion}
+      <p id="institution-earlier-date-hint" class="text-sm text-muted sm:col-span-2">
+        {m.reference_edit_earlier_date_hint()}
+      </p>
+    {/if}
   </div>
 
   <label>

@@ -101,6 +101,9 @@ happen on a date.
 - Duplicate active names are rejected among siblings in the same income or
   expense tree. The same label may exist under different parents.
 
+Earlier-dated corrections and lifecycle refusals follow the shared
+[reference-data backdating contract](accounts-system-design.md) (#552).
+
 ## Categories Versus Tags
 
 Categories answer "what kind of income or expense is this?" A split or posting
