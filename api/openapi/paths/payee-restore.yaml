@@ -46,3 +46,6 @@ post:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      $ref: "../openapi.yaml#/components/responses/ReferenceVersionConflict"
+      description: REFERENCE_DATED_CONFLICT when an active payee holds the name on a date the restore governs; REFERENCE_VERSION_BACKDATED when dated before the latest version; CONFLICT for a stale edit.

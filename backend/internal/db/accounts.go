@@ -817,11 +817,23 @@ func requireNoDatedParentCycleTx(ctx context.Context, tx *sql.Tx, bookID int64, 
 			return fmt.Errorf("check account parent cycle on %s: %w", date, err)
 		}
 		if loops > 0 {
-			return ErrAccountParentCycle
+			return AccountParentCycleError{Date: date}
 		}
 	}
 	return nil
 }
+
+// AccountParentCycleError is ErrAccountParentCycle with the first date on
+// which the loop exists, for callers that explain a dated refusal (#552).
+type AccountParentCycleError struct {
+	Date string
+}
+
+func (e AccountParentCycleError) Error() string {
+	return fmt.Sprintf("%v on %s", ErrAccountParentCycle, e.Date)
+}
+
+func (e AccountParentCycleError) Unwrap() error { return ErrAccountParentCycle }
 
 // requirePostingsStayEligibleTx refuses a new account version that would
 // govern an existing posting and not accept it. Only postings the new version

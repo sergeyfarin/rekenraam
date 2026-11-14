@@ -70,13 +70,9 @@ func updateAccountVersion(t *testing.T, f referenceVersionFixture, accountID int
 
 func updateInstitutionVersion(t *testing.T, f referenceVersionFixture, institutionID int64, name, effectiveFrom string) Institution {
 	t.Helper()
-	current, err := f.institutions.Institution(context.Background(), institutionID)
-	require.NoError(t, err)
 	updated, err := f.institutions.UpdateInstitution(context.Background(), UpdateInstitutionInput{
 		OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "institution.update",
-		InstitutionID: institutionID, Name: name, Kind: current.Kind, CountryCode: current.CountryCode,
-		Website: current.Website, AddressJSON: current.AddressJSON, CommentMarkdown: current.CommentMarkdown,
-		MetadataJSON: current.MetadataJSON, EffectiveFrom: effectiveFrom, ChangeReason: "version sequence regression",
+		InstitutionID: institutionID, Name: new(name), EffectiveFrom: effectiveFrom, ChangeReason: "version sequence regression",
 	})
 	require.NoError(t, err)
 	return updated

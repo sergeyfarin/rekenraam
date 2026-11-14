@@ -75,7 +75,7 @@ func TestReferencedUnusedCategoryVersionsStillRefuse(t *testing.T) {
 	child := createGuardTestCategory(t, database, "child", custom, sql.NullInt64{Int64: parent, Valid: true})
 	_, err := NewCategoryRepository(database).UpdateCategory(ctx, UpdateCategoryParams{
 		BookID: 1, CategoryID: child, ChangedByUserID: 1, AuthSessionID: 1, RequestID: "guard-move",
-		OriginType: "browser_api", Operation: "category.update", Status: "active",
+		OriginType: "browser_api", Operation: "category.update",
 		Spec:         AccountSpec{Name: "child", AccountClass: "expense", AccountKind: "expense", AllowsPostings: true, MetadataJSON: custom, OpenedOn: "0001-01-01"},
 		ChangeReason: "moved to the top level", RecordedAt: "2026-10-27T00:00:00Z", EffectiveFrom: "0001-01-01",
 	})

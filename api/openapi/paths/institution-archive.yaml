@@ -63,14 +63,8 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: An account that is not archived still uses the institution
-      headers:
-        X-Request-ID:
-          $ref: "../openapi.yaml#/components/headers/XRequestID"
-      content:
-        application/json:
-          schema:
-            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+      $ref: "../openapi.yaml#/components/responses/ReferenceVersionConflict"
+      description: REFERENCE_DATED_CONFLICT when an account that is not archived uses the institution on a date the archive governs; REFERENCE_VERSION_BACKDATED when dated before the latest version; CONFLICT for a stale edit.
     "500":
       description: Internal server error
       headers:

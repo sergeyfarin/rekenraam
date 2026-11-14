@@ -68,7 +68,6 @@
   let collapsedCategoryIDs = $state<Set<number>>(new Set());
 
   const allCategories = $derived(categoriesQuery.data?.categories ?? []);
-  const activeCategories = $derived(allCategories.filter((category) => category.status === 'active'));
   const categoriesByID = $derived.by(() => new Map<number, CategoryResponse>(allCategories.map((category) => [category.id, category])));
   const activeChildCounts = $derived.by(() => countChildren(allCategories.filter((category) => category.status === 'active')));
   const anyChildCounts = $derived.by(() => countChildren(allCategories));
@@ -449,7 +448,7 @@
       <CategoryEditor
         mode={editor.type === 'edit' ? 'edit' : 'create'}
         category={editor.type === 'edit' ? editor.category : undefined}
-        categories={activeCategories}
+        categories={allCategories}
         {csrfToken}
         onSaved={handleSaved}
         onCancel={() => (editor = { type: 'none' })}

@@ -55,3 +55,15 @@ function daysInMonth(year: number, month: number): number {
   }
   return month === 4 || month === 6 || month === 9 || month === 11 ? 30 : 31;
 }
+
+/**
+ * A calendar date for display, in the reader's locale. Formatted in UTC from
+ * its parts so the reader's time zone cannot move it to the previous day.
+ * Anything that is not a calendar date is shown as received.
+ */
+export function formatCalendarDate(value: string, locale: string): string {
+  const match = ISO_DATE.exec(value);
+  if (!match || !isCalendarDate(value)) return value;
+  const instant = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(instant);
+}

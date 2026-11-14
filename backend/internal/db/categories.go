@@ -17,6 +17,10 @@ var (
 	ErrCategoryUsed                = errors.New("category has financial references")
 	ErrCategoryDeleteNotPermitted  = errors.New("category cannot be deleted")
 	ErrCategoryParentHasReferences = errors.New("category parent has references")
+	// ErrCategoryParentInvalid refuses a parent that is not an active
+	// category of the same type on every date the new version governs, or
+	// that makes the category its own ancestor on any of those dates.
+	ErrCategoryParentInvalid = errors.New("category parent is invalid")
 )
 
 type CategoryRepository struct {
@@ -63,10 +67,12 @@ type UpdateCategoryParams struct {
 	OriginType      string
 	Operation       string
 	Spec            AccountSpec
-	Status          string
-	ChangeReason    string
-	RecordedAt      string
-	EffectiveFrom   string
+	// BaseVersionID is the version the caller filled omitted fields from;
+	// zero skips the staleness check.
+	BaseVersionID int64
+	ChangeReason  string
+	RecordedAt    string
+	EffectiveFrom string
 }
 
 type CategoryLifecycleParams struct {
@@ -311,13 +317,60 @@ func (r *CategoryRepository) UpdateCategory(ctx context.Context, params UpdateCa
 	if err != nil {
 		return AccountRecord{}, err
 	}
-	status := params.Status
-	if status == "" {
-		status = current.Status
+	latest, err := latestAccountVersionDateTx(ctx, tx, params.CategoryID)
+	if err != nil {
+		return AccountRecord{}, err
 	}
-	if status == "active" && params.Spec.Name != "" {
-		if err := ensureActiveCategoryNameAvailable(ctx, tx, params.BookID, params.Spec.AccountClass, params.Spec.ParentAccountID, params.Spec.Name, params.CategoryID); err != nil {
+	// The version in effect on the requested date supplies the lifecycle the
+	// new version keeps (#552): the latest version for an ordinary edit, the
+	// historical one for an earlier-dated correction.
+	asOf, err := accountVersionAsOfTx(ctx, tx, params.BookID, params.CategoryID, params.EffectiveFrom)
+	if errors.Is(err, ErrNotFound) {
+		return AccountRecord{}, referenceVersionBeforeFirst(ctx, tx, accountVersionTable, params.CategoryID)
+	}
+	if err != nil {
+		return AccountRecord{}, err
+	}
+	if err := requireBaseVersionTx(params.BaseVersionID, asOf.VersionID); err != nil {
+		return AccountRecord{}, err
+	}
+	backdated := params.EffectiveFrom < latest
+	if backdated && accountStructureDiffers(asOf, params.Spec) {
+		return AccountRecord{}, ReferenceVersionBackdatedError{LatestEffectiveFrom: latest}
+	}
+	status := asOf.Status
+	params.Spec.ClosedOn = asOf.ClosedOn
+	checkName := status == "active" && params.Spec.Name != ""
+	// A forward edit's parent must be an active category on every date the
+	// version governs. An earlier-dated correction keeps its as-of parent,
+	// which already governed those dates. An archived category's unchanged
+	// parent is not re-validated: that link already exists.
+	checkParent := !backdated && params.Spec.ParentAccountID.Valid &&
+		(status == "active" || params.Spec.ParentAccountID != asOf.ParentAccountID)
+	if checkName || checkParent {
+		var sources []referenceDateSource
+		if checkName {
+			sources = append(sources, categoryNameDates(params.BookID, params.Spec.AccountClass, params.Spec.ParentAccountID, params.Spec.Name))
+		}
+		if checkParent {
+			sources = append(sources, accountOwnDates(params.Spec.ParentAccountID.Int64))
+		}
+		dates, err := referenceWindowDatesTx(ctx, tx, accountVersionTable, params.CategoryID, params.EffectiveFrom, sources...)
+		if err != nil {
 			return AccountRecord{}, err
+		}
+		for _, date := range dates {
+			dated := WithReferenceDate(ctx, date)
+			if checkName {
+				if err := ensureActiveCategoryNameAvailable(dated, tx, params.BookID, params.Spec.AccountClass, params.Spec.ParentAccountID, params.Spec.Name, params.CategoryID); err != nil {
+					return AccountRecord{}, datedCategoryNameConflict(err, date)
+				}
+			}
+			if checkParent {
+				if err := requireActiveCategoryParentTx(dated, tx, params.BookID, params.Spec.ParentAccountID.Int64, params.Spec.AccountClass); err != nil {
+					return AccountRecord{}, err
+				}
+			}
 		}
 	}
 
@@ -356,6 +409,30 @@ func (r *CategoryRepository) UpdateCategory(ctx context.Context, params UpdateCa
 	if err != nil {
 		return AccountRecord{}, err
 	}
+	// A forward edit dated in the past can close a loop on a later date that
+	// today's or its own date's tree does not show; the account check walks
+	// every date the new version governs.
+	if !backdated && params.Spec.ParentAccountID.Valid {
+		if err := requireNoDatedParentCycleTx(ctx, tx, params.BookID, params.CategoryID, params.EffectiveFrom); err != nil {
+			if cycle, ok := errors.AsType[AccountParentCycleError](err); ok {
+				name, builtinKey, labelErr := categoryLabelTx(WithReferenceDate(ctx, cycle.Date), tx, params.Spec.ParentAccountID.Int64)
+				if labelErr != nil {
+					return AccountRecord{}, labelErr
+				}
+				return AccountRecord{}, ReferenceRuleConflictError{Rule: ReferenceRuleCategoryParentCycle, Date: cycle.Date, Name: name, BuiltinKey: builtinKey, Err: ErrCategoryParentInvalid}
+			}
+			return AccountRecord{}, err
+		}
+	}
+	// Answer with the category as it stands on the caller's reference date,
+	// not the inserted version: an earlier-dated correction governs only its
+	// past window and must not read back as today's state.
+	if backdated {
+		record, err = currentCategoryByID(ctx, tx, params.BookID, params.CategoryID)
+		if err != nil {
+			return AccountRecord{}, err
+		}
+	}
 
 	if err := tx.Commit(); err != nil {
 		return AccountRecord{}, fmt.Errorf("commit update category transaction: %w", err)
@@ -386,21 +463,37 @@ func (r *CategoryRepository) ChangeCategoryStatus(ctx context.Context, params Ca
 	if err != nil {
 		return AccountRecord{}, err
 	}
+	latest, err := latestAccountVersionDateTx(ctx, tx, params.CategoryID)
+	if err != nil {
+		return AccountRecord{}, err
+	}
+	if params.EffectiveFrom < latest {
+		return AccountRecord{}, ReferenceVersionBackdatedError{LatestEffectiveFrom: latest}
+	}
 	if current.Status == params.Status {
 		return current, nil
 	}
-	if params.Status == "archived" {
-		hasChildren, err := categoryHasActiveChildren(ctx, tx, params.BookID, params.CategoryID)
-		if err != nil {
-			return AccountRecord{}, err
-		}
-		if hasChildren {
-			return AccountRecord{}, ErrCategoryHasChildren
-		}
+	// A lifecycle command dated in the past governs every day from its date
+	// through today, so its sibling rules hold on each of those days (#552).
+	source := categoryChildDates(params.CategoryID)
+	if params.Status == "active" {
+		source = categoryNameDates(params.BookID, current.AccountClass, current.ParentAccountID, current.Name.String)
 	}
-	if params.Status == "active" && current.Name.Valid {
-		if err := ensureActiveCategoryNameAvailable(ctx, tx, params.BookID, current.AccountClass, current.ParentAccountID, current.Name.String, params.CategoryID); err != nil {
-			return AccountRecord{}, err
+	dates, err := referenceWindowDatesTx(ctx, tx, accountVersionTable, params.CategoryID, params.EffectiveFrom, source)
+	if err != nil {
+		return AccountRecord{}, err
+	}
+	for _, date := range dates {
+		dated := WithReferenceDate(ctx, date)
+		if params.Status == "archived" {
+			if err := requireNoActiveCategoryChildTx(dated, tx, params.BookID, params.CategoryID); err != nil {
+				return AccountRecord{}, err
+			}
+		}
+		if params.Status == "active" && current.Name.Valid {
+			if err := ensureActiveCategoryNameAvailable(dated, tx, params.BookID, current.AccountClass, current.ParentAccountID, current.Name.String, params.CategoryID); err != nil {
+				return AccountRecord{}, datedCategoryNameConflict(err, date)
+			}
 		}
 	}
 
@@ -709,7 +802,7 @@ func currentCategoryByCode(ctx context.Context, tx *sql.Tx, bookID int64, code s
 
 func ensureActiveCategoryNameAvailable(ctx context.Context, tx *sql.Tx, bookID int64, categoryType string, parentID sql.NullInt64, name string, exceptCategoryID int64) error {
 	query := `
-		SELECT a.id
+		SELECT av.name
 		FROM accounts a
 		JOIN ` + CurrentReferenceVersions(ctx, "account") + ` av ON av.account_id = a.id
 		WHERE a.book_id = ?
@@ -729,21 +822,83 @@ func ensureActiveCategoryNameAvailable(ctx context.Context, tx *sql.Tx, bookID i
 	}
 	query += " LIMIT 1"
 
-	var existingID int64
-	if err := tx.QueryRowContext(ctx, query, args...).Scan(&existingID); err != nil {
+	var existing string
+	if err := tx.QueryRowContext(ctx, query, args...).Scan(&existing); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
 		return fmt.Errorf("check category name availability: %w", err)
 	}
 
-	return ErrCategoryExists
+	return categoryNameTakenError{name: existing}
 }
 
-func categoryHasActiveChildren(ctx context.Context, tx *sql.Tx, bookID int64, categoryID int64) (bool, error) {
-	var childID int64
+// categoryNameTakenError carries the sibling's stored name, which can differ
+// in case from the requested one. It unwraps to ErrCategoryExists.
+type categoryNameTakenError struct{ name string }
+
+func (e categoryNameTakenError) Error() string { return ErrCategoryExists.Error() }
+func (e categoryNameTakenError) Unwrap() error { return ErrCategoryExists }
+
+// datedCategoryNameConflict names the date and the sibling that already holds
+// the name on a date the new version governs.
+func datedCategoryNameConflict(err error, date string) error {
+	if taken, ok := errors.AsType[categoryNameTakenError](err); ok {
+		return ReferenceRuleConflictError{Rule: ReferenceRuleCategoryNameTaken, Date: date, Name: taken.name, Err: ErrCategoryExists}
+	}
+	return err
+}
+
+// requireActiveCategoryParentTx refuses a parent that is not an active
+// category of the given type on the context's reference date.
+func requireActiveCategoryParentTx(ctx context.Context, tx *sql.Tx, bookID int64, parentID int64, categoryType string) error {
+	var status, class, name, builtinKey string
 	err := tx.QueryRowContext(ctx, `
-		SELECT child.id
+		SELECT pv.status, pv.account_class, COALESCE(pv.name, ''),
+			COALESCE(json_extract(pv.metadata_json, '$.category.builtin_key'), '')
+		FROM accounts p
+		JOIN `+CurrentReferenceVersions(ctx, "account")+` pv ON pv.account_id = p.id
+		WHERE p.book_id = ?
+			AND p.id = ?
+			AND p.system_role IS NULL
+			AND `+categoryAccountPredicate("pv")+`
+	`, bookID, parentID).Scan(&status, &class, &name, &builtinKey)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrCategoryParentInvalid
+	}
+	if err != nil {
+		return fmt.Errorf("check category parent on %s: %w", ReferenceDate(ctx), err)
+	}
+	if class != categoryType {
+		return ErrCategoryParentInvalid
+	}
+	if status != "active" {
+		return ReferenceRuleConflictError{Rule: ReferenceRuleCategoryParentArchived, Date: ReferenceDate(ctx), Name: name, BuiltinKey: builtinKey, Err: ErrCategoryParentInvalid}
+	}
+	return nil
+}
+
+// categoryLabelTx reads a category's name and built-in key on the context's
+// reference date, for a refusal that names it.
+func categoryLabelTx(ctx context.Context, tx *sql.Tx, categoryID int64) (string, string, error) {
+	var name, builtinKey string
+	err := tx.QueryRowContext(ctx, `
+		SELECT COALESCE(av.name, ''), COALESCE(json_extract(av.metadata_json, '$.category.builtin_key'), '')
+		FROM `+CurrentReferenceVersions(ctx, "account")+` av
+		WHERE av.account_id = ?
+	`, categoryID).Scan(&name, &builtinKey)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return "", "", fmt.Errorf("read category label: %w", err)
+	}
+	return name, builtinKey, nil
+}
+
+// requireNoActiveCategoryChildTx refuses when an active category names this
+// one as its parent on the context's reference date.
+func requireNoActiveCategoryChildTx(ctx context.Context, tx *sql.Tx, bookID int64, categoryID int64) error {
+	var name, builtinKey string
+	err := tx.QueryRowContext(ctx, `
+		SELECT COALESCE(child_av.name, ''), COALESCE(json_extract(child_av.metadata_json, '$.category.builtin_key'), '')
 		FROM accounts child
 		JOIN `+CurrentReferenceVersions(ctx, "account")+` child_av ON child_av.account_id = child.id
 		WHERE child.book_id = ?
@@ -751,15 +906,16 @@ func categoryHasActiveChildren(ctx context.Context, tx *sql.Tx, bookID int64, ca
 			AND child.system_role IS NULL
 			AND child_av.status = 'active'
 			AND `+categoryAccountPredicate("child_av")+`
+		ORDER BY child.id
 		LIMIT 1
-	`, bookID, categoryID).Scan(&childID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return false, nil
-		}
-		return false, fmt.Errorf("check category active children: %w", err)
+	`, bookID, categoryID).Scan(&name, &builtinKey)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
 	}
-	return true, nil
+	if err != nil {
+		return fmt.Errorf("check category active children: %w", err)
+	}
+	return ReferenceRuleConflictError{Rule: ReferenceRuleCategoryActiveChild, Date: ReferenceDate(ctx), Name: name, BuiltinKey: builtinKey, Err: ErrCategoryHasChildren}
 }
 
 func categoryHasAnyChildren(ctx context.Context, tx *sql.Tx, bookID int64, categoryID int64) (bool, error) {

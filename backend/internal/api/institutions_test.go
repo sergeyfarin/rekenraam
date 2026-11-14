@@ -91,7 +91,9 @@ func TestUpdateInstitutionCreatesAppendOnlyVersion(t *testing.T) {
 	handler, database := newSetupTestHandler(t)
 	sessionCookie, csrfToken := createOwnerSession(t, handler)
 	createBookForSession(t, handler, sessionCookie, csrfToken, "Personal")
-	institution := createInstitutionForSession(t, handler, sessionCookie, csrfToken, `{"name":"Old Bank","kind":"bank"}`)
+	// #552: an update cannot precede the institution's first version. Give
+	// this fixture an explicit history before the dated correction below.
+	institution := createInstitutionForSession(t, handler, sessionCookie, csrfToken, `{"name":"Old Bank","kind":"bank","effective_from":"2020-01-01"}`)
 
 	req := httptest.NewRequest(http.MethodPatch, "/api/v1/institutions/"+strconvFormatInt(institution.ID), strings.NewReader(`{
 		"name": "Renamed Bank",
@@ -151,9 +153,13 @@ func TestUpdateInstitutionCanClearOptionalFields(t *testing.T) {
 		"metadata":{"tag":"old"}
 	}`)
 
+	// PATCH is partial: a field is cleared by sending it empty.
 	req := httptest.NewRequest(http.MethodPatch, "/api/v1/institutions/"+strconvFormatInt(institution.ID), strings.NewReader(`{
-		"name": "Clear Fields Bank",
-		"kind": "bank"
+		"country_code": "",
+		"website": "",
+		"address": {},
+		"comment_markdown": "",
+		"metadata": {}
 	}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(csrfTokenHeader, csrfToken)
@@ -167,11 +173,53 @@ func TestUpdateInstitutionCanClearOptionalFields(t *testing.T) {
 
 	var body institutionResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, "Clear Fields Bank", body.Name)
+	assert.Equal(t, "bank", body.Kind)
 	assert.Equal(t, "", body.CountryCode)
 	assert.Equal(t, "", body.Website)
 	assert.Equal(t, "{}", string(body.Address))
 	assert.Equal(t, "", body.CommentMarkdown)
 	assert.Equal(t, "{}", string(body.Metadata))
+}
+
+// The institution editor edits only some fields; an omitted field must keep
+// the stored value instead of resetting it (#552 review: address and metadata
+// were wiped by every editor save).
+func TestUpdateInstitutionKeepsOmittedFields(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken := createOwnerSession(t, handler)
+	createBookForSession(t, handler, sessionCookie, csrfToken, "Personal")
+	institution := createInstitutionForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Keep Fields Bank",
+		"kind":"brokerage",
+		"country_code":"NL",
+		"website":"https://keep.example",
+		"address":{"city":"Utrecht"},
+		"comment_markdown":"Keep me",
+		"metadata":{"tag":"kept"}
+	}`)
+
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/institutions/"+strconvFormatInt(institution.ID), strings.NewReader(`{"name": "Kept Fields Bank"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(req)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusOK, res.Code, res.Body.String())
+	var body institutionResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, "Kept Fields Bank", body.Name)
+	assert.Equal(t, "brokerage", body.Kind)
+	assert.Equal(t, "NL", body.CountryCode)
+	assert.Equal(t, "https://keep.example", body.Website)
+	assert.JSONEq(t, `{"city":"Utrecht"}`, string(body.Address))
+	assert.Equal(t, "Keep me", body.CommentMarkdown)
+	assert.JSONEq(t, `{"tag":"kept"}`, string(body.Metadata))
 }
 
 func TestArchiveInstitutionHidesFromDefaultListAndRestoreShowsIt(t *testing.T) {

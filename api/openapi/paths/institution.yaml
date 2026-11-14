@@ -125,6 +125,7 @@ delete:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
 patch:
   summary: Update an institution by creating a new version
+  description: "Partial update: omitted fields keep the values of the version in effect on effective_from. Institution fields are descriptive, so any date on or after the first version is accepted; a correction dated before the latest version governs only until the next version and keeps the lifecycle in effect on its date. The response is the institution as it stands today, which for such a correction is not the version just written; the versions endpoint lists it."
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/InstitutionID"
     - in: header
@@ -138,7 +139,7 @@ patch:
     content:
       application/json:
         schema:
-          $ref: "../openapi.yaml#/components/schemas/InstitutionRequest"
+          $ref: "../openapi.yaml#/components/schemas/InstitutionUpdateRequest"
   responses:
     "413":
       $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
@@ -196,3 +197,6 @@ patch:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      $ref: "../openapi.yaml#/components/responses/ReferenceVersionConflict"
+      description: REFERENCE_VERSION_BEFORE_FIRST before the first version; CONFLICT for a stale edit.
