@@ -23,11 +23,17 @@ describe('brokerage ancestry', () => {
     expect(nearestBrokerage(looped, byID)).toBeUndefined();
   });
 
-  it('walks by id reads the same way', async () => {
-    const read = async (id: number) => byID.get(id)!;
-    expect((await findBrokerageAncestor(nested, read))?.id).toBe(1);
-    expect(await findBrokerageAncestor(orphan, read)).toBeNull();
-    expect(await findBrokerageAncestor(looped, read)).toBeNull();
+  it('finds the same brokerage with at most one parent read and one catalog read', async () => {
+    const reads: string[] = [];
+    const read = async (id: number) => { reads.push(`account ${id}`); return byID.get(id)!; };
+    const readCatalog = async () => { reads.push('catalog'); return [...byID.values()]; };
+    expect((await findBrokerageAncestor(direct, read, readCatalog))?.id).toBe(1);
+    expect(reads).toEqual(['account 1']);
+    reads.length = 0;
+    expect((await findBrokerageAncestor(nested, read, readCatalog))?.id).toBe(1);
+    expect(reads).toEqual(['account 2', 'catalog']);
+    expect(await findBrokerageAncestor(orphan, read, readCatalog)).toBeNull();
+    expect(await findBrokerageAncestor(looped, read, readCatalog)).toBeNull();
   });
 
   it('follows a chain deeper than any fixed limit, as the server owner walk does', async () => {
@@ -35,6 +41,9 @@ describe('brokerage ancestry', () => {
     const deep = account(200, 'security_holding', 139);
     const deepByID = new Map([...chain, deep].map(a => [a.id, a]));
     expect(nearestBrokerage(deep, deepByID)?.id).toBe(1);
-    expect((await findBrokerageAncestor(deep, async id => deepByID.get(id)!))?.id).toBe(1);
+    let reads = 0;
+    const found = await findBrokerageAncestor(deep, async id => { reads++; return deepByID.get(id)!; }, async () => { reads++; return [...deepByID.values()]; });
+    expect(found?.id).toBe(1);
+    expect(reads).toBe(2);
   });
 });

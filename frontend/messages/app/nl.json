@@ -2097,5 +2097,6 @@
   "ledger_empty_holdings": "Posities zonder stukken",
   "ledger_account_children_block": "Rekeningen onder deze rekening houden sommige acties tegen totdat ze zijn gesloten, gearchiveerd of verwijderd.",
   "ledger_archived_accounts": "Gearchiveerde rekeningen",
-  "ledger_archived_accounts_copy": "Gearchiveerde rekeningen staan niet in de boom. Open er een om hem te herstellen of te verwijderen."
+  "ledger_archived_accounts_copy": "Gearchiveerde rekeningen staan niet in de boom. Open er een om hem te herstellen of te verwijderen.",
+  "ledger_account_children": "Rekeningen onder deze rekening"
 }

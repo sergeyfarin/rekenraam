@@ -14,7 +14,7 @@
     type AccountResponse
   } from '#lib/api/accounts.ts';
   import { ledgerQueryKey } from '#lib/api/ledger.ts';
-  import { accountDisplayName, accountStatusLabel } from './account-labels.ts';
+  import { accountDisplayName, accountLabelWithStatus, accountStatusLabel } from './account-labels.ts';
   import { childDependents, noDependents } from './dependents.ts';
 
   // Lifecycle actions on an account's own register (#567 review). Every
@@ -38,6 +38,14 @@
     delete: !dependents || dependents.all > 0
   });
   const childrenBlock = $derived(!!dependents && dependents.all > 0);
+  // The direct children that hold an action back, each linking to its own
+  // register: a child the index folds into an ordinary row (a holding under
+  // a cash account) is reachable from here even when it is archived.
+  const children = $derived(
+    (catalogQuery.data?.accounts ?? [])
+      .filter((child) => child.parent_account_id === account.id)
+      .sort((a, b) => accountDisplayName(a).localeCompare(accountDisplayName(b)))
+  );
   let pending = $state('');
   let error = $state<unknown>(undefined);
   const name = $derived(accountDisplayName(account));
@@ -87,7 +95,14 @@
     {/if}
     <button type="button" class="inline-flex min-h-11 items-center rounded-(--radius-control) border border-danger/30 bg-danger-soft px-3 text-sm font-semibold text-danger transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60" disabled={!!pending || !csrfToken || blocked.delete} onclick={remove}>{m.accounts_action_delete({ name })}</button>
   </div>
-  {#if childrenBlock}<p class="text-sm text-muted">{m.ledger_account_children_block()}</p>{/if}
+  {#if childrenBlock}
+    <p class="text-sm text-muted">{m.ledger_account_children_block()}</p>
+    <ul class="flex flex-wrap gap-x-3" aria-label={m.ledger_account_children()}>
+      {#each children as child (child.id)}
+        <li><a class="inline-flex min-h-11 items-center text-sm font-semibold underline" href={`/app/ledger/accounts/${child.id}/register`}>{accountLabelWithStatus(child)}</a></li>
+      {/each}
+    </ul>
+  {/if}
   {#if catalogQuery.isError}<APIFormError error={catalogQuery.error} />{/if}
   </div>
   </details>

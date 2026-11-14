@@ -184,9 +184,12 @@
   // owner made for rows that are still pending are kept.
   let filesStale = $state(false);
   let resyncing = $state(false);
+  let resyncError = $state<unknown>(undefined);
   let resyncRequest = 0;
+  // A split or short link in flight is a batch write the panels own.
+  let linkPending = $state(false);
   $effect(() => {
-    if (view !== 'files' || !filesStale || batchWriting || reviewedCheckpointsPending) return;
+    if (view !== 'files' || !filesStale || batchBusy) return;
     untrack(() => {
       filesStale = false;
       if (batchId && previewData && (step === 'preview' || step === 'result')) void resyncBatch(batchId);
@@ -196,6 +199,7 @@
   async function resyncBatch(id: number) {
     const request = ++resyncRequest;
     resyncing = true;
+    resyncError = undefined;
     try {
       const refreshed = await getFullImportBatch(id);
       if (request !== resyncRequest || id !== batchId || !previewData) return;
@@ -213,7 +217,9 @@
         gainReview = null;
       }
     } catch (error) {
-      if (request === resyncRequest) restoreError = error;
+      // The working copy stays, with its choices, and stays held: retrying
+      // re-reads it again rather than restoring the batch from scratch.
+      if (request === resyncRequest) resyncError = error;
     } finally {
       if (request === resyncRequest) resyncing = false;
     }
@@ -323,10 +329,13 @@
   let discardError = $state<unknown>(undefined);
   let showDiscardConfirm = $state(false);
 
-  const batchWriting = $derived(uploading || startingOnlineConnectionId !== null || committing || discarding || sourceCorrectionPending || matchCheckPending);
-  // A resync replaces the working copy, so no batch write may start from the
-  // stale one until it lands. It is a read: it does not hold navigation.
-  const batchBusy = $derived(batchWriting || resyncing);
+  // Every batch write, including the override review (it saves resolutions)
+  // and a split/short link: each holds navigation and every other write.
+  const batchWriting = $derived(uploading || startingOnlineConnectionId !== null || committing || discarding || sourceCorrectionPending || matchCheckPending || reviewedCheckpointsPending || linkPending);
+  // A resync or a result-view re-read replaces the working copy, so no batch
+  // write may start from the stale one until it lands, nor after a resync
+  // failed until it is retried. Reads do not hold navigation.
+  const batchBusy = $derived(batchWriting || resyncing || reviewChangedPending || resyncError !== undefined);
   beforeNavigate(navigation => {
     if (!batchWriting) return;
     const next = navigation.to?.url;
@@ -828,8 +837,9 @@
     if (!previewData?.rows.some(row => row.id === rowId)) return;
     // The re-read below supersedes a resync still in flight: both replace the
     // working copy, and this one already includes the link.
-    resyncRequest++;
+    const request = ++resyncRequest;
     resyncing = false;
+    resyncError = undefined;
     splitLinkRowID = null;
     shortLinkRowID = null;
     if (previewData) {
@@ -844,7 +854,8 @@
     try {
       const selectedID = batchId;
       const refreshed = await getFullImportBatch(selectedID);
-      if (selectedID !== batchId) return;
+      // A later re-read of the batch owns the working copy.
+      if (selectedID !== batchId || request !== resyncRequest) return;
       if (previewData) previewData = { ...previewData, batch: refreshed.batch, rows: refreshed.rows, warnings: refreshed.warnings };
     } catch {
       // The link is committed; keep the local row state.
@@ -852,7 +863,7 @@
   }
 
   async function handleReviewChangedFills() {
-    if (!batchId || !previewData) return;
+    if (batchBusy || !batchId || !previewData) return;
     reviewChangedPending = true;
     reviewChangedError = undefined;
     try {
@@ -1088,7 +1099,7 @@
   // Back to the preview with the batch's current rows and commit controls,
   // so held and failed rows can be fixed and committed in the same batch.
   async function handleReviewRemainingRows() {
-    if (!batchId || !previewData) return;
+    if (batchBusy || !batchId || !previewData) return;
     reviewChangedPending = true;
     reviewRemainingError = undefined;
     try {
@@ -1137,6 +1148,8 @@
   function handleImportAnother(updateURL = true) {
     if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
     sourceCorrectionAcceptGains = false;
+    // A re-read of the previous batch, in flight or failed, is not this one's.
+    resyncRequest++; resyncing = false; resyncError = undefined; filesStale = false;
     if (updateURL) rememberBatch(null);
     resetMatchReview();
     rowResolutions = new Map();
@@ -1712,6 +1725,14 @@
   <APIFormError error={restoreError} />
   <button type="button" class="min-h-11 text-sm underline" onclick={() => linkedBatchID && restoreBatch(linkedBatchID)}>{m.install_gate_retry()}</button>
 {:else}
+{#if resyncError}
+  <!-- A failed re-read keeps the working copy and its choices, held until
+       a retry lands; it never falls back to restoring the batch afresh. -->
+  <div class="mb-4 space-y-2">
+    <APIFormError error={resyncError} />
+    <button type="button" class="min-h-11 text-sm underline" disabled={resyncing} onclick={() => batchId && resyncBatch(batchId)}>{m.install_gate_retry()}</button>
+  </div>
+{/if}
 <!-- Upload step -->
 {#if step === 'upload'}
   <div class="max-w-2xl space-y-6">
@@ -2154,7 +2175,7 @@
               {#if splitLinkRowID === row.id && batchId}
                 <tr class="border-b border-border bg-control">
                   <td colspan="9" class="px-4 py-4">
-                    <SplitLinkPanel batchId={batchId} rowId={row.id} {csrfToken} {accounts} disabled={batchBusy} onLinked={() => handleOperationLinked(row.id)} />
+                    <SplitLinkPanel batchId={batchId} rowId={row.id} {csrfToken} {accounts} disabled={batchBusy} onPending={(value) => (linkPending = value)} onLinked={() => handleOperationLinked(row.id)} />
                   </td>
                 </tr>
               {/if}
@@ -2163,7 +2184,7 @@
                   <td colspan="9" class="px-4 py-4">
                     <!-- Pinned to the visible width so the review stays readable inside the scrolling table on a phone. -->
                     <div class="sticky left-4 max-w-[calc(100vw-4rem)]">
-                      <ShortLinkPanel batchId={batchId} rowId={row.id} {csrfToken} {accounts} disabled={batchBusy} onLinked={() => handleOperationLinked(row.id)} />
+                      <ShortLinkPanel batchId={batchId} rowId={row.id} {csrfToken} {accounts} disabled={batchBusy} onPending={(value) => (linkPending = value)} onLinked={() => handleOperationLinked(row.id)} />
                     </div>
                   </td>
                 </tr>
@@ -2242,6 +2263,7 @@
         choices={matchChoices}
         {currencies}
         pending={matchCheckPending}
+        disabled={batchBusy}
         error={matchCheckError}
         decide={matchDecide}
         onCheck={() => void handleCheckMatches()}
@@ -2366,7 +2388,7 @@
         {#if commitResult.skipped_count > 0}
           <p class="text-muted">{m.import_result_skipped({ count: commitResult.skipped_count })}</p>
           {#if previewData?.rows.some((row) => row.source_changed)}
-            <button type="button" disabled={reviewChangedPending} class="text-sm font-semibold text-foreground underline underline-offset-2 disabled:opacity-60" onclick={() => void handleReviewChangedFills()}>
+            <button type="button" disabled={batchBusy} class="text-sm font-semibold text-foreground underline underline-offset-2 disabled:opacity-60" onclick={() => void handleReviewChangedFills()}>
               {m.import_result_review_changed_fills()}
             </button>
             <APIFormError error={reviewChangedError} id="review-changed-error" />
@@ -2382,7 +2404,7 @@
           <p class="text-warning">{m.import_result_reconciliation_stale({ count: commitResult.reconciliation_stale_row_ids.length })}</p>
         {/if}
         {#if commitResult.failed_count > 0 || commitResult.reconciliation_hold_row_ids.length > 0 || commitResult.reconciliation_stale_row_ids.length > 0 || commitResult.match_review_row_ids.length > 0}
-          <button type="button" disabled={reviewChangedPending} class="inline-flex min-h-11 items-center text-sm font-semibold text-foreground underline underline-offset-2 disabled:opacity-60" onclick={() => void handleReviewRemainingRows()}>
+          <button type="button" disabled={batchBusy} class="inline-flex min-h-11 items-center text-sm font-semibold text-foreground underline underline-offset-2 disabled:opacity-60" onclick={() => void handleReviewRemainingRows()}>
             {m.import_result_review_remaining()}
           </button>
           <APIFormError error={reviewRemainingError} id="review-remaining-error" />
@@ -2424,7 +2446,7 @@
     impacts={[]}
     gainRows={gainReview.rows}
     gainRefreshed={gainReview.refreshed}
-    pending={committing}
+    pending={batchBusy}
     onCancel={() => (gainReview = null)}
     onConfirm={() => void confirmImportGains()}
   />

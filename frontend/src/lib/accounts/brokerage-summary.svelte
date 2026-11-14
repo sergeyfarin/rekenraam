@@ -4,8 +4,7 @@
   import type { LedgerAccount, LedgerOverview } from '#lib/api/ledger.ts';
   import Panel from '#lib/components/panel.svelte';
   import LedgerValue from './ledger-value.svelte';
-  import { accountDisplayName, accountStatusLabel } from './account-labels.ts';
-  import type { AccountResponse } from '#lib/api/accounts.ts';
+  import { accountLabelWithStatus as label } from './account-labels.ts';
   import { m } from '#lib/paraglide/messages.js';
   let { summary, commodities, asOf }: { summary: LedgerAccount; commodities: LedgerOverview['commodities']; asOf: string } = $props();
   const dateLabel = $derived(new Intl.DateTimeFormat(getLocale(), { year: 'numeric', month: 'short', day: 'numeric' }).format(parseISO(asOf)));
@@ -15,7 +14,6 @@
   // Every folded child stays reachable, including closed or archived ones and
   // holdings with no units: they still count as the brokerage's dependents,
   // and their registers carry their own lifecycle actions.
-  const label = (account: AccountResponse) => account.status === 'active' ? accountDisplayName(account) : `${accountDisplayName(account)} (${accountStatusLabel(account.status)})`;
   // Each position links to its instrument and to its holding's own register,
   // with the holding's status when it is closed or archived.
   const holdingName = (id: number) => { const account = holdings.get(id); return account ? label(account) : String(id); };

@@ -5,8 +5,10 @@ import type { AccountResponse } from '#lib/api/accounts.ts';
  * parent. Each action has its own rule:
  *
  * - archive: the server refuses while any child is not archived (#294);
- * - delete: any child version references the parent, archived or not, and
- *   the server refuses any referenced account;
+ * - delete: any current child, archived or not. This is only the part the
+ *   catalog shows: the server also refuses an account referenced by a past
+ *   version's parent, postings, payee defaults or reconciliation, and that
+ *   refusal is shown when it comes (#567 review);
  * - close: the server allows it, but the index asks for active children to be
  *   closed first, so a closed parent never carries active accounts.
  *

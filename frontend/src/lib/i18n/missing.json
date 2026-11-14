@@ -1,8 +1,8 @@
 {
   "counts": {
-    "es": 150,
-    "fr": 150,
-    "de": 150
+    "es": 151,
+    "fr": 151,
+    "de": 151
   },
   "keys": {
     "es": [
@@ -122,6 +122,7 @@
       "investments_trade_unit_price_non_positive",
       "investments_trade_unit_price_precision",
       "ledger_account_actions",
+      "ledger_account_children",
       "ledger_account_children_block",
       "ledger_account_reopen",
       "ledger_account_restore",
@@ -274,6 +275,7 @@
       "investments_trade_unit_price_non_positive",
       "investments_trade_unit_price_precision",
       "ledger_account_actions",
+      "ledger_account_children",
       "ledger_account_children_block",
       "ledger_account_reopen",
       "ledger_account_restore",
@@ -426,6 +428,7 @@
       "investments_trade_unit_price_non_positive",
       "investments_trade_unit_price_precision",
       "ledger_account_actions",
+      "ledger_account_children",
       "ledger_account_children_block",
       "ledger_account_reopen",
       "ledger_account_restore",

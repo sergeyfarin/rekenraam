@@ -1,9 +1,9 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { createQuery } from '@tanstack/svelte-query';
+  import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import { m } from '#lib/paraglide/messages.js';
   import { breadcrumbs, routeFor } from '#lib/navigation/routes.ts';
-  import { accountQueryOptions, accountsQueryKey, getAccount } from '#lib/api/accounts.ts';
+  import { accountQueryOptions, accountsQueryKey, accountsQueryOptions, getAccount } from '#lib/api/accounts.ts';
   import { ledgerAccountQueryOptions } from '#lib/api/ledger.ts';
   import { findBrokerageAncestor, isHoldingAccount } from '#lib/accounts/brokerage.ts';
   import { isCategoryAccount } from '#lib/accounts/account-labels.ts';
@@ -16,6 +16,7 @@
   import { holdingAccountPrefill } from '#lib/investments/investment-prefill.ts';
 
   const accountID = $derived(Number(page.params.id));
+  const queryClient = useQueryClient();
 
   // The register's own account, read by id: an archived account or one far
   // down a large catalog still names the page and seeds New transaction (#518).
@@ -32,10 +33,11 @@
   const summary = $derived(summaryQuery.data?.accounts[0]);
   // A register of an account inside a brokerage (a holding, a cash or other
   // child) leads back to that brokerage: the nearest brokerage ancestor, as
-  // Ledger Overview owns it. Usually one read, the direct parent.
+  // Ledger Overview owns it. Usually one read, the direct parent; never more
+  // than that and one catalog read.
   const brokerageQuery = createQuery(() => ({
     queryKey: [...accountsQueryKey, 'brokerage-of', accountID] as const,
-    queryFn: () => findBrokerageAncestor(account!, getAccount),
+    queryFn: () => findBrokerageAncestor(account!, getAccount, async () => (await queryClient.fetchQuery(accountsQueryOptions(true, false))).accounts),
     enabled: !!account?.parent_account_id && account.account_kind !== 'brokerage',
     staleTime: 10_000
   }));
@@ -100,7 +102,9 @@
     {/if}
     {#if managed && account}
       <div class="mb-4">
-        <AccountLifecycleActions {account} {csrfToken} {afterDelete} />
+        <!-- Keyed: moving between registers reuses this page, and one
+             account's open state, pending action or error is not another's. -->
+        {#key account.id}<AccountLifecycleActions {account} {csrfToken} {afterDelete} />{/key}
       </div>
     {/if}
     <AccountRegister {accountID} {csrfToken} {actions} onRowClick={(entry) => actions.showTransaction(entry.transaction_id)} />

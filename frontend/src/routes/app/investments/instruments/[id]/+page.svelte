@@ -5,6 +5,7 @@
   import { m } from '#lib/paraglide/messages.js';
   import { accountsQueryOptions } from '#lib/api/accounts.ts';
   import { isHoldingAccount, nearestBrokerage } from '#lib/accounts/brokerage.ts';
+  import { accountLabelWithStatus } from '#lib/accounts/account-labels.ts';
   import { investmentInstrumentsQueryOptions } from '#lib/api/investments.ts';
   import Panel from '#lib/components/panel.svelte';
   import StatePanel from '#lib/components/state-panel.svelte';
@@ -19,7 +20,9 @@
   const commodityID = $derived(Number(page.params.id));
 
   const instrumentsQuery = createQuery(() => investmentInstrumentsQueryOptions());
-  const accountsQuery = createQuery(() => accountsQueryOptions(false, false));
+  // Archived holdings are listed too, labelled: their register is where they
+  // are restored or deleted. New transaction prefill takes active ones only.
+  const accountsQuery = createQuery(() => accountsQueryOptions(true, false));
   const instrument = $derived(instrumentsQuery.data?.instruments.find((item) => item.commodity_id === commodityID));
 
   // Each holding of this instrument, with its register and its broker (the
@@ -67,7 +70,7 @@
         <ul class="flex flex-col gap-x-6 sm:flex-row sm:flex-wrap" aria-label={m.investments_instrument_holdings()}>
           {#each holdings as { account, brokerage } (account.id)}
             <li class="flex min-w-0 flex-wrap items-center gap-x-3">
-              <a class="inline-flex min-h-11 items-center text-sm font-semibold underline" href={`/app/ledger/accounts/${account.id}/register`}>{account.name || account.code}</a>
+              <a class="inline-flex min-h-11 items-center text-sm font-semibold underline" href={`/app/ledger/accounts/${account.id}/register`}>{accountLabelWithStatus(account)}</a>
               {#if brokerage}<a class="inline-flex min-h-11 items-center text-sm text-muted underline" href={`/app/ledger/accounts/${brokerage.id}/register`}>{brokerage.name || brokerage.code}</a>{/if}
             </li>
           {/each}

@@ -29,20 +29,21 @@ export function nearestBrokerage(
 }
 
 /**
- * The same walk for a page that holds one account rather than the catalog:
- * reads each ancestor by id (usually one read, the direct parent).
+ * The same walk for a page that holds one account rather than the catalog.
+ * Most accounts sit directly under their brokerage, or under no parent that
+ * has a parent of its own, so one read of the direct parent settles them. A
+ * deeper chain reads the catalog once and walks it in memory, so the cost
+ * never grows with the depth (#567 review: no per-ancestor fan-out).
  */
 export async function findBrokerageAncestor(
   account: AccountResponse,
-  read: (id: number) => Promise<AccountResponse>
+  read: (id: number) => Promise<AccountResponse>,
+  readCatalog: () => Promise<readonly AccountResponse[]>
 ): Promise<AccountResponse | null> {
-  const seen = new Set<number>([account.id]);
-  let parentID = account.parent_account_id;
-  while (parentID && !seen.has(parentID)) {
-    seen.add(parentID);
-    const parent = await read(parentID);
-    if (parent.account_kind === 'brokerage') return parent;
-    parentID = parent.parent_account_id;
-  }
-  return null;
+  if (!account.parent_account_id || account.parent_account_id === account.id) return null;
+  const parent = await read(account.parent_account_id);
+  if (parent.account_kind === 'brokerage') return parent;
+  if (!parent.parent_account_id) return null;
+  const catalog = await readCatalog();
+  return nearestBrokerage(account, new Map(catalog.map((item) => [item.id, item]))) ?? null;
 }

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
+  import { goto, replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import { ledgerOverviewQueryOptions } from '#lib/api/ledger.ts';
   import PageHeader from '#lib/components/page-header.svelte';
@@ -50,9 +50,10 @@
     accountKindLabel,
     institutionCountryLabel,
     institutionKindLabel,
-    isCategoryAccount
+    isCategoryAccount,
+    accountLabelWithStatus
   } from './account-labels';
-  import type { AccountTypeFilter, StatusFilter } from './account-list-options';
+  import { parseStatusFilter, type AccountTypeFilter, type StatusFilter } from './account-list-options';
 
   type EditorState =
     | { type: 'none' }
@@ -72,15 +73,24 @@
   const sessionQuery = createQuery(() => authSessionQueryOptions());
   const queryClient = useQueryClient();
 
-  let statusFilter = $state<StatusFilter>('active');
+  // The status filter lives in the URL (#326 convention), so Back from an
+  // archived account's register returns to the Archived list (#567 review).
+  const filterURL = $derived(page.shallow?.url ?? page.url);
+  const statusFilter = $derived(parseStatusFilter(filterURL.searchParams.get('status')));
+  function setStatusFilter(value: StatusFilter) {
+    const url = new URL(filterURL.href);
+    if (value === 'active') url.searchParams.delete('status');
+    else url.searchParams.set('status', value);
+    void replaceState(url, page.state);
+  }
   let accountTypeFilter = $state<AccountTypeFilter>('all');
   let query = $state('');
   let actionError = $state<unknown>(undefined);
   let actionPendingKey = $state('');
   let collapsedNodeIDs = $state<Set<string>>(new Set());
 
-  const view = $derived(page.url.searchParams.get('view') === 'institutions' ? 'institutions' : 'accounts');
-  function changeView(value: string) { const url = new URL(page.url.href); url.searchParams.set('view', value); void goto(url, { reset: false }); }
+  const view = $derived(filterURL.searchParams.get('view') === 'institutions' ? 'institutions' : 'accounts');
+  function changeView(value: string) { const url = new URL(filterURL.href); url.searchParams.set('view', value); void goto(url, { reset: false }); }
   async function institutionAction(institution: InstitutionResponse, restore = false) {
     await runAccountAction(`institution:${institution.id}`, async token => { if (restore) await restoreInstitution(institution.id, token); else await archiveInstitution(institution.id, token); });
   }
@@ -120,7 +130,10 @@
   const archivedAccounts = $derived.by(() => {
     if (statusFilter !== 'archived') return [];
     const normalizedQuery = query.trim().toLocaleLowerCase();
-    return allUserAccounts.filter((account) => account.status === 'archived' && !isCategoryAccount(account) && account.account_class !== 'equity' && accountMatchesFilters(account, normalizedQuery));
+    // Owner rows and the accounts folded into them: an archived holding under
+    // an ordinary account is no row of its own (#567 review).
+    const byID = new Map([...allUserAccounts, ...foldedAccounts].map((account) => [account.id, account]));
+    return [...byID.values()].filter((account) => account.status === 'archived' && !isCategoryAccount(account) && account.account_class !== 'equity' && accountMatchesFilters(account, normalizedQuery));
   });
 
   // A brokerage row folds in its holdings, cash and other children, so they
@@ -188,7 +201,7 @@
     });
   });
 
-  const visibleCount = $derived(visibleAccounts.length);
+  const visibleCount = $derived(statusFilter === 'archived' ? archivedAccounts.length : visibleAccounts.length);
   const activeCount = $derived(userAccounts.filter((account) => account.status === 'active').length);
   const closedCount = $derived(userAccounts.filter((account) => account.status === 'closed').length);
   const shellError = $derived(
@@ -412,7 +425,7 @@
       {#if view === 'accounts'}
       <AccountSummaryStats {activeCount} {closedCount} {visibleCount} />
       <div class="min-w-0 flex-1">
-        <AccountFilterBar bind:query bind:statusFilter bind:accountTypeFilter />
+        <AccountFilterBar bind:query bind:statusFilter={() => statusFilter, setStatusFilter} bind:accountTypeFilter />
       </div>
       {/if}
       <div class="flex flex-wrap gap-2 xl:justify-end">
@@ -577,7 +590,7 @@
       <ul class="mt-3 divide-y divide-border">
         {#each unparentedHoldings as row (row.account.id)}
           <li class="flex min-w-0 flex-wrap items-center justify-between gap-3 py-2 text-sm">
-            <a class="inline-flex min-h-11 items-center wrap-anywhere font-semibold underline" href={`/app/ledger/accounts/${row.account.id}/register`}>{accountDisplayName(row.account)}</a>
+            <a class="inline-flex min-h-11 items-center wrap-anywhere font-semibold underline" href={`/app/ledger/accounts/${row.account.id}/register`}>{accountLabelWithStatus(row.account)}</a>
             <LedgerValue value={row.value} commodities={overview.data?.commodities ?? []} />
           </li>
         {/each}

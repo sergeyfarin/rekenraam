@@ -290,6 +290,75 @@ test('every register follows the index child rules, labels a closed holding and 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+test('an archived holding under an ordinary account stays reachable until it is deleted (#567 review)', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const today = todayISO();
+  const parent = await createCashAccount(page, csrfToken, 'Nest parent', currencyID);
+  const instrument = await apiJSON<{ id: number; commodity_id: number }>(page, 'POST', '/api/v1/investments/instruments', csrfToken, {
+    commodity_code: 'NEST', display_name: 'Nest stock', instrument_type: 'stock', quantity_scale: 0, price_scale: 2, quote_commodity_id: currencyID, identifiers: {}, metadata: {}
+  });
+  // Under an ordinary account, the holding is folded into that account's row.
+  const holding = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/holding-accounts', csrfToken, {
+    instrument_id: instrument.id, name: 'Nest holding', parent_account_id: parent.id, opened_on: today
+  });
+  await page.setViewportSize({ width: 390, height: 900 });
+  const actions = page.getByRole('region', { name: 'Account actions', exact: true });
+  await page.goto(`/app/ledger/accounts/${holding.id}/register`);
+  await expect(page.getByRole('link', { name: 'Reconcile this holding', exact: true })).toBeVisible();
+  await actions.locator('summary').click();
+  await actions.getByRole('button', { name: 'Close Nest holding', exact: true }).click();
+  await expect(actions.getByText('Status: Closed', { exact: true })).toBeVisible();
+  // Reconcile starts only for an active holding.
+  await expect(page.getByRole('link', { name: 'Reconcile this holding', exact: true })).toHaveCount(0);
+  await actions.getByRole('button', { name: 'Archive Nest holding', exact: true }).click();
+  await expect(actions.getByText('Status: Archived', { exact: true })).toBeVisible();
+
+  // The Archived filter lists it although its parent is active, and keeps
+  // the filter in the URL so Back returns to the list.
+  await page.goto('/app/ledger');
+  await page.getByRole('combobox', { name: /^Status/ }).selectOption('archived');
+  await expect(page).toHaveURL(/status=archived/);
+  const archived = page.getByRole('link', { name: 'Nest holding', exact: true });
+  await expect(archived).toBeVisible();
+  await expectNoAccessibilityViolations(page, 'Archived accounts list');
+  await archived.click();
+  await expect(page).toHaveURL(`/app/ledger/accounts/${holding.id}/register`);
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Archived accounts', exact: true })).toBeVisible();
+
+  // The instrument page lists it with its status.
+  await page.goto(`/app/investments/instruments/${instrument.commodity_id}`);
+  await expect(page.getByRole('list', { name: 'Holdings', exact: true }).getByRole('link', { name: 'Nest holding (Archived)', exact: true })).toBeVisible();
+
+  // The parent's actions name the child that holds Delete back and lead to it.
+  await page.goto(`/app/ledger/accounts/${parent.id}/register`);
+  await actions.locator('summary').click();
+  await expect(actions.getByRole('button', { name: /^Delete Nest parent/ })).toBeDisabled();
+  await expectNoAccessibilityViolations(page, 'open Account actions');
+  await actions.getByRole('list', { name: 'Accounts under this one', exact: true }).getByRole('link', { name: 'Nest holding (Archived)', exact: true }).click();
+  await expect(page).toHaveURL(`/app/ledger/accounts/${holding.id}/register`);
+
+  // Deleting it returns to its parent, whose Delete is then free.
+  await actions.locator('summary').click();
+  page.once('dialog', dialog => void dialog.accept());
+  await actions.getByRole('button', { name: 'Delete Nest holding', exact: true }).click();
+  await expect(page).toHaveURL(`/app/ledger/accounts/${parent.id}/register`);
+  await actions.locator('summary').click();
+  await expect(actions.getByRole('button', { name: /^Delete Nest parent/ })).toBeEnabled();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('a book whose accounts are all archived still offers the Archived filter (#567 review)', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const account = await createCashAccount(page, csrfToken, 'Only archived', currencyID);
+  await apiJSON(page, 'POST', `/api/v1/accounts/${account.id}/close`, csrfToken);
+  await apiJSON(page, 'POST', `/api/v1/accounts/${account.id}/archive`, csrfToken);
+  await page.goto('/app/ledger');
+  await expect(page.getByText('No user accounts yet', { exact: true })).toHaveCount(0);
+  await page.getByRole('combobox', { name: /^Status/ }).selectOption('archived');
+  await expect(page.getByRole('link', { name: /Only archived/ })).toHaveAttribute('href', `/app/ledger/accounts/${account.id}/register`);
+});
+
 test('a book whose only account is an unparented holding still lists it, under the filters (#567 review)', async ({ page }) => {
   const { csrfToken, currencyID } = await readyForLedger(page);
   const instrument = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/instruments', csrfToken, {

@@ -7,14 +7,16 @@
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
 
-  let { batchId, rowId, csrfToken, accounts, onLinked, disabled = false }: {
+  let { batchId, rowId, csrfToken, accounts, onLinked, onPending, disabled = false }: {
     batchId: number;
     rowId: number;
     csrfToken: string;
     accounts: AccountResponse[];
     onLinked: () => void | Promise<void>;
-    // The import screen holds writes while it re-reads the batch (#567).
+    // The import screen holds writes while it re-reads the batch, and holds
+    // its own batch writes while this link is in flight (#567).
     disabled?: boolean;
+    onPending?: (pending: boolean) => void;
   } = $props();
 
   const candidatesQuery = createQuery(() => ({
@@ -32,6 +34,7 @@
     event.preventDefault();
     if (!selected || pending || disabled || !csrfToken) return;
     pending = true;
+    onPending?.(true);
     linkError = undefined;
     try {
       await linkImportSplit(batchId, rowId, Number(selected), csrfToken);
@@ -40,6 +43,7 @@
       linkError = error;
     } finally {
       pending = false;
+      onPending?.(false);
     }
   }
 </script>

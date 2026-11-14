@@ -22,13 +22,15 @@
     type ImportRowMatchReview
   } from '#lib/imports/match-review.ts';
 
-  let { reviews, rows, choices, currencies, pending, error, decide, onCheck, onChoose }: {
+  let { reviews, rows, choices, currencies, pending, disabled = false, error, decide, onCheck, onChoose }: {
     /** The preview's match reviews; null until the owner checks. */
     reviews: ImportRowMatchReview[] | null;
     rows: ImportStagedRow[];
     choices: ReadonlyMap<number, ImportMatchChoice>;
     currencies: CurrencyResponse[];
     pending: boolean;
+    // Held while another batch write or re-read is in flight (#567 review).
+    disabled?: boolean;
     error: unknown;
     /** Commit stopped because rows still need a decision. */
     decide: boolean;
@@ -89,7 +91,8 @@
   {:else if reviews === null}
     <button
       type="button"
-      class="mt-3 inline-flex min-h-11 items-center rounded-(--radius-control) border border-border bg-control px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-control-hover"
+      class="mt-3 inline-flex min-h-11 items-center rounded-(--radius-control) border border-border bg-control px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-60"
+      {disabled}
       onclick={onCheck}
     >
       {m.import_match_check()}
