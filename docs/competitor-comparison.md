@@ -22,6 +22,10 @@ Rekenraam's R13 status was reconciled on 2026-10-26 at `b9c57ea3`; the
 now replaces the earlier local returns gap. This updates local capability
 status only; competitor sources retain their original review dates.
 
+The [self-hosted newcomers section](#self-hosted-newcomers-2026-11-14) was
+added on 2026-11-14. It is the one place this document records popularity,
+and it reads repository schema files rather than vendor documentation.
+
 ## Verified comparison
 
 | Product | Documented strengths relevant here | Boundary or implication for Rekenraam |
@@ -142,3 +146,79 @@ Actual's richer imports/rules, Firefly III's routine management and PocketSmith'
 cross-currency planning remain reasons to test the whole daily workflow, even
 though the recent delivery effort concentrated on investments. The roadmap's
 audit coverage includes those areas. Market-wide parity is not a release gate.
+
+## Self-hosted newcomers (2026-11-14)
+
+Added after the owner asked whether newer self-hosted projects make Rekenraam
+redundant, and whether joining one would be better than continuing. Because
+the question is about the field, this section records stars and contributor
+counts, which the rest of this document leaves out. Counts come from the
+GitHub API on 2026-11-14.
+
+Each row names its evidence. "Models" means the schema or model files were
+read at the commit given. "README" means only the project's own description
+was read. Nothing was installed or run. No claim is made about code quality,
+security, or behaviour beyond the columns read, and an unread feature is not
+an absent one.
+
+Field size: GitHub search returned 6,010 repositories tagged
+`personal-finance` created since 2026-01-01, and 288 tagged both
+`self-hosted` and `finance`. Topic tags are self-assigned and include guides,
+tax tools and chat bots, so these numbers bound the activity; they do not
+count comparable apps. The descriptions of the most-starred 2026 entries lead
+with an AI agent, an MCP server or bank sync.
+
+| Project | Size and age | Evidence | What the evidence shows |
+|---|---|---|---|
+| **[Sure](https://github.com/we-promise/sure)** (community fork of Maybe) | 15,144 stars. Forked 2025-07-23. Several maintainers. 929 open issues and pull requests. Ruby, PostgreSQL, AGPL-3.0. | Models at `c9cc6d24` (`db/schema.rb`). | An `entries` row holds one account and one `decimal(19,4)` amount, with a reconciled status and a statement reference. A transfer pairs an inflow and an outflow transaction. `holdings` are dated rows with one `cost_basis` each; `trades` hold quantity, price and fee. No lot table was found in the tables read. |
+| **[ezBookkeeping](https://github.com/mayswind/ezbookkeeping)** | 6,073 stars. Created 2020. One author has 3,627 of about 3,745 commits. Go with SQLite, MySQL or PostgreSQL. MIT. | README. | Imports CSV, Excel, OFX, QFX, QIF, IIF, CAMT.052/053, MT940, GnuCash, Firefly III and Beancount files. Scheduled transactions, receipt recognition, an MCP server, PWA. The README does not mention double entry, investments or reconciliation. The closest stack to Rekenraam's. |
+| **[Securo](https://github.com/securo-finance/securo)** | 4,499 stars. Created 2026-03-08. Top contributor has 333 of 729 commits; about 99 contributors. 273 open issues and pull requests. Python, PostgreSQL, AGPL-3.0. | Models at `83301a15` (`backend/app/models`). | A `transactions` row holds one account, a `Numeric(15,2)` amount, a debit/credit type and an optional `transfer_pair_id`. `asset_transactions` are buys and sells with quantity, price and fee; no lot model is among the model files. Its `reconciliation_*` tables store rules and suggestions for matching transactions to expected items, not statement checkpoints. README: bank sync through Pluggy, Enable Banking and SimpleFIN; OFX, QIF, CAMT and CSV import; rules, budgets, goals, workspaces with roles, OIDC, passkeys, optional LLM agents and plugins. |
+| **[open-net-worth](https://github.com/open-net-worth-ai/open-net-worth)** | 482 stars. Created 2026-10-15. One author has 1,025 of about 1,040 commits. Python, AGPL-3.0. | README. | Describes "a real multi-currency ledger" with transfers, splits, reconciliation and reviewed statement import, operated by an AI agent that can also act through MCP servers, including placing trades. None of this was checked against its code. |
+| **[MoneyMatter](https://github.com/letehaha/moneymatter)** | 239 stars. Created 2025-02-19. One author has 2,776 of about 2,880 commits. TypeScript, PostgreSQL, Redis, AGPL-3.0. Its README offers a paid hosted plan. | Models at `906e7064` (`packages/backend/src/models`). | A transaction holds one account with `amount` and `refAmount` as `BIGINT` cents. A holding stores one `quantity`, `costBasis` and `refCostBasis` as `DECIMAL(20,10)`; a code comment derives the average price as cost basis divided by quantity. Its "reconciliation" endpoints remove, restore and merge duplicate transactions. README: bank sync through Monobank, SimpleFIN, LunchFlow and Walutomat; CSV, OFX, QFX, YNAB, Wallet and Microsoft Money import; AI statement parsing; splits, attachments, budgets, subscriptions, loans, sharing and an MCP server. |
+
+Two further projects are noted without a row.
+[Paisa](https://github.com/ananthakumaran/paisa) (3,236 stars) describes
+itself as built on the ledger double-entry tool, so it belongs with the
+plain-text-accounting audience that adoption asset #335 already addresses.
+[FireFunds](https://github.com/nicolopozzato/firefunds) (created 2026-10-19,
+18 commits, no stars) claims double entry with average-cost investments and
+lists imports and reconciliation as planned; it is the only 2026 entry found
+that leads with the ledger.
+
+What this means for Rekenraam:
+
+- **The ledger and lot model is not matched in the three schemas read.** Sure,
+  Securo and MoneyMatter store a cash transaction as a row on one account and
+  carry investment basis as one figure per holding. A balanced journal, lots,
+  dated corrections and statement checkpoints would need a redesign there, not
+  an added feature. This describes the files read. It is not a uniqueness claim.
+- **Exact amounts are not a difference.** All three use integer cents or fixed
+  decimals. Securo's two-decimal amount column is a boundary for currencies and
+  commodities with other scales; whether that matters in use was not tested.
+- **Adoption has not followed ledger depth.** Securo gathered its stars in
+  eight months on a single-entry model. The fast-growing projects lead with
+  bank sync, wide import format lists, rules and AI or MCP access. Those are
+  the areas Rekenraam has placed deliberately later (R6, feeds) or has not
+  authorized (AI/MCP).
+- **Joining one is not a practical option.** The stacks differ, most of these
+  projects are also one maintainer's work, and contributing would mean writing
+  for a model that cannot carry this ledger. Cooperation is realistic only as
+  interoperability, for example importing their exports.
+- **Rekenraam has no adoption evidence yet.** The repository is public with one
+  star and no tagged release. The
+  [public-release gates](roadmap.md#public-release-gates), not feature parity,
+  are what stand between the delivered core and any outside user.
+
+Proposals raised by this review. None is accepted, and the roadmap is
+unchanged:
+
+1. Keep the `v0.1.0` and announcement gates ahead of further investment depth.
+   This agrees with the roadmap's current order.
+2. Consider importers for Firefly III, Actual and Sure exports as migration
+   paths when R6 is scheduled.
+3. Decide explicitly whether a read-only MCP server fits the read-only stance
+   toward outside systems. The October recheck above did not authorize one;
+   this review only shows that the 2026 field treats it as expected.
+4. Set a checkpoint some months after announcement. If no outside use appears,
+   weigh keeping Rekenraam as the owner's own tool against further
+   public-facing work.
