@@ -8,13 +8,13 @@ import (
 
 type referenceDateKey struct{}
 
-// referenceDay is the reference date as parsed civil-date parts. Keeping the
-// parts numeric means CurrentReferenceVersions renders its SQL literal from
-// integers only: no caller-supplied text ever reaches the query string.
+// referenceDay is the reference date as parsed civil-date parts. It holds no
+// caller text at all: CurrentReferenceVersions renders its SQL literal from the
+// integers only, and ReferenceDate reports a fixed value for a malformed pin.
 type referenceDay struct {
-	raw              string
-	year, month, day int
+	empty            bool
 	valid            bool
+	year, month, day int
 }
 
 // WithReferenceDate pins current reference-data selection to the application's
@@ -25,7 +25,7 @@ type referenceDay struct {
 // here; an invalid value is kept only so every query that would select
 // reference versions with it fails instead of silently using a different day.
 func WithReferenceDate(ctx context.Context, date string) context.Context {
-	value := referenceDay{raw: date}
+	value := referenceDay{empty: date == ""}
 	if parsed, err := time.Parse(time.DateOnly, date); err == nil {
 		value.year, value.month, value.day = parsed.Year(), int(parsed.Month()), parsed.Day()
 		value.valid = true
@@ -44,7 +44,7 @@ const invalidReferenceDate = "invalid-date"
 func ReferenceDate(ctx context.Context) string {
 	value, ok := ctx.Value(referenceDateKey{}).(referenceDay)
 	switch {
-	case !ok || value.raw == "":
+	case !ok || value.empty:
 		return ""
 	case !value.valid:
 		return invalidReferenceDate
@@ -58,12 +58,12 @@ func (d referenceDay) literal() string {
 }
 
 // invalidReferenceDateSQL fails the statement at prepare time ("no such
-// column: candidate.invalid_reference_date"). It is qualified by the helper's
-// own candidate alias, so it resolves only against the version tables in
-// referenceVersionSources, never against a caller's tables;
-// TestCurrentReferenceVersionsFailsClosedOnInvalidDate proves none of them has
-// that column.
-const invalidReferenceDateSQL = "candidate.invalid_reference_date"
+// function: invalid_reference_date"). It is a function call, not a column:
+// SQLite resolves an unknown column — qualified or not — outward through every
+// enclosing scope, so a caller table or alias could satisfy a column sentinel
+// when the helper sits in a correlated subquery. Function names are not
+// scope-resolved, and this package registers no SQL functions (sqlite.go).
+const invalidReferenceDateSQL = "invalid_reference_date()"
 
 // referenceDateSQL is the SQL expression for the reference date. Unpinned
 // repository callers (and an empty pinned date) retain UTC selection. An
@@ -72,7 +72,7 @@ const invalidReferenceDateSQL = "candidate.invalid_reference_date"
 func referenceDateSQL(ctx context.Context) string {
 	value, ok := ctx.Value(referenceDateKey{}).(referenceDay)
 	switch {
-	case !ok || value.raw == "":
+	case !ok || value.empty:
 		return "date('now')"
 	case !value.valid:
 		return invalidReferenceDateSQL
@@ -95,11 +95,14 @@ var referenceVersionSources = map[string]struct{ table, key string }{
 // ordering as the former UTC views, with the application's date.
 // Unwired repository callers retain UTC selection; application operations
 // establish their reference date before opening a transaction or read snapshot.
+//
+// kind must be one of the keys of referenceVersionSources ("account",
+// "commodity", "institution", "investment_instrument", "payee"); any other
+// value panics, since every caller passes a constant. A malformed pinned
+// reference date makes the returned subquery fail to prepare.
 func CurrentReferenceVersions(ctx context.Context, kind string) string {
 	source, ok := referenceVersionSources[kind]
 	if !ok {
-		// Every caller passes a constant kind; an unknown one is a programming
-		// error that any test reaching the call site surfaces.
 		panic(fmt.Sprintf("db: unknown reference version kind %q", kind))
 	}
 	dateSQL := referenceDateSQL(ctx)

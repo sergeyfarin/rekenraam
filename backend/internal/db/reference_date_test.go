@@ -52,8 +52,7 @@ func TestCurrentReferenceVersionsRejectsUnknownKind(t *testing.T) {
 }
 
 // An invalid pinned date must fail the read, never fall back to another day
-// or compare effective_from against malformed text. Running every kind also
-// proves no version table has a column named like the sentinel.
+// or compare effective_from against malformed text.
 func TestCurrentReferenceVersionsFailsClosedOnInvalidDate(t *testing.T) {
 	t.Parallel()
 	database, _, _ := migratedInvestmentTestDatabase(t)
@@ -67,7 +66,22 @@ func TestCurrentReferenceVersionsFailsClosedOnInvalidDate(t *testing.T) {
 		require.NoError(t, query(WithReferenceDate(context.Background(), "2026-02-03"), kind), kind)
 		for _, malformed := range malformedReferenceDates {
 			err := query(WithReferenceDate(context.Background(), malformed), kind)
-			require.ErrorContains(t, err, "no such column: "+invalidReferenceDateSQL, "%s %q", kind, malformed)
+			require.ErrorContains(t, err, "no such function: invalid_reference_date", "%s %q", kind, malformed)
 		}
 	}
+}
+
+// The sentinel must not depend on query scope. SQLite resolves an unknown
+// column outward through enclosing scopes, even when qualified, so a column
+// sentinel would be satisfied by a caller table aliased "candidate" with an
+// invalid_reference_date column once the helper sits in a correlated subquery,
+// turning the fail-closed read into a successful one.
+func TestCurrentReferenceVersionsSentinelIgnoresCallerColumns(t *testing.T) {
+	t.Parallel()
+	database, _, _ := migratedInvestmentTestDatabase(t)
+	dated := WithReferenceDate(context.Background(), "2026-02-30")
+	var count int
+	err := database.QueryRowContext(dated, `SELECT (SELECT COUNT(*) FROM `+CurrentReferenceVersions(dated, "account")+` v)
+		FROM (SELECT '2026-02-03' AS invalid_reference_date) candidate`).Scan(&count)
+	require.ErrorContains(t, err, "no such function: invalid_reference_date")
 }
