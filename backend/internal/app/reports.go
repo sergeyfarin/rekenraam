@@ -611,13 +611,11 @@ func (s *TransactionService) resolveReportFilters(ctx context.Context, filters R
 
 	normalized := normalizeReportFilters(filters)
 
-	for _, accountID := range normalized.AccountIDs {
-		if err := s.repository.EnsureAccountInBook(ctx, BookID, accountID); err != nil {
-			if errors.Is(err, db.ErrNotFound) {
-				return ReportFiltersEcho{}, nil, ValidationError{Message: "account filter is invalid"}
-			}
-			return ReportFiltersEcho{}, nil, fmt.Errorf("check report account filter: %w", err)
+	if err := s.repository.EnsureAccountsInBook(ctx, BookID, normalized.AccountIDs); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return ReportFiltersEcho{}, nil, ValidationError{Message: "account filter is invalid"}
 		}
+		return ReportFiltersEcho{}, nil, fmt.Errorf("check report account filter: %w", err)
 	}
 	if len(normalized.AccountIDs) > 0 {
 		accounts, err := s.repository.LedgerAccountsAsOf(ctx, BookID, asOf)
@@ -825,13 +823,11 @@ func (s *TransactionService) ensureCategoriesExist(ctx context.Context, category
 	if len(categoryIDs) == 0 {
 		return nil
 	}
-	for _, categoryID := range categoryIDs {
-		if err := s.repository.EnsureAccountInBook(ctx, BookID, categoryID); err != nil {
-			if errors.Is(err, db.ErrNotFound) {
-				return ValidationError{Message: "category filter is invalid"}
-			}
-			return fmt.Errorf("check report category filter: %w", err)
+	if err := s.repository.EnsureAccountsInBook(ctx, BookID, categoryIDs); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return ValidationError{Message: "category filter is invalid"}
 		}
+		return fmt.Errorf("check report category filter: %w", err)
 	}
 	accounts, err := s.repository.LedgerAccountsAsOf(ctx, BookID, asOf)
 	if err != nil {

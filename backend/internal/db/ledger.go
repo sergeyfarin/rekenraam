@@ -501,19 +501,31 @@ func queryLedgerPostings(ctx context.Context, source queryer, query ledgerPostin
 	return postings, nil
 }
 
-func (r *TransactionRepository) EnsureAccountInBook(ctx context.Context, bookID int64, accountID int64) error {
-	var exists int
-	if err := r.database.QueryRowContext(ctx, `
-		SELECT EXISTS(
-			SELECT 1
-			FROM accounts
-			WHERE book_id = ?
-				AND id = ?
-		)
-	`, bookID, accountID).Scan(&exists); err != nil {
-		return fmt.Errorf("check account book: %w", err)
+// EnsureAccountsInBook validates a whole report selection in one read. The
+// per-id form compiled a statement for each selected account, so a Home read
+// with many cash accounts paid one query per account for validation alone.
+func (r *TransactionRepository) EnsureAccountsInBook(ctx context.Context, bookID int64, accountIDs []int64) error {
+	if len(accountIDs) == 0 {
+		return nil
 	}
-	if exists == 0 {
+	clause, args := inClause("id", accountIDs)
+	queryArgs := make([]any, 0, len(args)+1)
+	queryArgs = append(queryArgs, bookID)
+	queryArgs = append(queryArgs, args...)
+
+	var found int
+	if err := r.database.QueryRowContext(ctx, `
+		SELECT COUNT(DISTINCT id)
+		FROM accounts
+		WHERE book_id = ? AND `+clause,
+		queryArgs...).Scan(&found); err != nil {
+		return fmt.Errorf("check accounts in book: %w", err)
+	}
+	unique := make(map[int64]struct{}, len(accountIDs))
+	for _, accountID := range accountIDs {
+		unique[accountID] = struct{}{}
+	}
+	if found != len(unique) {
 		return ErrNotFound
 	}
 	return nil

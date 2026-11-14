@@ -467,6 +467,17 @@ When a feature introduces a durable new rule, update one of those documents in t
   returns; pool calls keep per-call preparation.
 - Early runtime uses one application `*sql.DB` pool with `SetMaxOpenConns(1)`; revisit only when real workload pressure justifies more concurrency.
 - Database access uses repository-style methods over raw `database/sql`. Introduce **`sqlc`** only when the query surface is large enough to justify code generation, and document the generation command before generated files land.
+- Partial updates must distinguish **omitted** from **set to zero**. Editable
+  optional fields use pointer parameters end-to-end: `nil` keeps the stored
+  value, while a pointer to `0`, `false` or `""` writes that value. A nullable
+  field whose clearing cannot be expressed by a pointer carries an explicit
+  `clear_*` flag (see `UpdateCategoryInput.ClearParent`), never an overloaded
+  zero. `COALESCE(?, column)` is only for parameters that can actually be nil;
+  a plain zero value is never a sentinel for "keep". Lifecycle timestamps that
+  cannot be cleared may keep an empty-string sentinel (`UpdateBackupRunParams`),
+  but do not extend that to user-editable fields. Add a regression test when
+  adding or changing a partial update: `UpdateBackupRunParams` and
+  `UpdateImportProfileParams` are the current examples.
 
 ## Project Lifecycle And Migration Immutability
 
