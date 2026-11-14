@@ -415,6 +415,14 @@ than inferring a deployment's safety from closed implementation issues.
 Resolve these only when their related slice becomes current work:
 
 - The highest-priority mobile workflow, beyond the required responsive core.
+- Whether to run the one-OS desktop spike now that a stable Wails v3 exists
+  ([#583](https://github.com/sergeyfarin/rekenraam/issues/583), proposed
+  2026-11-14, after the `v0.1.0` tag). Native desktop apps stay out of scope
+  until an ADR supersedes that requirement; see the
+  [feasibility review](reviews/desktop-application-feasibility-2026-09-19.md).
+- Whether an optional read-only MCP server fits the product direction
+  ([#582](https://github.com/sergeyfarin/rekenraam/issues/582), proposed
+  2026-11-14).
 - Attachment storage, retention, access-control, backup and encryption model.
   A proposed resolution exists in [the receipts plan](plans/receipts-plan.md)
   (R14a); accepting it is required before changing the current attachment scope.

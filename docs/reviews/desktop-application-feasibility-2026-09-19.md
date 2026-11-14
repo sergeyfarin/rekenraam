@@ -38,6 +38,23 @@ benefits are explicit lifecycle ownership, cleanup of partial startup failures,
 testable composition, and a smaller server command; the roadmap scope fence
 forbids adding Wails or changing runtime behavior as part of that extraction.
 
+## Status note — 2026-11-14
+
+This note records changed facts. It is not a decision, and the review below is
+unchanged.
+
+- The condition the owner set on 2026-09-19 is met. Wails lists `v3.0.0`
+  (2026-10-26) and `v3.1.0` (2026-11-01) as stable releases on GitHub.
+- The preparation item above is delivered as `internal/appruntime`; see the
+  [capability ledger](../implemented.md).
+- The owner raised desktop packaging again on 2026-11-14 as a way to reach
+  users beyond self-hosters, following the
+  [newcomers review](../competitor-comparison.md#self-hosted-newcomers-2026-11-14).
+- Gate 2, the one-OS spike, is proposed in
+  [#583](https://github.com/sergeyfarin/rekenraam/issues/583). Gate 1 (demand)
+  remains unanswered, and native desktop apps remain out of scope in the
+  requirements until a Gate 3 ADR is accepted.
+
 ## Executive conclusion
 
 Rekenraam can become a desktop application without rewriting its ledger,
