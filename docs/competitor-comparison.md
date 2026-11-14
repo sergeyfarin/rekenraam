@@ -209,8 +209,9 @@ What this means for Rekenraam:
   [public-release gates](roadmap.md#public-release-gates), not feature parity,
   are what stand between the delivered core and any outside user.
 
-Proposals raised by this review. The roadmap is unchanged; the owner confirmed
-the first on 2026-11-14 and the others await a decision:
+Proposals raised by this review. The roadmap's order is unchanged, and its
+open product decisions now list #582 and #583. The owner confirmed the first
+proposal on 2026-11-14 and the others await a decision:
 
 1. Keep the `v0.1.0` and announcement gates ahead of further investment depth.
    Confirmed by the owner; it agrees with the roadmap's current order.
@@ -225,3 +226,17 @@ the first on 2026-11-14 and the others await a decision:
 4. Set a checkpoint some months after announcement. If no outside use appears,
    weigh keeping Rekenraam as the owner's own tool against further
    public-facing work.
+5. Reconsider a desktop edition as a second way to reach users. Raised by the
+   owner on 2026-11-14, after the review above; the review itself did not
+   weigh it. The projects in the table are run as servers or containers, so
+   a packaged desktop application would reach people coming from desktop
+   finance tools, whom none of them address. That audience was inferred from
+   a few projects, such as Wealthfolio's desktop-first growth, and was not
+   measured. The owner's September condition, a stable Wails v3, is met
+   (`v3.0.0` on 2026-10-26). The
+   [feasibility review](reviews/desktop-application-feasibility-2026-09-19.md)'s
+   one-OS spike is proposed in
+   [#583](https://github.com/sergeyfarin/rekenraam/issues/583), after the
+   `v0.1.0` tag and ahead of #582. Native desktop and mobile apps stay out of
+   scope in the requirements until an ADR changes that; a native mobile app
+   is not proposed.
