@@ -182,6 +182,7 @@
   // it never offers to commit a row that is no longer pending; choices the
   // owner made for rows that are still pending are kept.
   let filesStale = $state(false);
+  let resyncing = $state(false);
   let resyncRequest = 0;
   $effect(() => {
     if (view !== 'files' || !filesStale || batchWriting) return;
@@ -193,6 +194,7 @@
 
   async function resyncBatch(id: number) {
     const request = ++resyncRequest;
+    resyncing = true;
     try {
       const refreshed = await getFullImportBatch(id);
       if (request !== resyncRequest || id !== batchId || !previewData) return;
@@ -202,14 +204,19 @@
       const kept = rowResolutions;
       rowResolutions = new Map(refreshed.rows.map((row) => [row.id, pending.has(row.id) ? (kept.get(row.id) ?? parseResolution(row)) : parseResolution(row)]));
       if (changed) {
-        // Reviews computed for the old row set no longer apply.
+        // Reviews computed for the old row set no longer apply; the owner's
+        // match choices for rows still pending are kept for the next check.
+        const choices = new Map([...matchChoices].filter(([rowID]) => pending.has(rowID)));
         resetMatchReview();
+        matchChoices = choices;
         reviewedCheckpoints = null;
         reconciliationOverride = false;
         gainReview = null;
       }
     } catch (error) {
       if (request === resyncRequest) restoreError = error;
+    } finally {
+      if (request === resyncRequest) resyncing = false;
     }
   }
 
@@ -318,6 +325,9 @@
   let showDiscardConfirm = $state(false);
 
   const batchWriting = $derived(uploading || startingOnlineConnectionId !== null || committing || discarding || sourceCorrectionPending || matchCheckPending);
+  // A resync replaces the working copy, so no batch write may start from the
+  // stale one until it lands. It is a read: it does not hold navigation.
+  const batchBusy = $derived(batchWriting || resyncing);
   beforeNavigate(navigation => {
     if (!batchWriting) return;
     const next = navigation.to?.url;
@@ -536,7 +546,7 @@
   }
 
   async function handleUpload() {
-    if (!selectedFile || batchWriting) return;
+    if (!selectedFile || batchBusy) return;
     uploading = true;
     uploadError = undefined;
 
@@ -566,7 +576,7 @@
 
   // ── Online import (Trading 212) ───────────────────────────────────────
   async function handleStartOnlineImport(connectionId: number) {
-    if (batchWriting) return;
+    if (batchBusy) return;
     startingOnlineConnectionId = connectionId;
     onlineImportError = undefined;
     fetchFailed = false;
@@ -586,7 +596,7 @@
   }
 
   async function handleRefreshConnection(connectionId: number) {
-    if (batchWriting) return;
+    if (batchBusy) return;
     startingOnlineConnectionId = connectionId;
     onlineImportError = undefined;
     fetchFailed = false;
@@ -755,7 +765,7 @@
   }
 
   async function handleSourceCorrection(row: ImportStagedRow) {
-    if (batchWriting) return;
+    if (batchBusy) return;
     if (!batchId || !csrfToken || sourceCorrectionPending || !sourceCorrectionReason.trim()) return;
     const kind = sourceCorrectionKind(row);
     if (!kind) return;
@@ -790,7 +800,8 @@
             : row)
         };
       }
-      await invalidateInvestmentReads(queryClient);
+      // A source correction changes a batch row as well as the ledger.
+      await Promise.all([invalidateInvestmentReads(queryClient), invalidateImportReads(queryClient)]);
       try {
         const selectedID = batchId;
       const refreshed = await getFullImportBatch(selectedID);
@@ -824,6 +835,8 @@
         rows: previewData.rows.map((row) => row.id === rowId ? { ...row, commit_status: 'committed' } : row)
       };
     }
+    // The linked row is committed: the batch's counts and history change.
+    void invalidateImportReads(queryClient);
     if (!batchId) return;
     try {
       const selectedID = batchId;
@@ -893,7 +906,7 @@
   }
 
   async function handleCheckMatches() {
-    if (batchWriting) return;
+    if (batchBusy) return;
     if (!batchId) return;
     matchCheckPending = true;
     matchCheckError = undefined;
@@ -924,7 +937,7 @@
   }
 
   async function handleCommit() {
-    if (batchWriting) return;
+    if (batchBusy) return;
     if (!batchId || !previewData) return;
     committing = true;
     commitError = undefined;
@@ -1013,7 +1026,7 @@
   }
 
   async function confirmImportGains() {
-    if (batchWriting) return;
+    if (batchBusy) return;
     if (!gainReview) return;
     const { acknowledgements } = gainReview;
     gainReview = null;
@@ -1054,7 +1067,7 @@
   // Held rows stay pending in a partially committed batch. An earlier row in
   // the same run can change their gain set, so they are reviewed again here.
   async function handleReviewHeldGains() {
-    if (batchWriting) return;
+    if (batchBusy) return;
     if (!batchId) return;
     committing = true;
     commitError = undefined;
@@ -1091,7 +1104,7 @@
 
   // ── Discard ────────────────────────────────────────────────────────
   async function handleDiscard() {
-    if (batchWriting) return;
+    if (batchBusy) return;
     if (!batchId) return;
     discarding = true;
     discardError = undefined;
@@ -1515,7 +1528,7 @@
                           conn.last_fetch_status
                             ? handleRefreshConnection(conn.id)
                             : handleStartOnlineImport(conn.id)}
-                        disabled={batchWriting || conn.last_fetch_status === 'fetching'}
+                        disabled={batchBusy || conn.last_fetch_status === 'fetching'}
                       >
                         {#if startingOnlineConnectionId === conn.id}
                           {m.import_connections_starting()}
@@ -1530,7 +1543,7 @@
                           type="button"
                           class="inline-flex items-center gap-1 rounded-(--radius-control) border border-border px-2.5 py-1 text-xs font-medium text-foreground transition hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-60"
                           onclick={() => handleStartOnlineImport(conn.id)}
-                          disabled={batchWriting || conn.last_fetch_status === 'fetching'}
+                          disabled={batchBusy || conn.last_fetch_status === 'fetching'}
                         >
                           {m.import_connections_refetch()}
                         </button>
@@ -1756,7 +1769,7 @@
           type="button"
           class="inline-flex items-center gap-2 rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
           onclick={handleUpload}
-          disabled={batchWriting || !selectedFile || (cryptoCSV && (!cryptoHoldingId || !cryptoCashId)) || uploading || analyzingCSV || editingProfileId !== null || (selectedIsCSV && (!!csvAnalysisError || csvHeaders.length === 0 || (!selectedProfileId && !newCSVProfileValid)))}
+          disabled={batchBusy || !selectedFile || (cryptoCSV && (!cryptoHoldingId || !cryptoCashId)) || uploading || analyzingCSV || editingProfileId !== null || (selectedIsCSV && (!!csvAnalysisError || csvHeaders.length === 0 || (!selectedProfileId && !newCSVProfileValid)))}
         >
           {uploading ? m.import_upload_submitting() : m.import_upload_submit()}
         </button>
@@ -2200,7 +2213,7 @@
                       <APIFormError error={sourceCorrectionError} id="source-correction-error" />
                       <button
                         type="submit"
-                        disabled={batchWriting || !csrfToken || !sourceCorrectionReason.trim() || (sourceCorrectionImpact !== null && sourceCorrectionImpact.affected_checkpoints.length > 0 && !sourceCorrectionOverride) || (sourceCorrectionGainRows.length > 0 && !sourceCorrectionAcceptGains)}
+                        disabled={batchBusy || !csrfToken || !sourceCorrectionReason.trim() || (sourceCorrectionImpact !== null && sourceCorrectionImpact.affected_checkpoints.length > 0 && !sourceCorrectionOverride) || (sourceCorrectionGainRows.length > 0 && !sourceCorrectionAcceptGains)}
                         class="rounded-(--radius-control) bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
                       >{sourceCorrectionPending ? (sourceCorrectionImpact ? m.import_preview_correct_buy_pending() : m.import_preview_correct_buy_preview_pending()) : sourceCorrectionImpact ? m.import_preview_correct_buy_submit() : m.import_preview_correct_buy_preview()}</button>
                     </form>
@@ -2282,7 +2295,7 @@
             type="button"
             class="inline-flex items-center gap-2 rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
             onclick={handleCommit}
-            disabled={batchWriting || reviewedCheckpointsPending}
+            disabled={batchBusy || reviewedCheckpointsPending}
           >
             {committing ? m.import_commit_pending() : m.import_commit_button()}
           </button>
@@ -2318,7 +2331,7 @@
             type="button"
             class="inline-flex items-center gap-2 rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
             onclick={handleDiscard}
-            disabled={batchWriting}
+            disabled={batchBusy}
           >
             {m.import_discard_confirm_button()}
           </button>
@@ -2374,7 +2387,7 @@
         {/if}
         {#if commitResult.gain_review_row_ids.length > 0}
           <p class="text-warning">{m.import_result_gain_review({ count: commitResult.gain_review_row_ids.length })}</p>
-          <button type="button" disabled={batchWriting} class="text-sm font-semibold text-foreground underline underline-offset-2 disabled:opacity-60" onclick={() => void handleReviewHeldGains()}>
+          <button type="button" disabled={batchBusy} class="text-sm font-semibold text-foreground underline underline-offset-2 disabled:opacity-60" onclick={() => void handleReviewHeldGains()}>
             {m.import_result_gain_review_action()}
           </button>
           <APIFormError error={commitError} id="gain-review-error" />

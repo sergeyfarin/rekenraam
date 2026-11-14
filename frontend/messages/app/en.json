@@ -2088,6 +2088,11 @@
   "ledger_holding_instrument": "Instrument page",
   "ledger_holding_reconcile": "Reconcile this holding",
   "ledger_unparented_holdings": "Holdings outside a brokerage",
-  "ledger_unparented_holdings_copy": "These holdings have no brokerage or parent account. Their value is included in your totals.",
-  "investments_instrument_holdings": "Holdings"
+  "ledger_unparented_holdings_copy": "These holdings are not inside a brokerage or an ordinary account. Their value is included in your totals.",
+  "investments_instrument_holdings": "Holdings",
+  "ledger_account_actions": "Account actions",
+  "ledger_account_status": "Status: {status}",
+  "ledger_account_reopen": "Reopen {name}",
+  "ledger_account_restore": "Restore {name}",
+  "ledger_empty_holdings": "Holdings with no units"
 }

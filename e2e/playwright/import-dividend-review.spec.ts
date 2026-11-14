@@ -88,8 +88,18 @@ test('a dividend recorded in the Dividends view refreshes the Files batch and th
   expect(after).toBe(before - 1);
   await expect(page.getByRole('button', { name: label(after), exact: true })).toBeVisible();
   // Its only row is now recorded, so the batch is committed: Files re-reads
-  // it and offers no commit for the stale working copy.
+  // it and offers no commit for the stale working copy. While that read is
+  // in flight, the stale copy cannot be committed.
+  let release!: () => void;
+  let started!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  const requested = new Promise<void>(resolve => { started = resolve; });
+  await page.route(`**/api/v1/imports/${batch}?*`, async route => { started(); await held; await route.continue(); });
   await page.getByRole('button', { name: 'Files', exact: true }).click();
+  await requested;
+  try {
+    await expect(page.getByRole('button', { name: 'Commit to ledger' })).toBeDisabled();
+  } finally { release(); }
   expect(new URL(page.url()).searchParams.get('batch_id')).toBe(batch);
   await expect(page.getByRole('button', { name: 'Commit to ledger' })).toHaveCount(0);
   expect((await f.activity()).transactions).toHaveLength(1);

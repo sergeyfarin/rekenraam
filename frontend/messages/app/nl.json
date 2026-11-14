@@ -2088,6 +2088,11 @@
   "ledger_holding_instrument": "Instrumentpagina",
   "ledger_holding_reconcile": "Deze positie afstemmen",
   "ledger_unparented_holdings": "Posities buiten een beleggingsrekening",
-  "ledger_unparented_holdings_copy": "Deze posities hebben geen beleggingsrekening of bovenliggende rekening. Hun waarde telt mee in je totalen.",
-  "investments_instrument_holdings": "Posities"
+  "ledger_unparented_holdings_copy": "Deze posities staan niet in een beleggingsrekening of een gewone rekening. Hun waarde telt mee in je totalen.",
+  "investments_instrument_holdings": "Posities",
+  "ledger_account_actions": "Rekeningacties",
+  "ledger_account_status": "Status: {status}",
+  "ledger_account_reopen": "{name} heropenen",
+  "ledger_account_restore": "{name} herstellen",
+  "ledger_empty_holdings": "Posities zonder stukken"
 }

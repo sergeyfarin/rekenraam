@@ -7,6 +7,7 @@
   import { ledgerAccountQueryOptions } from '#lib/api/ledger.ts';
   import { findBrokerageAncestor, isHoldingAccount } from '#lib/accounts/brokerage.ts';
   import BrokerageSummary from '#lib/accounts/brokerage-summary.svelte';
+  import AccountLifecycleActions from '#lib/accounts/account-lifecycle-actions.svelte';
   import AccountRegister from '#lib/transactions/account-register.svelte';
   import TransactionWorkspace, { type TransactionWorkspaceCreate } from '#lib/transactions/transaction-workspace.svelte';
   import { accountEntryKind } from '#lib/transactions/entry-account.ts';
@@ -28,14 +29,18 @@
   // for it; an ordinary register never pays for it or refetches it on writes.
   const summaryQuery = createQuery(() => ({ ...ledgerAccountQueryOptions(accountID), enabled: account?.account_kind === 'brokerage' }));
   const summary = $derived(summaryQuery.data?.accounts[0]);
-  // A holding's register leads back to its brokerage and its instrument; the
-  // brokerage is the nearest brokerage ancestor, as Ledger Overview owns it.
+  // A register of an account inside a brokerage (a holding, a cash or other
+  // child) leads back to that brokerage: the nearest brokerage ancestor, as
+  // Ledger Overview owns it. Usually one read, the direct parent.
   const brokerageQuery = createQuery(() => ({
     queryKey: [...accountsQueryKey, 'brokerage-of', accountID] as const,
     queryFn: () => findBrokerageAncestor(account!, getAccount),
-    enabled: holding && !!account?.parent_account_id,
+    enabled: !!account?.parent_account_id && account.account_kind !== 'brokerage',
     staleTime: 10_000
   }));
+  // Accounts folded into a brokerage row, and holdings listed apart from the
+  // tree, have no row actions in the index; their register offers them.
+  const folded = $derived(!!account && !account.is_system && (holding || !!brokerageQuery.data));
   const pageBreadcrumbs = $derived.by(() => {
     const base = breadcrumbs(routeFor(page.url.pathname));
     const brokerage = brokerageQuery.data;
@@ -79,7 +84,13 @@
     {#if holding && account}
       <div class="mb-4 flex flex-wrap gap-x-4">
         {#if account.default_commodity_id}<a class="inline-flex min-h-11 items-center text-sm font-semibold underline" href={`/app/investments/instruments/${account.default_commodity_id}`}>{m.ledger_holding_instrument()}</a>{/if}
-        <a class="inline-flex min-h-11 items-center text-sm font-semibold underline" href={`/app/ledger/reconcile?account=${account.id}`}>{m.ledger_holding_reconcile()}</a>
+        <!-- Reconcile starts only for active accounts. -->
+        {#if account.status === 'active'}<a class="inline-flex min-h-11 items-center text-sm font-semibold underline" href={`/app/ledger/reconcile?account=${account.id}`}>{m.ledger_holding_reconcile()}</a>{/if}
+      </div>
+    {/if}
+    {#if folded && account}
+      <div class="mb-4">
+        <AccountLifecycleActions {account} {csrfToken} afterDelete={brokerageQuery.data ? `/app/ledger/accounts/${brokerageQuery.data.id}/register` : '/app/ledger'} />
       </div>
     {/if}
     <AccountRegister {accountID} {csrfToken} {actions} onRowClick={(entry) => actions.showTransaction(entry.transaction_id)} />

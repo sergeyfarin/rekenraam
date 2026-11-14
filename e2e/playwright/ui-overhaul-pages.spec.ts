@@ -164,6 +164,81 @@ test('holding registers stay reachable and hidden children still guard archive a
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+test('folded children are closed and archived from their registers, which frees the brokerage (#567 review)', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const today = todayISO();
+  const brokerName = 'Lifecycle brokerage';
+  const cashName = 'Lifecycle cash';
+  const holdingName = 'Lifecycle holding';
+  const broker = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/accounts', csrfToken, {
+    name: brokerName, account_class: 'asset', account_kind: 'brokerage', allows_postings: false, opened_on: today
+  });
+  await apiJSON(page, 'POST', '/api/v1/accounts', csrfToken, {
+    name: cashName, account_class: 'asset', account_kind: 'brokerage_cash', allows_postings: true,
+    parent_account_id: broker.id, default_commodity_id: currencyID, opened_on: today
+  });
+  const instrument = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/instruments', csrfToken, {
+    commodity_code: 'LIFECYCLE', display_name: 'Lifecycle stock', instrument_type: 'stock', quantity_scale: 0, price_scale: 2, quote_commodity_id: currencyID, identifiers: {}, metadata: {}
+  });
+  await apiJSON(page, 'POST', '/api/v1/investments/holding-accounts', csrfToken, {
+    instrument_id: instrument.id, name: holdingName, parent_account_id: broker.id, opened_on: today
+  });
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto('/app/ledger');
+  const closeBroker = page.getByRole('button', { name: `Close ${brokerName}`, exact: true });
+  await expect(closeBroker).toBeDisabled();
+
+  // Each folded child, including a holding with no units, is reachable from
+  // the brokerage and carries its own lifecycle actions.
+  for (const name of [cashName, holdingName]) {
+    await page.goto(`/app/ledger/accounts/${broker.id}/register`);
+    await page.getByRole('link', { name, exact: true }).click();
+    await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
+    const actions = page.getByRole('region', { name: 'Account actions', exact: true });
+    await actions.getByRole('button', { name: `Close ${name}`, exact: true }).click();
+    await expect(actions.getByText('Status: Closed', { exact: true })).toBeVisible();
+    await actions.getByRole('button', { name: `Archive ${name}`, exact: true }).click();
+    await expect(actions.getByText('Status: Archived', { exact: true })).toBeVisible();
+  }
+  await page.goto(`/app/ledger/accounts/${broker.id}/register`);
+  await expect(page.getByRole('link', { name: `${cashName} (Archived)`, exact: true })).toBeVisible();
+
+  // Archived children no longer block close or archive; they still block
+  // delete, because they reference the brokerage.
+  await page.goto('/app/ledger');
+  await expect(closeBroker).toBeEnabled();
+  await closeBroker.click();
+  await page.getByRole('combobox', { name: /^Status/ }).selectOption('closed');
+  await expect(page.getByRole('button', { name: `Delete ${brokerName}`, exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: `Archive ${brokerName}`, exact: true }).click();
+  await expect.poll(async () => (await apiJSON<{ status: string }>(page, 'GET', `/api/v1/accounts/${broker.id}`)).status).toBe('archived');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('a book whose only account is an unparented holding still lists it, under the filters (#567 review)', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const instrument = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/instruments', csrfToken, {
+    commodity_code: 'ALONE', display_name: 'Alone stock', instrument_type: 'stock', quantity_scale: 0, price_scale: 2, quote_commodity_id: currencyID, identifiers: {}, metadata: {}
+  });
+  const holding = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/holding-accounts', csrfToken, {
+    instrument_id: instrument.id, name: 'Alone holding', opened_on: todayISO()
+  });
+  await page.goto('/app/ledger');
+  const panel = page.getByRole('heading', { name: 'Holdings outside a brokerage', exact: true });
+  await expect(panel).toBeVisible();
+  await expect(page.getByText('No user accounts yet', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Alone holding', exact: true })).toHaveAttribute('href', `/app/ledger/accounts/${holding.id}/register`);
+  const search = page.getByPlaceholder('Name, code, institution', { exact: true });
+  await search.fill('nothing matches this');
+  await expect(panel).toHaveCount(0);
+  await expect(page.getByText('No matching accounts', { exact: true })).toBeVisible();
+  await search.fill('Alone');
+  await expect(panel).toBeVisible();
+  await page.getByRole('combobox', { name: /^Account type/ }).selectOption('checking');
+  await expect(panel).toHaveCount(0);
+  await expectNoAccessibilityViolations(page);
+});
+
 test('an ordinary register never asks for the book-wide Ledger read (#567 review)', async ({ page }) => {
   const { csrfToken, currencyID } = await readyForLedger(page);
   const account = await createCashAccount(page, csrfToken, `Light register ${Date.now()}`, currencyID);

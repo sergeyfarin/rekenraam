@@ -7,6 +7,7 @@
   import LedgerInstitutions from './ledger-institutions.svelte';
   import LedgerValue from './ledger-value.svelte';
   import { isHoldingAccount } from './brokerage.ts';
+  import { childDependents } from './dependents.ts';
   import { addTransaction, addTransfer } from '#lib/transactions/add-transaction.svelte.ts';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
@@ -120,9 +121,14 @@
   const foldedAccounts = $derived(overview.data?.accounts.flatMap((row) => [...row.holding_accounts, ...row.cash_accounts, ...row.other_accounts]) ?? []);
   // A holding with no parent account is its own Ledger row; it is shown
   // apart from the institution tree so its value is never missing.
-  const unparentedHoldings = $derived(
-    overview.data?.accounts.filter((row) => isHoldingAccount(row.account) && row.account.status !== 'archived' && (statusFilter === 'all' || row.account.status === statusFilter)) ?? []
+  const allUnparentedHoldings = $derived(
+    overview.data?.accounts.filter((row) => isHoldingAccount(row.account) && row.account.status !== 'archived') ?? []
   );
+  // The panel follows the same search, status and type filters as the tree.
+  const unparentedHoldings = $derived.by(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    return allUnparentedHoldings.filter((row) => accountMatchesFilters(row.account, normalizedQuery));
+  });
 
   const activeInstitutions = $derived.by(() => {
     return institutionsQuery.data?.institutions.filter((institution) => institution.status === 'active') ?? [];
@@ -140,17 +146,9 @@
     return counts;
   });
 
-  const allAccountChildCounts = $derived.by(() => {
-    const counts = new Map<number, number>();
-
-    for (const account of [...userAccounts, ...foldedAccounts]) {
-      if (account.parent_account_id) {
-        counts.set(account.parent_account_id, (counts.get(account.parent_account_id) ?? 0) + 1);
-      }
-    }
-
-    return counts;
-  });
+  // Every child of a parent, including the accounts folded into brokerage
+  // rows and the holdings listed apart (they are in allUserAccounts).
+  const childDependentCounts = $derived(childDependents([...allUserAccounts, ...foldedAccounts]));
 
   const visibleAccounts = $derived.by(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -211,7 +209,8 @@
       return 'error';
     }
 
-    if (manageableAccounts.length === 0 && (institutionsQuery.data?.institutions.length ?? 0) === 0) {
+    // A book whose only accounts are unparented holdings still shows them.
+    if (manageableAccounts.length === 0 && allUnparentedHoldings.length === 0 && (institutionsQuery.data?.institutions.length ?? 0) === 0) {
       return 'empty';
     }
 
@@ -518,6 +517,8 @@
     </StatePanel>
   {:else if view === 'institutions'}
     <LedgerInstitutions institutions={institutionsQuery.data?.institutions ?? []} accounts={overview.data?.accounts ?? []} onEdit={(institution) => (editor = { type: 'institution-edit', institution })} onArchive={(institution) => institutionAction(institution)} onRestore={(institution) => institutionAction(institution, true)} pending={actionPendingKey} />
+  {:else if visibleAccounts.length === 0 && visibleInstitutions.length === 0 && unparentedHoldings.length > 0}
+    <!-- Only unparented holdings match: they are listed below. -->
   {:else if visibleAccounts.length === 0 && visibleInstitutions.length === 0}
     <StatePanel title={m.accounts_no_results_title()} copy={m.accounts_no_results_copy()} />
   {:else}
@@ -537,7 +538,7 @@
       onEditInstitution={(institution) => (editor = { type: 'institution-edit', institution })}
       onDeleteInstitution={handleDeleteInstitution}
       {institutionAccountCounts}
-      {allAccountChildCounts}
+      {childDependentCounts}
       {actionPendingKey}
     />
   {/if}

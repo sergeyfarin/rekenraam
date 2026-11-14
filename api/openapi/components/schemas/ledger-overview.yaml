@@ -55,6 +55,7 @@ LedgerAccount:
       items:
         $ref: ../../openapi.yaml#/components/schemas/BalanceQuantity
     cash:
+      description: Currency held by a brokerage or cash-kind row itself and by its cash-kind children. Empty for other rows; holdings and other accounts are never cash.
       type: array
       items:
         $ref: ../../openapi.yaml#/components/schemas/BalanceQuantity

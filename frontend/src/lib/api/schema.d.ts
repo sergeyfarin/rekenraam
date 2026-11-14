@@ -28525,6 +28525,7 @@ export interface components {
         LedgerAccount: {
             account: components["schemas"]["AccountResponse"];
             balances: components["schemas"]["BalanceQuantity"][];
+            /** @description Currency held by a brokerage or cash-kind row itself and by its cash-kind children. Empty for other rows; holdings and other accounts are never cash. */
             cash: components["schemas"]["BalanceQuantity"][];
             unsettled: components["schemas"]["BalanceQuantity"][];
             positions: components["schemas"]["LedgerPosition"][];

@@ -226,18 +226,20 @@ func (s *LedgerService) Overview(ctx context.Context, input LedgerOverviewInput)
 			}
 		}
 		slices.Sort(scope)
-		// Cash is the row's own currency plus its cash-kind children and
-		// holdings; another ordinary child (a receivable, say) is linked
-		// but never presented as cash.
+		// Cash is the currency held by a brokerage or cash-kind row itself and
+		// by its cash-kind children. Holdings and other ordinary accounts (a
+		// receivable or a credit card, as a row or a child) count in value but
+		// are never presented as cash.
 		row := LedgerAccount{Account: a, CashAccounts: []Account{}, OtherAccounts: []Account{}, HoldingAccounts: []Account{}}
 		cashScope := []int64{}
 		for _, id := range scope {
 			account, known := metadataByID[id]
 			switch {
 			case id == a.ID:
-				cashScope = append(cashScope, id)
+				if a.AccountKind == "brokerage" || defaultCashAccountKinds[a.AccountKind] {
+					cashScope = append(cashScope, id)
+				}
 			case holding[id]:
-				cashScope = append(cashScope, id)
 				if known {
 					row.HoldingAccounts = append(row.HoldingAccounts, account)
 				}
@@ -253,8 +255,11 @@ func (s *LedgerService) Overview(ctx context.Context, input LedgerOverviewInput)
 		if err != nil {
 			return result, err
 		}
-		cash := bucket
-		if len(cashScope) != len(scope) {
+		cash := netWorthBucket{}
+		switch {
+		case len(cashScope) == len(scope):
+			cash = bucket
+		case len(cashScope) > 0:
 			cash, err = netWorthBucketTotals(accounts, running, pending, unsettled.accounts, kinds, ReportFilters{AccountIDs: cashScope}, shorts)
 			if err != nil {
 				return result, err

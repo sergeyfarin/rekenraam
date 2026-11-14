@@ -138,4 +138,19 @@ func TestLedgerOverviewShowsOrphanHoldingAndSeparatesNonCashChildren(t *testing.
 	requireAmount(t, row.Cash, f.eurCommodityID, 100000, 2, "the receivable is not cash")
 	requireHomeCents(t, 125000, row.Value, "the receivable still counts in the row's value")
 	assert.Empty(t, row.HoldingAccounts)
+	assert.Empty(t, orphan.Cash, "a holding is never cash")
+	// A top-level non-cash account reports its value but no cash.
+	card := f.account(t, "Card", "liability", "credit_card")
+	f.move(t, "2026-09-10", card, f.eurCommodityID, -3000)
+	result, err = service.Overview(context.Background(), LedgerOverviewInput{OwnerUserID: 1, AsOf: "2026-10-15"})
+	require.NoError(t, err)
+	found := false
+	for _, r := range result.Accounts {
+		if r.Account.ID == card {
+			found = true
+			assert.Empty(t, r.Cash)
+			requireAmount(t, r.Balances, f.eurCommodityID, -3000, 2, "its balance is still reported")
+		}
+	}
+	assert.True(t, found, "the card has its own row")
 }
