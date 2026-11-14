@@ -63,6 +63,7 @@ get:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
 patch:
   summary: Update a category
+  description: "Partial update: omitted fields keep the values of the version in effect on effective_from. A correction dated before the latest version governs only until the next version and keeps the lifecycle and structure (parent, posting eligibility) in effect on its date; a structural change that early is refused. The response is the category as it stands today, which for such a correction is not the version just written."
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/CategoryID"
     - in: header
@@ -126,14 +127,8 @@ patch:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Active sibling category with the same name already exists
-      headers:
-        X-Request-ID:
-          $ref: "../openapi.yaml#/components/headers/XRequestID"
-      content:
-        application/json:
-          schema:
-            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+      $ref: "../openapi.yaml#/components/responses/ReferenceVersionConflict"
+      description: REFERENCE_DATED_CONFLICT when an active sibling holds the name, the parent is archived, or the parent would form a loop on a date the new version governs; REFERENCE_VERSION_BACKDATED for a structural change (parent, posting eligibility) dated before the latest version; REFERENCE_VERSION_BEFORE_FIRST before the first version; CONFLICT for a stale edit or a built-in category.
     "500":
       description: Internal server error
       headers:
@@ -197,7 +192,13 @@ delete:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Category must be disabled instead of deleted
+      description: >-
+        CONFLICT. A built-in category cannot be edited, disabled or deleted. A
+        category with any child category, archived or not, cannot be deleted
+        until its children are moved or deleted. When none of those children
+        is active, disabling the category is allowed instead. A category with
+        financial references (postings, reconciliation, payee defaults) cannot
+        be deleted; disable it instead.
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"

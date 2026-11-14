@@ -407,6 +407,166 @@ therefore enforces this contract inside its transaction:
   on which any account version changes, refusing a cycle
   (`400 VALIDATION_FAILED`, "account parent is invalid").
 
+Earlier-dated categories, payees and institutions (#552) follow the account
+contract inside each write transaction. An earlier descriptive correction keeps
+the status in effect on its date; categories also keep that version's
+`closed_on`. Disable/restore or archive/reactivate commands dated before the
+latest version are refused, even when the requested status matches today's.
+Those refusals return `409 REFERENCE_VERSION_BACKDATED` with the latest
+version's date as `conflict_date`. An update before the first version is
+refused rather than inventing an earlier lifecycle (the same choice as
+instruments), with `409 REFERENCE_VERSION_BEFORE_FIRST` and the first
+version's date as `conflict_date`: any date from there on is open to a
+descriptive correction. The service returns it before validating fields
+filled from today's version, so a stale hint cannot turn it into a
+`400 VALIDATION_FAILED`. Neither refusal appends a version or an audit row.
+Same-date changes remain allowed, ordered by `MAX(version_seq) + 1`.
+
+- Categories: name, code and icon are descriptive. Class/type, kind, parent,
+  posting eligibility and opened date are structural and must equal their
+  as-of values for an earlier correction. Category type remains immutable at
+  every date (`400 VALIDATION_FAILED` for an attempted type change). Omitted
+  PATCH fields are filled from the version in effect on the requested date.
+  An earlier correction keeps its as-of parent, so it is not re-validated
+  against a parent archived later in history.
+- Payees: name, default account/category hints and metadata are descriptive;
+  these hints change future entry defaults, never existing postings. Omitted
+  PATCH fields keep their as-of values. Status is lifecycle state. Hints are
+  validated on the requested date and, when no later version exists (so the
+  new version is today's payee), also today. No first-party screen pre-fills
+  from the hints yet, but the payee API returns them. Hard-delete checks count
+  every payee version that names an account or category, so a referenced one
+  cannot be deleted. Archiving an account or category does not check payees
+  that name it, so a client that pre-fills from a hint must treat an archived
+  default as absent.
+- Institutions: name, kind, country, website, address, comment and metadata are
+  descriptive; none rewrites an account's institution link. PATCH is partial
+  (`InstitutionUpdateRequest`): omitted fields keep their as-of values, and an
+  empty string (or `{}` for address and metadata) clears a field. Status is
+  lifecycle state. The existing
+  unarchived-account guard applies to archive commands, not descriptive
+  corrections in an already archived historical window.
+
+**Rules that involve other entities hold on every date the new version
+governs.** This applies to updates and lifecycle commands. Creates still check
+today only: a category starts at the book's genesis date, so a check over its
+window would forbid reusing a name another category held in the past. The
+decision for categories and payees created with a past date is #569.
+A version governs from its `effective_from` until the entity's
+next later version. With no later version, it governs through today, even
+when it is dated in the past. Checking only `effective_from` misses later
+days, and checking only today misses earlier ones. A rule that holds on
+`effective_from` can only start failing on a date when another version takes
+effect with the state the rule refuses. The write transaction therefore checks
+the version's own date plus, inside the window, the dates of just those
+versions (`referenceWindowDatesTx` with a per-rule source): versions giving a
+sibling category or a payee the same name, the parent's own versions, versions
+placing a child under the category, and versions linking an account to the
+institution. Unrelated versions add no dates. The dated cycle walk
+(`requireNoDatedParentCycleTx`, shared with accounts) still visits every later
+account-version date in the book:
+
+- category sibling-name and normalized-payee-name uniqueness, for updates and
+  restore commands (`category_name_taken`, `payee_name_taken`);
+- a forward category edit's parent must be an active category on every date
+  (`category_parent_archived`) and must not make the category its own ancestor
+  on any later date (`category_parent_cycle`). This applies when the category
+  is active or the edit changes the parent. An archived category's unchanged
+  parent is not re-validated. A parent of another type, or a missing one,
+  stays `400 VALIDATION_FAILED`, and new categories keep today's check;
+- category disable refuses a child that is active on any date in the window
+  (`category_active_child`);
+- institution archive refuses an account that is not archived and names the
+  institution on any date in the window (`institution_linked_account`).
+
+Institutions have no unique-name requirement.
+
+**Refusals explain themselves.** The failing date may lie between the
+requested date and today, where today's lists do not show the cause. These
+refusals therefore return `409 REFERENCE_DATED_CONFLICT`, with
+`conflict_rule` (the value in parentheses above), `conflict_date` (the first
+failing date) and `conflict_name` (the other record's stored name on that
+date: the sibling or payee holding the name, which can differ in case from the
+requested one, or the parent, the child or the account). For an unnamed
+built-in or starter category, `conflict_builtin_key` replaces the name, and the
+client labels it in its own locale. The backdated and before-first refusals
+carry their dates as described above. These rules use
+`REFERENCE_DATED_CONFLICT` whether the first failing date is today or earlier,
+so one rule has one code and one explanation; creates check today only and
+keep `409 CONFLICT`. The service errors unwrap to the service sentinels
+(`ErrCategoryExists`, `ErrPayeeExists`, `ErrCategoryParentInvalid`,
+`ErrCategoryHasActiveChildren`, `ErrInstitutionInUse`). The form error boundary
+renders rule-specific copy in all six locales, with the date formatted for the
+reader. A refusal without details falls back to the code's generic message.
+
+**Stale fills are refused.** The service fills omitted PATCH fields, and
+lifecycle commands copy descriptive fields, from a read taken before the write
+transaction. The transaction re-reads the version in effect on the requested
+date. If that is no longer the version the fill came from, the write is
+refused with a retryable `409 CONFLICT`.
+
+**Editors send only what changed.** The category and institution editors load
+today's values. On save they send only the fields the user changed, so the
+server fills the rest from the version in effect on the chosen date. Sending
+the whole form would copy today's values into an earlier window, and for
+categories would assert today's parent or posting eligibility as a backdated
+structural change, which is refused. The category editor keeps the current
+parent selectable even when it is archived, so opening the form never moves a
+category. The form still shows today's values, not the version being
+corrected. When the chosen date is earlier than the current version, a hint
+says that only changed fields are saved and, if the record existed then, every
+other field keeps that date's value, including fields the form does not show.
+Two cases
+remain out of reach: setting a field to the value it has today, and clearing
+a field that is empty today but set on that date. Both look unchanged, so they
+are not sent. #568 loads the as-of values into the form.
+
+**The response is today's state.** A successful update answers with the entity
+as it stands today, not the inserted version. An earlier correction governs
+only its past window, so returning it would report, for example, `active` for
+a category that is archived today. The PATCH descriptions in OpenAPI state
+this; institution versions are listed by `/institutions/{id}/versions`.
+Accounts still answer with the version written (#566).
+
+Versions written by earlier builds are not detected or repaired. Before
+v0.1.0 only development databases hold them. Restoring a category whose parent
+is archived is still accepted, as before; the product decision is #565.
+
+The shared form error boundary presents the backdating refusal in all six
+locales. No version is moved, deleted or voided by this workflow.
+
+Named service regressions: `TestReferenceBackdatedDescriptionPreservesHistoricalLifecycle`,
+`TestReferenceBackdatedLifecycleRefusesWithoutWritesAndSameDateWorks`,
+`TestReferenceCorrectionBeforeFirstVersionIsRefused`,
+`TestCategoryBackdatedStructureIsRefused`,
+`TestReferenceBackdatedNameUniquenessUsesTheEffectiveDate`,
+`TestReferenceForwardEditNameUniquenessCoversTheWholeWindow`,
+`TestCategoryForwardEditParentMustStayActiveThroughToday`,
+`TestCategoryForwardEditRefusesADatedParentCycle`,
+`TestReferenceLifecycleRulesCoverTheWholeWindow`,
+`TestPayeeForwardEditDefaultHintsMustBeValidToday`,
+`TestReferenceWriteRefusesAStaleBaseVersion`,
+`TestReferenceConflictIdentifiesABuiltinCategoryByKey`,
+`TestPayeeBeforeFirstRefusalPrecedesHintValidation`,
+`TestReferenceNameConflictNamesTheOtherRecord`,
+`TestCategoryBackdatedPatchKeepsAsOfStructureAndParentValidation` and
+`TestPayeeBackdatedPatchKeepsAsOfDefaultsAndMetadata`.
+`TestReferenceBackdatedLifecycleReturnsCodedConflict` and
+`TestReferenceStaleBaseVersionReturnsConflict` and
+`TestReferenceDatedConflictNamesTheRuleDateAndRecord` and
+`TestCategoryParentCycleIsADatedConflict` cover the HTTP refusals;
+`TestUpdateInstitutionKeepsOmittedFields` and
+`TestUpdateInstitutionCanClearOptionalFields` cover partial institution
+updates. `form-errors.test.ts` exercises the forms' translated error boundary
+in each locale. In `reference-data-management.spec.ts`, two browser journeys
+at 390 px make earlier-dated renames through the category and institution
+editors. Both assert the hint, that the request carries only the name, and
+that today's version is unchanged. The institution journey also triggers the
+before-first refusal in the form, then reads the earlier window back through
+`/versions`: it keeps that date's kind, address and metadata. Categories have
+no version read, so `TestCategoryBackdatedPatchKeepsAsOfStructureAndParentValidation`
+pins the earlier window's parent, posting eligibility, code and icon.
+
 Earlier-dated instrument versions (#549). Instrument creation always dates v1
 at the commodity genesis; `effective_from` is update-only and is ignored on
 create, after the usual shape and future-date validation. Instruments follow the same

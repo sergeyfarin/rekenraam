@@ -4642,7 +4642,10 @@ export interface paths {
         };
         options?: never;
         head?: never;
-        /** Update an institution by creating a new version */
+        /**
+         * Update an institution by creating a new version
+         * @description Partial update: omitted fields keep the values of the version in effect on effective_from. Institution fields are descriptive, so any date on or after the first version is accepted; a correction dated before the latest version governs only until the next version and keeps the lifecycle in effect on its date. The response is the institution as it stands today, which for such a correction is not the version just written; the versions endpoint lists it.
+         */
         patch: {
             parameters: {
                 query?: never;
@@ -4657,7 +4660,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["InstitutionRequest"];
+                    "application/json": components["schemas"]["InstitutionUpdateRequest"];
                 };
             };
             responses: {
@@ -4711,6 +4714,8 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description REFERENCE_VERSION_BEFORE_FIRST before the first version; CONFLICT for a stale edit. */
+                409: components["responses"]["ReferenceVersionConflict"];
                 413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
@@ -4804,16 +4809,8 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description An account that is not archived still uses the institution */
-                409: {
-                    headers: {
-                        "X-Request-ID": components["headers"]["XRequestID"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
+                /** @description REFERENCE_DATED_CONFLICT when an account that is not archived uses the institution on a date the archive governs; REFERENCE_VERSION_BACKDATED when dated before the latest version; CONFLICT for a stale edit. */
+                409: components["responses"]["ReferenceVersionConflict"];
                 413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
@@ -4911,6 +4908,8 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description REFERENCE_VERSION_BACKDATED when dated before the latest version; CONFLICT for a stale edit. */
+                409: components["responses"]["ReferenceVersionConflict"];
                 413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
@@ -7888,7 +7887,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Category must be disabled instead of deleted */
+                /** @description CONFLICT. A built-in category cannot be edited, disabled or deleted. A category with any child category, archived or not, cannot be deleted until its children are moved or deleted. When none of those children is active, disabling the category is allowed instead. A category with financial references (postings, reconciliation, payee defaults) cannot be deleted; disable it instead. */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -7912,7 +7911,10 @@ export interface paths {
         };
         options?: never;
         head?: never;
-        /** Update a category */
+        /**
+         * Update a category
+         * @description Partial update: omitted fields keep the values of the version in effect on effective_from. A correction dated before the latest version governs only until the next version and keeps the lifecycle and structure (parent, posting eligibility) in effect on its date; a structural change that early is refused. The response is the category as it stands today, which for such a correction is not the version just written.
+         */
         patch: {
             parameters: {
                 query?: never;
@@ -7981,16 +7983,8 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Active sibling category with the same name already exists */
-                409: {
-                    headers: {
-                        "X-Request-ID": components["headers"]["XRequestID"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
+                /** @description REFERENCE_DATED_CONFLICT when an active sibling holds the name, the parent is archived, or the parent would form a loop on a date the new version governs; REFERENCE_VERSION_BACKDATED for a structural change (parent, posting eligibility) dated before the latest version; REFERENCE_VERSION_BEFORE_FIRST before the first version; CONFLICT for a stale edit or a built-in category. */
+                409: components["responses"]["ReferenceVersionConflict"];
                 413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
@@ -8087,16 +8081,8 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Category has active child categories */
-                409: {
-                    headers: {
-                        "X-Request-ID": components["headers"]["XRequestID"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
+                /** @description REFERENCE_DATED_CONFLICT when a child category is active on a date the disable governs; REFERENCE_VERSION_BACKDATED when dated before the latest version; CONFLICT for a built-in category, which cannot be disabled. */
+                409: components["responses"]["ReferenceVersionConflict"];
                 413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
@@ -8194,16 +8180,8 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Active sibling category with the same name already exists */
-                409: {
-                    headers: {
-                        "X-Request-ID": components["headers"]["XRequestID"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
+                /** @description REFERENCE_DATED_CONFLICT when an active sibling holds the name on a date the restore governs; REFERENCE_VERSION_BACKDATED when dated before the latest version. */
+                409: components["responses"]["ReferenceVersionConflict"];
                 413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
@@ -8955,7 +8933,10 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Update a payee */
+        /**
+         * Update a payee
+         * @description Partial update: omitted fields keep the values of the version in effect on effective_from. Payee fields are descriptive, so any date on or after the first version is accepted; a correction dated before the latest version governs only until the next version and keeps the lifecycle in effect on its date. The response is the payee as it stands today, which for such a correction is not the version just written.
+         */
         patch: {
             parameters: {
                 query?: never;
@@ -9018,15 +8999,8 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Payee already exists */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
+                /** @description REFERENCE_DATED_CONFLICT when an active payee holds the name on a date the new version governs; REFERENCE_VERSION_BEFORE_FIRST before the first version; CONFLICT for a stale edit. */
+                409: components["responses"]["ReferenceVersionConflict"];
                 413: components["responses"]["JSONBodyTooLarge"];
             };
         };
@@ -9104,6 +9078,8 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description REFERENCE_VERSION_BACKDATED when dated before the latest version; CONFLICT for a stale edit. */
+                409: components["responses"]["ReferenceVersionConflict"];
                 413: components["responses"]["JSONBodyTooLarge"];
             };
         };
@@ -9185,6 +9161,8 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description REFERENCE_DATED_CONFLICT when an active payee holds the name on a date the restore governs; REFERENCE_VERSION_BACKDATED when dated before the latest version; CONFLICT for a stale edit. */
+                409: components["responses"]["ReferenceVersionConflict"];
                 413: components["responses"]["JSONBodyTooLarge"];
             };
         };
@@ -29475,6 +29453,32 @@ export interface components {
             /** @description Omit to use the default reason for the operation. */
             change_reason?: string;
         };
+        /** @description Partial update. An omitted field keeps the value of the version in effect on effective_from, so an earlier-dated correction changes only the fields it sends. To clear an optional field, send an empty string for country_code, website or comment_markdown, or {} for address or metadata. name and kind cannot be cleared. */
+        InstitutionUpdateRequest: {
+            name?: string;
+            kind?: components["schemas"]["InstitutionKind"];
+            /** @description Two letters, or empty to clear. */
+            country_code?: string;
+            /** @description An http(s) URL, or empty to clear. */
+            website?: string;
+            /** @description Reserved structured address object; {} clears it. */
+            address?: {
+                [key: string]: unknown;
+            };
+            /** @description Markdown text, or empty to clear. */
+            comment_markdown?: string;
+            /** @description Reserved structured metadata object; {} clears it. */
+            metadata?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Format: date
+             * @description Omit to use today's date. Future dates are rejected.
+             */
+            effective_from?: string;
+            /** @description Omit to use the default reason for the operation. */
+            change_reason?: string;
+        };
         InstitutionLifecycleRequest: {
             /**
              * Format: date
@@ -36071,10 +36075,24 @@ export interface components {
         };
         ErrorBody: {
             /** @enum {string} */
-            code: "VALIDATION_FAILED" | "DECODE_ERROR" | "REQUEST_TOO_LARGE" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "PRICE_IMPACT_STALE" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "MFA_AUTHENTICATOR_UNAVAILABLE" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "FORECAST_TOO_LARGE" | "FORECAST_BASIS_CHANGED" | "INVESTMENT_WORKFLOW_REQUIRED" | "INVESTMENT_INSTRUMENT_VERSION_BACKDATED" | "INVESTMENT_EVENT_OUT_OF_ORDER" | "INVESTMENT_POSITION_SIDE_CONFLICT" | "INVESTMENT_SHORT_DEPENDENCY" | "INVESTMENT_TRANSFER_POOL_REQUIRED" | "INVESTMENT_TRANSFER_POOL_UNAVAILABLE" | "INVESTMENT_SALE_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SALE" | "INVESTMENT_SALE_CHANGED" | "INVESTMENT_SALE_DEPENDENCY" | "INVESTMENT_BUY_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_BUY" | "INVESTMENT_BUY_CHANGED" | "INVESTMENT_BUY_DEPENDENCY" | "INVESTMENT_DIVIDEND_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_DIVIDEND" | "INVESTMENT_DIVIDEND_CHANGED" | "INVESTMENT_PAYMENT_IN_LIEU_ALREADY_CORRECTED" | "INVESTMENT_PAYMENT_IN_LIEU_CHANGED" | "INVESTMENT_WRITE_OFF_ALREADY_CORRECTED" | "INVESTMENT_TRANSFER_ALREADY_CORRECTED" | "INVESTMENT_TRANSFER_CHANGED" | "INVESTMENT_TRANSFER_DEPENDENCY" | "INVESTMENT_IMPORTED_TRANSFER" | "INVESTMENT_TRANSFER_BASIS_RESOLVED" | "INVESTMENT_TRANSFER_BASIS_NOT_UNKNOWN" | "INVESTMENT_TRANSFER_BASIS_NOT_RESOLVED" | "INVESTMENT_BASIS_RESOLUTION_ALREADY_CORRECTED" | "INVESTMENT_BASIS_RESOLUTION_CHANGED" | "INVESTMENT_WRITE_OFF_CHANGED" | "INVESTMENT_REINVESTMENT_ALREADY_CORRECTED" | "INVESTMENT_REINVESTMENT_CHANGED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE" | "INVESTMENT_SPLIT_NO_HOLDINGS" | "INVESTMENT_CAPITAL_RETURN_DEPENDENCY" | "INVESTMENT_CAPITAL_RETURN_NO_HOLDINGS" | "INVESTMENT_CASH_IN_LIEU_SPLIT_UNAVAILABLE" | "INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPLIT_CHANGED" | "INVESTMENT_SPLIT_DEPENDENCY" | "INVESTMENT_SPLIT_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SPLIT" | "INVESTMENT_EXCHANGE_NO_HOLDINGS" | "INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE" | "INVESTMENT_EXCHANGE_CHANGED" | "INVESTMENT_EXCHANGE_ALREADY_CORRECTED" | "INVESTMENT_SPIN_OFF_NO_HOLDINGS" | "INVESTMENT_SPIN_OFF_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPIN_OFF_CHANGED" | "INVESTMENT_SPIN_OFF_ALREADY_CORRECTED" | "INVESTMENT_MERGER_ALREADY_CORRECTED" | "IMPORT_SPLIT_LINK_UNAVAILABLE" | "IMPORT_SHORT_LINK_UNAVAILABLE" | "IMPORT_SHORT_LINK_CHANGED" | "IMPORT_SHORT_LINK_MISMATCH" | "IMPORT_LINK_STALE" | "IMPORT_UPLOAD_TOO_LARGE" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "TRANSACTION_VERSION_STALE" | "RECONCILIATION_IMPACT_STALE" | "POSTING_ACCOUNT_VERSION_STALE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECONCILIATION_START_STALE" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
+            code: "VALIDATION_FAILED" | "DECODE_ERROR" | "REQUEST_TOO_LARGE" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "PRICE_IMPACT_STALE" | "CONFLICT" | "REFERENCE_VERSION_BACKDATED" | "REFERENCE_VERSION_BEFORE_FIRST" | "REFERENCE_DATED_CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "MFA_AUTHENTICATOR_UNAVAILABLE" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "FORECAST_TOO_LARGE" | "FORECAST_BASIS_CHANGED" | "INVESTMENT_WORKFLOW_REQUIRED" | "INVESTMENT_INSTRUMENT_VERSION_BACKDATED" | "INVESTMENT_EVENT_OUT_OF_ORDER" | "INVESTMENT_POSITION_SIDE_CONFLICT" | "INVESTMENT_SHORT_DEPENDENCY" | "INVESTMENT_TRANSFER_POOL_REQUIRED" | "INVESTMENT_TRANSFER_POOL_UNAVAILABLE" | "INVESTMENT_SALE_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SALE" | "INVESTMENT_SALE_CHANGED" | "INVESTMENT_SALE_DEPENDENCY" | "INVESTMENT_BUY_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_BUY" | "INVESTMENT_BUY_CHANGED" | "INVESTMENT_BUY_DEPENDENCY" | "INVESTMENT_DIVIDEND_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_DIVIDEND" | "INVESTMENT_DIVIDEND_CHANGED" | "INVESTMENT_PAYMENT_IN_LIEU_ALREADY_CORRECTED" | "INVESTMENT_PAYMENT_IN_LIEU_CHANGED" | "INVESTMENT_WRITE_OFF_ALREADY_CORRECTED" | "INVESTMENT_TRANSFER_ALREADY_CORRECTED" | "INVESTMENT_TRANSFER_CHANGED" | "INVESTMENT_TRANSFER_DEPENDENCY" | "INVESTMENT_IMPORTED_TRANSFER" | "INVESTMENT_TRANSFER_BASIS_RESOLVED" | "INVESTMENT_TRANSFER_BASIS_NOT_UNKNOWN" | "INVESTMENT_TRANSFER_BASIS_NOT_RESOLVED" | "INVESTMENT_BASIS_RESOLUTION_ALREADY_CORRECTED" | "INVESTMENT_BASIS_RESOLUTION_CHANGED" | "INVESTMENT_WRITE_OFF_CHANGED" | "INVESTMENT_REINVESTMENT_ALREADY_CORRECTED" | "INVESTMENT_REINVESTMENT_CHANGED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE" | "INVESTMENT_SPLIT_NO_HOLDINGS" | "INVESTMENT_CAPITAL_RETURN_DEPENDENCY" | "INVESTMENT_CAPITAL_RETURN_NO_HOLDINGS" | "INVESTMENT_CASH_IN_LIEU_SPLIT_UNAVAILABLE" | "INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPLIT_CHANGED" | "INVESTMENT_SPLIT_DEPENDENCY" | "INVESTMENT_SPLIT_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SPLIT" | "INVESTMENT_EXCHANGE_NO_HOLDINGS" | "INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE" | "INVESTMENT_EXCHANGE_CHANGED" | "INVESTMENT_EXCHANGE_ALREADY_CORRECTED" | "INVESTMENT_SPIN_OFF_NO_HOLDINGS" | "INVESTMENT_SPIN_OFF_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPIN_OFF_CHANGED" | "INVESTMENT_SPIN_OFF_ALREADY_CORRECTED" | "INVESTMENT_MERGER_ALREADY_CORRECTED" | "IMPORT_SPLIT_LINK_UNAVAILABLE" | "IMPORT_SHORT_LINK_UNAVAILABLE" | "IMPORT_SHORT_LINK_CHANGED" | "IMPORT_SHORT_LINK_MISMATCH" | "IMPORT_LINK_STALE" | "IMPORT_UPLOAD_TOO_LARGE" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "TRANSACTION_VERSION_STALE" | "RECONCILIATION_IMPACT_STALE" | "POSTING_ACCOUNT_VERSION_STALE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECONCILIATION_START_STALE" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
             message: string;
             /** @description On a reconciliation guard refusal of a generic ledger write (CONFLICT "reconciliation override is required", or RECONCILIATION_IMPACT_STALE): the checkpoints the write would invalidate right now. A reorder, which has no preview, binds its override to this set (#296). */
             checkpoint_ids?: number[];
+            /**
+             * @description On REFERENCE_DATED_CONFLICT: the rule a dated category, payee or institution write breaks on a date the new version governs, which may lie between the requested date and today (#552).
+             * @enum {string}
+             */
+            conflict_rule?: "category_name_taken" | "payee_name_taken" | "category_parent_archived" | "category_parent_cycle" | "category_active_child" | "institution_linked_account";
+            /**
+             * Format: date
+             * @description On REFERENCE_DATED_CONFLICT: the first date the rule fails. On REFERENCE_VERSION_BACKDATED: the latest version's date, the earliest date a lifecycle or structural change may take effect. On REFERENCE_VERSION_BEFORE_FIRST: the first version's date, the earliest date any change may take effect.
+             */
+            conflict_date?: string;
+            /** @description On REFERENCE_DATED_CONFLICT: the other record's name on conflict_date (the taken name, the parent, the active child or the linked account). Absent for an unnamed built-in or starter category; see conflict_builtin_key. */
+            conflict_name?: string;
+            /** @description On REFERENCE_DATED_CONFLICT about an unnamed built-in or starter category: its built-in key, which the client labels in its locale. */
+            conflict_builtin_key?: string;
         };
         ErrorResponse: {
             error: components["schemas"]["ErrorBody"];
@@ -36105,6 +36123,16 @@ export interface components {
         };
     };
     responses: {
+        /** @description A dated category, payee or institution write was refused (#552). REFERENCE_DATED_CONFLICT — a rule involving another record fails on a date the new version governs; conflict_rule, conflict_date and conflict_name (or conflict_builtin_key) say which rule, the first failing date and the other record. REFERENCE_VERSION_BACKDATED — a lifecycle or structural change dated before the latest version; conflict_date is that version's date. REFERENCE_VERSION_BEFORE_FIRST — dated before the record's first version; conflict_date is the first version's date. CONFLICT — a version was added while the edit was prepared; reload and retry. Which of these an operation can return is in its own description. No audit event or version is written. */
+        ReferenceVersionConflict: {
+            headers: {
+                "X-Request-ID": components["headers"]["XRequestID"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
         /** @description REQUEST_TOO_LARGE — the JSON request body exceeds 1 MiB (1,048,576 bytes), including trailing whitespace. No application mutation is performed. */
         JSONBodyTooLarge: {
             headers: {

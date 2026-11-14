@@ -245,6 +245,9 @@ func readPayeeID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 }
 
 func writePayeeServiceError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, action string, err error) {
+	if writeReferenceVersionError(w, err) {
+		return
+	}
 	var validationError app.ValidationError
 	switch {
 	case errors.As(err, &validationError):

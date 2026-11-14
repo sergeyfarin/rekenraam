@@ -64,14 +64,8 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Category has active child categories
-      headers:
-        X-Request-ID:
-          $ref: "../openapi.yaml#/components/headers/XRequestID"
-      content:
-        application/json:
-          schema:
-            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+      $ref: "../openapi.yaml#/components/responses/ReferenceVersionConflict"
+      description: REFERENCE_DATED_CONFLICT when a child category is active on a date the disable governs; REFERENCE_VERSION_BACKDATED when dated before the latest version; CONFLICT for a built-in category, which cannot be disabled.
     "500":
       description: Internal server error
       headers:
