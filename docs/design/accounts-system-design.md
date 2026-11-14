@@ -433,9 +433,12 @@ Same-date changes remain allowed, ordered by `MAX(version_seq) + 1`.
   these hints change future entry defaults, never existing postings. Omitted
   PATCH fields keep their as-of values. Status is lifecycle state. Hints are
   validated on the requested date and, when no later version exists (so the
-  new version is today's payee), also today. Nothing reads the hints yet, and
-  archiving an account or category does not check payees that name it. So the
-  first feature that reads them must treat an archived default as absent.
+  new version is today's payee), also today. No first-party screen pre-fills
+  from the hints yet, but the payee API returns them. Hard-delete checks count
+  every payee version that names an account or category, so a referenced one
+  cannot be deleted. Archiving an account or category does not check payees
+  that name it, so a client that pre-fills from a hint must treat an archived
+  default as absent.
 - Institutions: name, kind, country, website, address, comment and metadata are
   descriptive; none rewrites an account's institution link. PATCH is partial
   (`InstitutionUpdateRequest`): omitted fields keep their as-of values, and an
@@ -511,7 +514,9 @@ structural change, which is refused. The category editor keeps the current
 parent selectable even when it is archived, so opening the form never moves a
 category. The form still shows today's values, not the version being
 corrected. When the chosen date is earlier than the current version, a hint
-says that unchanged fields keep the values in effect on that date. Two cases
+says that only changed fields are saved and, if the record existed then, every
+other field keeps that date's value, including fields the form does not show.
+Two cases
 remain out of reach: setting a field to the value it has today, and clearing
 a field that is empty today but set on that date. Both look unchanged, so they
 are not sent. #568 loads the as-of values into the form.

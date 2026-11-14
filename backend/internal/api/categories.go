@@ -331,7 +331,7 @@ func writeCategoryServiceError(w http.ResponseWriter, r *http.Request, logger *s
 	case errors.Is(err, app.ErrCategoryParentInvalid):
 		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "category parent is invalid")
 	case errors.Is(err, app.ErrCategoryHasChildren):
-		writeAPIError(w, http.StatusConflict, "CONFLICT", "category has active child categories")
+		writeAPIError(w, http.StatusConflict, "CONFLICT", "category has child categories")
 	case errors.Is(err, app.ErrCategoryBuiltInProtected):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "built-in categories cannot be edited, disabled or deleted")
 	case errors.Is(err, app.ErrCategoryUsed):

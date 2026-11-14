@@ -227,7 +227,7 @@
   "categories_field_allows_postings": "Permitir apuntes",
   "categories_field_code": "Código",
   "categories_field_effective_from": "En vigor desde",
-  "reference_edit_earlier_date_hint": "El formulario muestra los valores de hoy. Para una fecha anterior, solo se guardan los campos que cambie; los demás conservan los valores vigentes en esa fecha.",
+  "reference_edit_earlier_date_hint": "El formulario muestra los valores actuales. Para esta fecha solo se guardan los campos que cambie. Si el registro ya existía, los demás campos, incluidos los que no se muestran aquí, conservan sus valores de esa fecha.",
   "categories_field_icon": "Icono",
   "categories_field_name": "Nombre",
   "categories_field_name_override": "Nombre personalizado",

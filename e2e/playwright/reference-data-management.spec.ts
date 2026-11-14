@@ -128,7 +128,7 @@ test('[acceptance] an earlier-dated category rename sends only the name and leav
   await form.getByLabel('Name', { exact: true }).fill(`Spring name ${suffix}`);
   await form.getByText('Advanced').click();
   await form.getByLabel('Effective from').fill('2024-03-01');
-  await expect(form.getByLabel('Effective from')).toHaveAccessibleDescription(/only the fields you change are saved/);
+  await expect(form.getByLabel('Effective from')).toHaveAccessibleDescription(/Only the fields you change are saved/);
   await expectNoHorizontalScroll(page);
   const sent = page.waitForRequest(
     (request) => request.method() === 'PATCH' && request.url().endsWith(`/api/v1/categories/${child.id}`)
@@ -183,7 +183,7 @@ test('[acceptance] an earlier-dated institution rename keeps that date\'s kind a
   await expect(form.getByRole('alert')).toContainText('This record starts on');
   await expectNoHorizontalScroll(page);
   await form.getByLabel('Effective from').fill('2024-03-01');
-  await expect(form.getByLabel('Effective from')).toHaveAccessibleDescription(/only the fields you change are saved/);
+  await expect(form.getByLabel('Effective from')).toHaveAccessibleDescription(/Only the fields you change are saved/);
   const sent = page.waitForRequest(
     (request) => request.method() === 'PATCH' && request.url().endsWith(`/api/v1/institutions/${institution.id}`)
   );

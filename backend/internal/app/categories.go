@@ -38,7 +38,7 @@ var (
 	ErrCategoryExists           = errors.New("category already exists")
 	ErrCategoryParentInvalid    = errors.New("category parent is invalid")
 	ErrCategoryHasChildren      = errors.New("category has active child categories")
-	ErrCategoryBuiltInProtected = errors.New("built-in category cannot be deleted")
+	ErrCategoryBuiltInProtected = errors.New("built-in category cannot be edited, disabled or deleted")
 	ErrCategoryUsed             = errors.New("category is used by financial records")
 	categoryIconPattern         = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 )

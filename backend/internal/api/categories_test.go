@@ -290,11 +290,49 @@ func TestBuiltInCategoryCannotBeEditedDisabledOrDeleted(t *testing.T) {
 	assert.False(t, other.IsStarter)
 	assert.Equal(t, "expense.other", other.BuiltinKey)
 
-	patchCategory(t, handler, sessionCookie, csrfToken, other.ID, `{
-		"name":"Miscellaneous"
-	}`, http.StatusConflict)
-	mutateCategory(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/categories/"+strconvFormatInt(other.ID)+"/disable", `{}`, http.StatusConflict)
-	mutateCategoryNoBody(t, handler, sessionCookie, csrfToken, http.MethodDelete, "/api/v1/categories/"+strconvFormatInt(other.ID), http.StatusConflict)
+	// Each refusal says what a built-in category cannot do, so no client
+	// suggests disabling one as the way out of a refused delete.
+	path := "/api/v1/categories/" + strconvFormatInt(other.ID)
+	for _, call := range []struct{ method, path, body string }{
+		{http.MethodPatch, path, `{"name":"Miscellaneous"}`},
+		{http.MethodPost, path + "/disable", `{}`},
+		{http.MethodDelete, path, ""},
+	} {
+		res := categoryRequest(t, handler, sessionCookie, csrfToken, call.method, call.path, call.body)
+		require.Equal(t, http.StatusConflict, res.Code, "%s %s", call.method, call.path)
+		assert.JSONEq(t, `{"error":{"code":"CONFLICT","message":"built-in categories cannot be edited, disabled or deleted"}}`, res.Body.String(), "%s %s", call.method, call.path)
+	}
+}
+
+// Delete refuses any child, archived or not; disabling is checked against
+// active children only, with its own dated code.
+func TestCategoryDeleteRefusesAParentWithOnlyArchivedChildren(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, _ := setupAccountAPITest(t, handler)
+	parent := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Delete parent","category_type":"expense"}`)
+	child := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Archived child","category_type":"expense","parent_category_id":`+strconvFormatInt(parent.ID)+`}`)
+	mutateCategory(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/categories/"+strconvFormatInt(child.ID)+"/disable", `{}`, http.StatusOK)
+
+	res := categoryRequest(t, handler, sessionCookie, csrfToken, http.MethodDelete, "/api/v1/categories/"+strconvFormatInt(parent.ID), "")
+	require.Equal(t, http.StatusConflict, res.Code)
+	assert.JSONEq(t, `{"error":{"code":"CONFLICT","message":"category has child categories"}}`, res.Body.String())
+}
+
+func categoryRequest(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, method string, path string, body string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	req.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(req)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	return res
 }
 
 func TestCategoryMutationsRequireAuthentication(t *testing.T) {

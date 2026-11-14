@@ -227,7 +227,7 @@
   "categories_field_allows_postings": "Boekingsregels toestaan",
   "categories_field_code": "Code",
   "categories_field_effective_from": "Geldig vanaf",
-  "reference_edit_earlier_date_hint": "Het formulier toont de waarden van vandaag. Voor een eerdere datum worden alleen de velden opgeslagen die u wijzigt; de overige houden de waarden die op die datum golden.",
+  "reference_edit_earlier_date_hint": "Het formulier toont de huidige waarden. Voor deze datum worden alleen de velden opgeslagen die u wijzigt. Als het record toen al bestond, houden alle andere velden, ook die hier niet worden getoond, hun waarden van die datum.",
   "categories_field_icon": "Pictogram",
   "categories_field_name": "Naam",
   "categories_field_name_override": "Eigen naam",
