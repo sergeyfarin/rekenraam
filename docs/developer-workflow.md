@@ -1043,8 +1043,9 @@ Database* above.
 
 **Implementation work goes through a short-lived branch and a pull request.**
 Work on an issue, bug or feature starts on a branch cut from the latest
-`origin/main` and ends with an open, ready-for-review pull request, opened
-without waiting to be asked. The owner merges; nobody else merges or enables
+canonical `main` (`upstream/main` in a fork, `origin/main` in a direct clone)
+and ends with an open, ready-for-review pull request, opened without waiting
+to be asked. The owner merges; nobody else merges or enables
 auto-merge. (Owner decision, 2026-11-15. It replaces the 2026-08-23 rule of
 committing directly to `main`.)
 
@@ -1065,9 +1066,14 @@ The two task shapes this produces:
   decisions, approach, implementation, tests and docs, and report ranked
   findings. A review changes nothing: no edits, commits, pushes or issues.
 
+Recurring tasks around those two have their own skills: shaping an issue
+before it is built, updating dependencies, sweeping for drift, and sweeping
+for one bug class. The owner-facing guide to all of them is
+[agent-task-playbook.md](agent-task-playbook.md).
+
 What keeps this safe:
 
-- **Branches stay short-lived and start from the latest `origin/main`.** The
+- **Branches stay short-lived and start from the latest canonical `main`.** The
   2026-08 merge of two long-diverged branches is where the duplicated
   `docs/conventions.md` paragraph, the duplicated `writePricingServiceError`
   arms, the duplicate CodeQL workflow, and the colliding T-42–T-47 backlog IDs

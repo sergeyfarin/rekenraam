@@ -66,7 +66,7 @@ guards by source effective date. The UTC current-version views can hide a
 valid owner-today write or expose tomorrow's version. Keep
 `TestCurrentReference*`,
 `TestReferenceDateRefreshesPreferencesWithoutLeakingAcrossOperations`,
-`TestReferenceDateMigrationPreservesHistoryAndUsesSourceDates`,
+`TestReferenceDateBaselineGuardsUseSourceDates`,
 `TestOwnerCurrentReferenceHTTPCreateListAndFutureExclusion` and
 `owner-current-reference.spec.ts` green. Carry the authenticated owner into
 blank transaction and ledger-read defaults too (#343); undated FX source

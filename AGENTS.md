@@ -39,7 +39,7 @@ Most requests are one of two modes. Decide which one you are in before you start
 
 **Work an issue** (implement an issue, bug fix or feature) — `work-issue` skill:
 
-- Branch from the latest `origin/main`, build the slice, validate it.
+- Branch from the latest canonical `main` (`upstream/main` in a fork, otherwise `origin/main`), build the slice, validate it.
 - Finish with a pushed branch and an open, ready-for-review pull request. Do this without asking; it overrides any machine-wide default to wait for a request. Never merge.
 - While in the code, look for bugs, weak tests, code smells and improvement opportunities beyond the task. A finding that is small, local and needs no migration, API contract change or owner decision is fixed in the same pull request as its own commit. Anything else, and anything that changes a financial result, becomes a GitHub issue. Nothing is left only in the conversation.
 
@@ -49,16 +49,27 @@ Most requests are one of two modes. Decide which one you are in before you start
 - Review only. No edits, commits, pushes, pull request comments or new issues unless the owner asks for that specific thing. Describe a fix; do not make it.
 - Report a verdict, then verified findings ranked `P0`–`P3` with `file:line`.
 
-A request that fits neither mode (a question, an investigation, a docs or maintenance task) follows the owner's wording; it still ends in a pull request when it changes the repository.
+Four recurring tasks have their own skill. The last three are run as *work an issue*: they end in a pull request, fix what is small and file issues for the rest.
+
+- **Shape an issue** — `shape-issue`: turn an idea, bug report or finding into an implementation-ready issue. No code, no branch.
+- **Update dependencies** — `update-dependencies`: Dependabot, security alerts, upgrades, and what the new versions make possible.
+- **Sweep for drift** — `drift-sweep`: blocked issues whose blocker is gone, roadmap and docs that no longer match the code, tests that no longer earn their place.
+- **Sweep one bug class** — `sweep-bug-class`: find every remaining instance of a known pattern and add a guard.
+
+A request that fits none of these (a question, an investigation) follows the owner's wording; it still ends in a pull request when it changes the repository. `docs/agent-task-playbook.md` is the owner's guide to all of them.
 
 ## Task Skills
 
-`.claude/skills/` holds eight skills distilled from this repo's conventions and bug history: the two task modes above and six area skills. Claude Code and OpenCode discover them there; Codex discovers the same files through `.agents/skills`, a symlink to that directory. This file is only the floor: load the matching skills before starting work.
+`.claude/skills/` holds twelve skills distilled from this repo's conventions and bug history: the six task skills above and six area skills. Claude Code and OpenCode discover them there; Codex discovers the same files through `.agents/skills`, a symlink to that directory. This file is only the floor: load the matching skills before starting work.
 
 | Work | Skill |
 |---|---|
 | Implementing an issue, bug fix or feature slice | `work-issue` |
 | Reviewing a pull request, branch or diff | `review-pr` |
+| Turning an idea or finding into a ready issue | `shape-issue` |
+| Dependencies, Dependabot, security alerts | `update-dependencies` |
+| Stale docs, roadmap, tests, blocked issues | `drift-sweep` |
+| Finding every instance of one bug pattern | `sweep-bug-class` |
 | Money, transactions, postings, reconciliation, investments, prices, FX | `ledger-invariants`, before writing code |
 | Go code, migrations, backend tests | `backend-slice` |
 | Any `/api/v1` endpoint, schema or error code | `api-contract` |
@@ -66,7 +77,7 @@ A request that fits neither mode (a question, an investigation, a docs or mainte
 | Workers, schedulers, provider fetching, FX refresh | `background-work` |
 | Before every commit, reviewing a diff, running the app, editing CI workflows, choosing which doc to update | `validate-and-ship` |
 
-- A typical task uses one task mode plus two or three area skills, and anything financial includes `ledger-invariants`.
+- A typical task uses one task skill plus two or three area skills, and anything financial includes `ledger-invariants`.
 - If your harness did not list these skills, read `.claude/skills/<name>/SKILL.md` directly.
 - A `SKILL.md` names the reference files beside it (`ledger-invariants/investments.md`, `validate-and-ship/bug-classes/<area>.md`). Read the ones for the area you are changing; they are not loaded automatically.
 - The `docs/` sources above govern on any conflict. When a convention changes, update the skill that restates it in the same change. `.claude/skills/README.md` covers maintaining the library.

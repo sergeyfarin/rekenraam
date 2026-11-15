@@ -244,7 +244,7 @@ Conventional Commits, smallest honest scope:
 `test(backend): ...`. Don't mix unrelated refactors.
 
 Implementation work goes through a short-lived branch cut from the latest
-`origin/main` and a pull request, opened without being asked; the owner
+canonical `main` (`upstream/main` in a fork) and a pull request, opened without being asked; the owner
 merges. A direct commit to `main` needs the owner's say-so. Long-diverged
 branches are where the 2026-08 merge damage came from, so keep one slice per
 branch. If a change alters product rules, conventions or ADRs, say so in the

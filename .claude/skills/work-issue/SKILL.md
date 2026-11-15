@@ -27,13 +27,16 @@ auto-merge; the owner merges. Governing rule: *Branches And PRs* in
 ## 2. Branch
 
 ```sh
-git fetch origin
-git switch -c <type>/<short-name> origin/main
+base=$(git remote | grep -qx upstream && echo upstream || echo origin)
+git fetch "$base"
+git switch -c <type>/<short-name> "$base/main"
 ```
 
-Always cut from the latest `origin/main`: never from another feature branch,
-and never onto a branch that already has an open pull request for other work.
-If the working tree holds changes that are not yours, stop and ask.
+Always cut from the latest canonical `main`. In a fork that is
+`upstream/main`, because the fork's own `main` can be behind; in a direct
+clone it is `origin/main`. Never cut from another feature branch, and never
+onto a branch that already has an open pull request for other work. If the
+working tree holds changes that are not yours, stop and ask.
 
 ## 3. Build
 
@@ -90,7 +93,10 @@ change.
 
 ## 6. Ship
 
-- Commit with Conventional Commits, then `git push -u origin <branch>`.
+- Commit with Conventional Commits, then `git push -u origin <branch>`. In a
+  fork, `origin` is the fork and the pull request targets the canonical
+  repository; `gh` asks once which repository is the default
+  (`gh repo set-default`), and issues are read and filed there too.
 - `gh pr create --base main`, ready for review, following
   `.github/pull_request_template.md`. The body states:
   - what changed and why;
