@@ -90,4 +90,6 @@ body tells the agent to read it. Three consequences:
   (in `CLAUDE.md`, Copilot or Cursor instruction files); they drift from it.
 - Every `gh ... list` and `gh api` survey in a skill passes `--limit` or
   `--paginate`, and every `--json` field must exist in the oldest `gh` in use
-  (2.46 here). Run a command once before putting it in a skill.
+  (2.46 here). Run a command once before putting it in a skill, and run its
+  failure and empty cases too, under `set -euo pipefail`: a guard written as
+  `test … || echo` does not stop the next line.

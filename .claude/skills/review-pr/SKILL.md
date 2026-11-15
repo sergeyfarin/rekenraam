@@ -16,9 +16,15 @@ opinion, and its fixes reach `main` unreviewed.
 
 ## Prepare
 
-- Read the pull request and what it claims:
-  `gh pr view <n> --json title,body,baseRefName,headRefOid,commits,files`,
-  `gh pr diff <n>`, `gh pr checks <n>`.
+- Read the pull request and what it claims, and record the head commit you
+  are reviewing:
+  ```sh
+  gh pr view <n> --json title,body,baseRefName,commits,files
+  sha=$(gh pr view <n> --json headRefOid --jq .headRefOid)
+  gh pr diff <n>; gh pr checks <n>
+  ```
+  Everything below reviews `$sha`. If the pull request moves on during the
+  review, say so and start again from this step.
 - Find the issues it closes. `closingIssuesReferences` is not a
   `gh pr view` field in every `gh` release, so ask GraphQL:
   ```sh
@@ -35,13 +41,17 @@ opinion, and its fixes reach `main` unreviewed.
   whatever `origin` is — and check that you got the commit GitHub reports:
   ```sh
   repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
-  sha=$(gh pr view <n> --json headRefOid --jq .headRefOid)
-  git fetch "https://github.com/$repo.git" "pull/<n>/head"
-  test "$(git rev-parse FETCH_HEAD)" = "$sha" || echo "WRONG COMMIT: stop"
-  git worktree add --detach .claude/worktrees/review-<n> "$sha"
+  if git fetch "https://github.com/$repo.git" "pull/<n>/head" \
+     && [ "$(git rev-parse FETCH_HEAD)" = "$sha" ]; then
+    git worktree add --detach .claude/worktrees/review-<n> "$sha"
+  else
+    echo "fetch failed or wrong commit: do not review" >&2; false
+  fi
   ```
-  In a fork, `origin` is the fork and its pull request <n> is a different
-  pull request. Never review a commit whose SHA does not match `headRefOid`.
+  The worktree is created only when the fetch succeeded and returned `$sha`
+  from the metadata step. In a fork, `origin` is the fork and its pull request
+  <n> is a different pull request; a commit that is already present locally
+  can also satisfy a careless check. Never review a commit other than `$sha`.
 - Use `.claude/worktrees/` (git-ignored); a worktree under `/tmp` disappears
   on reboot. Run every command there with `git -C` or an absolute path, so a
   failed `cd` cannot run it in the main checkout. Run tests and builds there.

@@ -21,7 +21,8 @@ gh pr list --author "app/dependabot" --state open --limit 200
 gh api --paginate "repos/{owner}/{repo}/dependabot/alerts?state=open&per_page=100" --jq '.[] | "\(.security_advisory.severity) \(.dependency.package.name) \(.security_advisory.ghsa_id)"'
 gh api --paginate "repos/{owner}/{repo}/code-scanning/alerts?state=open&per_page=100" --jq '.[] | "\(.rule.security_severity_level // "-") \(.rule.id) \(.most_recent_instance.location.path)"'
 if out=$(gh api --paginate "repos/{owner}/{repo}/secret-scanning/alerts?state=open&per_page=100" --jq '.[].number'); then
-  printf '%s\n' "$out" | grep -c . ; else echo "secret scanning: UNCHECKED"; fi
+  printf '%s\n' "$out" | awk 'NF { n++ } END { print n + 0 }'
+else echo "secret scanning: UNCHECKED"; fi
 gh issue list --label blocked --state open --limit 500
 ```
 
@@ -31,7 +32,9 @@ the list silently looks complete. A feed that answers with an error (403 or
 pages, is **unchecked**, not empty; say so in the report. Judge a feed by the
 exit status of `gh` itself. Never pipe a survey into `wc` or `grep` and read
 the result: the pipeline reports the last command's status, and an error body
-counts as lines.
+counts as lines. Count with a command that succeeds on an empty result
+(`awk`, not `grep -c`, which exits 1 on zero matches and stops a `set -e`
+shell before the next survey).
 
 Also read the latest `govulncheck` workflow run. Note which blocked issues are
 held upgrades (a peer range, a missing upstream release): this run is when
