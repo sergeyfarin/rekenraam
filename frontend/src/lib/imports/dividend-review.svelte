@@ -1,6 +1,8 @@
 <script lang="ts">
   import { createInfiniteQuery, createQuery, useQueryClient } from '@tanstack/svelte-query';
   import { SvelteSet } from 'svelte/reactivity';
+  import { page } from '$app/state';
+  import { importViewURL } from './views.ts';
   import { untrack } from 'svelte';
   import PageHeader from '#lib/components/page-header.svelte';
   import Panel from '#lib/components/panel.svelte';
@@ -34,6 +36,14 @@
   const rows = $derived(reviews.data?.pages.flatMap(page => page.rows) ?? []);
   const loading = $derived(reviews.isPending || accounts.isPending || currencies.isPending || instruments.isPending);
   const loadError = $derived(reviews.error ?? accounts.error ?? currencies.error ?? instruments.error);
+  // Back returns to the Files view of the same batch, as the view selector
+  // does, so the staged batch and its unsaved choices stay (#567 review).
+  const backHref = $derived.by(() => {
+    if (embedded) return importViewURL(page.url, 'files');
+    const url = new URL('/app/ledger/import', page.url.origin);
+    if (batchID) url.searchParams.set('batch_id', String(batchID));
+    return importViewURL(url, 'files');
+  });
   let saved = $state<{ id: number; repaired: boolean } | null>(null);
   const finished = new SvelteSet<number>();
   // An embedding screen reuses this view across batches: what was recorded
@@ -59,7 +69,7 @@
 </script>
 {#if embedded}<h2 class="text-lg font-semibold">{m.import_dividend_title()}</h2><p class="mt-2 text-sm text-muted">{m.import_dividend_help()}</p>{:else}<PageHeader title={m.import_dividend_title()} copy={m.import_dividend_help()} />{/if}
 <div class="mt-6 max-w-3xl space-y-5">
-  <a href="/app/ledger/import" class="inline-flex min-h-11 items-center text-sm font-semibold text-foreground underline underline-offset-2">{m.import_dividend_back()}</a>
+  <a href={backHref} class="inline-flex min-h-11 items-center text-sm font-semibold text-foreground underline underline-offset-2">{m.import_dividend_back()}</a>
   {#if saved}
     <Panel>
       <p role="status" class="text-sm text-positive">{saved.repaired ? m.import_dividend_repaired() : m.import_dividend_recorded()}</p>

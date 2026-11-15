@@ -232,6 +232,48 @@ test('Import another file leaves a batch whose re-read keeps failing (#567 revie
   await expect(page.getByText('Dividend recorded.', { exact: true })).toHaveCount(0);
 });
 
+test('a Dividends save in flight holds the result view\'s Import another file (#567 review)', async ({ page }) => {
+  const f = await dividendSource(page, 2);
+  const batch = new URL(page.url()).searchParams.get('batch_id')!;
+  await page.getByRole('button', { name: 'Commit to ledger' }).click();
+  await expect(page.getByText('2 dividend payments remain in review.')).toBeVisible();
+  const another = page.getByRole('button', { name: 'Import another file', exact: true });
+  await expect(another).toBeEnabled();
+  let release!: () => void;
+  let started!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  const requested = new Promise<void>(resolve => { started = resolve; });
+  await page.route(`**/api/v1/imports/${batch}/rows/*/review-dividend`, async route => { started(); await held; await route.continue(); });
+  await page.getByRole('button', { name: /^Dividends/ }).click();
+  await recordFirstDividend(page, f);
+  await requested;
+  try {
+    await page.getByRole('button', { name: 'Files', exact: true }).click();
+    await expect(another).toBeVisible();
+    await expect(another).toBeDisabled();
+    // Even a click that reaches the reset leaves the batch in place.
+    await another.evaluate(button => { (button as HTMLButtonElement).disabled = false; (button as HTMLButtonElement).click(); });
+    expect(new URL(page.url()).searchParams.get('batch_id')).toBe(batch);
+    await expect(page.getByText('Upload a file', { exact: true })).toHaveCount(0);
+  } finally { release(); }
+  await expect(another).toBeEnabled();
+  expect(new URL(page.url()).searchParams.get('batch_id')).toBe(batch);
+  expect((await f.activity()).transactions).toHaveLength(1);
+});
+
+test('Back to import returns to the staged batch in Files (#567 review)', async ({ page }) => {
+  await dividendSource(page);
+  const batch = new URL(page.url()).searchParams.get('batch_id')!;
+  await page.getByRole('button', { name: /^Dividends/ }).click();
+  await expect(page.getByRole('heading', { name: 'Pending dividend', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Back to import', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Commit to ledger' })).toBeVisible();
+  await expect(page.getByText('Upload a file', { exact: true })).toHaveCount(0);
+  const url = new URL(page.url());
+  expect(url.searchParams.get('batch_id')).toBe(batch);
+  expect(url.searchParams.get('view')).toBe('files');
+});
+
 test('[acceptance] historical cash dividend repair keeps the original payment and owner note on a phone', async ({ page }) => {
   test.skip(Boolean(process.env.E2E_BASE_URL), 'historical source-link fixture needs the disposable local e2e database');
   const f = await dividendSource(page);

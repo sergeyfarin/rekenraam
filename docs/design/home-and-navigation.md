@@ -1040,7 +1040,9 @@ finishes supersedes any re-read in flight with its own, and a later re-read
 supersedes it in turn. A failed re-read keeps the working copy and its
 choices, holds writes and offers a retry of the re-read, or *Import another
 file* to leave the batch as it is on the server; it never restores the batch
-afresh. Resolutions and match choices for rows still pending are kept; reviews
+afresh. *Import another file* itself refuses while any batch write, from
+either view, is in flight. *Back to import* in the Dividends view returns to
+the Files view of the same batch, as the view selector does. Resolutions and match choices for rows still pending are kept; reviews
 computed for the old row set (match check, checkpoints, gain review) are
 cleared when a row stopped being pending.
 
@@ -1101,7 +1103,9 @@ ancestor (including one under another holding) is its own row, shown apart
 from the institution tree as "Holdings outside a brokerage" under the same
 search, status and type filters, and shown even when it is the book's only
 account, so its value is never missing. Outside brokerages, ordinary children keep their
-own rows to avoid counting their balances twice.
+own rows to avoid counting their balances twice; a brokerage nested under
+another is its own row for the same reason. Index rows partition the book, so
+no amount appears in two rows.
 
 A holding's register links to its instrument and, while it is active, to
 reconciliation for that holding; its breadcrumb adds its brokerage. The instrument page lists each
@@ -1114,7 +1118,11 @@ register), because a holding statement checkpoint is a legitimate flow.
 
 Only a brokerage register reads the composed ledger detail, which values the
 whole book; every other register reads its one account, so ordinary registers
-never pay for or refetch the book-wide read after writes.
+never pay for or refetch the book-wide read after writes. The detail covers
+the brokerage's whole subtree, nested brokerages included (listed and counted
+as its cash accounts), so its value matches Net worth for the account and its
+descendants on the same date even where the index splits that subtree into
+rows.
 
 Institutions support add, edit, archive and restore; the existing server
 refusal protects institutions still used by unarchived accounts. Source labels

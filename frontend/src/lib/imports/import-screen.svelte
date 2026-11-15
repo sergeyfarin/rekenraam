@@ -1154,6 +1154,14 @@
     }
   }
 
+  // The owner's Import another file. A reset while any batch write is in
+  // flight, from either view, would drop the batch under that write, so the
+  // reset itself refuses, not only its buttons (#567 review).
+  function importAnother() {
+    if (batchWriting) return;
+    handleImportAnother();
+  }
+
   function handleImportAnother(updateURL = true) {
     if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
     sourceCorrectionAcceptGains = false;
@@ -1749,7 +1757,7 @@
       <button type="button" class="min-h-11 text-sm underline" disabled={resyncing} onclick={() => batchId && resyncBatch(batchId)}>{m.install_gate_retry()}</button>
       <!-- An escape when the re-read keeps failing: leave this batch as it is
            on the server and start another import. -->
-      <button type="button" class="min-h-11 text-sm underline" disabled={batchWriting} onclick={() => handleImportAnother()}>{m.import_result_import_another()}</button>
+      <button type="button" class="min-h-11 text-sm underline" disabled={batchWriting} onclick={importAnother}>{m.import_result_import_another()}</button>
     </div>
   </div>
 {/if}
@@ -2451,8 +2459,9 @@
         </a>
         <button
           type="button"
-          class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-control-hover"
-          onclick={() => handleImportAnother()}
+          class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-control-hover disabled:opacity-60"
+          disabled={batchWriting}
+          onclick={importAnother}
         >
           {m.import_result_import_another()}
         </button>

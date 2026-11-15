@@ -162,6 +162,16 @@ func (s *LedgerService) Overview(ctx context.Context, input LedgerOverviewInput)
 		}
 		return fallback
 	}
+	descendsFrom := func(id, ancestor int64) bool {
+		seen := map[int64]bool{}
+		for p := parent[id]; p > 0 && !seen[p]; p = parent[p] {
+			if p == ancestor {
+				return true
+			}
+			seen[p] = true
+		}
+		return false
+	}
 	scopes := map[int64][]int64{}
 	for id := range parent {
 		owner := ownerFor(id)
@@ -220,14 +230,27 @@ func (s *LedgerService) Overview(ctx context.Context, input LedgerOverviewInput)
 			break
 		}
 		scope := []int64{a.ID}
-		for _, id := range scopes[a.ID] {
-			if id != a.ID {
-				scope = append(scope, id)
+		if input.AccountID > 0 {
+			// One account's detail covers its whole subtree, nested brokerages
+			// included, so its value matches Net worth for the account and its
+			// descendants. Only index rows partition the book, so that no
+			// account is counted twice across rows (#567 review).
+			for id := range parent {
+				if id != a.ID && descendsFrom(id, a.ID) {
+					scope = append(scope, id)
+				}
+			}
+		} else {
+			for _, id := range scopes[a.ID] {
+				if id != a.ID {
+					scope = append(scope, id)
+				}
 			}
 		}
 		slices.Sort(scope)
 		// Cash is the currency held by a brokerage or cash-kind row itself and
-		// by its cash-kind children. Holdings and other ordinary accounts (a
+		// by its cash-kind and nested brokerage descendants, which are listed
+		// as its cash accounts. Holdings and other ordinary accounts (a
 		// receivable or a credit card, as a row or a child) count in value but
 		// are never presented as cash.
 		row := LedgerAccount{Account: a, CashAccounts: []Account{}, OtherAccounts: []Account{}, HoldingAccounts: []Account{}}
@@ -243,7 +266,7 @@ func (s *LedgerService) Overview(ctx context.Context, input LedgerOverviewInput)
 				if known {
 					row.HoldingAccounts = append(row.HoldingAccounts, account)
 				}
-			case known && defaultCashAccountKinds[account.AccountKind]:
+			case known && (defaultCashAccountKinds[account.AccountKind] || account.AccountKind == "brokerage"):
 				cashScope = append(cashScope, id)
 				row.CashAccounts = append(row.CashAccounts, account)
 			case known:

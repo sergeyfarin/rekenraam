@@ -154,3 +154,52 @@ func TestLedgerOverviewShowsOrphanHoldingAndSeparatesNonCashChildren(t *testing.
 	}
 	assert.True(t, found, "the card has its own row")
 }
+
+// A nested brokerage is its own index row, so no amount is counted in two
+// rows. One account's detail still covers its whole subtree and matches Net
+// worth for the account and its descendants (#567 review).
+func TestLedgerOverviewDetailCoversNestedBrokerageWhileIndexRowsPartition(t *testing.T) {
+	t.Parallel()
+	f := newHomeWidgetFixture(t)
+	parentBroker := f.account(t, "Parent broker", "asset", "brokerage")
+	f.move(t, "2026-09-10", parentBroker, f.eurCommodityID, 100000)
+	childBroker := f.account(t, "Child broker", "asset", "brokerage")
+	reviseHomeAccount(t, f.homeFixture, childBroker, "Child broker", &parentBroker)
+	f.move(t, "2026-09-10", childBroker, f.eurCommodityID, 50000)
+	childCash := f.account(t, "Child broker cash", "asset", "checking")
+	reviseHomeAccount(t, f.homeFixture, childCash, "Child broker cash", &childBroker)
+	f.move(t, "2026-09-10", childCash, f.eurCommodityID, 20000)
+	service := NewLedgerService(f.transactionService, f.accountService, NewInstitutionService(db.NewInstitutionRepository(f.database)))
+	index, err := service.Overview(context.Background(), LedgerOverviewInput{OwnerUserID: 1, AsOf: "2026-10-15"})
+	require.NoError(t, err)
+	byID := map[int64]LedgerAccount{}
+	for _, row := range index.Accounts {
+		byID[row.Account.ID] = row
+	}
+	requireHomeCents(t, 100000, byID[parentBroker].Value, "the parent row leaves the nested brokerage to its own row")
+	requireHomeCents(t, 70000, byID[childBroker].Value, "the nested brokerage row holds its own subtree")
+	_, listed := byID[childCash]
+	assert.False(t, listed, "cash under the nested brokerage belongs to its row")
+
+	detail, err := service.Overview(context.Background(), LedgerOverviewInput{OwnerUserID: 1, AsOf: "2026-10-15", AccountID: parentBroker})
+	require.NoError(t, err)
+	require.Len(t, detail.Accounts, 1)
+	row := detail.Accounts[0]
+	requireHomeCents(t, 170000, row.Value, "the parent's detail covers its whole subtree")
+	requireAmount(t, row.Cash, f.eurCommodityID, 170000, 2, "a nested brokerage's cash and its cash children are cash")
+	cash := []int64{}
+	for _, account := range row.CashAccounts {
+		cash = append(cash, account.ID)
+	}
+	assert.ElementsMatch(t, []int64{childBroker, childCash}, cash)
+	report, err := f.transactionService.NetWorthSeries(context.Background(), NetWorthSeriesInput{StartDate: "2026-10-15", EndDate: "2026-10-15", Bucket: "day", Filters: ReportFilters{AccountIDs: []int64{parentBroker}, IncludeDescendants: true}, Reporting: &ReportingCurrencyInput{CommodityID: f.eurCommodityID}})
+	require.NoError(t, err)
+	require.Len(t, report.Buckets, 1)
+	assert.Equal(t, report.Buckets[0].Converted, row.Value)
+
+	// The nested brokerage's own detail is its index row.
+	nested, err := service.Overview(context.Background(), LedgerOverviewInput{OwnerUserID: 1, AsOf: "2026-10-15", AccountID: childBroker})
+	require.NoError(t, err)
+	require.Len(t, nested.Accounts, 1)
+	assert.Equal(t, byID[childBroker], nested.Accounts[0])
+}
