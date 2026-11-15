@@ -694,8 +694,12 @@
     } finally {
       discarding = false;
     }
-    // A poll that landed during the discard is not kept either.
-    if (batchId === idToDiscard) handleImportAnother();
+    // A poll that landed during the discard is not kept either, nor is the
+    // cancelled fetch's error shown on Online connections.
+    if (batchId === idToDiscard) {
+      handleImportAnother();
+      onlineImportError = undefined;
+    }
   }
 
   onDestroy(() => {

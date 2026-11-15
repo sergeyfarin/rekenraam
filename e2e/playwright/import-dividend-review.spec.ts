@@ -327,6 +327,29 @@ test('Cancel while fetching waits for a Dividends save, and holds the batch unti
   expect(new URL(page.url()).searchParams.get('batch_id')).toBeNull();
 });
 
+test('Cancel after a failed fetch-status read clears its error from Online connections (#567 review)', async ({ page }) => {
+  const f = await dividendSource(page, 1, false);
+  await page.route(url => /^\/api\/v1\/imports\/\d+$/.test(url.pathname), route => route.fulfill({
+    status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'SERVICE_UNAVAILABLE', message: 'Try again' } })
+  }));
+  await page.goto('/app/ledger/import?view=connections');
+  await page.getByRole('row').filter({ hasText: f.connectionName }).getByRole('button', { name: 'Import', exact: true }).click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('batch_id')).not.toBeNull();
+  const batch = new URL(page.url()).searchParams.get('batch_id')!;
+  const fetchError = page.getByText('Could not start the fetch. Check the connection and try again.', { exact: true });
+  // The failed read is reported on Online connections while the fetch is open.
+  await page.getByRole('button', { name: 'Online connections', exact: true }).click();
+  await expect(fetchError).toBeVisible();
+  await page.getByRole('button', { name: 'Files', exact: true }).click();
+  const discarded = page.waitForResponse(response => new URL(response.url()).pathname === `/api/v1/imports/${batch}/discard`);
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  expect((await discarded).ok()).toBe(true);
+  await expect(page.getByText('Upload a file', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Online connections', exact: true }).click();
+  await expect(page.getByRole('row').filter({ hasText: f.connectionName })).toBeVisible();
+  await expect(fetchError).toHaveCount(0);
+});
+
 test('Back to import returns to the staged batch in Files (#567 review)', async ({ page }) => {
   await dividendSource(page);
   const batch = new URL(page.url()).searchParams.get('batch_id')!;
