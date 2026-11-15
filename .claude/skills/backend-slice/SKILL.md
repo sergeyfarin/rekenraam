@@ -46,12 +46,28 @@ backend/cmd/rekenraam/  binary entrypoint + service wiring (command.go)
 
 Every API error is `{"error":{"code":"STABLE_CODE","message":"..."}}` via
 `writeAPIError(w, status, code, message)` (`internal/api/middleware.go`).
-Existing codes: `VALIDATION_FAILED`, `UNAUTHENTICATED`, `FORBIDDEN`,
-`NOT_FOUND`, `CONFLICT`, `CSRF_INVALID`, `RATE_LIMITED`, `RESOURCE_BUSY`,
-`LEDGER_OVERFLOW`, `SETUP_REQUIRED`, `SETUP_ALREADY_COMPLETE`,
-`CONFIG_REQUIRED`, `PROVIDER_ERROR`, `INTERNAL_ERROR`. Adding a code means
-updating the OpenAPI `ErrorBody.code` enum too. Never return raw Go error
-strings to the client.
+The complete code list is the `ErrorBody.code` enum in
+`api/openapi/components/schemas/errors.yaml`; read it before inventing a code
+and reuse a generic one (`VALIDATION_FAILED`, `NOT_FOUND`, `CONFLICT`,
+`RESOURCE_BUSY`, `LEDGER_OVERFLOW`) when it fits. A new code is added to that
+enum in the same change. Never return raw Go error strings to the client.
+
+## Request pipeline and platform rules (source: `docs/conventions.md`)
+
+- Middleware order is fixed: request ID → panic recovery → request logging →
+  auth → CSRF for mutating authenticated requests → handler. Each layer is a
+  plain `http.Handler` wrapper; the request ID is logged and echoed as
+  `X-Request-ID`.
+- Sessions are opaque `HttpOnly`, `SameSite=Strict` cookie tokens stored
+  hashed; mutating requests need the session-bound CSRF token. The app never
+  terminates TLS: a reverse proxy does.
+- Pass the `slog` logger by parameter or context, never a package-level
+  global. `APP_ENV` is `development` or `production`, and unset means
+  production.
+- SQL is handwritten over `database/sql`. There is no `sqlc` and no generated
+  query code; do not assume generated files exist.
+- Live backups use SQLite's online backup API or `VACUUM INTO`, never a raw
+  copy of the live file.
 
 ## SQLite rules (source: ADRs 0004/0014/0015, conventions § Data)
 
@@ -152,5 +168,8 @@ pnpm build                           # only if the integrated binary shape chang
 - Guard-check + insert as two statements = TOCTOU race; do both in one
   transaction (repo-layer method), which under `SetMaxOpenConns(1)` is a lock.
 - Writing a row in transaction A and its idempotency/identity marker in
-  transaction B — a crash between them creates duplicates on retry (open
-  backlog item T-06 documents this trap).
+  transaction B — a crash between them creates duplicates on retry (T-06 and
+  T-26, both closed; the pattern recurs).
+
+The full entries, with their named regression tests, are in
+`.claude/skills/validate-and-ship/bug-classes/backend.md`.

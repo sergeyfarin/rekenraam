@@ -183,4 +183,11 @@ pnpm build                    # if the production bundle/app shell changed
 ```
 
 Add a vitest unit test when you write non-trivial pure logic (parsing,
-label mapping, polling contracts — see `lib/api/imports.test.ts`).
+label mapping, polling contracts — see `lib/api/imports.test.ts`). There is no
+component-test harness: logic that needs a test is extracted from the
+`.svelte` file into a `.ts` module first.
+
+Before committing, check the diff against
+`.claude/skills/validate-and-ship/bug-classes/frontend.md` — the frontend bugs
+this repo has already shipped (modal focus, token names, stale form versions,
+navigation races, editor round-trips).

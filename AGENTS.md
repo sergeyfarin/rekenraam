@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file gives repo-wide guidance to coding agents and automation working in this repository.
+This file gives repo-wide guidance to coding agents and automation working in this repository. It is the one instruction file every harness used here loads (Claude Code, Codex, OpenCode); do not add harness-specific copies of it.
 
 ## Project Shape
 
@@ -19,7 +19,7 @@ Read these before making durable product or architecture changes:
 - `docs/adrs/`
 - `docs/developer-workflow.md`
 
-In case of conflict, earlier items in the list take precedence over later items. ADRs supersede all other documents once accepted. Agent guidance files (`AGENTS.md`, `.github/copilot-instructions.md`) are not product sources of truth; the documents above govern.
+In case of conflict, earlier items in the list take precedence over later items. ADRs supersede all other documents once accepted. Agent guidance (`AGENTS.md` and the skills under `.claude/skills/`) is not a product source of truth; the documents above govern.
 
 For current execution state, read these (governed by the sources above):
 
@@ -35,7 +35,21 @@ Follow `docs/conventions.md` → Work Tracking for issue readiness and closure.
 
 ## Task Skills
 
-`.claude/skills/` contains six task-shaped skill guides (ledger invariants, backend slice, API contract, frontend screen, background work, validate-and-ship) distilled from this repo's conventions and bug history. Claude Code picks them up automatically; other agents should read the relevant `SKILL.md` files directly — start with `.claude/skills/README.md`. The `docs/` sources above still govern on any conflict.
+`.claude/skills/` holds six task-shaped skills distilled from this repo's conventions and bug history. Claude Code and OpenCode discover them there; Codex discovers the same files through `.agents/skills`, a symlink to that directory. This file is only the floor: load the matching skills before starting work.
+
+| Work | Skill |
+|---|---|
+| Money, transactions, postings, reconciliation, investments, prices, FX | `ledger-invariants`, before writing code |
+| Go code, migrations, backend tests | `backend-slice` |
+| Any `/api/v1` endpoint, schema or error code | `api-contract` |
+| Anything under `frontend/src` | `frontend-screen` |
+| Workers, schedulers, provider fetching, FX refresh | `background-work` |
+| Before every commit, reviewing a diff, running the app, editing CI workflows, choosing which doc to update | `validate-and-ship` |
+
+- A typical task uses two or three skills, and anything financial includes `ledger-invariants`.
+- If your harness did not list these skills, read `.claude/skills/<name>/SKILL.md` directly.
+- A `SKILL.md` names the reference files beside it (`ledger-invariants/investments.md`, `validate-and-ship/bug-classes/<area>.md`). Read the ones for the area you are changing; they are not loaded automatically.
+- The `docs/` sources above govern on any conflict. When a convention changes, update the skill that restates it in the same change. `.claude/skills/README.md` covers maintaining the library.
 
 ## Working Rules
 
@@ -89,5 +103,13 @@ Follow `docs/conventions.md` → Work Tracking for issue readiness and closure.
 
 - Run the narrowest relevant validation after edits.
 - Prefer feature-scoped tests first, then broader checks.
+- Backend: `./scripts/test-backend.sh`; focused Go commands go through `./scripts/go-backend.sh`, which sets the SQLite build tags a bare `go test` lacks.
+- Frontend: `./scripts/test-frontend.sh`. Integrated shape: `pnpm build`. User journeys: `./scripts/test-e2e.sh`.
+- The full command matrix and the review checklist are in the `validate-and-ship` skill.
 - If docs or conventions change, keep references and commands consistent across the repo.
 - Keep README guidance and developer commands aligned.
+
+## Commits
+
+- Use Conventional Commits with the smallest honest scope; do not bundle unrelated refactors.
+- Where a commit goes (`main` or a branch and PR) follows *Branches And PRs* in `docs/developer-workflow.md`.

@@ -1030,6 +1030,6 @@ has actual installations, its migration files are immutable.
   flipped in three trackers and no decision recorded in `reports-plan.md`, which
   left the three saying "closed" and the plan saying "open" for four days.
 - Decision records belong in `docs/adrs/`.
-- Repo-wide agent guidance belongs in `AGENTS.md`.
+- Repo-wide agent guidance belongs in `AGENTS.md`, the one instruction file every agent harness loads; do not add harness-specific copies. Task-shaped agent skills live in `.claude/skills/` (linked for Codex at `.agents/skills`); these documents govern wherever a skill disagrees.
 - Developer workflow notes belong in `README.md` and `docs/developer-workflow.md` unless a tooling area needs substantial local guidance.
 - Placeholder README files are acceptable for ignored or generated directories that must remain present in Git.
