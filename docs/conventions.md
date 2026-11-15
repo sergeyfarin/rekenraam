@@ -502,12 +502,12 @@ has actual installations, its migration files are immutable.
   fails, restore that backup and the previous binary; do not rely on Goose down
   migrations against production data. Operator steps live in `docs/upgrades.md`.
 - **Migration numbers are renumbered before merge, not after.** Work lands
-  directly on `main` (see *Branches And PRs* in `docs/developer-workflow.md`),
-  so a collision now mostly means unpushed local work: pull first, and if your
-  `00NN_` is taken, renumber **your own** file to the next free number before
-  pushing. The same holds for the occasional branch — the one merged second
-  renumbers itself. Never merge two files sharing a number, and never renumber a
-  installed-release migration already on `main`.
+  through short-lived branches and pull requests (see *Branches And PRs* in
+  `docs/developer-workflow.md`), so two open branches can claim the same
+  number. Rebase on the latest `main` first; if your `00NN_` is taken,
+  renumber **your own** file to the next free number before merging — the
+  branch merged second renumbers itself. Never merge two files sharing a
+  number, and never renumber a installed-release migration already on `main`.
 - **Migration numbers do not encode product releases.** They are a single
   monotonic database ordering sequence. After `v0.1.0`, each schema change takes
   the next integer regardless of which release eventually contains it; release

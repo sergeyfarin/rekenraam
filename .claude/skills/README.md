@@ -1,9 +1,18 @@
 # Rekenraam Skill Library
 
-Six task-shaped skills that let any agent work on this project at the standard
-it was built to. Which skill covers which work is in `AGENTS.md` → Task
-Skills, because every harness loads that file. This file is for maintaining
-the library.
+Eight skills that let any agent work on this project at the standard it was
+built to:
+
+- Two **task modes** say how a session runs from start to finish:
+  `work-issue` (implement, then open a pull request) and `review-pr` (review
+  only, change nothing).
+- Six **area skills** hold the rules for a part of the codebase:
+  `ledger-invariants`, `backend-slice`, `api-contract`, `frontend-screen`,
+  `background-work`, `validate-and-ship`.
+
+Which skill covers which work is in `AGENTS.md` → Task Modes and Task Skills,
+because every harness loads that file. This file is for maintaining the
+library.
 
 ## Layout
 
@@ -33,14 +42,17 @@ body tells the agent to read it. Three consequences:
   skill covers and when to use it, in words a task prompt would contain.
 - A reference file nobody is told to read is never read. `SKILL.md` names each
   one and the work that needs it.
-- When a session should not depend on automatic selection, name the skills in
-  the first prompt: *"Use the backend-slice and api-contract skills, then
-  implement <task>. Run validate-and-ship before committing."*
+- When a session should not depend on automatic selection, start the prompt
+  with the task mode: `/work-issue 592`, `$work-issue 592` or
+  `@work-issue 592`; `/review-pr 585` and its equivalents for a review. Name
+  area skills too when the area is not obvious from the issue.
 
 ## Rules for maintaining this library
 
 - Keep it small. A new skill must earn its place: a recurring task shape, real
   failure modes, not derivable from a quick read of the code.
+- A task mode is a procedure and an area skill is a rule set. Keep them apart:
+  a mode points at area skills, and no area rule is restated in a mode.
 - Keep `SKILL.md` lean, about 250 lines at most. It holds what applies to
   every use of the skill. Detail for one family or one area goes in a
   reference file. A skill that grows by one appended paragraph per issue is

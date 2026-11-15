@@ -243,13 +243,14 @@ Conventional Commits, smallest honest scope:
 `feat(backend): ...`, `fix(api): ...`, `docs(requirements): ...`,
 `test(backend): ...`. Don't mix unrelated refactors.
 
-Where a commit goes is decided by *Branches And PRs* in
-`docs/developer-workflow.md`, which governs. Before `v0.1.0` the default is
-`main` directly, and a branch needs a reason: the owner asked for a branch and
-PR, the work is a throwaway spike, or CI should see it first. A branch starts
-from the latest `origin/main` and stays short-lived — long-diverged branches
-are where the 2026-08 merge damage came from. If a change alters product
-rules, conventions or ADRs, say so in the commit body.
+Implementation work goes through a short-lived branch cut from the latest
+`origin/main` and a pull request, opened without being asked; the owner
+merges. A direct commit to `main` needs the owner's say-so. Long-diverged
+branches are where the 2026-08 merge damage came from, so keep one slice per
+branch. If a change alters product rules, conventions or ADRs, say so in the
+commit and pull request body. *Branches And PRs* in
+`docs/developer-workflow.md` governs; the `work-issue` skill is the
+procedure.
 
 ## Provider-independent delivery (ADR 0017)
 
@@ -269,4 +270,6 @@ claims consistent with this boundary.
 3. OpenAPI + generated types in sync (if API touched).
 4. Docs updated per the table above.
 5. No violation of `ledger-invariants` (if money/ledger touched).
-6. Focused conventional commit.
+6. Focused conventional commits on a branch, and an open pull request.
+7. Every defect noticed on the way is a commit in that pull request or a
+   GitHub issue (`work-issue` skill, step 4).

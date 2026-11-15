@@ -33,12 +33,32 @@ If a change introduces a durable new rule, update the relevant document in the s
 Use GitHub `#numbers` for active work; do not allocate new local issue IDs.
 Follow `docs/conventions.md` → Work Tracking for issue readiness and closure.
 
+## Task Modes
+
+Most requests are one of two modes. Decide which one you are in before you start, and do not mix them.
+
+**Work an issue** (implement an issue, bug fix or feature) — `work-issue` skill:
+
+- Branch from the latest `origin/main`, build the slice, validate it.
+- Finish with a pushed branch and an open, ready-for-review pull request. Do this without asking; it overrides any machine-wide default to wait for a request. Never merge.
+- While in the code, look for bugs, weak tests, code smells and improvement opportunities beyond the task. A finding that is small, local and needs no migration, API contract change or owner decision is fixed in the same pull request as its own commit. Anything else, and anything that changes a financial result, becomes a GitHub issue. Nothing is left only in the conversation.
+
+**Review a pull request** (review, re-review, assess) — `review-pr` skill:
+
+- Review everything: direction, owner decisions, approach, implementation, bugs, tests, docs. An owner decision that looks wrong is a finding like any other.
+- Review only. No edits, commits, pushes, pull request comments or new issues unless the owner asks for that specific thing. Describe a fix; do not make it.
+- Report a verdict, then verified findings ranked `P0`–`P3` with `file:line`.
+
+A request that fits neither mode (a question, an investigation, a docs or maintenance task) follows the owner's wording; it still ends in a pull request when it changes the repository.
+
 ## Task Skills
 
-`.claude/skills/` holds six task-shaped skills distilled from this repo's conventions and bug history. Claude Code and OpenCode discover them there; Codex discovers the same files through `.agents/skills`, a symlink to that directory. This file is only the floor: load the matching skills before starting work.
+`.claude/skills/` holds eight skills distilled from this repo's conventions and bug history: the two task modes above and six area skills. Claude Code and OpenCode discover them there; Codex discovers the same files through `.agents/skills`, a symlink to that directory. This file is only the floor: load the matching skills before starting work.
 
 | Work | Skill |
 |---|---|
+| Implementing an issue, bug fix or feature slice | `work-issue` |
+| Reviewing a pull request, branch or diff | `review-pr` |
 | Money, transactions, postings, reconciliation, investments, prices, FX | `ledger-invariants`, before writing code |
 | Go code, migrations, backend tests | `backend-slice` |
 | Any `/api/v1` endpoint, schema or error code | `api-contract` |
@@ -46,7 +66,7 @@ Follow `docs/conventions.md` → Work Tracking for issue readiness and closure.
 | Workers, schedulers, provider fetching, FX refresh | `background-work` |
 | Before every commit, reviewing a diff, running the app, editing CI workflows, choosing which doc to update | `validate-and-ship` |
 
-- A typical task uses two or three skills, and anything financial includes `ledger-invariants`.
+- A typical task uses one task mode plus two or three area skills, and anything financial includes `ledger-invariants`.
 - If your harness did not list these skills, read `.claude/skills/<name>/SKILL.md` directly.
 - A `SKILL.md` names the reference files beside it (`ledger-invariants/investments.md`, `validate-and-ship/bug-classes/<area>.md`). Read the ones for the area you are changing; they are not loaded automatically.
 - The `docs/` sources above govern on any conflict. When a convention changes, update the skill that restates it in the same change. `.claude/skills/README.md` covers maintaining the library.
@@ -112,4 +132,4 @@ Follow `docs/conventions.md` → Work Tracking for issue readiness and closure.
 ## Commits
 
 - Use Conventional Commits with the smallest honest scope; do not bundle unrelated refactors.
-- Where a commit goes (`main` or a branch and PR) follows *Branches And PRs* in `docs/developer-workflow.md`.
+- Implementation work lands through a branch and a pull request; a direct commit to `main` needs the owner's say-so. *Branches And PRs* in `docs/developer-workflow.md` governs.
