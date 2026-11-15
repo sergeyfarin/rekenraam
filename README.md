@@ -1,32 +1,53 @@
 # Rekenraam
 
-Rekenraam is a self-hosted personal finance app for tracking accounts,
-transactions, budgets and investments across currencies. It is intended
-primarily for a home lab or private network, and can also run on a local
-computer or a VPS. You use it through a web browser on desktop or phone.
-
-Your financial records live on the host you choose. You control the database,
-backups and access to them, with no required external account or cloud storage.
-Core bookkeeping works without bank or market-data connections. Optional
-integrations make requests to the providers you configure.
+Rekenraam is a self-hosted personal finance app built on a double-entry
+ledger. It is for people who keep money and investments in more than one
+currency and want to be able to check every figure the app shows. You use it
+through a web browser on desktop or phone.
 
 It is a **pre-release, single-user project** maintained by one person, with
-substantial use of AI to generate code and documentation. Features and data
-structures are still changing.
-
-**Why these choices.** [Go](docs/reviews/language-choice-review-2026-11-03.md)
-keeps the server a typed, small single binary with simple concurrency.
-[SvelteKit](docs/reviews/frontend-framework-choice-review-2026-11-03.md)
-compiles the UI to static assets that the same binary embeds and serves.
-[SQLite](docs/reviews/database-choice-review-2026-11-03.md) keeps the database
-a local file with no server to run, which also simplifies backup and the
-optional desktop host. [Self-hosting](docs/reviews/deployment-and-distribution-choice-review-2026-11-03.md)
-keeps your records, backups and exports on a host you control, with no required
-cloud account.
+substantial use of AI to generate code and documentation. There is no tagged
+release yet, and features and data structures are still changing.
 
 *Rekenraam* is Dutch for abacus.
 
 ![Spending report in Rekenraam, showing a quarter of categorized euro expenses and their chart in the light theme across the upper-left and the dark theme across the lower-right, from the synthetic reference book](docs/images/reports-spending.png)
+
+## What it is built around
+
+- **One set of books for cash and investments.** Bank accounts, cards, broker
+  accounts and crypto holdings share one ledger. Trades and dividends post to
+  it and positions are tracked as lots, so balances, net worth and gains come
+  from the same records.
+- **Every currency keeps its own amounts.** Money is stored as exact decimals
+  in the currency it was paid in. Reports convert only when you ask, using
+  exchange rates you can inspect and edit.
+- **Corrections leave a trail.** Posted records are corrected or voided rather
+  than deleted, and each change keeps its version history. Statement
+  reconciliation records which entries you matched to the bank.
+- **You can check the results.** Backups are verified and run a ledger
+  self-check, the export carries a trial balance and the lot records, and the
+  [review records](docs/reviews/) describe each audit and what it found.
+- **It runs on your host and needs nothing else.** One binary and one SQLite
+  file, on a home lab, a private network, a local computer or a VPS. No cloud
+  account, bank login or AI service is required. Broker and price-provider
+  connections are optional and use keys you supply.
+
+## Is it for you?
+
+It may suit you if:
+
+- you hold accounts or investments in several currencies or countries;
+- cost basis matters to you: lots, corporate actions and gains by method;
+- you would rather import statements and reconcile them than give a service
+  access to your bank;
+- you are comfortable running a container or a binary and keeping backups.
+
+It will not suit you yet if you need automatic sync with most banks, separate
+logins for a household, receipt or statement attachments, tax filing, or a
+built-in AI assistant. [Limitations and tradeoffs](#limitations-and-tradeoffs)
+covers these, and the [competitor comparison](docs/competitor-comparison.md)
+records how other tools were found to handle them.
 
 ## What it does
 
@@ -46,7 +67,9 @@ cloud account.
   transfers, splits, mergers, spin-offs and return of capital. Track realized
   and unrealized gains, compare FIFO, LIFO, average-cost and person-pooled
   methods, convert operational gains into a reporting currency, and save
-  original-currency gains reports and period statements. Prices and exchange
+  original-currency gains reports and period statements. Return reports give
+  time-weighted return and internal rate of return for a portfolio or an
+  instrument, with allocation, targets and benchmarks. Prices and exchange
   rates can be entered manually or fetched from optional providers.
 - **Data portability and recovery:** ledger CSV, QIF and structured archive
   exports for analysis or migration; nightly verified backups and command-line
@@ -75,10 +98,10 @@ gaps in each area.
   Some events need manual entry or linking even though the corresponding
   investment operations are supported. Provider API keys or paid plans may be
   needed. OFX/QFX and XLSX file imports are not implemented.
-- **Return analytics and tax automation are not included.** Cost-basis and
-  gains reporting are available, but time-weighted and money-weighted returns
-  are not yet implemented. Reports do not apply jurisdiction-specific tax
-  rules or prepare tax filings.
+- **No tax automation or rebalancing advice.** Cost-basis, gains and return
+  reports are available, but reports do not apply jurisdiction-specific tax
+  rules or prepare tax filings, and the app does not suggest trades to
+  rebalance a portfolio.
 - **No attachments.** Statement PDF and receipt storage are outside the current
   scope.
 - **Translations need native review.** The five non-English catalogs are
@@ -97,7 +120,7 @@ backup/restore. The [review records](docs/reviews/) describe their scope,
 findings and validation; the [roadmap](docs/roadmap.md) retains release gates
 and follow-up work.
 
-As of 22 October 2026, the repository has more than 1,000 commits. That is a
+As of 14 November 2026, the repository has more than 1,600 commits. That is a
 record of development activity, not a count of independent reviews or a
 guarantee of correctness. Bugs have been found through these reviews and may
 remain despite them.
@@ -150,6 +173,16 @@ Use a backup to restore Rekenraam. Exports are for use outside the app.
 
 The backend is Go with SQLite, the frontend is SvelteKit, and production is a
 single Go binary that serves the built frontend.
+
+**Why these choices.** [Go](docs/reviews/language-choice-review-2026-11-03.md)
+keeps the server a typed, small single binary with simple concurrency.
+[SvelteKit](docs/reviews/frontend-framework-choice-review-2026-11-03.md)
+compiles the UI to static assets that the same binary embeds and serves.
+[SQLite](docs/reviews/database-choice-review-2026-11-03.md) keeps the database
+a local file with no server to run, which also simplifies backup and the
+optional desktop host. [Self-hosting](docs/reviews/deployment-and-distribution-choice-review-2026-11-03.md)
+keeps your records, backups and exports on a host you control, with no required
+cloud account.
 
 You'll need Go 1.27.4+ (with CGO and a C compiler, e.g.
 `sudo apt install build-essential`), Node 26 and the pnpm version pinned in
