@@ -16,42 +16,42 @@ opinion, and its fixes reach `main` unreviewed.
 
 ## Prepare
 
-- Read the pull request and what it claims, and record the head commit you
-  are reviewing:
+- Set `$repo` and `$n` from the PR URL (the owner/repository and number in
+  `https://github.com/<owner>/<repo>/pull/<n>`). For a bare number, use
+  [GitHub repository selection](../README.md#github-repository-selection).
+  Use these values for all lookups, including comments requested by the owner.
+- Read the metadata and capture its head SHA from the same GitHub response:
   ```sh
-  gh pr view <n> --json title,body,baseRefName,commits,files
-  sha=$(gh pr view <n> --json headRefOid --jq .headRefOid)
-  gh pr diff <n>; gh pr checks <n>
+  metadata=$(gh pr view "$n" --repo "$repo" --json title,body,baseRefName,headRefOid,commits,files,statusCheckRollup)
+  sha=$(jq -er .headRefOid <<< "$metadata")
+  printf '%s\n' "$metadata"
+  gh pr diff "$n" --repo "$repo"
   ```
-  Everything below reviews `$sha`. If the pull request moves on during the
-  review, say so and start again from this step.
+  Everything below reviews `$sha`. If the pull request moves during the
+  review, read the updated metadata and diff before reviewing the new head.
 - Find the issues it closes. `closingIssuesReferences` is not a
   `gh pr view` field in every `gh` release, so ask GraphQL:
   ```sh
-  gh api graphql -F owner='{owner}' -F name='{repo}' -F n=<n> -f query='
+  gh api graphql -F owner="${repo%%/*}" -F name="${repo#*/}" -F n="$n" -f query='
     query($owner:String!,$name:String!,$n:Int!){repository(owner:$owner,name:$name){
       pullRequest(number:$n){closingIssuesReferences(first:50){nodes{number title state}}}}}' \
     --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[]'
   ```
   Also read `Closes`/`Refs` lines in the body; they can disagree.
-- Read the linked issue with its acceptance, the governing plan or ADR, and
-  where the work sits in `docs/roadmap.md`.
-- Get the code without disturbing the working tree. Fetch from the
-  repository that owns the pull request — the one `gh` resolved above, not
-  whatever `origin` is — and check that you got the commit GitHub reports:
+- Read the linked issue and its acceptance in its own repository (use
+  `--repo "$repo"` for same-repository numbers), the governing plan or ADR,
+  and where the work sits in `docs/roadmap.md`.
+- Fetch the PR head from the same repository and verify the recorded SHA:
   ```sh
-  repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
-  if git fetch "https://github.com/$repo.git" "pull/<n>/head" \
+  if git fetch "https://github.com/$repo.git" "refs/pull/$n/head" \
      && [ "$(git rev-parse FETCH_HEAD)" = "$sha" ]; then
-    git worktree add --detach .claude/worktrees/review-<n> "$sha"
+    git worktree add --detach ".claude/worktrees/review-$n" "$sha"
   else
     echo "fetch failed or wrong commit: do not review" >&2; false
   fi
   ```
   The worktree is created only when the fetch succeeded and returned `$sha`
-  from the metadata step. In a fork, `origin` is the fork and its pull request
-  <n> is a different pull request; a commit that is already present locally
-  can also satisfy a careless check. Never review a commit other than `$sha`.
+  from the metadata step. Use the verified worktree for local validation.
 - Use `.claude/worktrees/` (git-ignored); a worktree under `/tmp` disappears
   on reboot. Run every command there with `git -C` or an absolute path, so a
   failed `cd` cannot run it in the main checkout. Run tests and builds there.

@@ -26,10 +26,12 @@ and the issue or pull request number:
   example `/work-issue 592 with ledger-invariants`.
 - An agent that was not given a task skill still follows `AGENTS.md` → Task
   Modes, so a plain "fix #592" works. The prefix makes it certain.
-- Your wording sets what the agent may change. "Check", "find", "list" or
-  "assess" gets a report and changes nothing. "Draft" gets text. "Fix",
-  "build", "update", "sweep" or "file" — or the skill invoked by name — runs
-  the full workflow: branch, commits, pull request, issues.
+- An explicit limit such as "check", "report", "draft" or "dry run" takes
+  precedence over a skill invocation. For example, `/drift-sweep check docs`
+  returns findings and `/shape-issue draft …` returns text. A named
+  write-capable skill without a limit runs its full workflow.
+- A bare issue or PR number targets the canonical repository. Use a full PR
+  URL to review a PR in another repository.
 - Suspected security vulnerabilities come back to you in the session, never
   as a public issue or pull request text. You choose the private route in
   `SECURITY.md`.
@@ -43,9 +45,9 @@ These six say how a session runs from start to finish.
 | `work-issue` | An issue, bug or feature slice is ready to build | An open pull request, plus issues for what it found |
 | `review-pr` | A pull request needs a second opinion | A verdict and ranked findings; nothing changed |
 | `shape-issue` | An idea, bug report or finding is not yet buildable | A ready GitHub issue and the decisions it needs |
-| `update-dependencies` | Dependabot or security alerts have piled up | One pull request with every update |
-| `drift-sweep` | Docs, roadmap, tests or blocked issues may be stale | A small pull request, issues, and a report |
-| `sweep-bug-class` | A fixed bug could exist elsewhere | Every instance found, fixed or filed, and a guard |
+| `update-dependencies` | Dependabot or security alerts have piled up | One pull request for tracked updates, with links to any issue updates |
+| `drift-sweep` | Docs, roadmap, tests or blocked issues may be stale | A report with links to issue updates and a pull request for tracked changes |
+| `sweep-bug-class` | A fixed bug could exist elsewhere | A report with the instances, links to fixes or issues, and any guard |
 
 ### `work-issue` — implement
 
@@ -113,7 +115,7 @@ yours.
 The agent surveys open Dependabot pull requests and GitHub's Dependabot,
 code-scanning and secret-scanning alerts, updates npm, Go modules, GitHub
 Actions and the Docker image in one branch, runs every gate including the
-full browser run, and opens one pull request.
+full browser run, and opens one pull request when tracked files change.
 
 - Anything it cannot move is held with the reason and tracked on an issue.
 - A new version that replaces a local workaround is adopted when the change is
@@ -147,7 +149,8 @@ Four scopes; name the ones you want or run all four.
 
 It corrects facts and never decides: it will not reorder the roadmap, change
 scope, or choose between a document and the code when they disagree about
-behaviour. Those come back to you.
+behaviour. Those come back to you. A `blocked` sweep reports its GitHub
+updates with links and finishes there.
 
 ### `sweep-bug-class` — find every copy
 
@@ -165,7 +168,8 @@ Give it an entry number from the bug-class catalogue
 fixed something, or a pattern in words. It searches the whole tree for the
 pattern, counts and classifies every hit, proves the real ones with a failing
 test, fixes the small ones, files the rest, and adds a guard test where the
-pattern can be detected mechanically.
+pattern can be detected mechanically. When the sweep only files issues, it
+returns those links.
 
 - Run it after any bug whose cause was a copyable shape: a duplicated helper,
   a query written the same way in several readers, a repeated form pattern.

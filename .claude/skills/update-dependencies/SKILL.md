@@ -5,25 +5,28 @@ description: Maintenance procedure for Rekenraam's dependencies - survey Dependa
 
 # Update Dependencies
 
-One branch, one pull request, everything current. The owner prefers a single
-bulk update over merging Dependabot pull requests one by one. This task runs
-as a `work-issue` task: branch from the canonical `main`, finish with an open
-pull request, fix small things, file issues for the rest.
+The owner prefers a single bulk update PR for tracked changes. Use
+`work-issue` to branch from canonical `main` before making those changes.
 
-When the request is only to check (security warnings, what is outdated, what
-Dependabot has open), run step 1 and report in the session; update nothing
-(`AGENTS.md` → Task Modes).
+An explicit check, report or dry run takes precedence over the skill name.
+Run step 1 and report in the session for those requests. Use
+[GitHub repository selection](../README.md#github-repository-selection) to
+resolve `$repo` before the survey and for issue tracking, comments and PRs.
 
 ## 1. Survey first
 
 ```sh
-gh pr list --author "app/dependabot" --state open --limit 200
-gh api --paginate "repos/{owner}/{repo}/dependabot/alerts?state=open&per_page=100" --jq '.[] | "\(.security_advisory.severity) \(.dependency.package.name) \(.security_advisory.ghsa_id)"'
-gh api --paginate "repos/{owner}/{repo}/code-scanning/alerts?state=open&per_page=100" --jq '.[] | "\(.rule.security_severity_level // "-") \(.rule.id) \(.most_recent_instance.location.path)"'
-if out=$(gh api --paginate "repos/{owner}/{repo}/secret-scanning/alerts?state=open&per_page=100" --jq '.[].number'); then
+gh pr list --repo "$repo" --author "app/dependabot" --state open --limit 200
+if out=$(gh api --paginate "repos/$repo/dependabot/alerts?state=open&per_page=100" --jq '.[] | "\(.security_advisory.severity) \(.dependency.package.name) \(.security_advisory.ghsa_id)"'); then
+  printf '%s\n' "$out"
+else echo "dependabot: UNCHECKED"; fi
+if out=$(gh api --paginate "repos/$repo/code-scanning/alerts?state=open&per_page=100" --jq '.[] | "\(.rule.security_severity_level // "-") \(.rule.id) \(.most_recent_instance.location.path)"'); then
+  printf '%s\n' "$out"
+else echo "code-scanning: UNCHECKED"; fi
+if out=$(gh api --paginate "repos/$repo/secret-scanning/alerts?state=open&per_page=100" --jq '.[].number'); then
   printf '%s\n' "$out" | awk 'NF { n++ } END { print n + 0 }'
 else echo "secret scanning: UNCHECKED"; fi
-gh issue list --label blocked --state open --limit 500
+gh issue list --repo "$repo" --label blocked --state open --limit 500
 ```
 
 Paginate every survey: an unpaginated call returns the first page only and
@@ -36,7 +39,8 @@ counts as lines. Count with a command that succeeds on an empty result
 (`awk`, not `grep -c`, which exits 1 on zero matches and stops a `set -e`
 shell before the next survey).
 
-Also read the latest `govulncheck` workflow run. Note which blocked issues are
+Read the latest `govulncheck` workflow run (`gh run list --repo "$repo"
+--workflow govulncheck.yml --limit 1`). Note which blocked issues are
 held upgrades (a peer range, a missing upstream release): this run is when
 they get rechecked.
 
@@ -57,12 +61,12 @@ they get rechecked.
   `docs/developer-workflow.md` → GitHub Actions); change them everywhere or
   nowhere. Pushing a workflow file needs the `workflow` scope on the `gh`
   token.
-- **The SQLite driver is not a routine bump.** If `go get -u` moves
-  `github.com/mattn/go-sqlite3`, it changes the bundled engine. That is a
-  driver admission review (`docs/developer-workflow.md`, the native SQLite
-  section, and ADR 0016's race-gate thresholds): time `internal/app` against
-  `main`, rerun the admission probes, decide the FTS5 workaround. Do it
-  deliberately or pin the current version and file an issue.
+- **SQLite driver admission.** Compare the selected driver before and after
+  dependency resolution with `go list -mod=readonly -m github.com/mattn/go-sqlite3`
+  from `backend/`. A changed selection requires the driver admission review
+  in `docs/developer-workflow.md` and ADR 0016. Time `internal/app` against
+  `main`, rerun the admission probes and check the FTS5 workaround. Complete
+  the review or pin the current version and file an issue.
 
 ## 3. Hold what cannot move
 
@@ -119,8 +123,9 @@ yourself.
 
 ## 6. Validate
 
-Run the gates one after another, never concurrently; contention alone causes
-race-gate timeouts.
+Run the same gates for direct and transitive changes, including patch
+updates and changes confined to lockfiles. Run the gates sequentially to
+avoid race-gate timeouts.
 
 ```sh
 ./scripts/test-backend.sh
@@ -135,10 +140,11 @@ it.
 
 ## 7. Ship
 
-One pull request following `work-issue` step 6. Its body lists: what moved
-(with majors called out), what is held and why, the state of each published
-advisory, what was modernized, the follow-up issues, and the Dependabot pull
-requests it covers (`Covers #612, #613`).
+If tracked files changed, open one pull request following `work-issue`
+step 6. Otherwise report the survey and link any GitHub issue updates.
+The pull request body lists what moved (with majors called out), what is held
+and why, the state of each published advisory, what was modernized, the
+follow-up issues, and the Dependabot pull requests it covers (`Covers #612, #613`).
 
 Do not close those Dependabot pull requests yourself. The owner may reject
 this pull request or drop an upgrade in review, and a closed Dependabot pull

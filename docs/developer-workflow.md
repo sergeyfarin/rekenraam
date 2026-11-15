@@ -1071,6 +1071,17 @@ before it is built, updating dependencies, sweeping for drift, and sweeping
 for one bug class. The owner-facing guide to all of them is
 [agent-task-playbook.md](agent-task-playbook.md).
 
+An explicit read-only, draft or dry-run request takes precedence over a
+named skill. A maintenance run that changes only GitHub issues finishes
+with links to the updates. Tracked-file changes go through a pull request.
+
+Resolve GitHub targets with [GitHub repository
+selection](../.claude/skills/README.md#github-repository-selection). Bare
+numbers and repository-wide work target canonical `main`'s repository.
+An explicit PR URL identifies the repository for that review. In a fork,
+push to `origin` and open the PR against the canonical repository with the
+fork owner in the head reference.
+
 What keeps this safe:
 
 - **Branches stay short-lived and start from the latest canonical `main`.** The
