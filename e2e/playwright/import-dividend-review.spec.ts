@@ -1,4 +1,4 @@
-import { expect, test, type Page } from './support/fixtures';
+import { expect, test, type Locator, type Page } from './support/fixtures';
 import process from 'node:process';
 import { apiJSON } from './support/api';
 import { readyForLedger, createCashAccount } from './support/ledger';
@@ -156,6 +156,19 @@ test('a failed Files re-read keeps the working copy, holds writes and retries th
   await expectNoAccessibilityViolations(page, 'Files after a retried re-read');
 });
 
+// The guard lives on the button's disabled attribute, so a click that reaches
+// the handler needs it removed first. Put it back before the test waits on the
+// button again: leaving it forced on would make that wait pass at once, before
+// the held write landed (#589 CI).
+async function forceClick(button: Locator) {
+  await button.evaluate(element => {
+    const control = element as HTMLButtonElement;
+    control.disabled = false;
+    control.click();
+    control.disabled = true;
+  });
+}
+
 async function recordFirstDividend(page: Page, f: Awaited<ReturnType<typeof dividendSource>>) {
   const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Pending dividend', exact: true }) }).first();
   await form.getByRole('combobox', { name: 'Income account', exact: true }).selectOption(String(f.income.id));
@@ -252,7 +265,7 @@ test('a Dividends save in flight holds the result view\'s Import another file (#
     await expect(another).toBeVisible();
     await expect(another).toBeDisabled();
     // Even a click that reaches the reset leaves the batch in place.
-    await another.evaluate(button => { (button as HTMLButtonElement).disabled = false; (button as HTMLButtonElement).click(); });
+    await forceClick(another);
     expect(new URL(page.url()).searchParams.get('batch_id')).toBe(batch);
     await expect(page.getByText('Upload a file', { exact: true })).toHaveCount(0);
   } finally { release(); }
@@ -296,7 +309,7 @@ test('Cancel while fetching waits for a Dividends save, and holds the batch unti
     await expect(cancel).toBeVisible();
     await expect(cancel).toBeDisabled();
     // Even a click that reaches the handler leaves the batch alone.
-    await cancel.evaluate(button => { (button as HTMLButtonElement).disabled = false; (button as HTMLButtonElement).click(); });
+    await forceClick(cancel);
     expect(new URL(page.url()).searchParams.get('batch_id')).toBe(batch);
     await expect(page.getByText('Upload a file', { exact: true })).toHaveCount(0);
   } finally { releaseSave(); }
