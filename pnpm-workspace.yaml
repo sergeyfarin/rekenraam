@@ -1,3 +1,10 @@
 packages:
   - frontend
   - e2e
+
+# Keep the hand-maintained skill library as the only agent instructions.
+# @tanstack/svelte-table 9.3.2 started shipping skills; do not link unreviewed
+# dependency instructions into .claude/skills.
+permissions:
+  '@tanstack/svelte-table':
+    skills: false
