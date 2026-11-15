@@ -1041,7 +1041,10 @@ supersedes it in turn. A failed re-read keeps the working copy and its
 choices, holds writes and offers a retry of the re-read, or *Import another
 file* to leave the batch as it is on the server; it never restores the batch
 afresh. *Import another file* itself refuses while any batch write, from
-either view, is in flight. *Back to import* in the Dividends view returns to
+either view, is in flight. *Cancel* on a fetch in progress discards the batch,
+whose rows may already be staged for the Dividends view, so it is a batch write
+too: it waits for one in flight and holds the others, and the batch selection,
+until its discard finishes. *Back to import* in the Dividends view returns to
 the Files view of the same batch, as the view selector does. Resolutions and match choices for rows still pending are kept; reviews
 computed for the old row set (match check, checkpoints, gain review) are
 cleared when a row stopped being pending.

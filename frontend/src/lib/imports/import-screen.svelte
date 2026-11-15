@@ -673,26 +673,29 @@
     }
   }
 
+  // Cancel discards the batch being fetched. Its rows may already be staged
+  // and reviewed in the Dividends view, so Cancel is a batch write like any
+  // other: it waits for a write in flight, and holds the others (and
+  // navigation away from the batch) until the discard finishes (#567 review).
   async function handleCancelFetch() {
+    if (batchBusy) return;
     if (pollTimer) {
       clearTimeout(pollTimer);
       pollTimer = null;
     }
     const idToDiscard = batchId;
-    step = 'upload';
-    batchId = null;
-    rememberBatch(null);
-    fetchFailed = false;
-    onlineImportError = undefined;
-    if (idToDiscard) {
+    discarding = true;
+    try {
       // Best-effort: the batch may already be "failed" (discard would 409),
-      // and there is no UI consequence either way once we've left the step.
-      try {
-        await discardImportBatch(idToDiscard, csrfToken);
-      } catch {
-        // ignore
-      }
+      // and there is no UI consequence either way once we leave the step.
+      if (idToDiscard) await discardImportBatch(idToDiscard, csrfToken);
+    } catch {
+      // ignore
+    } finally {
+      discarding = false;
     }
+    // A poll that landed during the discard is not kept either.
+    if (batchId === idToDiscard) handleImportAnother();
   }
 
   onDestroy(() => {
@@ -1861,7 +1864,8 @@
       <div class="mt-5">
         <button
           type="button"
-          class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-control-hover"
+          class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-control-hover disabled:opacity-60"
+          disabled={batchBusy}
           onclick={handleCancelFetch}
         >
           {m.import_fetching_cancel()}

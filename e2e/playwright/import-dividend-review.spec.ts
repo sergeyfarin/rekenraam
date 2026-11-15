@@ -10,7 +10,7 @@ import { linkLegacyCashDividend } from './support/legacy-dividend';
 requireTrading212Stub();
 test.use({ viewport: { width: 390, height: 844 } });
 
-async function dividendSource(page: Page, payments = 1) {
+async function dividendSource(page: Page, payments = 1, fetch = true) {
   const { csrfToken, currencyID } = await readyForLedger(page);
   const suffix = Date.now();
   const ticker = `DIV${suffix}`;
@@ -38,8 +38,8 @@ async function dividendSource(page: Page, payments = 1) {
     await expect(page.getByRole('button', { name: 'Commit to ledger' })).toBeVisible({ timeout: 15_000 });
   };
   const activity = () => apiJSON<{ transactions: Array<{ id: number }> }>(page, 'GET', `/api/v1/transactions?commodity_id=${instrument.commodity_id}`);
-  await fetchRows('Import');
-  return { csrfToken, currencyID, cash, income, tax, instrument, fetchRows, activity };
+  if (fetch) await fetchRows('Import');
+  return { csrfToken, currencyID, cash, income, tax, instrument, connectionName, fetchRows, activity };
 }
 
 test('[acceptance] imported dividend waits for owner facts and records its known payer without defaults on a phone', async ({ page }) => {
@@ -259,6 +259,72 @@ test('a Dividends save in flight holds the result view\'s Import another file (#
   await expect(another).toBeEnabled();
   expect(new URL(page.url()).searchParams.get('batch_id')).toBe(batch);
   expect((await f.activity()).transactions).toHaveLength(1);
+});
+
+test('Cancel while fetching waits for a Dividends save, and holds the batch until its discard finishes (#567 review)', async ({ page }) => {
+  const f = await dividendSource(page, 2, false);
+  // The Files view stays on its fetching step: its status reads never land.
+  let releaseStatus!: () => void;
+  const statusHeld = new Promise<void>(resolve => { releaseStatus = resolve; });
+  // The fetch-status poll reads the bare batch path, with no query string.
+  await page.route(url => /^\/api\/v1\/imports\/\d+$/.test(url.pathname), async route => { await statusHeld; await route.continue(); });
+  await page.goto('/app/ledger/import?view=connections');
+  await page.getByRole('row').filter({ hasText: f.connectionName }).getByRole('button', { name: 'Import', exact: true }).click();
+  await expect(page.getByText('Fetching from Trading 212…', { exact: true })).toBeVisible();
+  await expect.poll(() => new URL(page.url()).searchParams.get('batch_id')).not.toBeNull();
+  const batch = new URL(page.url()).searchParams.get('batch_id')!;
+  // The server finishes the fetch and stages the payments while Files still
+  // shows it fetching (page.request bypasses the held route).
+  await expect.poll(async () => {
+    const response = await page.request.get(`/api/v1/imports/${batch}`);
+    const body = await response.json() as { batch: { source_meta: string } };
+    return (JSON.parse(body.batch.source_meta) as { fetch_status?: string }).fetch_status;
+  }, { timeout: 15_000 }).toBe('ready');
+  expect((await apiJSON<{ rows: unknown[] }>(page, 'GET', `/api/v1/import-dividends?batch_id=${batch}`)).rows).toHaveLength(2);
+  const cancel = page.getByRole('button', { name: 'Cancel', exact: true });
+
+  let releaseSave!: () => void;
+  let saveStarted!: () => void;
+  const saveHeld = new Promise<void>(resolve => { releaseSave = resolve; });
+  const saveRequested = new Promise<void>(resolve => { saveStarted = resolve; });
+  await page.route(`**/api/v1/imports/${batch}/rows/*/review-dividend`, async route => { saveStarted(); await saveHeld; await route.continue(); });
+  await page.getByRole('button', { name: /^Dividends/ }).click();
+  await recordFirstDividend(page, f);
+  await saveRequested;
+  try {
+    await page.getByRole('button', { name: 'Files', exact: true }).click();
+    await expect(cancel).toBeVisible();
+    await expect(cancel).toBeDisabled();
+    // Even a click that reaches the handler leaves the batch alone.
+    await cancel.evaluate(button => { (button as HTMLButtonElement).disabled = false; (button as HTMLButtonElement).click(); });
+    expect(new URL(page.url()).searchParams.get('batch_id')).toBe(batch);
+    await expect(page.getByText('Upload a file', { exact: true })).toHaveCount(0);
+  } finally { releaseSave(); }
+  await expect(cancel).toBeEnabled();
+  expect((await f.activity()).transactions).toHaveLength(1);
+
+  // Cancel is itself a batch write: while its discard is in flight the other
+  // payment cannot be saved, and the batch stays selected.
+  let releaseDiscard!: () => void;
+  let discardStarted!: () => void;
+  const discardHeld = new Promise<void>(resolve => { releaseDiscard = resolve; });
+  const discardRequested = new Promise<void>(resolve => { discardStarted = resolve; });
+  await page.route(`**/api/v1/imports/${batch}/discard`, async route => { discardStarted(); await discardHeld; await route.continue(); });
+  await cancel.click();
+  await discardRequested;
+  try {
+    expect(new URL(page.url()).searchParams.get('batch_id')).toBe(batch);
+    await page.getByRole('button', { name: /^Dividends/ }).click();
+    await expect(page.getByRole('button', { name: 'Record reviewed dividend', exact: true })).toBeDisabled();
+    await page.getByRole('button', { name: 'Files', exact: true }).click();
+  } finally { releaseDiscard(); }
+  await expect(page.getByText('Upload a file', { exact: true })).toBeVisible();
+  await expect.poll(() => new URL(page.url()).searchParams.get('batch_id')).toBeNull();
+  // A status read that lands after the discard does not bring the batch back.
+  releaseStatus();
+  await page.waitForLoadState('networkidle');
+  await expect(page.getByText('Upload a file', { exact: true })).toBeVisible();
+  expect(new URL(page.url()).searchParams.get('batch_id')).toBeNull();
 });
 
 test('Back to import returns to the staged batch in Files (#567 review)', async ({ page }) => {
