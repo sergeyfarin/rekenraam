@@ -10,18 +10,17 @@ could implement with the `work-issue` skill without asking a question. You
 write no code, create no branch and open no pull request. Rules:
 `docs/conventions.md` → Work Tracking.
 
-Resolve `$repo` using [GitHub repository selection](../README.md#github-repository-selection).
-Use `--repo "$repo"` when reading issues or adding an authorized comment.
+Resolve `$repo` using [GitHub repository selection](../../../docs/developer-workflow.md#github-repository-selection).
+Use `--repo "${repo:?resolve repo first}"` when reading issues or adding an authorized comment.
 
-The request decides whether anything is published (`AGENTS.md` → Task Modes):
+Follow [Task Modes](../../../AGENTS.md#task-modes) to select the outcome:
 
 - **Draft or check** ("draft", "propose", "check", "read-only", "dry run"):
   steps 1–5, then return the draft text or findings in the session. Nothing is written to GitHub: no
   issue created or edited, no comment, no label. A duplicate found in step 1
   comes back as its link and the comment you would add.
 - **Shape and file** (invoked by name with no explicit limit, or explicitly
-  asked to publish or edit the issue): all steps, including step 6. An
-  explicit draft or check request takes precedence over the skill name.
+  asked to publish or edit the issue): all steps, including step 6.
 
 A suspected security vulnerability is never written up as a public issue. It
 goes to the owner under `SECURITY.md`, whatever the request says.
@@ -29,7 +28,7 @@ goes to the owner under `SECURITY.md`, whatever the request says.
 ## 1. Find out what already exists
 
 - Search open and closed issues:
-  `gh issue list --repo "$repo" --search "<terms>" --state all --limit 100`.
+  `gh issue list --repo "${repo:?resolve repo first}" --search "<terms>" --state all --limit 100`.
   When one already covers it, the outcome is a comment with the new evidence
   on that issue, not a second issue. Write the comment in step 6.
 - Check whether it already ships (`docs/implemented.md`), where it sits in
@@ -90,12 +89,12 @@ Add **Decisions for the owner** when step 4 found any.
 
 - A duplicate of the proposed issue from step 1: add the evidence as a comment on that issue and
   stop; do not create a second one.
-- For a new issue, use `gh issue create --repo "$repo"` with the label `bug`,
+- For a new issue, use `gh issue create --repo "${repo:?resolve repo first}"` with the label `bug`,
   `enhancement` or `documentation` and a `priority: P0`–`P3` for urgency.
 - No milestone, and no edit to the order in `docs/roadmap.md`: creating an
   issue never changes release scope or sequence. Both are the owner's.
 - To make an existing brief issue ready, rewrite its body with
-  `gh api -X PATCH "repos/$repo/issues/$n" -F "body=@$body_file"` and add a
+  `gh api -X PATCH "repos/${repo:?resolve repo first}/issues/$n" -F "body=@$body_file"` and add a
   comment saying what changed. Keep the original problem statement.
 - Report the issue URL, the decisions waiting on the owner, and whether the
   issue is ready for `work-issue` now or only after those decisions.

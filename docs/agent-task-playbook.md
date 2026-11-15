@@ -26,10 +26,9 @@ and the issue or pull request number:
   example `/work-issue 592 with ledger-invariants`.
 - An agent that was not given a task skill still follows `AGENTS.md` → Task
   Modes, so a plain "fix #592" works. The prefix makes it certain.
-- An explicit limit such as "check", "report", "draft" or "dry run" takes
-  precedence over a skill invocation. For example, `/drift-sweep check docs`
-  returns findings and `/shape-issue draft …` returns text. A named
-  write-capable skill without a limit runs its full workflow.
+- See [Task Modes](../AGENTS.md#task-modes) for scope.
+  `/drift-sweep check docs` returns findings and `/shape-issue draft …`
+  returns text.
 - A bare issue or PR number targets the canonical repository. Use a full PR
   URL to review a PR in another repository.
 - Suspected security vulnerabilities come back to you in the session, never
@@ -152,12 +151,12 @@ scope, or choose between a document and the code when they disagree about
 behaviour. Those come back to you. A `blocked` sweep reports its GitHub
 updates with links and finishes there.
 
-### `sweep-bug-class` — find every copy
+### `sweep-bug-class` — fix repeated instances
 
 ```
 /sweep-bug-class 13
 /sweep-bug-class the bug fixed in #577
-check whether the bug fixed in #577 exists anywhere else
+/sweep-bug-class check whether the bug fixed in #577 exists anywhere else
 ```
 
 The first two run the full sweep. The third is a check: it reports every hit

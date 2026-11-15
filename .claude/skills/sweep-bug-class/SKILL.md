@@ -12,16 +12,16 @@ one class and finds all of it.
 
 ## Outcome
 
-The request decides how far this goes (`AGENTS.md` → Task Modes):
+Select the outcome using [Task Modes](../../../AGENTS.md#task-modes):
 
-- **Check** ("does this exist elsewhere?", "find", "audit", "list"): steps 1–4
+- **Check** ("does this exist elsewhere?", "check", "only list"): steps 1–4
   and the report. No branch, no edits to the checkout, nothing written to
   GitHub. Any probe that needs code changed (a failing test, a broken
   behaviour) runs in a scratch worktree under `.claude/worktrees/`, is never
   committed, and the worktree is removed afterwards. End by asking whether to
   fix and file.
 - **Sweep** (invoked by name without an explicit limit, or asked to fix
-  and file): all steps. A check takes precedence over the skill name. Use
+  and file): all steps. Use
   `work-issue` to branch from canonical `main` when making tracked changes
   and open a PR for those changes. If all instances are filed and there are
   no tracked changes, finish with the GitHub links.
@@ -34,7 +34,7 @@ described publicly; it goes to the owner under `SECURITY.md`.
 The class comes from the prompt: an entry number in
 `.claude/skills/validate-and-ship/bug-classes/`, a bug that was just fixed, or
 a pattern described in words. Read the entry and the fix that closed it.
-Use [GitHub repository selection](../README.md#github-repository-selection)
+Use [GitHub repository selection](../../../docs/developer-workflow.md#github-repository-selection)
 for issue and PR lookups and filing. Write down before searching:
 
 - the code shape that causes it;

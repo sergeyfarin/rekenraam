@@ -56,26 +56,6 @@ body tells the agent to read it. Three consequences:
   `@work-issue 592`; `/review-pr 585` and its equivalents for a review. Name
   area skills too when the area is not obvious from the issue.
 
-## GitHub repository selection
-
-For bare issue or pull request numbers and repository-wide work, resolve the
-canonical repository from the current clone before any GitHub lookup:
-
-```sh
-remote=origin
-if git remote get-url upstream >/dev/null 2>&1; then
-  remote=upstream
-fi
-repo_url=$(git remote get-url "$remote")
-repo=$(gh repo view "$repo_url" --json nameWithOwner --jq .nameWithOwner)
-```
-
-If either lookup fails, resolve the remote before continuing. For an explicit
-PR URL, use the owner, repo and PR number from that URL. Pass `--repo "$repo"`
-to repository-scoped `gh` subcommands, use explicit `repos/$repo/...` REST
-paths, and pass the owner and name in GraphQL variables. A contributor can
-keep their own GitHub CLI default repository.
-
 ## Rules for maintaining this library
 
 - Keep it small. A new skill must earn its place: a recurring task shape, real
@@ -108,9 +88,8 @@ keep their own GitHub CLI default repository.
 - `AGENTS.md` is the only repo-wide instruction file. `CLAUDE.md` stays the
   single line `@AGENTS.md`. Do not add harness-specific copies or content
   (in `CLAUDE.md`, Copilot or Cursor instruction files); they drift from it.
-- An explicit read-only, draft or dry-run request takes precedence over a
-  named skill. Skill descriptions and steps preserve that scope. Maintenance
-  workflows open a PR only when they change tracked files.
+- Follow [Task Modes](../../AGENTS.md#task-modes) for scope and [GitHub repository
+  selection](../../docs/developer-workflow.md#github-repository-selection) for targets.
 - Every `gh ... list` and `gh api` survey in a skill passes `--limit` or
   `--paginate`, and every `--json` field must exist in the oldest `gh` in use
   (2.46 here). Run a command once before putting it in a skill, and run its

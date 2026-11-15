@@ -9,16 +9,15 @@ Compare what the repository claims with what is true, and close the gap. Run
 the scopes named in the prompt (`blocked`, `roadmap`, `docs`, `tests`); with
 none named, run all four in that order.
 
-For an explicit check, report, read-only request or dry run, return findings
-and describe what a full sweep would do (`AGENTS.md` → Task Modes). Run any
+For a limited request under [Task Modes](../../../AGENTS.md#task-modes),
+return findings and describe what a full sweep would do. Run any
 probe that needs code changes in a scratch worktree under `.claude/worktrees/`.
 Keep the probe uncommitted and remove the worktree afterward.
-That scope takes precedence over the skill name. A named
-invocation with no explicit limit or a request to fix the drift runs the
-full workflow below.
+Run the full workflow for a request to fix the drift or a named invocation
+without an explicit limit.
 
-Resolve `$repo` using [GitHub repository selection](../README.md#github-repository-selection)
-before surveying. Use `--repo "$repo"` for issue reads, comments, labels,
+Resolve `$repo` using [GitHub repository selection](../../../docs/developer-workflow.md#github-repository-selection)
+before surveying. Use `--repo "${repo:?resolve repo first}"` for issue reads, comments, labels,
 milestones and workflow runs.
 
 Two rules hold for every scope of a full sweep:
@@ -36,7 +35,7 @@ Two rules hold for every scope of a full sweep:
 ## `blocked` — blocked issues
 
 ```sh
-gh issue list --repo "$repo" --label blocked --state open --limit 500 --json number,title,updatedAt
+gh issue list --repo "${repo:?resolve repo first}" --label blocked --state open --limit 500 --json number,title,updatedAt
 ```
 
 Every `gh ... list` defaults to 30 results. Pass `--limit` (or `--paginate`
@@ -60,7 +59,7 @@ the issue it waits on close?
   pull request merged; "next" items already delivered; dated statements that
   have expired.
 - `docs/implemented.md`: features merged since the last sweep that are not
-  recorded (`gh pr list --repo "$repo" --state merged --limit 500 --search "merged:>=<date>"`).
+  recorded (`gh pr list --repo "${repo:?resolve repo first}" --state merged --limit 500 --search "merged:>=<date>"`).
 - Open issues whose acceptance is fully met, and closed issues with an unmet
   acceptance item.
 - The `v0.1.0` milestone against the roadmap's accepted gates. Report the
@@ -98,7 +97,7 @@ their job.
   (`.claude/skills/validate-and-ship/bug-classes/general.md` and `e2e.md`).
 - `// serial:` opt-outs whose reason no longer applies.
 - Tests that fail intermittently in CI:
-  `gh run list --repo "$repo" --workflow ci.yml --status failure --limit 100`,
+  `gh run list --repo "${repo:?resolve repo first}" --workflow ci.yml --status failure --limit 100`,
   then group by failing test.
 - Comments and test names that cite an issue as pending when it is closed.
 

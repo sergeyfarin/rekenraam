@@ -8,25 +8,25 @@ description: Maintenance procedure for Rekenraam's dependencies - survey Dependa
 The owner prefers a single bulk update PR for tracked changes. Use
 `work-issue` to branch from canonical `main` before making those changes.
 
-An explicit check, report or dry run takes precedence over the skill name.
-Run step 1 and report in the session for those requests. Use
-[GitHub repository selection](../README.md#github-repository-selection) to
+For a limited request under [Task Modes](../../../AGENTS.md#task-modes),
+run step 1 and report in the session. Use
+[GitHub repository selection](../../../docs/developer-workflow.md#github-repository-selection) to
 resolve `$repo` before the survey and for issue tracking, comments and PRs.
 
 ## 1. Survey first
 
 ```sh
-gh pr list --repo "$repo" --author "app/dependabot" --state open --limit 200
-if out=$(gh api --paginate "repos/$repo/dependabot/alerts?state=open&per_page=100" --jq '.[] | "\(.security_advisory.severity) \(.dependency.package.name) \(.security_advisory.ghsa_id)"'); then
+gh pr list --repo "${repo:?resolve repo first}" --author "app/dependabot" --state open --limit 200
+if out=$(gh api --paginate "repos/${repo:?resolve repo first}/dependabot/alerts?state=open&per_page=100" --jq '.[] | "\(.security_advisory.severity) \(.dependency.package.name) \(.security_advisory.ghsa_id)"'); then
   printf '%s\n' "$out"
 else echo "dependabot: UNCHECKED"; fi
-if out=$(gh api --paginate "repos/$repo/code-scanning/alerts?state=open&per_page=100" --jq '.[] | "\(.rule.security_severity_level // "-") \(.rule.id) \(.most_recent_instance.location.path)"'); then
+if out=$(gh api --paginate "repos/${repo:?resolve repo first}/code-scanning/alerts?state=open&per_page=100" --jq '.[] | "\(.rule.security_severity_level // "-") \(.rule.id) \(.most_recent_instance.location.path)"'); then
   printf '%s\n' "$out"
 else echo "code-scanning: UNCHECKED"; fi
-if out=$(gh api --paginate "repos/$repo/secret-scanning/alerts?state=open&per_page=100" --jq '.[].number'); then
+if out=$(gh api --paginate "repos/${repo:?resolve repo first}/secret-scanning/alerts?state=open&per_page=100" --jq '.[].number'); then
   printf '%s\n' "$out" | awk 'NF { n++ } END { print n + 0 }'
 else echo "secret scanning: UNCHECKED"; fi
-gh issue list --repo "$repo" --label blocked --state open --limit 500
+gh issue list --repo "${repo:?resolve repo first}" --label blocked --state open --limit 500
 ```
 
 Paginate every survey: an unpaginated call returns the first page only and
@@ -39,7 +39,7 @@ counts as lines. Count with a command that succeeds on an empty result
 (`awk`, not `grep -c`, which exits 1 on zero matches and stops a `set -e`
 shell before the next survey).
 
-Read the latest `govulncheck` workflow run (`gh run list --repo "$repo"
+Read the latest `govulncheck` workflow run (`gh run list --repo "${repo:?resolve repo first}"
 --workflow govulncheck.yml --limit 1`). Note which blocked issues are
 held upgrades (a peer range, a missing upstream release): this run is when
 they get rechecked.

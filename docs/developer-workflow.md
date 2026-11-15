@@ -1043,7 +1043,7 @@ Database* above.
 
 **Implementation work goes through a short-lived branch and a pull request.**
 Work on an issue, bug or feature starts on a branch cut from the latest
-canonical `main` (`upstream/main` in a fork, `origin/main` in a direct clone)
+canonical `main` (see [GitHub repository selection](#github-repository-selection))
 and ends with an open, ready-for-review pull request, opened without waiting
 to be asked. The owner merges; nobody else merges or enables
 auto-merge. (Owner decision, 2026-11-15. It replaces the 2026-08-23 rule of
@@ -1071,16 +1071,7 @@ before it is built, updating dependencies, sweeping for drift, and sweeping
 for one bug class. The owner-facing guide to all of them is
 [agent-task-playbook.md](agent-task-playbook.md).
 
-An explicit read-only, draft or dry-run request takes precedence over a
-named skill. A maintenance run that changes only GitHub issues finishes
-with links to the updates. Tracked-file changes go through a pull request.
-
-Resolve GitHub targets with [GitHub repository
-selection](../.claude/skills/README.md#github-repository-selection). Bare
-numbers and repository-wide work target canonical `main`'s repository.
-An explicit PR URL identifies the repository for that review. In a fork,
-push to `origin` and open the PR against the canonical repository with the
-fork owner in the head reference.
+See [Task Modes](../AGENTS.md#task-modes) for the scope of agent tasks.
 
 What keeps this safe:
 
@@ -1103,6 +1094,36 @@ correction after a merge.
 milestone that freezes migrations (see *Project Lifecycle And Migration
 Immutability* in `docs/conventions.md`): once a released version exists,
 `main` is something users can be running.
+
+### GitHub repository selection
+
+Bare issue or PR numbers and repository-wide commands target the canonical
+repository. An explicit PR URL identifies the repository for that review.
+For a bare number, use the configured `upstream` remote when present.
+Otherwise inspect `origin` and use its GitHub parent if it is a fork:
+
+```sh
+if remote_url=$(git remote get-url upstream 2>/dev/null); then
+  repo=$(gh repo view "${remote_url:?missing upstream URL}" --json nameWithOwner --jq .nameWithOwner) || exit 1
+else
+  remote_url=$(git remote get-url origin) || exit 1
+  repository=$(gh repo view "${remote_url:?missing origin URL}" --json nameWithOwner,isFork,parent) || exit 1
+  repo=$(jq -er 'if .isFork then
+    .parent | select(.owner.login and .name) | "\(.owner.login)/\(.name)"
+    else .nameWithOwner end' <<< "$repository") || exit 1
+fi
+: "${repo:?resolve repo first}"
+```
+
+Each shell call can start fresh. Resolve `repo` in the same call as the
+dependent commands or pass its verified value explicitly. Use
+`"${repo:?resolve repo first}"` in repository arguments and
+API paths so a missing or empty value stops the command before GitHub can
+fall back to a CLI default. Stop if repository resolution fails.
+
+Fetch canonical `main` from the resolved repository. In a fork, push to
+`origin` and open the PR against the canonical repository with the fork
+owner in the head reference.
 
 ### Post-Merge Audit
 

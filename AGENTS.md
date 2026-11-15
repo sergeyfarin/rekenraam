@@ -39,7 +39,7 @@ Most requests are one of two modes. Decide which one you are in before you start
 
 **Work an issue** (implement an issue, bug fix or feature) — `work-issue` skill:
 
-- Branch from the latest canonical `main` (`upstream/main` in a fork, otherwise `origin/main`), build the slice, validate it.
+- Branch from the latest canonical `main`, build the slice, and validate it.
 - Finish with a pushed branch and an open, ready-for-review pull request. Do this without asking; it overrides any machine-wide default to wait for a request. Never merge.
 - While in the code, look for bugs, weak tests, code smells and improvement opportunities beyond the task. A finding that is small, local and needs no migration, API contract change or owner decision is fixed in the same pull request as its own commit. Anything else, and anything that changes a financial result, becomes a GitHub issue. Nothing is left only in the conversation.
 
@@ -60,7 +60,7 @@ A request that fits none of these (a question, an investigation) follows the own
 
 Two rules bound every task:
 
-- **The requested outcome sets the side effects.** An explicit limit such as check, find, list, assess, report, draft, propose, read-only or dry run takes precedence over a named skill or slash command. Return findings or draft text in the session. For a compound request, apply each limit to its stated stage and carry out any separately requested action. A write request or a named write-capable skill with no explicit limit runs that skill's write workflow. When the wording is unclear, report first and ask.
+- **The requested outcome sets the side effects.** An explicit limit such as check, assess, report, draft, propose, read-only or dry run takes precedence over a named skill or slash command. Standalone requests to find or list return findings. Within a named skill, "find every copy" describes the work and "only find" limits it to a report. Return findings or draft text in the session for limited requests. For a compound request, apply each limit to its stated stage and carry out any separately requested action. A write request or a named write-capable skill with no explicit limit runs that skill's write workflow. When the wording is unclear, report first and ask.
 - **A suspected security vulnerability is never made public before it is fixed.** Do not describe it in a public issue, pull request, commit message or comment. Report it to the owner in the session and follow `SECURITY.md` (GitHub private vulnerability reporting). An advisory GitHub has already published may be tracked publicly.
 
 ## Task Skills
@@ -89,7 +89,7 @@ Two rules bound every task:
 
 ## Working Rules
 
-- Resolve GitHub repository targets explicitly. Use the repository in an explicit PR URL for review and the canonical repository for bare numbers and repository-wide work. The canonical remote is `upstream` when present, otherwise `origin`. Use the resulting repository on every `gh` call that targets it. See [GitHub repository selection](.claude/skills/README.md#github-repository-selection).
+- Resolve GitHub repository targets explicitly. Use the repository in an explicit PR URL for review and the canonical repository for bare numbers and repository-wide work. Follow [GitHub repository selection](docs/developer-workflow.md#github-repository-selection) for targets and fork handling.
 - Deliver incrementally, one feature slice at a time.
 - Do not attempt broad archive-to-current-stack conversion in one change.
 - Prefer minimal, durable implementations over speculative abstractions.

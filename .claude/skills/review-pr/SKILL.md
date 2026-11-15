@@ -18,31 +18,39 @@ opinion, and its fixes reach `main` unreviewed.
 
 - Set `$repo` and `$n` from the PR URL (the owner/repository and number in
   `https://github.com/<owner>/<repo>/pull/<n>`). For a bare number, use
-  [GitHub repository selection](../README.md#github-repository-selection).
+  [GitHub repository selection](../../../docs/developer-workflow.md#github-repository-selection).
   Use these values for all lookups, including comments requested by the owner.
 - Read the metadata and capture its head SHA from the same GitHub response:
   ```sh
-  metadata=$(gh pr view "$n" --repo "$repo" --json title,body,baseRefName,headRefOid,commits,files,statusCheckRollup)
-  sha=$(jq -er .headRefOid <<< "$metadata")
+  : "${repo:?resolve repo first}" "${n:?set PR number first}"
+  metadata=$(gh pr view "$n" --repo "$repo" \
+    --json title,body,baseRefName,headRefOid,commits,files,statusCheckRollup) || exit 1
+  sha=$(jq -er .headRefOid <<< "$metadata") || exit 1
   printf '%s\n' "$metadata"
-  gh pr diff "$n" --repo "$repo"
+  gh pr diff "${n:?set PR number first}" --repo "${repo:?resolve repo first}"
   ```
-  Everything below reviews `$sha`. If the pull request moves during the
-  review, read the updated metadata and diff before reviewing the new head.
+  Review and test only the recorded `$sha`. Compare it with the live
+  `headRefOid` after reading the diff and again before reporting. If the head
+  moves, tell the owner and restart from the metadata step with the new SHA.
+  Refresh the diff and closing references, fetch the new head, and replace
+  the review worktree before testing again.
 - Find the issues it closes. `closingIssuesReferences` is not a
   `gh pr view` field in every `gh` release, so ask GraphQL:
   ```sh
+  : "${repo:?resolve repo first}" "${n:?set PR number first}"
   gh api graphql -F owner="${repo%%/*}" -F name="${repo#*/}" -F n="$n" -f query='
     query($owner:String!,$name:String!,$n:Int!){repository(owner:$owner,name:$name){
       pullRequest(number:$n){closingIssuesReferences(first:50){nodes{number title state}}}}}' \
     --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[]'
   ```
   Also read `Closes`/`Refs` lines in the body; they can disagree.
-- Read the linked issue and its acceptance in its own repository (use
-  `--repo "$repo"` for same-repository numbers), the governing plan or ADR,
-  and where the work sits in `docs/roadmap.md`.
-- Fetch the PR head from the same repository and verify the recorded SHA:
+- Read the linked issue and its acceptance in its own repository. Use
+  `--repo "${repo:?resolve repo first}"` for same-repository issue numbers.
+  Read the governing plan or ADR and locate the work in `docs/roadmap.md`.
+- Fetch the PR head from the resolved repository. In a fork, `origin` can
+  have a different pull request with the same number. Verify the recorded SHA:
   ```sh
+  : "${repo:?resolve repo first}" "${n:?set PR number first}" "${sha:?capture PR head first}"
   if git fetch "https://github.com/$repo.git" "refs/pull/$n/head" \
      && [ "$(git rev-parse FETCH_HEAD)" = "$sha" ]; then
     git worktree add --detach ".claude/worktrees/review-$n" "$sha"
