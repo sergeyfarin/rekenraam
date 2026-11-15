@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file gives repo-wide guidance to coding agents and automation working in this repository. It is the one instruction file for every harness used here (Claude Code, Codex, OpenCode); do not add harness-specific copies of it. `CLAUDE.md` only imports this file, so Claude Code loads it in every setup.
+This file gives repo-wide guidance to coding agents and automation working in this repository. It is the one instruction file for every harness used here (Claude Code, Codex, OpenCode); do not add harness-specific copies of it. `CLAUDE.md` only imports this file, so Claude Code loads it whatever its version (see `.claude/skills/README.md` for the one setting that skips it).
 
 ## Project Shape
 

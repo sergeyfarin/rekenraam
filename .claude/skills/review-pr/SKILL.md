@@ -30,15 +30,23 @@ opinion, and its fixes reach `main` unreviewed.
   Also read `Closes`/`Refs` lines in the body; they can disagree.
 - Read the linked issue with its acceptance, the governing plan or ADR, and
   where the work sits in `docs/roadmap.md`.
-- Get the code without disturbing the working tree:
+- Get the code without disturbing the working tree. Fetch from the
+  repository that owns the pull request — the one `gh` resolved above, not
+  whatever `origin` is — and check that you got the commit GitHub reports:
   ```sh
-  git fetch origin pull/<n>/head
-  git worktree add --detach .claude/worktrees/review-<n> FETCH_HEAD
+  repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+  sha=$(gh pr view <n> --json headRefOid --jq .headRefOid)
+  git fetch "https://github.com/$repo.git" "pull/<n>/head"
+  test "$(git rev-parse FETCH_HEAD)" = "$sha" || echo "WRONG COMMIT: stop"
+  git worktree add --detach .claude/worktrees/review-<n> "$sha"
   ```
-  Use `.claude/worktrees/` (git-ignored); a worktree under `/tmp` disappears
+  In a fork, `origin` is the fork and its pull request <n> is a different
+  pull request. Never review a commit whose SHA does not match `headRefOid`.
+- Use `.claude/worktrees/` (git-ignored); a worktree under `/tmp` disappears
   on reboot. Run every command there with `git -C` or an absolute path, so a
-  failed `cd` cannot run it in the main checkout. Run tests and builds there. A throwaway probe test that confirms a suspected
-  bug is allowed there and is never committed. Remove the worktree when done.
+  failed `cd` cannot run it in the main checkout. Run tests and builds there.
+  A throwaway probe test that confirms a suspected bug is allowed there and
+  is never committed. Remove the worktree when done.
 - Read the whole changed files and their callers, not just the hunks. Review
   the entire pull request, every commit, not only the latest push.
 - On a re-review, first check each earlier finding against the new commits

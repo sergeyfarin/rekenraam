@@ -10,8 +10,11 @@ the scopes named in the prompt (`blocked`, `roadmap`, `docs`, `tests`); with
 none named, run all four in that order.
 
 The request decides how far this goes (`AGENTS.md` → Task Modes). Asked only
-to check, list or report: make no changes anywhere — no branch, no label
-change, no comment, no issue — and report what a full sweep would do.
+to check, list or report: make no changes anywhere — no branch, no edit to
+the checkout, no label change, no comment, no issue — and report what a full
+sweep would do. Any probe that needs code changed (a failing test, a broken
+behaviour) runs in a scratch worktree under `.claude/worktrees/`, is never
+committed, and the worktree is removed afterwards.
 Invoked by name, or asked to sweep, fix or clean up: the full workflow below.
 
 Two rules hold for every scope of a full sweep:

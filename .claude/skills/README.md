@@ -37,8 +37,11 @@ catalogue of bugs this repo has shipped, split by area).
 
 Claude Code reads `AGENTS.md` by itself only from v2.1.277, and only while no
 `CLAUDE.md` or `CLAUDE.local.md` exists in the directory or above it. The
-one-line `CLAUDE.md` (`@AGENTS.md`) makes it load in every version and
-setting, including when someone adds a personal `CLAUDE.local.md`.
+one-line `CLAUDE.md` (`@AGENTS.md`) makes it load in every version, in the
+default *Project instructions* setting and in `claude-md-and-agents-md`, and
+when someone adds a personal `CLAUDE.local.md`. The `managed-only` setting
+skips every project instruction file, this import included; a session under
+it has no repository guidance.
 
 All three load only each skill's `name` and `description` up front, the
 `SKILL.md` body when the skill is used, and a reference file only when the

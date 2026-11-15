@@ -15,7 +15,10 @@ one class and finds all of it.
 The request decides how far this goes (`AGENTS.md` → Task Modes):
 
 - **Check** ("does this exist elsewhere?", "find", "audit", "list"): steps 1–4
-  and the report. No branch, no edits, no issues. End by asking whether to
+  and the report. No branch, no edits to the checkout, nothing written to
+  GitHub. Any probe that needs code changed (a failing test, a broken
+  behaviour) runs in a scratch worktree under `.claude/worktrees/`, is never
+  committed, and the worktree is removed afterwards. End by asking whether to
   fix and file.
 - **Sweep** (invoked by name, or asked to sweep, fix or clean up): all steps,
   run as a `work-issue` task — branch from the canonical `main`, fix small

@@ -70,3 +70,6 @@ bin/
 
 # Security scan output (gosec writes here when run locally)
 /gosec.sarif
+
+# Agent scratch worktrees (review-pr, sweep probes)
+.claude/worktrees/

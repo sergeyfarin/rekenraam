@@ -13,7 +13,9 @@ write no code, create no branch and open no pull request. Rules:
 The request decides whether anything is published (`AGENTS.md` → Task Modes):
 
 - **Draft** ("draft", "propose", "what would the issue say"): steps 1–5, then
-  return the issue text in the session. Do not create or edit any issue.
+  return the issue text in the session. Nothing is written to GitHub: no
+  issue created or edited, no comment, no label. A duplicate found in step 1
+  comes back as its link and the comment you would add.
 - **Shape and file** (invoked by name, or asked to shape, file, create or make
   an issue ready): all steps, including step 6.
 
@@ -24,7 +26,8 @@ goes to the owner under `SECURITY.md`, whatever the request says.
 
 - Search open and closed issues:
   `gh issue list --search "<terms>" --state all --limit 100`.
-  A duplicate gets a comment with the new evidence, not a second issue.
+  When one already covers it, the outcome is a comment with the new evidence
+  on that issue, not a second issue. Write the comment in step 6.
 - Check whether it already ships (`docs/implemented.md`), where it sits in
   `docs/roadmap.md`, and what the governing plan or ADR already decided.
 - Check it against `docs/product-requirements.md` and the scope locks in
@@ -81,8 +84,10 @@ Add **Decisions for the owner** when step 4 found any.
 
 ## 6. File it (not for a draft)
 
-- `gh issue create` with the label `bug`, `enhancement` or `documentation`
-  and a `priority: P0`–`P3` for urgency.
+- A duplicate from step 1: add the evidence as a comment on that issue and
+  stop; do not create a second one.
+- Otherwise `gh issue create` with the label `bug`, `enhancement` or
+  `documentation` and a `priority: P0`–`P3` for urgency.
 - No milestone, and no edit to the order in `docs/roadmap.md`: creating an
   issue never changes release scope or sequence. Both are the owner's.
 - To make an existing brief issue ready, rewrite its body with
