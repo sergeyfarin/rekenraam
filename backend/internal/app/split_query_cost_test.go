@@ -34,12 +34,12 @@ func TestSplitQueryCost(t *testing.T) {
 	replacements := setting("SPLIT_QUERY_REPLACEMENTS", 0)
 	start := time.Now()
 	day := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
-	for i := 0; i < operations; i++ {
+	for i := range operations {
 		buyOn(t, f, day.AddDate(0, 0, i).Format("2006-01-02"), 1, 1000)
 	}
 	splitDays := []string{}
 	var lastSplitID int64
-	for i := 0; i < splitCount; i++ {
+	for i := range splitCount {
 		date := day.AddDate(0, 0, operations+10*(i+1)).Format("2006-01-02")
 		numerator, denominator := int64(2), int64(1)
 		if i%2 == 1 {
@@ -50,7 +50,7 @@ func TestSplitQueryCost(t *testing.T) {
 		lastSplitID = result.OperationID
 		splitDays = append(splitDays, date)
 	}
-	for i := 0; i < replacements; i++ {
+	for i := range replacements {
 		numerator := int64(3)
 		if i%2 == 1 {
 			numerator = 2
@@ -87,11 +87,11 @@ func TestSplitQueryCost(t *testing.T) {
 	bases, err := repository.TradeQuotePendingSplits(ctx, BookID, commodities, "2000-01-01", "2100-01-01")
 	require.NoError(t, err)
 	measure := func(name string, iterations int, fn func() error) {
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			require.NoError(t, fn())
 		}
 		start := time.Now()
-		for i := 0; i < iterations; i++ {
+		for range iterations {
 			require.NoError(t, fn())
 		}
 		t.Logf("engine=%s qpsg=%d operations=%d splits=%d replacements=%d %s: per_op=%.2fus", version, qpsg, operations, splitCount, replacements, name, float64(time.Since(start).Microseconds())/float64(iterations))
