@@ -160,8 +160,10 @@ version said no lot table was found in Sure, described open-net-worth from
 its README alone, said none of the listed projects addressed desktop users,
 and called joining another project impractical. The first and third were
 wrong at the cited commits, the second missed lots, corrections and a desktop
-application, and the fourth went beyond the evidence. The rows, implications
-and proposals below are the corrected text.
+application, and the fourth went beyond the evidence. A second review round
+the same day added open-net-worth's specific-lot selection, which the first
+correction had left out. The rows, implications and proposals below are the
+corrected text.
 
 Each row names its evidence. "Models" means the schema, model or service
 files named were read at the commit given. "README" means only the project's
@@ -181,7 +183,7 @@ with an AI agent, an MCP server or bank sync.
 | **[Sure](https://github.com/we-promise/sure)** (community fork of Maybe) | 15,144 stars. Forked 2025-07-23. Several maintainers. 929 open issues and pull requests. Ruby, PostgreSQL, AGPL-3.0. | Models at `c9cc6d24` (`db/schema.rb`, the `holding_lots` migration, `app/models/holding/lot_book.rb`, `desktop/README.md`). | An `entries` row holds one account and one `decimal(19,4)` amount, with a reconciled status and a statement reference. A transfer pairs an inflow and an outflow transaction. `holding_lots` (migration dated 2026-10-23) keeps one lot per acquisition with its date, source entry, quantity, currency and unit cost. The lot book is rebuilt by applying trades in order; a disposal relieves every open lot pro rata at the average cost, a split restates each lot, and a transfer-in has unknown cost. No other disposal method appears in that file. `desktop/` is a macOS shell that connects to a Sure server the user already runs. |
 | **[ezBookkeeping](https://github.com/mayswind/ezbookkeeping)** | 6,073 stars. Created 2020. One author has 3,627 of about 3,745 commits. Go with SQLite, MySQL or PostgreSQL. MIT. | README. | Imports CSV, Excel, OFX, QFX, QIF, IIF, CAMT.052/053, MT940, GnuCash, Firefly III and Beancount files. Scheduled transactions, receipt recognition, an MCP server, PWA. The README does not mention double entry, investments or reconciliation. The closest stack to Rekenraam's. |
 | **[Securo](https://github.com/securo-finance/securo)** | 4,499 stars. Created 2026-03-08. Top contributor has 333 of 729 commits; about 99 contributors. 273 open issues and pull requests. Python, PostgreSQL, AGPL-3.0. | Models at `83301a15` (`backend/app/models`). | A `transactions` row holds one account, a `Numeric(15,2)` amount, a debit/credit type and an optional `transfer_pair_id`. `asset_transactions` are buys and sells with quantity, price and fee; no path in its tree names lots or a desktop build. Its `reconciliation_*` tables store rules and suggestions for matching transactions to expected items, not statement checkpoints. README: bank sync through Pluggy, Enable Banking and SimpleFIN; OFX, QIF, CAMT and CSV import; rules, budgets, goals, workspaces with roles, OIDC, passkeys, optional LLM agents and plugins. |
-| **[open-net-worth](https://github.com/open-net-worth-ai/open-net-worth)** | 482 stars on 2026-11-14 and 507 a day later. Created 2026-10-15. One author has nearly all commits. Python, AGPL-3.0. | Models, services and README at `b863ba60` (`backend/models/transaction.py`, `backend/models/lot.py`, `backend/db/lot_store.py`, `backend/services/lot_corrections.py`). | The README recommends a desktop application holding a local book, with macOS (signed and notarized), Windows and Linux downloads, a background mode, and server and Docker options. An AI model is required at first run "with no skip"; a local model is allowed. Transactions are "two-leg": a from-account and a to-account, each with its amount and currency. Lots carry an acquisition date, original and remaining quantity and unit cost in FIFO order, and a lot that a sale already used can be corrected without re-running FIFO. The model schemas type amounts, quantities and costs as `float`, and the lot store clamps "float dust". The README also lists options, equity grants, watchlists, price alerts, reconciliation, reviewed statement import, and an agent that writes to the book and can act through MCP servers, including placing trades. Those README items were not checked against code. |
+| **[open-net-worth](https://github.com/open-net-worth-ai/open-net-worth)** | 482 stars on 2026-11-14 and 507 a day later. Created 2026-10-15. One author has nearly all commits. Python, AGPL-3.0. | Models, services and README at `b863ba60` (`backend/models/transaction.py`, `backend/models/lot.py`, `backend/db/lot_store.py`, `backend/services/lots.py`, `backend/services/lot_corrections.py`, `frontend/src/components/shared/DisposalForm.tsx`). | The README recommends a desktop application holding a local book, with macOS (signed and notarized), Windows and Linux downloads, a background mode, and server and Docker options. An AI model is required at first run "with no skip"; a local model is allowed. Transactions are "two-leg": a from-account and a to-account, each with its amount and currency. Lots carry an acquisition date, original and remaining quantity and unit cost. A disposal selects lots by FIFO or by specific lots the user names, classifies each line's holding period and keeps an unknown cost as unknown; no LIFO or average method appears in the lot service. A lot that a sale already used can be corrected without re-selecting lots. The model schemas type amounts, quantities and costs as `float`, and the lot store clamps "float dust". The README also lists options, equity grants, watchlists, price alerts, reconciliation, reviewed statement import, and an agent that writes to the book and can act through MCP servers, including placing trades. Those README items were not checked against code. |
 | **[MoneyMatter](https://github.com/letehaha/moneymatter)** | 239 stars. Created 2025-02-19. One author has 2,776 of about 2,880 commits. TypeScript, PostgreSQL, Redis, AGPL-3.0. Its README offers a paid hosted plan. | Models at `906e7064` (`packages/backend/src/models`). | A transaction holds one account with `amount` and `refAmount` as `BIGINT` cents. A holding stores one `quantity`, `costBasis` and `refCostBasis` as `DECIMAL(20,10)`; a code comment derives the average price as cost basis divided by quantity, and no path in its tree names lots or a desktop build. Its "reconciliation" endpoints remove, restore and merge duplicate transactions. README: bank sync through Monobank, SimpleFIN, LunchFlow and Walutomat; CSV, OFX, QFX, YNAB, Wallet and Microsoft Money import; AI statement parsing; splits, attachments, budgets, subscriptions, loans, sharing and an MCP server. |
 
 Two further projects are noted without a row.
@@ -197,12 +199,18 @@ What this means for Rekenraam:
 
 - **Lots are not particular to Rekenraam.** Sure and open-net-worth both keep
   one lot per acquisition. Securo and MoneyMatter carry one basis figure per
-  holding. The differences the files read do show are narrower. Sure's lot
-  book applies the average method only and is rebuilt from trades.
-  open-net-worth keeps FIFO order. Rekenraam compares FIFO, LIFO, average-cost
-  and person-pooled methods and keeps dated corrections with version history.
-  Corporate actions, short positions and correction history in the other
-  projects were not compared, so no claim is made about them.
+  holding. On disposal method the files read show this: Sure applies the
+  average method only; open-net-worth offers FIFO and specific-lot selection;
+  Rekenraam records FIFO, LIFO, average cost and specific lot, resolved per
+  transaction, account or global default. Over open-net-worth, Rekenraam
+  therefore adds LIFO and average cost as recorded methods, an account-level
+  default, and read-only reports that restate gains under another method or a
+  person-pooled average beside the recorded result. Whether those matter
+  depends on a user's tax rules and was not tested. Rekenraam keeps dated
+  corrections with version history; open-net-worth corrects a sold lot
+  without re-selecting lots, and how it keeps the earlier values was not
+  read. Corporate actions, short positions and correction history in the
+  other projects were not compared, so no claim is made about them.
 - **None of the four keeps a general balanced journal in the files read.**
   Sure, Securo and MoneyMatter record a cash transaction as a row on one
   account; open-net-worth records two legs. Whether that limits a user's
