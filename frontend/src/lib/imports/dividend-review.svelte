@@ -34,7 +34,10 @@
   const finished = new SvelteSet<number>();
   // Rows with a save in flight: one row's save holds the others.
   const saving = new SvelteSet<number>();
-  $effect(() => onPending?.(saving.size > 0));
+  $effect(() => {
+    onPending?.(saving.size > 0);
+    return () => onPending?.(false);
+  });
   async function onSaved(rowID: number, id: number, repaired: boolean) {
     saved = { id, repaired }; finished.add(rowID);
     onRowSaved?.();

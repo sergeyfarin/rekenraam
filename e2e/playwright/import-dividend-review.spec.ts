@@ -140,6 +140,11 @@ test('a failed Files re-read keeps the working copy, holds writes and retries th
   await expect(commit).toBeDisabled();
   await expect(override).toBeDisabled();
   expect(reads).toHaveLength(1);
+  // The hold reaches the Dividends view: its save would write the same batch.
+  await page.getByRole('button', { name: /^Dividends/ }).click();
+  await expect(page.getByRole('button', { name: 'Record reviewed dividend', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Files', exact: true }).click();
+  await expect(retry).toBeVisible();
 
   // Retry re-reads the batch; one payment is still pending, so commit returns.
   await retry.click();
@@ -149,6 +154,74 @@ test('a failed Files re-read keeps the working copy, holds writes and retries th
   expect(reads).toHaveLength(2);
   expect(new URL(page.url()).searchParams.get('batch_id')).toBe(batch);
   await expectNoAccessibilityViolations(page, 'Files after a retried re-read');
+});
+
+async function recordFirstDividend(page: Page, f: Awaited<ReturnType<typeof dividendSource>>) {
+  const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Pending dividend', exact: true }) }).first();
+  await form.getByRole('combobox', { name: 'Income account', exact: true }).selectOption(String(f.income.id));
+  await form.getByRole('combobox', { name: 'Withholding account', exact: true }).selectOption(String(f.tax.id));
+  await form.getByLabel('Dividend amount', { exact: true }).fill('100.00');
+  await form.getByLabel('Withholding amount', { exact: true }).fill('15.00');
+  await form.getByRole('button', { name: 'Record reviewed dividend', exact: true }).click();
+}
+
+test('a Dividends save in flight keeps holding Files writes after a view change, until it lands (#567 review)', async ({ page }) => {
+  const f = await dividendSource(page, 2);
+  const batch = new URL(page.url()).searchParams.get('batch_id')!;
+  const commit = page.getByRole('button', { name: 'Commit to ledger' });
+  const override = page.getByRole('checkbox', { name: 'Override reconciliation guards', exact: true });
+  await expect(commit).toBeEnabled();
+  let release!: () => void;
+  let started!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  const requested = new Promise<void>(resolve => { started = resolve; });
+  await page.route(`**/api/v1/imports/${batch}/rows/*/review-dividend`, async route => { started(); await held; await route.continue(); });
+  await page.getByRole('button', { name: /^Dividends/ }).click();
+  await recordFirstDividend(page, f);
+  await requested;
+  try {
+    // Leaving Dividends does not drop the save: Files still waits for it.
+    await page.getByRole('button', { name: 'Files', exact: true }).click();
+    await expect(commit).toBeVisible();
+    await expect(commit).toBeDisabled();
+    await expect(override).toBeDisabled();
+  } finally { release(); }
+  // The save lands, Files re-reads the batch, and the remaining payment can
+  // be committed again.
+  await expect(commit).toBeEnabled();
+  await expect(override).toBeEnabled();
+  expect((await f.activity()).transactions).toHaveLength(1);
+  await page.getByRole('button', { name: /^Dividends/ }).click();
+  await expect(page.getByText('Dividend recorded.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Record reviewed dividend', exact: true })).toBeEnabled();
+});
+
+test('Import another file leaves a batch whose re-read keeps failing (#567 review)', async ({ page }) => {
+  const f = await dividendSource(page, 2);
+  const batch = new URL(page.url()).searchParams.get('batch_id')!;
+  await page.getByRole('button', { name: /^Dividends/ }).click();
+  await recordFirstDividend(page, f);
+  await expect(page.getByText('Dividend recorded.', { exact: true })).toBeVisible();
+  await page.route(`**/api/v1/imports/${batch}?*`, route => route.fulfill({
+    status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'SERVICE_UNAVAILABLE', message: 'Try again' } })
+  }));
+  await page.getByRole('button', { name: 'Files', exact: true }).click();
+  const retry = page.getByRole('button', { name: 'Retry', exact: true });
+  await expect(retry).toBeVisible();
+  await retry.click();
+  await expect(retry).toBeVisible();
+  await page.getByRole('button', { name: 'Import another file', exact: true }).click();
+  // The batch stays as it is on the server; Files starts a new import with
+  // nothing held.
+  await expect(page.getByText('Upload a file', { exact: true })).toBeVisible();
+  await expect(retry).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Commit to ledger' })).toHaveCount(0);
+  expect(new URL(page.url()).searchParams.get('batch_id')).toBeNull();
+  await page.unroute(`**/api/v1/imports/${batch}?*`);
+  const kept = await apiJSON<{ rows: unknown[] }>(page, 'GET', `/api/v1/imports/${batch}`);
+  expect(kept.rows).toHaveLength(2);
+  await page.getByRole('button', { name: /^Dividends/ }).click();
+  await expect(page.getByRole('button', { name: 'Record reviewed dividend', exact: true }).first()).toBeEnabled();
 });
 
 test('[acceptance] historical cash dividend repair keeps the original payment and owner note on a phone', async ({ page }) => {

@@ -1029,9 +1029,11 @@ discard, source correction, match check, gain review, split/short link,
 reconciliation-override review) can start until that read lands. The same
 holds for the result view's re-reads, and every write (a link and the
 override review included) holds the others and navigation away from the
-batch. Across views of one batch, a Files write holds the Dividends view's
-saves and a Dividends save holds Files writes, so the two never write at
-once; switching views stays allowed. A link that
+batch. Across views of one batch, a Files write, re-read or failed re-read
+holds the Dividends view's saves and a Dividends save holds Files writes, so
+the two never write at once; switching views stays allowed. Once opened, the
+Dividends view stays mounted like Files, so a save in flight keeps holding
+Files writes after a view change and releases them only when it lands. A link that
 finishes supersedes any re-read in flight with its own, and a later re-read
 supersedes it in turn. A failed re-read keeps the working copy and its
 choices, holds writes and offers a retry of the re-read, or *Import another

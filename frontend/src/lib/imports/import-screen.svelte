@@ -190,6 +190,8 @@
   // Dividends save is one the Dividends view owns.
   let linkPending = $state(false);
   let dividendPending = $state(false);
+  let dividendsOpened = $state(false);
+  $effect(() => { if (view === 'dividends') untrack(() => (dividendsOpened = true)); });
   $effect(() => {
     if (view !== 'files' || !filesStale || batchBusy) return;
     untrack(() => {
@@ -339,8 +341,10 @@
   const batchWriting = $derived(filesWriting || dividendPending);
   // A resync or a result-view re-read replaces the working copy, so no batch
   // write may start from the stale one until it lands, nor after a resync
-  // failed until it is retried. Reads do not hold navigation.
-  const batchBusy = $derived(batchWriting || resyncing || reviewChangedPending || resyncError !== undefined);
+  // failed until it is retried; that holds Dividends saves too. Reads do not
+  // hold navigation.
+  const filesBusy = $derived(filesWriting || resyncing || reviewChangedPending || resyncError !== undefined);
+  const batchBusy = $derived(filesBusy || dividendPending);
   beforeNavigate(navigation => {
     if (!batchWriting) return;
     const next = navigation.to?.url;
@@ -1455,9 +1459,15 @@
     { value: 'dividends', label: dividendBadge ? `${m.import_view_dividends()} (${dividendBadge})` : m.import_view_dividends() }
   ]} />
 </div>
-{#if view === 'dividends'}
-  <DividendReview batchID={linkedBatchID} embedded held={filesWriting} onPending={(value) => (dividendPending = value)} onSaved={() => (filesStale = true)} />
-{:else if view === 'connections'}
+<!-- Once opened, Dividends stays mounted like Files: a save it started keeps
+     holding Files writes after a view change, and releases them only when it
+     lands (#567 review). -->
+{#if view === 'dividends' || dividendsOpened}
+  <div hidden={view !== 'dividends'}>
+    <DividendReview batchID={linkedBatchID} embedded held={filesBusy} onPending={(value) => (dividendPending = value)} onSaved={() => (filesStale = true)} />
+  </div>
+{/if}
+{#if view === 'connections'}
   <div class="max-w-3xl space-y-6">
     <!-- Online connections panel -->
     <Panel>

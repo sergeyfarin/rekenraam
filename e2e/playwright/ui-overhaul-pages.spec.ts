@@ -10,7 +10,14 @@ import type { Page } from '@playwright/test';
 // readyForLedger's system-account setup also creates an ordinary starter cash
 // account per currency, so a book with "no user accounts" must archive it.
 async function archiveEveryUserAccount(page: Page, csrfToken: string) {
-  const { accounts } = await apiJSON<{ accounts: Array<{ id: number; status: string; account_class: string }> }>(page, 'GET', '/api/v1/accounts?limit=500');
+  type Listing = { accounts: Array<{ id: number; status: string; account_class: string }>; next_cursor?: string };
+  const accounts: Listing['accounts'] = [];
+  let cursor: string | undefined;
+  do {
+    const listing: Listing = await apiJSON<Listing>(page, 'GET', `/api/v1/accounts?limit=500${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
+    accounts.push(...listing.accounts);
+    cursor = listing.next_cursor;
+  } while (cursor);
   const ordinary = accounts.filter(item => item.account_class === 'asset' || item.account_class === 'liability');
   for (const account of ordinary) {
     if (account.status === 'active') await apiJSON(page, 'POST', `/api/v1/accounts/${account.id}/close`, csrfToken);
