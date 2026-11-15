@@ -113,10 +113,15 @@ Pattern: a once-a-minute ticker service started from `command.go`
 
 ## Testing workers
 
-Drive the real worker against a temp DB (`db.Open` + `t.TempDir()`) and a fake
-HTTP server. Must-have cases (all exist in `import_fetch_worker_test.go` /
+Drive the real worker against an isolated migrated database
+(`testdb.Open(t)`, as `newImportFetchTestService` does) and a fake HTTP
+server. Must-have cases (all exist in `import_fetch_worker_test.go` /
 `fetcher_test.go` — mirror them): concurrency race (N goroutines, exactly one
 wins), failure-leaves-no-stranded-state, continuation across chunks without
 duplication, cursor boundary at exact timestamp, terminal-vs-retryable
 classification. Use test seams like `SetMaxPagesForTest` rather than giant
 fixtures.
+
+Shipped queue and FX-refresh bugs, with their named regressions, are entries
+5, 50, 75 and 76 in
+`.claude/skills/validate-and-ship/bug-classes/imports-background.md`.

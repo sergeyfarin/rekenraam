@@ -1,56 +1,95 @@
 # Rekenraam Skill Library
 
-Six core skills that let a junior/mid-level engineer or a smaller model
-(Sonnet-class, Codex/ChatGPT) work on this project at the standard it was
-built to. Each is a self-contained `SKILL.md` with hard rules, real file
-references, exact commands, and this repo's known bug classes.
+Twelve skills that let any agent work on this project at the standard it was
+built to:
 
-| Skill | Use when |
-|---|---|
-| `ledger-invariants` | Touching money, transactions, postings, reconciliation, investments, prices/FX — read **before** coding |
-| `backend-slice` | Any Go change: endpoints, services, repositories, migrations, backend tests |
-| `api-contract` | Adding/changing an `/api/v1` endpoint, schema, or error code |
-| `frontend-screen` | Anything under `frontend/src` |
-| `background-work` | Workers, schedulers, provider fetching, FX refresh, online import |
-| `validate-and-ship` | Before every commit; running/debugging the app; deciding which doc to update |
+- Six **task skills** say how a session runs from start to finish. The two
+  everyday modes are `work-issue` (implement, then open a pull request) and
+  `review-pr` (review only, change nothing). Four cover recurring work:
+  `shape-issue`, `update-dependencies`, `drift-sweep`, `sweep-bug-class`.
+- Six **area skills** hold the rules for a part of the codebase:
+  `ledger-invariants`, `backend-slice`, `api-contract`, `frontend-screen`,
+  `background-work`, `validate-and-ship`.
 
-Typical task = 2–3 skills. Example: "add a cashflow report endpoint + screen"
-→ `backend-slice` + `api-contract` + `frontend-screen`, then
-`validate-and-ship`. Anything financial also gets `ledger-invariants`.
+Which skill covers which work is in `AGENTS.md` → Task Modes and Task Skills,
+because every harness loads that file. `docs/agent-task-playbook.md` is the
+owner's guide to starting each one. This file is for maintaining the library.
 
-## How to use with Claude Code (any model, including Sonnet)
+## Layout
 
-Nothing to configure — skills in `.claude/skills/` are discovered
-automatically and invoked when the task matches the description. To force one,
-mention it: *"Apply the ledger-invariants skill, then add a void-checkpoint
-endpoint."* With Sonnet or other smaller models, be explicit: name the 2–3
-relevant skills in your first prompt rather than relying on auto-triggering.
+```
+.claude/skills/<name>/SKILL.md      rules for every use of the skill
+.claude/skills/<name>/<topic>.md    reference file, read when SKILL.md says so
+.agents/skills -> ../.claude/skills symlink, so Codex finds the same files
+```
 
-Suggested prompt shape for a Sonnet session:
+Reference files today: `ledger-invariants/investments.md` (the investment
+subledger contract) and `validate-and-ship/bug-classes/<area>.md` (the
+catalogue of bugs this repo has shipped, split by area).
 
-> Read `.claude/skills/backend-slice/SKILL.md` and
-> `.claude/skills/api-contract/SKILL.md`, then implement <task>. Before
-> committing, run through `.claude/skills/validate-and-ship/SKILL.md`.
+## How each harness finds them
 
-## How to use with Codex / ChatGPT (or any non-Claude agent)
+| Harness | Instructions | Skills | Force one | Verify |
+|---|---|---|---|---|
+| Claude Code | `CLAUDE.md`, which imports `AGENTS.md` | `.claude/skills/` | `/skill-name` | `/memory` lists `AGENTS.md`; `/skills` lists the skills |
+| Codex | `AGENTS.md` | `.agents/skills/` (the symlink) | `$skill-name` | `codex debug prompt-input "hello"` shows both |
+| OpenCode | `AGENTS.md` (it prefers it over `CLAUDE.md`) | `.claude/skills/` | `@skill-name` | not yet verified here |
 
-These tools don't read `.claude/skills/` on their own. Two options:
+Claude Code reads `AGENTS.md` by itself only from v2.1.277, and only while no
+`CLAUDE.md` or `CLAUDE.local.md` exists in the directory or above it. The
+one-line `CLAUDE.md` (`@AGENTS.md`) makes it load in every version, in the
+default *Project instructions* setting and in `claude-md-and-agents-md`, and
+when someone adds a personal `CLAUDE.local.md`. The `managed-only` setting
+skips every project instruction file, this import included; a session under
+it has no repository guidance.
 
-1. **Reference by path** (Codex CLI and other repo-aware agents): `AGENTS.md`
-   points here; additionally paste into the task prompt:
-   *"Follow `.claude/skills/<name>/SKILL.md` for this work."*
-2. **Paste inline** (chat UIs without repo access): copy the relevant
-   `SKILL.md` bodies into the system/first message. `ledger-invariants` +
-   `validate-and-ship` are the two to always include for financial changes.
+All three load only each skill's `name` and `description` up front, the
+`SKILL.md` body when the skill is used, and a reference file only when the
+body tells the agent to read it. Three consequences:
+
+- The description decides whether a skill is used at all. It says what the
+  skill covers and when to use it, in words a task prompt would contain.
+- A reference file nobody is told to read is never read. `SKILL.md` names each
+  one and the work that needs it.
+- When a session should not depend on automatic selection, start the prompt
+  with the task mode: `/work-issue 592`, `$work-issue 592` or
+  `@work-issue 592`; `/review-pr 585` and its equivalents for a review. Name
+  area skills too when the area is not obvious from the issue.
 
 ## Rules for maintaining this library
 
-- Keep it small. A new skill must earn its place: recurring task shape, real
+- Keep it small. A new skill must earn its place: a recurring task shape, real
   failure modes, not derivable from a quick read of the code.
+- A task skill is a procedure and an area skill is a rule set. Keep them
+  apart: a task skill points at area skills, and no area rule is restated in
+  it. The three maintenance skills reuse `work-issue` for branching, triage
+  and the pull request instead of repeating it.
+- Adding, renaming or removing a skill updates the routing table in
+  `AGENTS.md` and the list in `docs/agent-task-playbook.md` in the same
+  change.
+- Keep `SKILL.md` lean, about 250 lines at most. It holds what applies to
+  every use of the skill. Detail for one family or one area goes in a
+  reference file. A skill that grows by one appended paragraph per issue is
+  turning into a changelog: `validate-and-ship` reached 1,000 lines that way
+  before its catalogue moved to `bug-classes/`.
+- Write the rule, then its named test. The issue number points at the story;
+  the story itself belongs in the issue.
+- Frontmatter is `name` and `description` only, and `name` equals the
+  directory name. That subset is what all three harnesses read.
+- Refer to files in another skill by their path from the repo root.
 - When a convention changes in `docs/`, update the affected skill in the same
-  change — skills that drift from `docs/conventions.md` are worse than none.
-  The docs govern; skills summarize and point.
-- When a new bug class ships, add it to the `validate-and-ship` review
-  checklist and file any remaining work in GitHub Issues so it is checked
-  forever after. Use its GitHub number; `docs/backlog.md` preserves existing
-  historical aliases rather than allocating new IDs.
+  change. The docs govern; skills summarize and point.
+- When a new bug class ships, give it the next free number, add the entry to
+  the matching `validate-and-ship/bug-classes/<area>.md` and its title to the
+  list in `validate-and-ship/SKILL.md`, in the same change as the fix.
+  Numbers are cited from code comments, so they are never reused or
+  renumbered. File remaining work as a GitHub issue; `docs/backlog.md` keeps
+  historical aliases only.
+- `AGENTS.md` is the only repo-wide instruction file. `CLAUDE.md` stays the
+  single line `@AGENTS.md`. Do not add harness-specific copies or content
+  (in `CLAUDE.md`, Copilot or Cursor instruction files); they drift from it.
+- Every `gh ... list` and `gh api` survey in a skill passes `--limit` or
+  `--paginate`, and every `--json` field must exist in the oldest `gh` in use
+  (2.46 here). Run a command once before putting it in a skill, and run its
+  failure and empty cases too, under `set -euo pipefail`: a guard written as
+  `test … || echo` does not stop the next line.
