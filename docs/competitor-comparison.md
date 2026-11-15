@@ -22,6 +22,10 @@ Rekenraam's R13 status was reconciled on 2026-10-26 at `b9c57ea3`; the
 now replaces the earlier local returns gap. This updates local capability
 status only; competitor sources retain their original review dates.
 
+The [self-hosted newcomers section](#self-hosted-newcomers-2026-11-14) was
+added on 2026-11-14. It is the one place this document records popularity,
+and it reads repository schema files rather than vendor documentation.
+
 ## Verified comparison
 
 | Product | Documented strengths relevant here | Boundary or implication for Rekenraam |
@@ -142,3 +146,151 @@ Actual's richer imports/rules, Firefly III's routine management and PocketSmith'
 cross-currency planning remain reasons to test the whole daily workflow, even
 though the recent delivery effort concentrated on investments. The roadmap's
 audit coverage includes those areas. Market-wide parity is not a release gate.
+
+## Self-hosted newcomers (2026-11-14)
+
+Added after the owner asked whether newer self-hosted projects make Rekenraam
+redundant, and whether joining one would be better than continuing. Because
+the question is about the field, this section records stars and contributor
+counts, which the rest of this document leaves out. Counts come from the
+GitHub API on 2026-11-14.
+
+**Corrected 2026-11-15** after an independent review of PR #581. The first
+version said no lot table was found in Sure, described open-net-worth from
+its README alone, said none of the listed projects addressed desktop users,
+and called joining another project impractical. The first and third were
+wrong at the cited commits, the second missed lots, corrections and a desktop
+application, and the fourth went beyond the evidence. A second review round
+the same day added open-net-worth's specific-lot selection, which the first
+correction had left out. The rows, implications and proposals below are the
+corrected text.
+
+Each row names its evidence. "Models" means the schema, model or service
+files named were read at the commit given. "README" means only the project's
+own description was read. Nothing was installed or run. No claim is made
+about code quality, security, or behaviour beyond the files read, and an
+unread feature is not an absent one.
+
+Field size: GitHub search returned 6,010 repositories tagged
+`personal-finance` created since 2026-01-01, and 288 tagged both
+`self-hosted` and `finance`. Topic tags are self-assigned and include guides,
+tax tools and chat bots, so these numbers bound the activity; they do not
+count comparable apps. The descriptions of the most-starred 2026 entries lead
+with an AI agent, an MCP server or bank sync.
+
+| Project | Size and age | Evidence | What the evidence shows |
+|---|---|---|---|
+| **[Sure](https://github.com/we-promise/sure)** (community fork of Maybe) | 15,144 stars. Forked 2025-07-23. Several maintainers. 929 open issues and pull requests. Ruby, PostgreSQL, AGPL-3.0. | Models at `c9cc6d24` (`db/schema.rb`, the `holding_lots` migration, `app/models/holding/lot_book.rb`, `desktop/README.md`). | An `entries` row holds one account and one `decimal(19,4)` amount, with a reconciled status and a statement reference. A transfer pairs an inflow and an outflow transaction. `holding_lots` (migration dated 2026-10-23) keeps one lot per acquisition with its date, source entry, quantity, currency and unit cost. The lot book is rebuilt by applying trades in order; a disposal relieves every open lot pro rata at the average cost, a split restates each lot, and a transfer-in has unknown cost. No other disposal method appears in that file. `desktop/` is a macOS shell that connects to a Sure server the user already runs. |
+| **[ezBookkeeping](https://github.com/mayswind/ezbookkeeping)** | 6,073 stars. Created 2020. One author has 3,627 of about 3,745 commits. Go with SQLite, MySQL or PostgreSQL. MIT. | README. | Imports CSV, Excel, OFX, QFX, QIF, IIF, CAMT.052/053, MT940, GnuCash, Firefly III and Beancount files. Scheduled transactions, receipt recognition, an MCP server, PWA. The README does not mention double entry, investments or reconciliation. The closest stack to Rekenraam's. |
+| **[Securo](https://github.com/securo-finance/securo)** | 4,499 stars. Created 2026-03-08. Top contributor has 333 of 729 commits; about 99 contributors. 273 open issues and pull requests. Python, PostgreSQL, AGPL-3.0. | Models at `83301a15` (`backend/app/models`). | A `transactions` row holds one account, a `Numeric(15,2)` amount, a debit/credit type and an optional `transfer_pair_id`. `asset_transactions` are buys and sells with quantity, price and fee; no path in its tree names lots or a desktop build. Its `reconciliation_*` tables store rules and suggestions for matching transactions to expected items, not statement checkpoints. README: bank sync through Pluggy, Enable Banking and SimpleFIN; OFX, QIF, CAMT and CSV import; rules, budgets, goals, workspaces with roles, OIDC, passkeys, optional LLM agents and plugins. |
+| **[open-net-worth](https://github.com/open-net-worth-ai/open-net-worth)** | 482 stars on 2026-11-14 and 507 a day later. Created 2026-10-15. One author has nearly all commits. Python, AGPL-3.0. | Models, services and README at `b863ba60` (`backend/models/transaction.py`, `backend/models/lot.py`, `backend/db/lot_store.py`, `backend/services/lots.py`, `backend/services/lot_corrections.py`, `frontend/src/components/shared/DisposalForm.tsx`). | The README recommends a desktop application holding a local book, with macOS (signed and notarized), Windows and Linux downloads, a background mode, and server and Docker options. An AI model is required at first run "with no skip"; a local model is allowed. Transactions are "two-leg": a from-account and a to-account, each with its amount and currency. Lots carry an acquisition date, original and remaining quantity and unit cost. A disposal selects lots by FIFO or by specific lots the user names, classifies each line's holding period and keeps an unknown cost as unknown; no LIFO or average method appears in the lot service. A lot that a sale already used can be corrected without re-selecting lots. The model schemas type amounts, quantities and costs as `float`, and the lot store clamps "float dust". The README also lists options, equity grants, watchlists, price alerts, reconciliation, reviewed statement import, and an agent that writes to the book and can act through MCP servers, including placing trades. Those README items were not checked against code. |
+| **[MoneyMatter](https://github.com/letehaha/moneymatter)** | 239 stars. Created 2025-02-19. One author has 2,776 of about 2,880 commits. TypeScript, PostgreSQL, Redis, AGPL-3.0. Its README offers a paid hosted plan. | Models at `906e7064` (`packages/backend/src/models`). | A transaction holds one account with `amount` and `refAmount` as `BIGINT` cents. A holding stores one `quantity`, `costBasis` and `refCostBasis` as `DECIMAL(20,10)`; a code comment derives the average price as cost basis divided by quantity, and no path in its tree names lots or a desktop build. Its "reconciliation" endpoints remove, restore and merge duplicate transactions. README: bank sync through Monobank, SimpleFIN, LunchFlow and Walutomat; CSV, OFX, QFX, YNAB, Wallet and Microsoft Money import; AI statement parsing; splits, attachments, budgets, subscriptions, loans, sharing and an MCP server. |
+
+Two further projects are noted without a row.
+[Paisa](https://github.com/ananthakumaran/paisa) (3,236 stars) describes
+itself as built on the ledger double-entry tool, so it belongs with the
+plain-text-accounting audience that adoption asset #335 already addresses.
+[FireFunds](https://github.com/nicolopozzato/firefunds) (created 2026-10-19,
+18 commits, no stars) claims double entry with average-cost investments and
+lists imports and reconciliation as planned; it is the only 2026 entry found
+that leads with the ledger.
+
+What this means for Rekenraam:
+
+- **Lots are not particular to Rekenraam.** Sure and open-net-worth both keep
+  one lot per acquisition. Securo and MoneyMatter carry one basis figure per
+  holding. On disposal method the files read show this: Sure applies the
+  average method only; open-net-worth offers FIFO and specific-lot selection;
+  Rekenraam records FIFO, LIFO, average cost and specific lot, resolved per
+  transaction, account or global default. Over open-net-worth, Rekenraam
+  therefore adds LIFO and average cost as recorded methods, an account-level
+  default, and read-only reports that restate gains under another method or a
+  person-pooled average beside the recorded result. Whether those matter
+  depends on a user's tax rules and was not tested. Rekenraam keeps dated
+  corrections with version history; open-net-worth corrects a sold lot
+  without re-selecting lots, and how it keeps the earlier values was not
+  read. Corporate actions, short positions and correction history in the
+  other projects were not compared, so no claim is made about them.
+- **None of the four keeps a general balanced journal in the files read.**
+  Sure, Securo and MoneyMatter record a cash transaction as a row on one
+  account; open-net-worth records two legs. Whether that limits a user's
+  workflows was not tested.
+- **Exact amounts differ in one project.** Sure, Securo and MoneyMatter use
+  integer cents or fixed decimals. open-net-worth's model schemas use `float`.
+  Rekenraam stores exact decimals by rule. Securo's two-decimal amount column
+  is a boundary for currencies and commodities with other scales. Whether
+  either point matters in use was not tested.
+- **Adoption has not followed ledger depth.** Securo gathered its stars in
+  eight months without lots or a journal. The fast-growing projects lead with
+  bank sync, wide import format lists, rules and AI or MCP access. Those are
+  the areas Rekenraam has placed deliberately later (R6, feeds) or has not
+  authorized (AI/MCP). A project listing an MCP server shows that it is
+  available there, not that users expect it or keep using it.
+- **Desktop installation is already offered in this field.** open-net-worth
+  recommends a local desktop application on three operating systems, and Sure
+  ships a macOS shell for a server. A desktop edition of Rekenraam would lower
+  its installation barrier. It would not reach an audience the others ignore.
+- **No evaluated project has yet shown a cheaper route to the workflows the
+  owner needs.** That is the supported conclusion, and it is weaker than
+  "joining is impractical". Joining could mean accepting another architecture
+  and contributing selected improvements. The comparison that matters is the
+  remaining effort to meet the owner's needs plus ongoing maintenance, and
+  this review did not measure it: nothing was installed or trialled, and
+  Paisa, FireFunds and ezBookkeeping were read by README only. open-net-worth
+  is the closest in scope. Its required AI model, its agent that writes to
+  the book and its `float` amounts are the points a trial would have to weigh.
+- **Rekenraam has no adoption evidence yet.** The repository is public with one
+  star and no tagged release. The delivered capabilities justify testing it
+  with users; they do not establish demand or a lasting advantage. The
+  [public-release gates](roadmap.md#public-release-gates), not feature parity,
+  are what stand between the delivered core and any outside user.
+
+The owner stated the order of success on 2026-11-15, recorded in
+[the requirements](product-requirements.md): personal utility first, then
+popularity and recognition. Each has its own test.
+
+- **Personal utility** is tested by the owner's household dry run (#336) and
+  by continued use after it: import, reconciliation, correction, reports,
+  backup and restore on real records. Competitors do not change this test.
+  If the dry run shows that the owner would rather not keep their books here,
+  proposal 6 applies.
+- **Popularity and recognition** are tested by proposal 4, after the release.
+  Work aimed only at this second measure is run as a bounded experiment with a
+  stated question, and it does not displace work the owner needs for the first.
+
+Proposals raised by this review. The roadmap's order is unchanged, and its
+open product decisions now list #582 and #583. The owner confirmed the first
+proposal on 2026-11-14 and the others await a decision:
+
+1. Keep the `v0.1.0` and announcement gates ahead of further investment depth.
+   Confirmed by the owner; it agrees with the roadmap's current order.
+2. Consider importers for Firefly III, Actual and Sure exports as migration
+   paths when R6 is scheduled.
+3. Decide explicitly whether a read-only MCP server fits the read-only stance
+   toward outside systems. The October recheck above did not authorize one.
+   [#582](https://github.com/sergeyfarin/rekenraam/issues/582) keeps it
+   optional and starts from one concrete job the owner would use, such as
+   explaining a reconciliation discrepancy, before any wider set of tools. It
+   is outside the `v0.1.0` milestone.
+4. Make the adoption checkpoint active. After the release, recruit a few
+   relevant users, people with accounts or investments in several currencies,
+   and observe whether they keep using it. Record where each one stops:
+   installation, migration or fit. Waiting to see whether users appear after
+   an announcement would not tell weak distribution, difficult installation,
+   migration friction and weak fit apart.
+5. Treat a desktop edition as an installation experiment. Raised by the owner
+   on 2026-11-14, after the review above. A stable Wails v3 (`v3.0.0` on
+   2026-10-26) removes the framework prerequisite the owner set in September;
+   it does not establish demand, and other projects already offer desktop
+   installation. The
+   [feasibility review](reviews/desktop-application-feasibility-2026-09-19.md)'s
+   one-OS spike is proposed in
+   [#583](https://github.com/sergeyfarin/rekenraam/issues/583), after the
+   `v0.1.0` tag, and it must record which installation problem it solves and
+   by how much. Native desktop and mobile apps stay out of scope in the
+   requirements until an ADR changes that; a native mobile app is not
+   proposed. Whether #582 or #583 comes first follows the success order: the
+   one the owner would use themself.
+6. Before any decision to adopt or join another project, run a bounded trial
+   of the owner's required workflows in open-net-worth and Sure. This is not
+   proposed as current work. It is the step to take if the dry run goes badly.
