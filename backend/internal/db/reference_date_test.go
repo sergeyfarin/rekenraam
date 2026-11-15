@@ -69,6 +69,16 @@ func TestCurrentReferenceVersionsFailsClosedOnInvalidDate(t *testing.T) {
 			require.ErrorContains(t, err, "no such function: invalid_reference_date", "%s %q", kind, malformed)
 		}
 	}
+
+	// The failure is at prepare time, so it holds even when a bound value makes
+	// the predicate containing the subquery short-circuit at run time. (A
+	// literal "0 AND …" is folded away by SQLite's parser together with the
+	// subquery, so no reference row is read at all; that case needs no guard.)
+	dated := WithReferenceDate(context.Background(), "2026-02-30")
+	var count int
+	err := database.QueryRowContext(dated, `SELECT COUNT(*) FROM accounts a
+		WHERE ? AND EXISTS (SELECT 1 FROM `+CurrentReferenceVersions(dated, "account")+` v WHERE v.account_id = a.id)`, 0).Scan(&count)
+	require.ErrorContains(t, err, "no such function: invalid_reference_date")
 }
 
 // The sentinel must not depend on query scope. SQLite resolves an unknown
@@ -79,9 +89,14 @@ func TestCurrentReferenceVersionsFailsClosedOnInvalidDate(t *testing.T) {
 func TestCurrentReferenceVersionsSentinelIgnoresCallerColumns(t *testing.T) {
 	t.Parallel()
 	database, _, _ := migratedInvestmentTestDatabase(t)
-	dated := WithReferenceDate(context.Background(), "2026-02-30")
-	var count int
-	err := database.QueryRowContext(dated, `SELECT (SELECT COUNT(*) FROM `+CurrentReferenceVersions(dated, "account")+` v)
-		FROM (SELECT '2026-02-03' AS invalid_reference_date) candidate`).Scan(&count)
+	query := func(ctx context.Context) error {
+		var count int
+		return database.QueryRowContext(ctx, `SELECT (SELECT COUNT(*) FROM `+CurrentReferenceVersions(ctx, "account")+` v)
+			FROM (SELECT '2026-02-03' AS invalid_reference_date) candidate`).Scan(&count)
+	}
+
+	// Control: with a valid date the shadowing caller column is harmless.
+	require.NoError(t, query(WithReferenceDate(context.Background(), "2026-02-03")))
+	err := query(WithReferenceDate(context.Background(), "2026-02-30"))
 	require.ErrorContains(t, err, "no such function: invalid_reference_date")
 }

@@ -22,8 +22,9 @@ type referenceDay struct {
 // do not use this value. It is context-local, never connection or process state.
 //
 // The date must be YYYY-MM-DD. Callers validate request input before getting
-// here; an invalid value is kept only so every query that would select
-// reference versions with it fails instead of silently using a different day.
+// here; an invalid pin is recorded (as a flag, without its text) only so every
+// query that would select reference versions with it fails instead of silently
+// using a different day.
 func WithReferenceDate(ctx context.Context, date string) context.Context {
 	value := referenceDay{empty: date == ""}
 	if parsed, err := time.Parse(time.DateOnly, date); err == nil {
@@ -63,6 +64,9 @@ func (d referenceDay) literal() string {
 // enclosing scope, so a caller table or alias could satisfy a column sentinel
 // when the helper sits in a correlated subquery. Function names are not
 // scope-resolved, and this package registers no SQL functions (sqlite.go).
+// The check runs at prepare time, so a run-time short-circuit (a bound false
+// before AND) cannot skip it; only a literal "0 AND …" that the parser folds
+// away avoids it, and that removes the whole reference read with it.
 const invalidReferenceDateSQL = "invalid_reference_date()"
 
 // referenceDateSQL is the SQL expression for the reference date. Unpinned
