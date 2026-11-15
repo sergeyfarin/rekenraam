@@ -179,6 +179,9 @@ test('a Dividends save in flight keeps holding Files writes after a view change,
   await page.getByRole('button', { name: /^Dividends/ }).click();
   await recordFirstDividend(page, f);
   await requested;
+  // The hidden Dividends view pauses its reads while Files shows.
+  const queueReads: string[] = [];
+  page.on('request', request => { if (new URL(request.url()).pathname === '/api/v1/import-dividends') queueReads.push(request.url()); });
   try {
     // Leaving Dividends does not drop the save: Files still waits for it.
     await page.getByRole('button', { name: 'Files', exact: true }).click();
@@ -191,9 +194,12 @@ test('a Dividends save in flight keeps holding Files writes after a view change,
   await expect(commit).toBeEnabled();
   await expect(override).toBeEnabled();
   expect((await f.activity()).transactions).toHaveLength(1);
+  expect(queueReads).toHaveLength(0);
+  // Back on Dividends, the queue invalidated by the save is read again.
   await page.getByRole('button', { name: /^Dividends/ }).click();
   await expect(page.getByText('Dividend recorded.', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Record reviewed dividend', exact: true })).toBeEnabled();
+  expect(queueReads.length).toBeGreaterThan(0);
 });
 
 test('Import another file leaves a batch whose re-read keeps failing (#567 review)', async ({ page }) => {
@@ -222,6 +228,8 @@ test('Import another file leaves a batch whose re-read keeps failing (#567 revie
   expect(kept.rows).toHaveLength(2);
   await page.getByRole('button', { name: /^Dividends/ }).click();
   await expect(page.getByRole('button', { name: 'Record reviewed dividend', exact: true }).first()).toBeEnabled();
+  // What was recorded for the batch left behind is not shown for the queue.
+  await expect(page.getByText('Dividend recorded.', { exact: true })).toHaveCount(0);
 });
 
 test('[acceptance] historical cash dividend repair keeps the original payment and owner note on a phone', async ({ page }) => {

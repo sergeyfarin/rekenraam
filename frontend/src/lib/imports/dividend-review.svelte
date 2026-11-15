@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createInfiniteQuery, createQuery, useQueryClient } from '@tanstack/svelte-query';
   import { SvelteSet } from 'svelte/reactivity';
+  import { untrack } from 'svelte';
   import PageHeader from '#lib/components/page-header.svelte';
   import Panel from '#lib/components/panel.svelte';
   import APIFormError from '#lib/components/api-form-error.svelte';
@@ -16,22 +17,31 @@
   // onSaved tells an embedding Import screen that a batch row changed under
   // its Files working copy.
   // held and onPending serialize its saves with the embedding screen's other
-  // batch writes (#567 review).
-  let { batchID, embedded = false, onSaved: onRowSaved, held = false, onPending }: { batchID?: number; embedded?: boolean; onSaved?: () => void; held?: boolean; onPending?: (pending: boolean) => void } = $props();
+  // batch writes (#567 review). active is false while an embedding screen
+  // keeps this view mounted but hidden: its reads pause, and an invalidated
+  // read refetches when the view shows again.
+  let { batchID, embedded = false, onSaved: onRowSaved, held = false, onPending, active = true }: { batchID?: number; embedded?: boolean; onSaved?: () => void; held?: boolean; onPending?: (pending: boolean) => void; active?: boolean } = $props();
   const client = useQueryClient();
   const session = createQuery(() => authSessionQueryOptions());
-  const accounts = createQuery(() => accountsQueryOptions());
-  const currencies = createQuery(() => currenciesQueryOptions());
-  const instruments = createQuery(() => investmentInstrumentsQueryOptions());
+  const accounts = createQuery(() => ({ ...accountsQueryOptions(), enabled: active }));
+  const currencies = createQuery(() => ({ ...currenciesQueryOptions(), enabled: active }));
+  const instruments = createQuery(() => ({ ...investmentInstrumentsQueryOptions(), enabled: active }));
   const reviews = createInfiniteQuery(() => ({
     queryKey: [...importDividendReviewsQueryKey, batchID], initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam }) => getImportDividendReviews(batchID, pageParam), getNextPageParam: (last) => last.next_cursor ?? undefined
+    queryFn: ({ pageParam }) => getImportDividendReviews(batchID, pageParam), getNextPageParam: (last) => last.next_cursor ?? undefined,
+    enabled: active
   }));
   const rows = $derived(reviews.data?.pages.flatMap(page => page.rows) ?? []);
   const loading = $derived(reviews.isPending || accounts.isPending || currencies.isPending || instruments.isPending);
   const loadError = $derived(reviews.error ?? accounts.error ?? currencies.error ?? instruments.error);
   let saved = $state<{ id: number; repaired: boolean } | null>(null);
   const finished = new SvelteSet<number>();
+  // An embedding screen reuses this view across batches: what was recorded
+  // for one batch is not shown for the next.
+  $effect.pre(() => {
+    void batchID;
+    untrack(() => { saved = null; finished.clear(); });
+  });
   // Rows with a save in flight: one row's save holds the others.
   const saving = new SvelteSet<number>();
   $effect(() => {

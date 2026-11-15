@@ -1464,7 +1464,7 @@
      lands (#567 review). -->
 {#if view === 'dividends' || dividendsOpened}
   <div hidden={view !== 'dividends'}>
-    <DividendReview batchID={linkedBatchID} embedded held={filesBusy} onPending={(value) => (dividendPending = value)} onSaved={() => (filesStale = true)} />
+    <DividendReview batchID={linkedBatchID} embedded active={view === 'dividends'} held={filesBusy} onPending={(value) => (dividendPending = value)} onSaved={() => (filesStale = true)} />
   </div>
 {/if}
 {#if view === 'connections'}

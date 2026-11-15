@@ -1033,7 +1033,9 @@ batch. Across views of one batch, a Files write, re-read or failed re-read
 holds the Dividends view's saves and a Dividends save holds Files writes, so
 the two never write at once; switching views stays allowed. Once opened, the
 Dividends view stays mounted like Files, so a save in flight keeps holding
-Files writes after a view change and releases them only when it lands. A link that
+Files writes after a view change and releases them only when it lands; its
+reads pause while it is hidden, and what it recorded for one batch is not
+shown for the next. A link that
 finishes supersedes any re-read in flight with its own, and a later re-read
 supersedes it in turn. A failed re-read keeps the working copy and its
 choices, holds writes and offers a retry of the re-read, or *Import another
