@@ -1,0 +1,131 @@
+# Bug classes — Backend, SQLite and API contract
+
+Part of the `validate-and-ship` review checklist. Services, repositories,
+schema, HTTP decoding, uploads, process locks. Every entry shipped as a real
+bug in this repo. Numbers are stable IDs cited from code comments and docs;
+they are not an order and are never reused.
+
+## 1. Silent limit clamping
+
+Internal full-set reads using a paginated repo method whose limit gets clamped
+(import commit processed only 200 of 201 rows). Internal reads use explicit
+`ListAll*` methods.
+
+## 2. PATCH omission overwrites
+
+Optional update fields must be pointer types end-to-end; a plain `bool` made
+every rename silently disable auto-refresh.
+
+## 4. Split-transaction crash holes
+
+A row and its idempotency marker written in different transactions (T-06, T-26
+— both closed; the pattern recurs).
+
+## 8. Error-envelope drift
+
+New error codes not added to the OpenAPI enum; raw Go errors leaking to
+clients.
+
+## 10. Logging financial content
+
+Forbidden at every level.
+
+## 36. Canonical text CHECKs that inspect only a valid prefix
+
+SQLite text `length` and `GLOB` stop at an embedded NUL, so a digit-only CHECK
+admitted `1\0abc` and trailing NULs in every coefficient column (#192).
+Canonical ASCII coefficient CHECKs also require `instr(value, char(0)) = 0`,
+outside any zero allowance; this works across SQLite text encodings. Test
+installed CHECKs through actual insertions, including embedded/trailing NULs,
+signed boundaries and nullable amounts. Named regression:
+`TestExactNumberColumnChecks`.
+
+## 40. Checking a process lock without holding it through replacement
+
+`CheckAvailable` releases its lock immediately; it cannot protect a later
+restore from concurrent startup (#227). A destructive file replacement needs
+ownership throughout the operation, and lock handoffs must preserve one
+lock-file inode: unlinking after unlock can split contenders across different
+files. #227 retains ownership and keeps the file in place.
+`TestTwoProcessRestoreOwnsLockThroughoutReplacement` pauses before/after
+replacement and refuses startup and another restore;
+`TestTwoProcessLockHandoffsKeepOneFileIdentity` stages pre-opened contenders;
+`TestRestoreCommandReleasesLockOnFailure` preserves error-path recovery.
+
+## 41. Upload limits that silently return a prefix
+
+`ParseMultipartForm`'s argument is a memory threshold, not a request limit,
+and `LimitReader` alone silently truncates oversized files (#228). Bound the
+entire request with `MaxBytesReader`, including unknown-length bodies and
+multipart epilogues; check file size and read at most limit + 1 before
+accepting. Remove multipart spill files on every path. Prove the exact
+supported size works and one byte over an independently parseable prefix
+refuses without durable changes. Both staging and CSV analysis must show the
+translated size envelope. Named regressions:
+`TestImportUploadFileSizeBoundary`, `TestImportUploadMultipartResourceLimits`,
+`import-upload-limit.spec.ts`.
+
+## 45. Filesystem paths treated as SQLite URI syntax
+
+Concatenating `file:` with a path lets `#`, `?` and percent escapes select a
+different file (#128, #239). Build file URIs with `db.SQLiteFileURL` before
+adding query options, including template and auxiliary test connections.
+Exercise unnamed subtests (`#00`) and punctuation in the temporary root;
+assert migration, copy isolation and reopening the returned URL. Named
+regressions: `TestOpenEscapesFixturePaths`,
+`TestTemplateAndFixturesEscapeTemporaryRoot`,
+`TestFreshDatabaseHelpersEscapeTemporaryRoot`,
+`TestRecoveryAndRestoreHelpersEscapeTemporaryRoot` and
+`TestRestoreDrillMatchesSourceTrialBalance`.
+
+## 56. Empty data bypassing a native parser negative control
+
+Native text parsers may treat embedded NUL as end-of-input even when Go
+strings and SQL bindings retain it. Transaction search rejects NUL before
+quoting its literal FTS phrase (#355). Exercise parser refusals against a
+**populated** index: an empty FTS table returned 200 without reaching the
+failing parser. Named regression:
+`TestNativeSQLiteAuditSearchRejectsNULBeforeFTS`.
+
+## 58. Generated types mistaken for runtime schema evidence
+
+OpenAPI 3.1 ignored `nullable: true`, setup omitted implemented-step enum
+members, posting tags emitted null arrays, and spending disclosed stale role
+aliases (#367–#369). Use explicit null unions, normalize empty response
+collections, and check actual HTTP JSON against resolved schemas. The bounded
+`scripts/audit-api-contract.py` audit now rejects the repaired #350/#370
+discrepancies without exceptions. Generation alone cannot prove requiredness,
+enum, status or nullability conformity.
+
+## 59. Mutation journals bypassing display enrichment
+
+Investment and reconciliation responses converted raw records directly, losing
+account class, names, commodity codes and symbols (#370). Use the shared owner
+for singles and a two-lookup batch for compound results. Compare real HTTP
+mutation postings with canonical GETs, including journal-free/null results.
+Inject display read failures after COMMIT and preserve the saved operation
+exactly once. Internal import receipts need IDs, not display metadata; leave
+their commit outcome independent from optional enrichment reads.
+
+## 61. JSON decoder limits drifting from operations and EOF checks
+
+A raw backup-policy decoder bypassed the 1 MiB cap and strictness (#375), and
+the shared decoder mapped a trailing-whitespace size error to 400 (#374). Use
+the shared required/optional readers, map size errors at both decode steps,
+and document 413 only on operations that read capped JSON (#350). Preserve
+multipart's distinct 50/51 MiB limits. Keep
+`TestCappedJSONOperationsDeclare413`, `TestCappedJSONOperationRefusals`,
+`TestJSONBodyLimitTrailingWhitespace`, `TestOptionalJSONBodyLimitBoundary` and
+`TestBackupPolicyStrictJSONRefusals` green. Check exact limits and unknown
+content lengths through real consumers, including no-write refusal.
+
+## 66. A fresh connection per call hiding connection-lifetime state
+
+Tests opened a new read-only pool per self-check, while the server keeps one
+for its lifetime. SQLite 3.53.4's FTS5 `integrity_check` hook then reported a
+false checksum mismatch on the reused reader after new searchable entries
+(#403). Test helpers reuse a pool for a test's lifetime, as production does.
+Lifetime tests need writes that change the state: a transaction without payee
+or description leaves the FTS5 index unchanged. Keep
+`TestSQLiteIntegrityOnAReusedReaderAfterSearchWrites` (with its canary) and
+`TestRepeatedSelfCheckRunsPassAfterNewEntries` green.

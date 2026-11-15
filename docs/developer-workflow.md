@@ -905,6 +905,9 @@ pnpm test:release-preflight
 3. Run the narrowest relevant validation.
 4. Update docs or ADRs if the change introduces a durable new rule.
 5. Keep commits focused.
+6. Triage what you noticed on the way: a small, local finding is fixed in the
+   same pull request as its own commit; anything else becomes a GitHub issue.
+7. Open the pull request (see *Branches And PRs*).
 
 ## Migrations And Resetting Your Database
 
@@ -1038,36 +1041,57 @@ Database* above.
 
 ## Branches And PRs
 
-**Commit directly to `main`.** This is the default for all work, including
-changes to product rules, conventions, workflows, and CI. Do not open a feature
-branch unless there is a specific reason to (owner decision, 2026-08-23).
+**Implementation work goes through a short-lived branch and a pull request.**
+Work on an issue, bug or feature starts on a branch cut from the latest
+canonical `main` (`upstream/main` in a fork, `origin/main` in a direct clone)
+and ends with an open, ready-for-review pull request, opened without waiting
+to be asked. The owner merges; nobody else merges or enables
+auto-merge. (Owner decision, 2026-11-15. It replaces the 2026-08-23 rule of
+committing directly to `main`.)
 
-Why: the project is pre-release with a single contributor, so there is no
-release to protect and no second reviewer for a PR to reach. Branches bought
-nothing and cost something — the 2026-08 merge of two long-diverged branches is
-where the duplicated `docs/conventions.md` paragraph, the duplicated
-`writePricingServiceError` arms, the duplicate CodeQL workflow, and the
-colliding T-42–T-47 backlog IDs all came from.
+Why: the pull request is where the change is reviewed — direction, approach
+and implementation — and where CI runs on it before it reaches `main`. The
+project has one contributor but more than one agent, and the second opinion
+comes from a different session than the one that wrote the change.
 
-What replaces the PR as the safety net:
+The two task shapes this produces:
 
+- **Work an issue** (`work-issue` skill): build the slice, validate it, look
+  for further defects in the surrounding code, open the pull request. A
+  finding that is small, local and needs no migration, contract change or
+  owner decision is fixed in the same pull request as its own commit;
+  anything else becomes a GitHub issue. Nothing is left only in a
+  conversation.
+- **Review a pull request** (`review-pr` skill): judge direction, owner
+  decisions, approach, implementation, tests and docs, and report ranked
+  findings. A review changes nothing: no edits, commits, pushes or issues.
+
+Recurring tasks around those two have their own skills: shaping an issue
+before it is built, updating dependencies, sweeping for drift, and sweeping
+for one bug class. The owner-facing guide to all of them is
+[agent-task-playbook.md](agent-task-playbook.md).
+
+What keeps this safe:
+
+- **Branches stay short-lived and start from the latest canonical `main`.** The
+  2026-08 merge of two long-diverged branches is where the duplicated
+  `docs/conventions.md` paragraph, the duplicated `writePricingServiceError`
+  arms, the duplicate CodeQL workflow, and the colliding T-42–T-47 backlog IDs
+  all came from. One slice per branch; never branch from another feature
+  branch.
 - **`main` stays green.** Run the narrowest relevant validation before pushing
-  (see *Validation Expectations By Area* below). CI runs the same scripts, so a
-  local failure is a push that should not happen.
-- **Commits stay focused and honest.** The commit message is now the only
-  review artifact, so it carries the reasoning a PR summary would have. A commit
-  that changes product requirements, conventions, or ADRs says so in its body.
-- **Push often.** Long-lived local work recreates exactly the divergence this
-  rule exists to avoid.
+  (see *Validation Expectations By Area* below). CI runs the same scripts, so
+  a local failure is a push that should not happen.
+- **Commits stay focused and honest.** A commit or pull request that changes
+  product requirements, conventions, or ADRs says so in its body.
 
-Branch when the work genuinely needs isolation — a spike you may throw away, or
-a change you want CI to run before it reaches `main`. That is a judgement call,
-not a default.
+A direct commit to `main` needs the owner's say-so, for example a docs-only
+correction after a merge.
 
-**This flips at the `v0.1.0` release**, the same milestone that freezes
-migrations (see *Project Lifecycle And Migration Immutability* in
-`docs/conventions.md`). From that tag, feature branches and PRs become the norm:
-once a released version exists, `main` is something users can be running.
+**The `v0.1.0` release makes this stricter, not different.** It is the same
+milestone that freezes migrations (see *Project Lifecycle And Migration
+Immutability* in `docs/conventions.md`): once a released version exists,
+`main` is something users can be running.
 
 ### Post-Merge Audit
 

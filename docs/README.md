@@ -39,6 +39,8 @@ or sequencing change.
   Dated deep dives live in `reviews/`.
 - [developer-workflow.md](developer-workflow.md) — commands, environments,
   commit conventions.
+- [agent-task-playbook.md](agent-task-playbook.md) — the owner's guide to
+  directing coding agents: every skill, how to start it and what comes back.
 - [deployment-security.md](deployment-security.md) — operator-facing
   deployment guidance.
 - [upgrades.md](upgrades.md) — released migration policy and the operator
