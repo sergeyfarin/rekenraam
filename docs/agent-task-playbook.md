@@ -8,8 +8,10 @@ agent follows.
 
 ## Starting a task
 
-Every harness used here loads `AGENTS.md` and the same twelve skills. Start
-the prompt with the task skill and the issue or pull request number:
+Every harness used here loads `AGENTS.md` (Claude Code through the one-line
+`CLAUDE.md` that imports it) and the same twelve skills. How to check each
+harness is in `.claude/skills/README.md`. Start the prompt with the task skill
+and the issue or pull request number:
 
 | Harness | Prefix | Example |
 |---|---|---|
@@ -24,6 +26,13 @@ the prompt with the task skill and the issue or pull request number:
   example `/work-issue 592 with ledger-invariants`.
 - An agent that was not given a task skill still follows `AGENTS.md` → Task
   Modes, so a plain "fix #592" works. The prefix makes it certain.
+- Your wording sets what the agent may change. "Check", "find", "list" or
+  "assess" gets a report and changes nothing. "Draft" gets text. "Fix",
+  "build", "update", "sweep" or "file" — or the skill invoked by name — runs
+  the full workflow: branch, commits, pull request, issues.
+- Suspected security vulnerabilities come back to you in the session, never
+  as a public issue or pull request text. You choose the private route in
+  `SECURITY.md`.
 
 ## Task skills
 
@@ -86,7 +95,8 @@ fixes*, *rework*, *do not build*) and verified findings ranked `P0`–`P3` with
 
 The agent searches for duplicates, checks the roadmap, requirements and scope
 locks, gathers evidence, bounds the work to one reviewable pull request (or a
-parent with slices), and files the issue with measurable acceptance. It writes
+parent with slices), and files the issue with measurable acceptance. Ask for
+a *draft* to get the text back without anything being filed. It writes
 no code. It sets no milestone and does not touch roadmap order; both are
 yours.
 
@@ -108,8 +118,13 @@ full browser run, and opens one pull request.
 - Anything it cannot move is held with the reason and tracked on an issue.
 - A new version that replaces a local workaround is adopted when the change is
   small, and filed as an issue when it is not.
-- Every alert ends as fixed, not fixable yet (with an issue) or believed not
-  applicable. It does not dismiss alerts; that is yours.
+- Every published advisory ends as fixed, not fixable yet (with an issue) or
+  believed not applicable. Code-scanning findings on our own code, and whether
+  a vulnerable dependency is reachable here, come to you in the session, not
+  into the pull request. It does not dismiss alerts; that is yours.
+- It links the Dependabot pull requests it covers and leaves them open;
+  Dependabot closes each once its update is on `main`.
+- "Check the security warnings" gets the survey only, with no updates.
 - A SQLite driver bump is treated as a driver admission review, not a routine
   update.
 
@@ -139,7 +154,11 @@ behaviour. Those come back to you.
 ```
 /sweep-bug-class 13
 /sweep-bug-class the bug fixed in #577
+check whether the bug fixed in #577 exists anywhere else
 ```
+
+The first two run the full sweep. The third is a check: it reports every hit
+with a verdict and changes nothing.
 
 Give it an entry number from the bug-class catalogue
 (`.claude/skills/validate-and-ship/bug-classes/`), a pull request that just
@@ -214,4 +233,5 @@ Agent guidance follows decisions; it does not anticipate them.
   and the validation matrix.
 - **A new harness or model is adopted.** Check that it loads `AGENTS.md` and
   one of `.claude/skills/` or `.agents/skills/`, and add it to the table in
-  `.claude/skills/README.md`. Do not add a harness-specific instruction file.
+  `.claude/skills/README.md` with how to verify it. Do not add a
+  harness-specific instruction file.

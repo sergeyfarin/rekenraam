@@ -1,6 +1,6 @@
 ---
 name: sweep-bug-class
-description: Hunt for every remaining instance of one known bug class across the whole Rekenraam tree - search for the pattern rather than the copies a ticket named, count and classify every hit, prove and fix the real ones, and add a guard so it cannot return. Use when asked to sweep, hunt, audit or grep for a bug class or pattern, to check whether a bug that was just fixed exists elsewhere, or to work through an entry in the bug-class catalogue.
+description: Hunt for every remaining instance of one known bug class across the whole Rekenraam tree - search for the pattern rather than the copies a ticket named, count and classify every hit, and prove the real ones. A check returns the findings only; a sweep also fixes, files issues, adds a guard and opens a pull request. Use when asked to sweep, hunt, audit or grep for a bug class or pattern, to check whether a bug that was just fixed exists elsewhere, or to work through an entry in the bug-class catalogue.
 ---
 
 # Sweep One Bug Class
@@ -10,8 +10,19 @@ times here because each fix covered the copies its ticket named, and a survey
 that reported two copies had missed five (catalogue entry 13). This task takes
 one class and finds all of it.
 
-It runs as a `work-issue` task: branch from the canonical `main`, finish with
-an open pull request, fix small instances, file issues for the rest.
+## Outcome
+
+The request decides how far this goes (`AGENTS.md` → Task Modes):
+
+- **Check** ("does this exist elsewhere?", "find", "audit", "list"): steps 1–4
+  and the report. No branch, no edits, no issues. End by asking whether to
+  fix and file.
+- **Sweep** (invoked by name, or asked to sweep, fix or clean up): all steps,
+  run as a `work-issue` task — branch from the canonical `main`, fix small
+  instances, file issues for the rest, finish with an open pull request.
+
+An instance that could be a security vulnerability is never filed or
+described publicly; it goes to the owner under `SECURITY.md`.
 
 ## 1. Pick the class and learn its shape
 

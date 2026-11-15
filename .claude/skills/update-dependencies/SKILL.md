@@ -10,15 +10,24 @@ bulk update over merging Dependabot pull requests one by one. This task runs
 as a `work-issue` task: branch from the canonical `main`, finish with an open
 pull request, fix small things, file issues for the rest.
 
+When the request is only to check (security warnings, what is outdated, what
+Dependabot has open), run step 1 and report in the session; update nothing
+(`AGENTS.md` → Task Modes).
+
 ## 1. Survey first
 
 ```sh
-gh pr list --author "app/dependabot" --state open
-gh api "repos/{owner}/{repo}/dependabot/alerts?state=open" --jq '.[] | "\(.security_advisory.severity) \(.dependency.package.name) \(.html_url)"'
-gh api "repos/{owner}/{repo}/code-scanning/alerts?state=open&per_page=100" --jq '.[] | "\(.rule.severity) \(.rule.id) \(.most_recent_instance.location.path)"'
-gh api "repos/{owner}/{repo}/secret-scanning/alerts?state=open" --jq 'length'
-gh issue list --label blocked --state open
+gh pr list --author "app/dependabot" --state open --limit 200
+gh api --paginate "repos/{owner}/{repo}/dependabot/alerts?state=open&per_page=100" --jq '.[] | "\(.security_advisory.severity) \(.dependency.package.name) \(.security_advisory.ghsa_id)"'
+gh api --paginate "repos/{owner}/{repo}/code-scanning/alerts?state=open&per_page=100" --jq '.[] | "\(.rule.security_severity_level // "-") \(.rule.id) \(.most_recent_instance.location.path)"'
+gh api --paginate "repos/{owner}/{repo}/secret-scanning/alerts?state=open&per_page=100" --jq '.[].number' | wc -l
+gh issue list --label blocked --state open --limit 500
 ```
+
+Paginate every survey: an unpaginated call returns the first page only and
+the list silently looks complete. A feed that answers with an error (403 or
+404: not enabled, or the token lacks access) is **unchecked**, not empty; say
+so in the report.
 
 Also read the latest `govulncheck` workflow run. Note which blocked issues are
 held upgrades (a peer range, a missing upstream release): this run is when
@@ -71,17 +80,35 @@ An upgrade is the moment to stop carrying workarounds.
 
 ## 5. Security alerts
 
-Every open alert from step 1 ends in one of three states, listed in the pull
-request:
+What may be said in public depends on whether the vulnerability is already
+public. `SECURITY.md` governs: nothing unpublished is disclosed before a fix.
+
+**Published advisories** (Dependabot alerts and `govulncheck` findings, which
+come from public GHSA/CVE records) may be tracked in the open. Each ends in
+one of three states, listed in the pull request:
 
 - **Fixed** by an update in this branch.
 - **Not fixable yet** (no patched release, or the patch is a held major): an
-  issue with the advisory link, the affected path and whether the vulnerable
-  code is reachable in this app.
-- **Believed not applicable**: say why. Dismissing an alert on GitHub is the
-  owner's call; do not dismiss it yourself.
+  issue with the advisory ID and the dependency.
+- **Believed not applicable**: say so.
 
-A secret-scanning alert is reported to the owner at once and never quoted.
+Whether the vulnerable code is *reachable in this app*, and through which
+path, is not published while the alert is open: that turns a public advisory
+into a map of how to exploit this deployment. Give that analysis to the owner
+in the session.
+
+**First-party findings** (code-scanning alerts on this repository's own code,
+and anything you notice yourself) are unpublished. Do not name, describe or
+link them in the pull request, commit messages, an issue or a comment. Report
+them to the owner in the session, ranked, with your recommendation, and leave
+the route to the owner: a private security advisory per `SECURITY.md`, or a
+fix that is reviewed privately first. A code-scanning rule that is about code
+quality rather than security is ordinary work.
+
+**Secret-scanning alerts** are reported to the owner at once and never quoted.
+
+Dismissing any alert on GitHub is the owner's call; do not dismiss one
+yourself.
 
 ## 6. Validate
 
@@ -102,6 +129,12 @@ it.
 ## 7. Ship
 
 One pull request following `work-issue` step 6. Its body lists: what moved
-(with majors called out), what is held and why, each alert's state, what was
-modernized, the follow-up issues, and the Dependabot pull requests it
-supersedes. Close those with a comment linking this pull request.
+(with majors called out), what is held and why, the state of each published
+advisory, what was modernized, the follow-up issues, and the Dependabot pull
+requests it covers (`Covers #612, #613`).
+
+Do not close those Dependabot pull requests yourself. The owner may reject
+this pull request or drop an upgrade in review, and a closed Dependabot pull
+request would then claim an update that never landed. Dependabot closes its
+own pull request once main has the same or a newer version; after this one
+merges, list any that are still open for the owner.

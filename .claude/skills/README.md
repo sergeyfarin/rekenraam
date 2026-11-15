@@ -29,11 +29,16 @@ catalogue of bugs this repo has shipped, split by area).
 
 ## How each harness finds them
 
-| Harness | Instructions | Skills | Force one |
-|---|---|---|---|
-| Claude Code | `AGENTS.md` | `.claude/skills/` | `/skill-name` |
-| Codex | `AGENTS.md` | `.agents/skills/` (the symlink) | `$skill-name` |
-| OpenCode | `AGENTS.md` | `.claude/skills/` | `@skill-name` |
+| Harness | Instructions | Skills | Force one | Verify |
+|---|---|---|---|---|
+| Claude Code | `CLAUDE.md`, which imports `AGENTS.md` | `.claude/skills/` | `/skill-name` | `/memory` lists `AGENTS.md`; `/skills` lists the skills |
+| Codex | `AGENTS.md` | `.agents/skills/` (the symlink) | `$skill-name` | `codex debug prompt-input "hello"` shows both |
+| OpenCode | `AGENTS.md` (it prefers it over `CLAUDE.md`) | `.claude/skills/` | `@skill-name` | not yet verified here |
+
+Claude Code reads `AGENTS.md` by itself only from v2.1.277, and only while no
+`CLAUDE.md` or `CLAUDE.local.md` exists in the directory or above it. The
+one-line `CLAUDE.md` (`@AGENTS.md`) makes it load in every version and
+setting, including when someone adds a personal `CLAUDE.local.md`.
 
 All three load only each skill's `name` and `description` up front, the
 `SKILL.md` body when the skill is used, and a reference file only when the
@@ -77,6 +82,9 @@ body tells the agent to read it. Three consequences:
   Numbers are cited from code comments, so they are never reused or
   renumbered. File remaining work as a GitHub issue; `docs/backlog.md` keeps
   historical aliases only.
-- `AGENTS.md` is the only repo-wide instruction file. Do not add
-  harness-specific copies (`CLAUDE.md`, Copilot or Cursor instruction files);
-  they drift from it.
+- `AGENTS.md` is the only repo-wide instruction file. `CLAUDE.md` stays the
+  single line `@AGENTS.md`. Do not add harness-specific copies or content
+  (in `CLAUDE.md`, Copilot or Cursor instruction files); they drift from it.
+- Every `gh ... list` and `gh api` survey in a skill passes `--limit` or
+  `--paginate`, and every `--json` field must exist in the oldest `gh` in use
+  (2.46 here). Run a command once before putting it in a skill.

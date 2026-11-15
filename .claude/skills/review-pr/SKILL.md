@@ -17,16 +17,27 @@ opinion, and its fixes reach `main` unreviewed.
 ## Prepare
 
 - Read the pull request and what it claims:
-  `gh pr view <n> --json title,body,commits,files,closingIssuesReferences`,
+  `gh pr view <n> --json title,body,baseRefName,headRefOid,commits,files`,
   `gh pr diff <n>`, `gh pr checks <n>`.
+- Find the issues it closes. `closingIssuesReferences` is not a
+  `gh pr view` field in every `gh` release, so ask GraphQL:
+  ```sh
+  gh api graphql -F owner='{owner}' -F name='{repo}' -F n=<n> -f query='
+    query($owner:String!,$name:String!,$n:Int!){repository(owner:$owner,name:$name){
+      pullRequest(number:$n){closingIssuesReferences(first:50){nodes{number title state}}}}}' \
+    --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[]'
+  ```
+  Also read `Closes`/`Refs` lines in the body; they can disagree.
 - Read the linked issue with its acceptance, the governing plan or ADR, and
   where the work sits in `docs/roadmap.md`.
 - Get the code without disturbing the working tree:
   ```sh
   git fetch origin pull/<n>/head
-  git worktree add --detach <scratch-dir> FETCH_HEAD
+  git worktree add --detach .claude/worktrees/review-<n> FETCH_HEAD
   ```
-  Run tests and builds there. A throwaway probe test that confirms a suspected
+  Use `.claude/worktrees/` (git-ignored); a worktree under `/tmp` disappears
+  on reboot. Run every command there with `git -C` or an absolute path, so a
+  failed `cd` cannot run it in the main checkout. Run tests and builds there. A throwaway probe test that confirms a suspected
   bug is allowed there and is never committed. Remove the worktree when done.
 - Read the whole changed files and their callers, not just the hunks. Review
   the entire pull request, every commit, not only the latest push.
@@ -71,6 +82,8 @@ opinion, and its fixes reach `main` unreviewed.
 - It states a priority, `file:line`, the concrete failure (this input gives
   that wrong result), why it matters, and the direction of a fix in words or
   a few lines.
+- A suspected security vulnerability is reported in the session only, even
+  when the owner has asked for the review to be posted (`SECURITY.md`).
 - Priorities match the repository's labels:
   - **P0** — data loss, a wrong financial result, broken reconciliation
     trust, a security hole.

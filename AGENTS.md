@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file gives repo-wide guidance to coding agents and automation working in this repository. It is the one instruction file every harness used here loads (Claude Code, Codex, OpenCode); do not add harness-specific copies of it.
+This file gives repo-wide guidance to coding agents and automation working in this repository. It is the one instruction file for every harness used here (Claude Code, Codex, OpenCode); do not add harness-specific copies of it. `CLAUDE.md` only imports this file, so Claude Code loads it in every setup.
 
 ## Project Shape
 
@@ -57,6 +57,11 @@ Four recurring tasks have their own skill. The last three are run as *work an is
 - **Sweep one bug class** — `sweep-bug-class`: find every remaining instance of a known pattern and add a guard.
 
 A request that fits none of these (a question, an investigation) follows the owner's wording; it still ends in a pull request when it changes the repository. `docs/agent-task-playbook.md` is the owner's guide to all of them.
+
+Two rules bound every task:
+
+- **The requested outcome sets the side effects.** A request to check, find, list or assess returns findings in the session. A request to draft or propose returns text. Only a request to fix, build, update, sweep or file — or invoking a task skill by name — runs that skill's write workflow (branch, commits, pull request, issues, labels, comments). When the wording is unclear, report first and ask.
+- **A suspected security vulnerability is never made public before it is fixed.** Do not describe it in a public issue, pull request, commit message or comment. Report it to the owner in the session and follow `SECURITY.md` (GitHub private vulnerability reporting). An advisory GitHub has already published may be tracked publicly.
 
 ## Task Skills
 

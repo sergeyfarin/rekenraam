@@ -1,6 +1,6 @@
 ---
 name: shape-issue
-description: Turn a rough idea, bug report or review finding into an implementation-ready GitHub issue for Rekenraam - evidence, bounded scope, measurable acceptance, real dependencies, and the decisions the owner must make. Use when asked to shape, draft, write up, refine, split or groom an issue, or to make an existing issue ready for work. Writes no code; use work-issue to implement.
+description: Turn a rough idea, bug report or review finding into an implementation-ready GitHub issue for Rekenraam - evidence, bounded scope, measurable acceptance, real dependencies, and the decisions the owner must make. A draft request returns the issue text; a request to shape, file or create it publishes it. Use when asked to shape, draft, write up, refine, split or groom an issue, or to make an existing issue ready for work. Writes no code; use work-issue to implement.
 ---
 
 # Shape An Issue
@@ -10,9 +10,20 @@ could implement with the `work-issue` skill without asking a question. You
 write no code, create no branch and open no pull request. Rules:
 `docs/conventions.md` → Work Tracking.
 
+The request decides whether anything is published (`AGENTS.md` → Task Modes):
+
+- **Draft** ("draft", "propose", "what would the issue say"): steps 1–5, then
+  return the issue text in the session. Do not create or edit any issue.
+- **Shape and file** (invoked by name, or asked to shape, file, create or make
+  an issue ready): all steps, including step 6.
+
+A suspected security vulnerability is never written up as a public issue. It
+goes to the owner under `SECURITY.md`, whatever the request says.
+
 ## 1. Find out what already exists
 
-- Search open and closed issues: `gh issue list --search "<terms>" --state all`.
+- Search open and closed issues:
+  `gh issue list --search "<terms>" --state all --limit 100`.
   A duplicate gets a comment with the new evidence, not a second issue.
 - Check whether it already ships (`docs/implemented.md`), where it sits in
   `docs/roadmap.md`, and what the governing plan or ADR already decided.
@@ -68,7 +79,7 @@ Use the sections of `.github/ISSUE_TEMPLATE/work-item.md`:
 
 Add **Decisions for the owner** when step 4 found any.
 
-## 6. File it
+## 6. File it (not for a draft)
 
 - `gh issue create` with the label `bug`, `enhancement` or `documentation`
   and a `priority: P0`–`P3` for urgency.

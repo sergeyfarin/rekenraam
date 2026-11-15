@@ -67,7 +67,7 @@ and list it under *Also fixed* in the pull request.
 
 **File a GitHub issue** for everything else:
 
-- Search first (`gh issue list --search "<terms>" --state all`). Add new
+- Search first (`gh issue list --search "<terms>" --state all --limit 100`). Add new
   evidence to an existing issue as a comment; do not open a duplicate.
 - Write it with the sections of `.github/ISSUE_TEMPLATE/work-item.md`:
   evidence with `file:line` and a reproduction, bounded scope, measurable
@@ -75,6 +75,10 @@ and list it under *Also fixed* in the pull request.
 - Label it `bug` or `enhancement` and a `priority: P0`–`P3` for urgency. Do
   not set a milestone: creating an issue never changes release scope.
 - Link it under *Follow-up issues* in the pull request.
+
+A suspected security vulnerability is the exception to both outcomes: do not
+fix it in a public pull request and do not file it. Report it to the owner in
+the session and follow `SECURITY.md`.
 
 A finding that changes a financial result, reconciliation or stored data
 always gets an issue, even when the fix is short; fix it in this pull request
