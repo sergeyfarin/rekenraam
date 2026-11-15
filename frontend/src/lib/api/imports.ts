@@ -388,6 +388,7 @@ export async function linkImportShort(batchId: number, rowId: number, operationI
 export type ImportDividendReview = components['schemas']['ImportDividendReview'];
 export type ReviewImportDividendRequest = components['schemas']['ReviewImportDividendRequest'];
 export const importDividendReviewsQueryKey = ['api', 'import-dividends'] as const;
+export const importHistoryQueryKey = ['api', 'import-batches'] as const;
 export function getImportDividendReviews(batchID?: number, cursor?: string): Promise<components['schemas']['ImportDividendReviewsResponse']> {
   const params = new URLSearchParams();
   if (batchID) params.set('batch_id', String(batchID));

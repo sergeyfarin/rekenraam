@@ -38,8 +38,12 @@ test('[acceptance] a bank CSV mapping is reused with payee resolution and previe
   await page.getByRole('button', { name: 'Apply to all rows' }).click();
   await page.getByRole('button', { name: 'Commit to ledger' }).click();
   await expect(page.getByText('2 transactions committed')).toBeVisible();
+  const overview = await apiJSON<{ accounts: Array<{ account: { id: number }; sources: Array<{ kind: string; name: string }> }> }>(page, 'GET', '/api/v1/ledger/overview');
+  expect(overview.accounts.find(row => row.account.id === account.id)?.sources).toContainEqual({ kind: 'profile', name: profileName });
+
 
   await page.getByRole('button', { name: 'Import another file' }).click();
+  await page.getByRole('button', { name: 'Rules and profiles', exact: true }).click();
   const ruleName = `Bakker typo ${suffix}`;
   await page.getByRole('button', { name: 'Add rule' }).click();
   await page.getByLabel('Name').fill(ruleName);
@@ -49,6 +53,7 @@ test('[acceptance] a bank CSV mapping is reused with payee resolution and previe
   await page.getByRole('button', { name: 'Save rule' }).click();
   await expect(page.getByText('Import rule saved.')).toBeVisible();
 
+  await page.getByRole('button', { name: 'Files', exact: true }).click();
   await page.locator('input[type="file"]').setInputFiles({
     name: 'next-statement.csv',
     mimeType: 'text/csv',

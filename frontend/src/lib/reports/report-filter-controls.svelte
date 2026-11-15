@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isSubledgerManagedAccountKind } from '#lib/accounts/subledger-accounts.ts';
   import { createQuery } from '@tanstack/svelte-query';
   import { m } from '#lib/paraglide/messages.js';
   import { accountsQueryOptions } from '#lib/api/accounts.ts';
@@ -63,7 +64,7 @@
   const accountOptions = $derived(
     sortOptions(
       (accountsQuery.data?.accounts ?? [])
-        .filter((account) => account.account_class === 'asset' || account.account_class === 'liability')
+        .filter((account) => !isSubledgerManagedAccountKind(account.account_kind) && (account.account_class === 'asset' || account.account_class === 'liability'))
         .map((account) => ({ id: account.id, label: accountDisplayName(account) }))
     )
   );

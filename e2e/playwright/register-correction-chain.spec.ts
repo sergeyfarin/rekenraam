@@ -89,7 +89,8 @@ for (const appearance of [
     }, appearance);
     await page.goto(register);
     await expect(page.locator('html')).toHaveAttribute('data-theme', appearance.theme);
-    await expect(page.locator('summary')).toHaveCount(3);
+    // The register's own Account actions disclosure is not a correction badge.
+    await expect(page.locator('summary').filter({ hasNotText: 'Account actions' })).toHaveCount(3);
     await expectNoAccessibilityViolations(page, `register in ${appearance.theme} ${appearance.base} ${appearance.accent}`);
   });
 }

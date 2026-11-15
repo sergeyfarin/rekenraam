@@ -145,6 +145,16 @@ export function isCategoryAccount(account: AccountResponse): boolean {
   return account.account_class === 'income' || account.account_class === 'expense';
 }
 
+/**
+ * An account's name, with its status when it is closed or archived. Lists
+ * that can show inactive accounts (brokerage children, holdings, archived
+ * accounts) use it so a status is never left for the owner to guess.
+ */
+export function accountLabelWithStatus(account: AccountResponse): string {
+  const name = accountDisplayName(account);
+  return account.status === 'active' ? name : `${name} (${accountStatusLabel(account.status)})`;
+}
+
 export function accountDisplayName(account: AccountResponse): string {
   const starterName = starterAccountDisplayName(account);
   if (starterName) {

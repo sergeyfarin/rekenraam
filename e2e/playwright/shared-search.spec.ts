@@ -159,7 +159,7 @@ for (const theme of ['light', 'dark'] as const) {
     await page.evaluate(value => localStorage.setItem('rekenraam-theme', value), theme);
     await page.setViewportSize({ width: 390, height: 844 });
     // The header's compact trigger; Home's command bar is covered in home-entry.
-    await page.goto('/app/ledger/accounts');
+    await page.goto('/app/ledger');
     const trigger = page.getByRole('button', { name: 'Search', exact: true });
     await trigger.click();
     const dialog = page.getByRole('dialog', { name: 'Search', exact: true });

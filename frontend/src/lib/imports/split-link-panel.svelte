@@ -7,12 +7,16 @@
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
 
-  let { batchId, rowId, csrfToken, accounts, onLinked }: {
+  let { batchId, rowId, csrfToken, accounts, onLinked, onPending, disabled = false }: {
     batchId: number;
     rowId: number;
     csrfToken: string;
     accounts: AccountResponse[];
     onLinked: () => void | Promise<void>;
+    // The import screen holds writes while it re-reads the batch, and holds
+    // its own batch writes while this link is in flight (#567).
+    disabled?: boolean;
+    onPending?: (pending: boolean) => void;
   } = $props();
 
   const candidatesQuery = createQuery(() => ({
@@ -28,8 +32,9 @@
 
   async function link(event: SubmitEvent) {
     event.preventDefault();
-    if (!selected || pending || !csrfToken) return;
+    if (!selected || pending || disabled || !csrfToken) return;
     pending = true;
+    onPending?.(true);
     linkError = undefined;
     try {
       await linkImportSplit(batchId, rowId, Number(selected), csrfToken);
@@ -38,6 +43,7 @@
       linkError = error;
     } finally {
       pending = false;
+      onPending?.(false);
     }
   }
 </script>
@@ -72,7 +78,7 @@
       {/each}
     </fieldset>
     <APIFormError error={linkError} id={`split-link-error-${rowId}`} />
-    <button type="submit" disabled={!selected || pending || !csrfToken}
+    <button type="submit" disabled={!selected || pending || disabled || !csrfToken}
       class="rounded-(--radius-control) bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60">
       {pending ? m.import_preview_split_link_pending() : m.import_preview_split_link_submit()}
     </button>

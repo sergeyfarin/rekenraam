@@ -12,7 +12,7 @@ test('a new-account draft survives a currency refetch while the editor is open',
   const draft = `Refetch draft ${Date.now()}`;
 
   await page.clock.install();
-  await page.goto('/app/ledger/accounts');
+  await page.goto('/app/ledger');
   await page.getByRole('button', { name: 'Add account' }).first().click();
   const form = page.locator('form').filter({ has: page.getByRole('button', { name: 'Create account' }) });
   const nameField = form.getByLabel('Name', { exact: true });

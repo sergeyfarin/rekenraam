@@ -337,6 +337,19 @@ func TestLargeBookExportAndSelfCheckStayBounded(t *testing.T) {
 	assert.Less(t, homeUsage.Wall, 10*time.Second, "home wall time")
 	assert.Less(t, homeUsage.PeakHeap, uint64(256<<20), "home peak heap")
 
+	// Ledger's composed first page uses one snapshot and keeps per-row valuation
+	// in memory; no per-account ledger reads are permitted by its page contract.
+	ledger := NewLedgerService(transactions, NewAccountService(db.NewAccountRepository(writer), nil, nil), NewInstitutionService(db.NewInstitutionRepository(writer)))
+	probe = startResourceProbe()
+	ledgerPage, err := ledger.Overview(context.Background(), LedgerOverviewInput{OwnerUserID: 1})
+	ledgerUsage := probe.finish()
+	require.NoError(t, err)
+	require.Len(t, ledgerPage.Accounts, 100)
+	require.NotEmpty(t, ledgerPage.NextCursor)
+	t.Logf("ledger overview: wall=%s allocated=%dMiB peak-heap=%dMiB", ledgerUsage.Wall.Round(time.Millisecond), ledgerUsage.Allocated>>20, ledgerUsage.PeakHeap>>20)
+	assert.Less(t, ledgerUsage.Wall, 10*time.Second, "ledger overview wall time")
+	assert.Less(t, ledgerUsage.PeakHeap, uint64(256<<20), "ledger overview peak heap")
+
 	// Entry account choices are complete beyond the ordinary account-list cap
 	// (#507). Reading hierarchy and command eligibility must not scan holdings
 	// or issue one request/query per account.

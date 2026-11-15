@@ -2061,5 +2061,9 @@
   "statement_links_cancel": "Cancelar",
   "statement_links_confirm_reassign": "Mover vínculo",
   "statement_links_confirm_unlink": "Desvincular fila",
-  "statement_links_already_unlinked": "Esta fila del extracto ya está desvinculada."
+  "statement_links_already_unlinked": "Esta fila del extracto ya está desvinculada.",
+  "import_view_files": "Archivos",
+  "import_view_rules": "Reglas y perfiles",
+  "import_view_dividends": "Dividendos",
+  "import_profiles_help": "Gestiona las asignaciones CSV guardadas. Para crear una, selecciona un archivo CSV en Archivos."
 }

@@ -22,6 +22,10 @@ AttentionSource:
     failed:
       type: boolean
       description: A durable operation failed and requires attention; cannot be muted.
+    dividend_review_count:
+      type: [integer, 'null']
+      minimum: 0
+      description: Import source only. Global Dividends view row count from its canonical queue membership. Those batches count once in imports, including historical repairs; never sum this row count into total_known.
     error_code:
       type: string
       enum: [INTERNAL_ERROR]

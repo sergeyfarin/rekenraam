@@ -1,5 +1,4 @@
 <script lang="ts">
-  import SectionOverview from '#lib/navigation/section-overview.svelte';
+  import AccountListScreen from '#lib/accounts/account-list-screen.svelte';
 </script>
-
-<SectionOverview section="ledger" />
+<AccountListScreen />

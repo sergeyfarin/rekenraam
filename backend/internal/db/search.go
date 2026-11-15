@@ -31,7 +31,7 @@ func (r *SearchRepository) Catalog(ctx context.Context, bookID int64, afterKind 
  COALESCE(json_extract(av.metadata_json, '$.category.builtin_key'),'') AS builtin_key,
  av.status, av.account_kind
  FROM accounts a JOIN `+CurrentReferenceVersions(ctx, "account")+` av ON av.account_id=a.id
- WHERE a.book_id=? AND a.system_role IS NULL
+ WHERE a.book_id=? AND a.system_role IS NULL AND av.account_kind NOT IN ('security_holding','fund_holding')
  UNION ALL
  SELECT 'instrument', ii.commodity_id, iiv.display_name,
  COALESCE(iiv.symbol,'') || ' ' || c.code, '', iiv.status, ''

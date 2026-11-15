@@ -167,7 +167,7 @@ const subViews: SubView[] = [
   },
   {
     // Outside Home the header button opens it as a dialog (#490).
-    name: 'header search', group: 'dialog', path: () => '/app/ledger/accounts',
+    name: 'header search', group: 'dialog', path: () => '/app/ledger',
     open: async (c) => {
       await c.page.locator('.shell-bar').getByRole('button', { name: c.t('search_label', true) }).click();
       const view = openDialog(c.page);
@@ -257,7 +257,7 @@ const subViews: SubView[] = [
     open: (c) => clickAndDialog(c, 'currencies_add')
   },
   {
-    name: 'account currency picker', group: 'dialog', path: () => '/app/ledger/accounts',
+    name: 'account currency picker', group: 'dialog', path: () => '/app/ledger',
     open: async (c) => {
       await c.page.getByRole('button', { name: c.t('accounts_add_account') }).first().click();
       await c.page.getByRole('combobox', { name: c.t('accounts_field_currency', true) }).selectOption('__other_currency__');
@@ -426,7 +426,7 @@ const subViews: SubView[] = [
 
   // ── Editors ──────────────────────────────────────────────────────────
   {
-    name: 'account editor (new)', group: 'editor', path: () => '/app/ledger/accounts',
+    name: 'account editor (new)', group: 'editor', path: () => '/app/ledger',
     open: async (c) => {
       await c.page.getByRole('button', { name: c.t('accounts_add_account') }).first().click();
       return c.page.locator('main form').first();
@@ -434,7 +434,7 @@ const subViews: SubView[] = [
     close: async (c, view) => { await view.getByRole('button', { name: c.t('accounts_form_cancel') }).first().click(); }
   },
   {
-    name: 'institution editor (new)', group: 'editor', path: () => '/app/ledger/accounts',
+    name: 'institution editor (new)', group: 'editor', path: () => '/app/ledger',
     open: async (c) => {
       await c.page.getByRole('button', { name: c.t('institutions_add_institution') }).first().click();
       return c.page.locator('main form').first();
@@ -463,6 +463,14 @@ const subViews: SubView[] = [
   },
 
   // ── Import review ────────────────────────────────────────────────────
+  ...(['accounts', 'institutions'] as const).map(view => ({
+    name: `Ledger ${view} view`, group: 'panel' as const, path: () => `/app/ledger?view=${view}`,
+    open: async (c: Context) => { await expect(c.page.getByRole('button', { pressed: true }).first()).toBeVisible(); return c.page.getByRole('main'); }, close: null
+  })),
+  ...(['files', 'connections', 'rules', 'dividends'] as const).map(view => ({
+    name: `Import ${view} view`, group: 'panel' as const, path: () => `/app/ledger/import?view=${view}`,
+    open: async (c: Context) => { await expect(c.page.getByRole('button', { pressed: true }).first()).toBeVisible(); return c.page.getByRole('main'); }, close: null
+  })),
   {
     name: 'staged CSV preview with payee resolution', group: 'import review', path: () => '/app/ledger/import',
     writes: /\/imports(\/|$)|\/import-profiles/,
@@ -524,7 +532,7 @@ const subViews: SubView[] = [
     }
   },
   {
-    name: 'provider preview: short link', group: 'import review', path: () => '/app/ledger/import',
+    name: 'provider preview: short link', group: 'import review', path: () => '/app/ledger/import?view=connections',
     writes: /\/import-connections\/\d+\/refresh|\/imports(\/|$)/,
     open: async (c) => {
       await fetchProvider(c);
@@ -535,7 +543,7 @@ const subViews: SubView[] = [
     close: discardImport
   },
   {
-    name: 'provider preview: split link', group: 'import review', path: () => '/app/ledger/import',
+    name: 'provider preview: split link', group: 'import review', path: () => '/app/ledger/import?view=connections',
     writes: /\/import-connections\/\d+\/refresh|\/imports(\/|$)/,
     open: async (c) => {
       await fetchProvider(c);
@@ -546,7 +554,7 @@ const subViews: SubView[] = [
     close: discardImport
   },
   {
-    name: 'pending dividend review', group: 'import review', path: () => '/app/ledger/import/dividends',
+    name: 'pending dividend review', group: 'import review', path: () => '/app/ledger/import?view=dividends',
     open: async (c) => {
       await expect(c.page.getByRole('heading', { name: c.t('import_dividend_pending') }).first()).toBeVisible();
       return c.page.locator('main');
@@ -780,7 +788,7 @@ async function seedProviderImport(page: Page, csrf: string, ids: Map<string, num
     source: 'trading212', display_name: fillConnection, api_key: fillKey, cash_account_id: cash.id
   });
   // The dividend batch is committed now, so it waits in review for every configuration.
-  await page.goto('/app/ledger/import');
+  await page.goto('/app/ledger/import?view=connections');
   await page.getByRole('row').filter({ hasText: dividendConnection }).getByRole('button', { name: 'Import', exact: true }).click();
   await page.getByRole('button', { name: 'Commit to ledger' }).click();
   await expect(page.getByText('1 dividend payments remain in review.')).toBeVisible({ timeout: 15_000 });

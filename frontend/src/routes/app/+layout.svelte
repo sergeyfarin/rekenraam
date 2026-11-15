@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ledgerQueryKey } from '#lib/api/ledger.ts';
   import { onMount } from 'svelte';
   import type { Middleware } from 'openapi-fetch';
   import { apiClient } from '#lib/api/client.ts';
@@ -99,6 +100,7 @@
         if (response.ok && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
           void queryClient.invalidateQueries({ queryKey: attentionQueryKey });
           void queryClient.invalidateQueries({ queryKey: homeQueryKey });
+          void queryClient.invalidateQueries({ queryKey: ledgerQueryKey });
         }
       }
     };

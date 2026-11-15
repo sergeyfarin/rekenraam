@@ -9,13 +9,14 @@ for (const width of [1280, 390]) {
     const { ids } = await seedReferenceBook(page);
     const state = '?highlight=first&highlight=second&empty=&future=a%2Bb+%26+c#detail';
     const paths = [
-      ['/app/accounts', '/app/ledger/accounts', 'Accounts'],
-      [`/app/accounts/${ids.get('checking')}/register`, `/app/ledger/accounts/${ids.get('checking')}/register`, 'Accounts'],
+      ['/app/accounts', '/app/ledger', 'Overview'],
+      ['/app/ledger/accounts', '/app/ledger', 'Overview'],
+      [`/app/accounts/${ids.get('checking')}/register`, `/app/ledger/accounts/${ids.get('checking')}/register`, 'Overview'],
       ['/app/transactions', '/app/ledger/transactions', 'Transactions'],
       ['/app/categories', '/app/ledger/categories', 'Categories'],
       [`/app/categories/${ids.get('groceries')}`, `/app/ledger/categories/${ids.get('groceries')}`, 'Categories'],
       ['/app/import', '/app/ledger/import', 'Import'],
-      ['/app/import/dividends', '/app/ledger/import/dividends', 'Import'],
+      ['/app/import/dividends', '/app/ledger/import?view=dividends', 'Import'],
       ['/app/reconcile', '/app/ledger/reconcile', 'Reconcile'],
       ['/app/budgets', '/app/planning/budgets', 'Budgets'],
       ['/app/recurring', '/app/planning/recurring', 'Recurring'],
@@ -25,12 +26,18 @@ for (const width of [1280, 390]) {
     for (const [from, to, tab] of paths) {
       await test.step(from, async () => {
         await page.goto(`${from}${state}`);
-        await expect(page).toHaveURL(`${to}${state}`);
+        const expected = new URL(to, 'http://example.test');
+        const retained = new URL(state, 'http://example.test/');
+        const targetParams = new URLSearchParams(expected.search);
+        expected.search = retained.search;
+        for (const [key, value] of targetParams) expected.searchParams.set(key, value);
+        expected.hash = retained.hash;
+        await expect(page).toHaveURL(expected.pathname + expected.search + expected.hash);
         await expect(page.locator('main h1')).toBeVisible();
         const section = to.startsWith('/app/ledger') ? 'Ledger' : 'Planning';
-        const tabPath = to.includes('/register') ? '/app/ledger/accounts'
+        const tabPath = to.includes('/register') ? '/app/ledger'
           : to.includes('/categories/') ? '/app/ledger/categories'
-          : to.endsWith('/dividends') ? '/app/ledger/import' : to;
+          : to.includes('?view=dividends') ? '/app/ledger/import' : to;
         const current = page.getByRole('navigation', { name: `${section} pages`, exact: true })
           .locator(`a[href="${tabPath}"]`);
         await expect(current).toHaveAttribute('aria-current', 'page');

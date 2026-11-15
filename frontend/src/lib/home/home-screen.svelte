@@ -61,7 +61,7 @@
     <div class="rounded-(--radius-panel) border border-border bg-surface p-6 text-left">
       <h2 class="text-lg font-semibold">{m.briefing_start_title()}</h2>
       <p class="mt-2 text-sm leading-6 text-muted">{m.briefing_start_copy()}</p>
-      <a href="/app/ledger/accounts" class="mt-4 inline-flex min-h-11 items-center rounded-(--radius-control) bg-accent px-4 text-sm font-semibold text-accent-foreground">{m.briefing_start_action()}</a>
+      <a href="/app/ledger" class="mt-4 inline-flex min-h-11 items-center rounded-(--radius-control) bg-accent px-4 text-sm font-semibold text-accent-foreground">{m.briefing_start_action()}</a>
     </div>
   {:else if home && headline}
     <div class="relative" {@attach dismissible(() => menuOpen, closeMenu)}>

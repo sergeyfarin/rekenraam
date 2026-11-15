@@ -28,7 +28,7 @@ describe('route registry', () => {
   });
 
   it('gives a detail page the tab it belongs to as its breadcrumb', () => {
-    expect(breadcrumbs(routeFor('/app/ledger/accounts/7/register'))).toEqual([{ label: 'Accounts', href: '/app/ledger/accounts' }]);
+    expect(breadcrumbs(routeFor('/app/ledger/accounts/7/register'))).toEqual([{ label: 'Overview', href: '/app/ledger' }]);
     expect(breadcrumbs(routeFor('/app/ledger/categories/3'))).toEqual([{ label: 'Categories', href: '/app/ledger/categories' }]);
     expect(breadcrumbs(routeFor('/app/ledger/transactions'))).toEqual([]);
   });
@@ -87,7 +87,7 @@ describe('route registry', () => {
 
   it('matches dynamic segments and marks the parent tab current', () => {
     expect(routeFor('/app/ledger/accounts/12/register')?.route).toBe('/app/ledger/accounts/[id]/register');
-    expect(currentTab(routeFor('/app/ledger/accounts/12/register'))).toBe('/app/ledger/accounts');
+    expect(currentTab(routeFor('/app/ledger/accounts/12/register'))).toBe('/app/ledger');
     expect(currentTab(routeFor('/app/investments/instruments/7'))).toBe('/app/investments/instruments');
     expect(routeFor('/app/ledger/accounts/12')).toBeUndefined();
     expect(routeFor('/app/reports/spending/')?.route).toBe('/app/reports/spending');
@@ -109,13 +109,12 @@ describe('legacy links', () => {
   // Include detail routes and duplicates/empty/encoded/unknown parameters: a
   // redirect must preserve the entire URL state, not a known filter allowlist.
   it.each([
-    ['/app/accounts', '/app/ledger/accounts'],
+    ['/app/accounts', '/app/ledger'],
     ['/app/accounts/12/register', '/app/ledger/accounts/12/register'],
     ['/app/transactions', '/app/ledger/transactions'],
     ['/app/categories', '/app/ledger/categories'],
     ['/app/categories/7', '/app/ledger/categories/7'],
     ['/app/import', '/app/ledger/import'],
-    ['/app/import/dividends', '/app/ledger/import/dividends'],
     ['/app/reconcile', '/app/ledger/reconcile'],
     ['/app/budgets', '/app/planning/budgets'],
     ['/app/recurring', '/app/planning/recurring'],
@@ -133,6 +132,16 @@ describe('legacy links', () => {
       expect(canonicalURL(next)).toBeNull();
       expect(routeFor(next.pathname)?.legacy).toBeUndefined();
     }
+  });
+
+  it.each(['/app/import/dividends', '/app/ledger/import/dividends'])('moves %s into the Dividends view', from => {
+    const next = canonicalURL(url(`${from}?batch_id=7&future=x#review`))!;
+    expect(next.pathname).toBe('/app/ledger/import');
+    expect(next.searchParams.get('view')).toBe('dividends');
+    expect(next.searchParams.get('batch_id')).toBe('7');
+    expect(next.searchParams.get('future')).toBe('x');
+    expect(next.hash).toBe('#review');
+    expect(canonicalURL(next)).toBeNull();
   });
 
   it('gives every legacy entry an existing canonical destination', () => {

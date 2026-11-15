@@ -1714,5 +1714,6 @@
   "transactions_entry_amount_positive": "Saisissez le montant sans signe. Le type de transaction fixe son sens.",
   "transactions_entry_split_direction": "Ces montants vont dans l’autre sens pour {account} : choisissez « {tab} » ou modifiez les montants.",
   "transactions_entry_review_stale": "La transaction a changé après cette vérification. Enregistrez de nouveau pour la vérifier telle qu’elle est maintenant.",
-  "transactions_entry_search_keywords": "ajouter nouvelle transaction retrait dépôt débit crédit paiement"
+  "transactions_entry_search_keywords": "ajouter nouvelle transaction retrait dépôt débit crédit paiement",
+  "accounts_filter_status_archived": "Archivés"
 }

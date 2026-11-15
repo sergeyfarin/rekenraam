@@ -13,9 +13,13 @@
   import { maskFinancialText, formatQuantity } from '#lib/money/format.ts';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { m } from '#lib/paraglide/messages.js';
-  let { review, accounts, currencies, instruments, csrfToken, onSaved }: {
+  // held: another write on the same batch is in flight (an embedding Import
+  // screen's Files write, or another row's save); onPending reports this
+  // row's own save so the screen can hold its writes in turn (#567 review).
+  let { review, accounts, currencies, instruments, csrfToken, onSaved, held = false, onPending }: {
     review: ImportDividendReview; accounts: AccountResponse[]; currencies: CurrencyResponse[];
     instruments: InvestmentInstrumentResponse[]; csrfToken: string; onSaved: (id: number, repaired: boolean) => void | Promise<void>;
+    held?: boolean; onPending?: (pending: boolean) => void;
   } = $props();
   let resolution = $state<ImportResolution>(untrack(() => ({ ...review.resolution })));
   // Bind the token to these editable fields, not a newer list response.
@@ -36,7 +40,12 @@
   function request(reviewed: ReviewedCheckpoints = []) {
     return { resolution, expected_transaction_version_id: expectedTransactionVersionID, reason, reconciliation_override: false, ...checkpointOverride(reviewed) };
   }
+  $effect(() => {
+    onPending?.(pending);
+    return () => onPending?.(false);
+  });
   async function save(reviewed: ReviewedCheckpoints = []) {
+    if (held && !pending) return;
     pending = true; error = undefined;
     try {
       const transaction = await reviewImportDividend(review, request(reviewed), csrfToken);
@@ -54,7 +63,9 @@
     finally { pending = false; }
   }
   async function submit(event: SubmitEvent) {
-    event.preventDefault(); pending = true; error = undefined;
+    event.preventDefault();
+    if (pending || held) return;
+    pending = true; error = undefined;
     try {
       const preview = await importDividendReviewImpact(review, request());
       if (preview.affected_checkpoints.length) { impact = preview; return; }
@@ -79,10 +90,10 @@
     </label>
   {/if}
   <APIFormError {error} id={`dividend-review-error-${review.row_id}`} />
-  <button type="submit" disabled={pending || !csrfToken} class="min-h-11 rounded-(--radius-control) bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-60">
+  <button type="submit" disabled={pending || held || !csrfToken} class="min-h-11 rounded-(--radius-control) bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-60">
     {repaired ? m.import_dividend_repair() : m.import_dividend_record()}
   </button>
 </form>
 {#if impact}
-  <ReconciliationConfirm impacts={impact.affected_checkpoints} {pending} onCancel={() => { impact = null; }} onConfirm={() => void save(impact?.affected_checkpoints ?? [])} />
+  <ReconciliationConfirm impacts={impact.affected_checkpoints} pending={pending || held} onCancel={() => { impact = null; }} onConfirm={() => void save(impact?.affected_checkpoints ?? [])} />
 {/if}

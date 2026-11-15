@@ -96,9 +96,8 @@ export const sections: readonly Section[] = [
   { id: 'reports', title: () => m.reports_nav(), overview: '/app/reports' }
 ];
 
-// Order within a section is tab order. The Ledger, Planning and Reports
-// overviews are placeholders until #448 and #450; Accounts stays a Ledger tab
-// until #448 folds it into the Ledger overview.
+// Order within a section is tab order. Planning and Reports overviews remain
+// placeholders until #450; Ledger Overview owns the account index (#448).
 type RouteDefinition = Omit<RouteEntry, 'title' | 'keywords'> & {
   /** Extra localized search terms this page still answers to. */
   keywords?: readonly TitleKey[];
@@ -108,14 +107,14 @@ const definitions: readonly RouteDefinition[] = [
   { route: '/app/review', section: 'review', titleKey: 'attention_review', icon: 'scan-line', width: 'standard', standalone: true },
   { route: '/app', section: 'home', titleKey: 'nav_home', icon: 'house', width: 'fluid', ownHeader: true },
 
-  { route: '/app/ledger', section: 'ledger', titleKey: 'nav_overview', icon: 'landmark', width: 'standard', tab: true },
-  { route: '/app/ledger/accounts', section: 'ledger', titleKey: 'accounts_title', icon: 'landmark', width: 'standard', tab: true },
-  { route: '/app/ledger/accounts/[id]/register', section: 'ledger', titleKey: 'accounts_title', icon: 'list', width: 'fluid', parent: '/app/ledger/accounts', ownHeader: true },
+  { route: '/app/ledger', section: 'ledger', titleKey: 'nav_overview', icon: 'landmark', width: 'standard', tab: true, ownHeader: true, keywords: ['accounts_title'] },
+  { route: '/app/ledger/accounts', section: 'ledger', titleKey: 'accounts_title', icon: 'landmark', width: 'standard', legacy: true },
+  { route: '/app/ledger/accounts/[id]/register', section: 'ledger', titleKey: 'accounts_title', icon: 'list', width: 'fluid', parent: '/app/ledger', ownHeader: true },
   { route: '/app/ledger/transactions', attention: ['transaction_review'], section: 'ledger', titleKey: 'transactions_page_title', icon: 'list', width: 'fluid', tab: true, ownHeader: true },
   { route: '/app/ledger/categories', section: 'ledger', titleKey: 'categories_title', icon: 'tags', width: 'standard', tab: true },
   { route: '/app/ledger/categories/[id]', section: 'ledger', titleKey: 'categories_title', icon: 'tags', width: 'fluid', parent: '/app/ledger/categories', ownHeader: true },
   { route: '/app/ledger/import', attention: ['imports', 'connections'], section: 'ledger', titleKey: 'import_title', icon: 'download', width: 'fluid', tab: true },
-  { route: '/app/ledger/import/dividends', section: 'ledger', titleKey: 'import_dividend_title', icon: 'download', width: 'fluid', parent: '/app/ledger/import', ownHeader: true },
+  { route: '/app/ledger/import/dividends', section: 'ledger', titleKey: 'import_dividend_title', icon: 'download', width: 'fluid', legacy: true },
   { route: '/app/ledger/reconcile', section: 'ledger', titleKey: 'reconcile_title', icon: 'scan-line', width: 'fluid', tab: true },
 
   { route: '/app/investments', attention: ['suggestions'], section: 'investments', titleKey: 'nav_overview', icon: 'chart-no-axes-combined', width: 'standard', tab: true, ownHeader: true },
@@ -153,8 +152,8 @@ const definitions: readonly RouteDefinition[] = [
 ];
 
 // Keep the old page families until old bookmarks no longer need them (#460).
-// Accounts remains a tab until #448 folds its list into the Ledger overview;
-// registers already have their lasting section-owned path.
+// Account-list aliases redirect directly to Ledger Overview (#448); register
+// detail paths retain their lasting section-owned addresses.
 const sectionRouteMoves = [
   ['/app/accounts', '/app/ledger/accounts'],
   ['/app/transactions', '/app/ledger/transactions'],
@@ -253,6 +252,13 @@ export function canonicalURL(url: Pick<URL, 'href' | 'pathname' | 'search'>): UR
     return next;
   };
   const path = url.pathname.replace(/\/$/, '') || '/';
+
+  if (path === '/app/accounts' || path === '/app/ledger/accounts') return move('/app/ledger');
+
+  if (path === '/app/import/dividends' || path === '/app/ledger/import/dividends') {
+    params.set('view', 'dividends');
+    return move('/app/ledger/import');
+  }
 
   if (routeFor(path)?.legacy) {
     const moved = sectionRouteMoves.find(([from]) => path === from || path.startsWith(`${from}/`));

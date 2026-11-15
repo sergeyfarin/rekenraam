@@ -79,7 +79,7 @@ test.describe.serial('imported cash payments', () => {
     await apiJSON(page, 'POST', '/api/v1/import-connections', f.csrfToken, {
       source: 'trading212', display_name: connectionName, api_key: apiKey, cash_account_id: f.cash.id
     });
-    await page.goto('/app/ledger/import');
+    await page.goto('/app/ledger/import?view=connections');
     await page.getByRole('row').filter({ hasText: connectionName }).getByRole('button', { name: 'Import', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Commit to ledger' })).toBeVisible({ timeout: 15_000 });
     const reviews = await apiJSON<{ rows: Array<{ batch_id: number; row_id: number; state: string; resolution: { account_id?: number } }> }>(page, 'GET', '/api/v1/import-dividends');
@@ -108,7 +108,7 @@ test.describe.serial('imported cash payments', () => {
     await expect(card.getByText(new RegExp(`Source names Coverage payer ${f.suffix}`))).toBeVisible();
     await expect(card.getByText(new RegExp(`Source evidence: ${f.ticker}`))).toBeVisible();
     await card.getByRole('link', { name: 'Review gross, tax and payer', exact: true }).click();
-    await page.waitForURL(`**/app/ledger/import/dividends?batch_id=${row.batch_id}`);
+    await page.waitForURL(`**/app/ledger/import?view=dividends&batch_id=${row.batch_id}`);
     await expect(page.getByRole('heading', { name: 'Repair previously imported cash payment', exact: true })).toBeVisible();
   });
 

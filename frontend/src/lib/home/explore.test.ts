@@ -105,7 +105,7 @@ describe('cashflow', () => {
     expect(cashflowWidget(home({ cashflow: { status: 'ok', summary: quiet } }), 'en').state).toBe('zero');
     const none = cashflowWidget(home({ cashflow: { status: 'ok', summary: { ...quiet, account_count: 0 } } }), 'en');
     expect(none.state).toBe('not_set_up');
-    expect(none.action?.href).toBe('/app/ledger/accounts');
+    expect(none.action?.href).toBe('/app/ledger');
   });
 
   it('masks amounts while they are hidden', () => {

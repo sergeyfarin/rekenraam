@@ -21,7 +21,7 @@ test('[acceptance] accounts can be created, renamed and closed at 390 px', async
   // Seed the collision here so this journey never depends on worker history.
   await createCashAccount(page, csrfToken, `Name collision ${suffix}`, currencyID);
 
-  await page.goto('/app/ledger/accounts');
+  await page.goto('/app/ledger');
   await page.getByRole('button', { name: 'Add account' }).first().click();
   let form = page.locator('form').filter({ has: page.getByRole('button', { name: 'Create account' }) });
   await form.getByLabel('Name', { exact: true }).fill(name);

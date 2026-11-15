@@ -1,4 +1,7 @@
 <script lang="ts">
+  import LedgerValue from './ledger-value.svelte';
+  import { noDependents, type ChildDependents } from './dependents.ts';
+  import type { LedgerOverview, LedgerAccount } from '#lib/api/ledger.ts';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import Archive from '@lucide/svelte/icons/archive';
   import BuildingComplex from '@lucide/svelte/icons/building-complex';
@@ -38,6 +41,8 @@
 
   let {
     accounts,
+    values = new Map(),
+    commodities = [],
     institutions,
     currenciesByID,
     countryNames,
@@ -50,10 +55,12 @@
     onEditInstitution,
     onDeleteInstitution,
     institutionAccountCounts,
-    allAccountChildCounts,
+    childDependentCounts,
     actionPendingKey
   }: {
     accounts: AccountResponse[];
+    values?: ReadonlyMap<number, LedgerAccount['value']>;
+    commodities?: LedgerOverview['commodities'];
     institutions: InstitutionResponse[];
     currenciesByID: ReadonlyMap<number, CurrencyResponse>;
     countryNames: Intl.DisplayNames;
@@ -66,7 +73,7 @@
     onEditInstitution: (institution: InstitutionResponse) => void;
     onDeleteInstitution: (institution: InstitutionResponse) => void;
     institutionAccountCounts: ReadonlyMap<number, number>;
-    allAccountChildCounts: ReadonlyMap<number, number>;
+    childDependentCounts: ReadonlyMap<number, ChildDependents>;
     actionPendingKey: string;
   } = $props();
 
@@ -295,7 +302,7 @@
         {#each root.rows as row (row.account.id)}
           {@const account = row.account}
           {@const hasChildren = (visibleAccountChildCounts.get(account.id) ?? 0) > 0}
-          {@const hasAnyChildren = (allAccountChildCounts.get(account.id) ?? 0) > 0}
+          {@const dependents = childDependentCounts.get(account.id) ?? noDependents}
           {@const accountCollapsed = collapsedNodeIDs.has(accountNodeID(account.id))}
           <!--
             Stretched-link pattern: the <a> for the register covers the whole row via
@@ -343,7 +350,7 @@
             </div>
 
             <div class="min-w-0 text-sm">
-              <p class="truncate text-foreground">{accountCommodityLabel(account, currenciesByID)}</p>
+              <LedgerValue value={values.get(account.id) ?? null} {commodities} />
               {#if account.number_last4}
                 <p class="mt-1 truncate text-xs text-muted">{m.accounts_number_hint({ last4: account.number_last4 })}</p>
               {:else}
@@ -374,7 +381,7 @@
                   type="button"
                   class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-50"
                   onclick={() => onCloseAccount(account)}
-                  disabled={hasAnyChildren || actionPendingKey === `close:${account.id}`}
+                  disabled={dependents.active > 0 || actionPendingKey === `close:${account.id}`}
                   aria-label={m.accounts_action_close({ name: accountDisplayName(account) })}
                   title={m.accounts_action_close({ name: accountDisplayName(account) })}
                 >
@@ -385,7 +392,7 @@
                   type="button"
                   class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-50"
                   onclick={() => onArchiveAccount(account)}
-                  disabled={hasAnyChildren || actionPendingKey === `archive:${account.id}`}
+                  disabled={dependents.unarchived > 0 || actionPendingKey === `archive:${account.id}`}
                   aria-label={m.accounts_action_archive({ name: accountDisplayName(account) })}
                   title={m.accounts_action_archive({ name: accountDisplayName(account) })}
                 >
@@ -397,7 +404,7 @@
                 type="button"
                 class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-danger/30 bg-danger-soft text-danger transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 onclick={() => onDeleteAccount(account)}
-                disabled={hasAnyChildren || actionPendingKey === `delete:${account.id}`}
+                disabled={dependents.all > 0 || actionPendingKey === `delete:${account.id}`}
                 aria-label={m.accounts_action_delete({ name: accountDisplayName(account) })}
                 title={m.accounts_action_delete({ name: accountDisplayName(account) })}
               >

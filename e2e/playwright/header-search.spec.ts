@@ -20,7 +20,7 @@ for (const theme of ['light', 'dark'] as const) {
     await readyForLedger(page);
     await page.evaluate(value => localStorage.setItem('rekenraam-theme', value), theme);
     await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto('/app/ledger/accounts');
+    await page.goto('/app/ledger');
     const button = headerButton(page);
     await expect(button).toBeVisible();
     await expect(button).toHaveAttribute('aria-keyshortcuts', 'Control+K');
@@ -63,7 +63,7 @@ for (const theme of ['light', 'dark'] as const) {
 test('slash and Ctrl/⌘ K open the centred search from any page, select and close it', async ({ page }) => {
   await readyForLedger(page);
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto('/app/ledger/accounts');
+  await page.goto('/app/ledger');
   await expect(headerButton(page)).toBeVisible();
 
   // With nothing focused, closing returns focus to the header button.
@@ -166,7 +166,7 @@ test('the shortcut hint says ⌘ K on Apple platforms', async ({ page }) => {
   });
   await readyForLedger(page);
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto('/app/ledger/accounts');
+  await page.goto('/app/ledger');
   const button = page.locator('.shell-bar').getByRole('button', { name: 'Search ⌘ K', exact: true });
   await expect(button).toBeVisible();
   await expect(button).toHaveAttribute('aria-keyshortcuts', 'Meta+K');
@@ -179,7 +179,7 @@ test('the button label and Ctrl key are localized in every locale', async ({ pag
     ...JSON.parse(readFileSync(path.join(repoRoot, 'frontend/messages/app/en.json'), 'utf8')),
     ...JSON.parse(readFileSync(path.join(repoRoot, 'frontend/messages/app', `${locale}.json`), 'utf8'))
   }) as Record<string, string>;
-  await page.goto('/app/ledger/accounts');
+  await page.goto('/app/ledger');
   for (const locale of ['en', 'nl', 'ru', 'es', 'fr', 'de']) {
     const text = messages(locale);
     await page.evaluate(value => localStorage.setItem('PARAGLIDE_LOCALE', value), locale);
@@ -197,7 +197,7 @@ for (const width of [320, 800]) {
   test(`header search reflows without sideways scroll at ${width}px`, async ({ page }) => {
     await readyForLedger(page);
     await page.setViewportSize({ width, height: 800 });
-    await page.goto('/app/ledger/accounts');
+    await page.goto('/app/ledger');
     const trigger = width < 768
       ? page.locator('.shell-bar').getByRole('button', { name: 'Search', exact: true })
       : headerButton(page);

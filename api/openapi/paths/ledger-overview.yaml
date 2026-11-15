@@ -1,0 +1,57 @@
+get:
+  summary: Ledger overview
+  description: >-
+    One composed ledger read, with institution metadata, exact balances and
+    brokerage positions. Holding accounts are hidden from the index but valued
+    with their nearest non-holding parent. Values use Net worth's live_raw_v1
+    policy, default currency and seven-day rate window, including unsettled
+    investment cash. Unpriced or unclassified negative positions leave value
+    null, never zero. No provider requests or writes. Session-only.
+  security:
+    - CookieSession: []
+  parameters:
+    - in: query
+      name: as_of
+      schema: { type: string, format: date }
+      description: Owner-local today by default.
+    - in: query
+      name: cursor
+      schema: { type: string }
+      description: Opaque continuation returned by next_cursor. Keep as_of when continuing.
+  responses:
+    '200':
+      description: Ledger accounts and institutions; at most 100 account rows per page.
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/LedgerOverviewResponse'
+    '400':
+      description: Invalid query
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    '401':
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    '404':
+      description: Account not found
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    '422':
+      description: Ledger overflow
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    '500':
+      description: Read failed
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
