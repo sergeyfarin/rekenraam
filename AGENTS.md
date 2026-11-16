@@ -39,7 +39,7 @@ Most requests are one of two modes. Decide which one you are in before you start
 
 **Work an issue** (implement an issue, bug fix or feature) — `work-issue` skill:
 
-- Branch from the latest canonical `main` (`upstream/main` in a fork, otherwise `origin/main`), build the slice, validate it.
+- Branch from the latest canonical `main`, build the slice, and validate it.
 - Finish with a pushed branch and an open, ready-for-review pull request. Do this without asking; it overrides any machine-wide default to wait for a request. Never merge.
 - While in the code, look for bugs, weak tests, code smells and improvement opportunities beyond the task. A finding that is small, local and needs no migration, API contract change or owner decision is fixed in the same pull request as its own commit. Anything else, and anything that changes a financial result, becomes a GitHub issue. Nothing is left only in the conversation.
 
@@ -49,7 +49,7 @@ Most requests are one of two modes. Decide which one you are in before you start
 - Review only. No edits, commits, pushes, pull request comments or new issues unless the owner asks for that specific thing. Describe a fix; do not make it.
 - Report a verdict, then verified findings ranked `P0`–`P3` with `file:line`.
 
-Four recurring tasks have their own skill. The last three are run as *work an issue*: they end in a pull request, fix what is small and file issues for the rest.
+Four recurring tasks have their own skill. The last three use *work an issue* for repository changes. A maintenance run with only GitHub issue updates ends with links to those updates.
 
 - **Shape an issue** — `shape-issue`: turn an idea, bug report or finding into an implementation-ready issue. No code, no branch.
 - **Update dependencies** — `update-dependencies`: Dependabot, security alerts, upgrades, and what the new versions make possible.
@@ -60,7 +60,7 @@ A request that fits none of these (a question, an investigation) follows the own
 
 Two rules bound every task:
 
-- **The requested outcome sets the side effects.** A request to check, find, list or assess returns findings in the session. A request to draft or propose returns text. Only a request to fix, build, update, sweep or file — or invoking a task skill by name — runs that skill's write workflow (branch, commits, pull request, issues, labels, comments). When the wording is unclear, report first and ask.
+- **The requested outcome sets the side effects.** An explicit limit such as check, audit, assess, report, draft, propose, read-only or dry run takes precedence over a named skill or slash command. Standalone requests to find or list return findings. Within a named skill, "find every copy" describes the work and "only find" limits it to a report. Return findings or draft text in the session for limited requests. For a compound request, apply each limit to its stated stage and carry out any separately requested action. A write request or a named write-capable skill with no explicit limit runs that skill's write workflow. When the wording is unclear, report first and ask.
 - **A suspected security vulnerability is never made public before it is fixed.** Do not describe it in a public issue, pull request, commit message or comment. Report it to the owner in the session and follow `SECURITY.md` (GitHub private vulnerability reporting). An advisory GitHub has already published may be tracked publicly.
 
 ## Task Skills
@@ -89,6 +89,7 @@ Two rules bound every task:
 
 ## Working Rules
 
+- Resolve GitHub repository targets explicitly. Use the repository in an explicit PR URL for review and the canonical repository for bare numbers and repository-wide work. Follow [GitHub repository selection](docs/developer-workflow.md#github-repository-selection) for targets and fork handling.
 - Deliver incrementally, one feature slice at a time.
 - Do not attempt broad archive-to-current-stack conversion in one change.
 - Prefer minimal, durable implementations over speculative abstractions.

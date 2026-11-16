@@ -16,42 +16,50 @@ opinion, and its fixes reach `main` unreviewed.
 
 ## Prepare
 
-- Read the pull request and what it claims, and record the head commit you
-  are reviewing:
+- Set `$repo` and `$n` from the PR URL (the owner/repository and number in
+  `https://github.com/<owner>/<repo>/pull/<n>`). For a bare number, use
+  [GitHub repository selection](../../../docs/developer-workflow.md#github-repository-selection).
+  Use these values for all lookups, including comments requested by the owner.
+- Read the metadata and capture its head SHA from the same GitHub response:
   ```sh
-  gh pr view <n> --json title,body,baseRefName,commits,files
-  sha=$(gh pr view <n> --json headRefOid --jq .headRefOid)
-  gh pr diff <n>; gh pr checks <n>
+  : "${repo:?resolve repo first}" "${n:?set PR number first}"
+  metadata=$(gh pr view "$n" --repo "$repo" \
+    --json title,body,baseRefName,headRefOid,commits,files,statusCheckRollup) || exit 1
+  sha=$(jq -er .headRefOid <<< "$metadata") || exit 1
+  printf '%s\n' "$metadata"
+  gh pr diff "${n:?set PR number first}" --repo "${repo:?resolve repo first}"
   ```
-  Everything below reviews `$sha`. If the pull request moves on during the
-  review, say so and start again from this step.
+  Review and test only the recorded `$sha`. Compare it with the live
+  `headRefOid` after reading the diff and again before reporting. If the head
+  moves, tell the owner and restart from the metadata step with the new SHA.
+  Refresh the diff and closing references, fetch the new head, and replace
+  the review worktree before testing again.
 - Find the issues it closes. `closingIssuesReferences` is not a
   `gh pr view` field in every `gh` release, so ask GraphQL:
   ```sh
-  gh api graphql -F owner='{owner}' -F name='{repo}' -F n=<n> -f query='
+  : "${repo:?resolve repo first}" "${n:?set PR number first}"
+  gh api graphql -F owner="${repo%%/*}" -F name="${repo#*/}" -F n="$n" -f query='
     query($owner:String!,$name:String!,$n:Int!){repository(owner:$owner,name:$name){
       pullRequest(number:$n){closingIssuesReferences(first:50){nodes{number title state}}}}}' \
     --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[]'
   ```
   Also read `Closes`/`Refs` lines in the body; they can disagree.
-- Read the linked issue with its acceptance, the governing plan or ADR, and
-  where the work sits in `docs/roadmap.md`.
-- Get the code without disturbing the working tree. Fetch from the
-  repository that owns the pull request — the one `gh` resolved above, not
-  whatever `origin` is — and check that you got the commit GitHub reports:
+- Read the linked issue and its acceptance in its own repository. Use
+  `--repo "${repo:?resolve repo first}"` for same-repository issue numbers.
+  Read the governing plan or ADR and locate the work in `docs/roadmap.md`.
+- Fetch the PR head from the resolved repository. In a fork, `origin` can
+  have a different pull request with the same number. Verify the recorded SHA:
   ```sh
-  repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
-  if git fetch "https://github.com/$repo.git" "pull/<n>/head" \
+  : "${repo:?resolve repo first}" "${n:?set PR number first}" "${sha:?capture PR head first}"
+  if git fetch "https://github.com/$repo.git" "refs/pull/$n/head" \
      && [ "$(git rev-parse FETCH_HEAD)" = "$sha" ]; then
-    git worktree add --detach .claude/worktrees/review-<n> "$sha"
+    git worktree add --detach ".claude/worktrees/review-$n" "$sha"
   else
     echo "fetch failed or wrong commit: do not review" >&2; false
   fi
   ```
   The worktree is created only when the fetch succeeded and returned `$sha`
-  from the metadata step. In a fork, `origin` is the fork and its pull request
-  <n> is a different pull request; a commit that is already present locally
-  can also satisfy a careless check. Never review a commit other than `$sha`.
+  from the metadata step. Use the verified worktree for local validation.
 - Use `.claude/worktrees/` (git-ignored); a worktree under `/tmp` disappears
   on reboot. Run every command there with `git -C` or an absolute path, so a
   failed `cd` cannot run it in the main checkout. Run tests and builds there.

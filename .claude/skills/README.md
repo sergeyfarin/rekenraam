@@ -88,6 +88,8 @@ body tells the agent to read it. Three consequences:
 - `AGENTS.md` is the only repo-wide instruction file. `CLAUDE.md` stays the
   single line `@AGENTS.md`. Do not add harness-specific copies or content
   (in `CLAUDE.md`, Copilot or Cursor instruction files); they drift from it.
+- Follow [Task Modes](../../AGENTS.md#task-modes) for scope and [GitHub repository
+  selection](../../docs/developer-workflow.md#github-repository-selection) for targets.
 - Every `gh ... list` and `gh api` survey in a skill passes `--limit` or
   `--paginate`, and every `--json` field must exist in the oldest `gh` in use
   (2.46 here). Run a command once before putting it in a skill, and run its
