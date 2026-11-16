@@ -156,11 +156,11 @@ updates with links and finishes there.
 ```
 /sweep-bug-class 13
 /sweep-bug-class the bug fixed in #577
-/sweep-bug-class check whether the bug fixed in #577 exists anywhere else
+/sweep-bug-class audit the bug fixed in #577
 ```
 
-The first two run the full sweep. The third is a check: it reports every hit
-with a verdict and changes nothing.
+The first two run the full sweep. The audit returns each hit and its verdict
+in the session.
 
 Give it an entry number from the bug-class catalogue
 (`.claude/skills/validate-and-ship/bug-classes/`), a pull request that just

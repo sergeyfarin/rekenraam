@@ -1,6 +1,6 @@
 ---
 name: sweep-bug-class
-description: Hunt for every remaining instance of one known bug class across the whole Rekenraam tree - search for the pattern rather than the copies a ticket named, count and classify every hit, and prove the real ones. An explicit check returns findings, even when invoked by name. A full sweep also fixes or files instances and opens a pull request for tracked changes. Use when asked to sweep, hunt, audit or grep for a bug class or pattern, to check whether a bug that was just fixed exists elsewhere, or to work through an entry in the bug-class catalogue.
+description: Hunt for every remaining instance of one known bug class across the whole Rekenraam tree - search for the pattern rather than the copies a ticket named, count and classify every hit, and prove the real ones. An explicit check or audit returns findings, even when invoked by name. A full sweep also fixes or files instances and opens a pull request for tracked changes. Use when asked to sweep, hunt, audit or grep for a bug class or pattern, to check whether a bug that was just fixed exists elsewhere, or to work through an entry in the bug-class catalogue.
 ---
 
 # Sweep One Bug Class
@@ -14,7 +14,7 @@ one class and finds all of it.
 
 Select the outcome using [Task Modes](../../../AGENTS.md#task-modes):
 
-- **Check** ("does this exist elsewhere?", "check", "only list"): steps 1–4
+- **Check** ("does this exist elsewhere?", "check", "audit", "only list"): steps 1–4
   and the report. No branch, no edits to the checkout, nothing written to
   GitHub. Any probe that needs code changed (a failing test, a broken
   behaviour) runs in a scratch worktree under `.claude/worktrees/`, is never

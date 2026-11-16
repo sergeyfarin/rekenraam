@@ -124,6 +124,10 @@ Then open `http://localhost:1888`. Vite proxies `/api` to the backend on the
 development host, so the frontend port is the only required forward. Use an
 HTTPS reverse proxy for direct access from phones or other LAN clients.
 
+Set `OPEN_EXCHANGE_RATES_APP_ID` in the backend environment to enable
+[Open Exchange Rates](adrs/0008-investment-market-data-boundaries.md) as an
+FX source. Keep the app ID in the environment or secrets store.
+
 ### Public website
 
 The separate `website/` project renders static HTML for the app's six locales.
@@ -516,6 +520,9 @@ why the old matrix took hours; [current delivery measurements](reviews/payment-a
 record the new outcomes and costs.
 
 ### Local Owner Recovery
+
+Use `recover-owner` for password resets and leave the `users` table unedited.
+Recovery revokes existing sessions and personal access tokens.
 
 Stop the server first: the command holds the same database lock as the
 server and `restore`, and refuses while the server runs, so no in-flight
@@ -1103,16 +1110,18 @@ For a bare number, use the configured `upstream` remote when present.
 Otherwise inspect `origin` and use its GitHub parent if it is a fork:
 
 ```sh
-if remote_url=$(git remote get-url upstream 2>/dev/null); then
-  repo=$(gh repo view "${remote_url:?missing upstream URL}" --json nameWithOwner --jq .nameWithOwner) || exit 1
-else
-  remote_url=$(git remote get-url origin) || exit 1
-  repository=$(gh repo view "${remote_url:?missing origin URL}" --json nameWithOwner,isFork,parent) || exit 1
-  repo=$(jq -er 'if .isFork then
-    .parent | select(.owner.login and .name) | "\(.owner.login)/\(.name)"
-    else .nameWithOwner end' <<< "$repository") || exit 1
-fi
-: "${repo:?resolve repo first}"
+repo=$(
+  if remote_url=$(git remote get-url upstream 2>/dev/null); then
+    resolved_repo=$(gh repo view "${remote_url:?missing upstream URL}" --json nameWithOwner --jq .nameWithOwner) || exit 1
+  else
+    remote_url=$(git remote get-url origin) || exit 1
+    repository=$(gh repo view "${remote_url:?missing origin URL}" --json nameWithOwner,isFork,parent) || exit 1
+    resolved_repo=$(jq -er 'if .isFork then
+      .parent | select(.owner.login and .name) | "\(.owner.login)/\(.name)"
+      else .nameWithOwner end' <<< "$repository") || exit 1
+  fi
+  printf '%s\n' "${resolved_repo:?resolve repo first}"
+)
 ```
 
 Each shell call can start fresh. Resolve `repo` in the same call as the
