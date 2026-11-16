@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // ReferenceVersionBackdatedError refuses changes that cannot take effect in
@@ -155,14 +156,15 @@ func referenceWindowDatesTx(ctx context.Context, tx *sql.Tx, own referenceVersio
 	if err := tx.QueryRowContext(ctx, `SELECT MIN(effective_from) FROM `+own.table+` WHERE `+own.key+` = ? AND effective_from > ?`, entityID, effectiveFrom).Scan(&end); err != nil {
 		return nil, fmt.Errorf("read %s window end: %w", own.table, err)
 	}
-	query := `SELECT ?`
+	var query strings.Builder
+	query.WriteString(`SELECT ?`)
 	args := []any{effectiveFrom}
 	for _, source := range sources {
-		query += ` UNION SELECT effective_from FROM (` + source.query + `) WHERE effective_from > ? AND (? IS NULL OR effective_from < ?)`
+		query.WriteString(` UNION SELECT effective_from FROM (` + source.query + `) WHERE effective_from > ? AND (? IS NULL OR effective_from < ?)`)
 		args = append(args, source.args...)
 		args = append(args, effectiveFrom, end, end)
 	}
-	rows, err := tx.QueryContext(ctx, query+` ORDER BY 1`, args...)
+	rows, err := tx.QueryContext(ctx, query.String()+` ORDER BY 1`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("read %s window dates: %w", own.table, err)
 	}
