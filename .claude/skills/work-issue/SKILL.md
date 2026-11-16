@@ -12,10 +12,15 @@ machine-wide default to wait for a request. Never merge and never enable
 auto-merge; the owner merges. Governing rule: *Branches And PRs* in
 `docs/developer-workflow.md`.
 
+For a limited request under [Task Modes](../../../AGENTS.md#task-modes), read
+the issue and return findings or an implementation plan in the session.
+
 ## 1. Understand before changing
 
-- Read the issue with its comments (`gh issue view <n> --comments`), the plan
-  or ADR it links, and its parent issue if it is a slice.
+- Resolve `$repo` using [GitHub repository
+  selection](../../../docs/developer-workflow.md#github-repository-selection).
+- Read the issue with its comments (`gh issue view <n> --repo "${repo:?resolve repo first}" --comments`),
+  the plan or ADR it links, and its parent issue if it is a slice.
 - Implementation needs actionable acceptance (`docs/conventions.md` → Work
   Tracking): problem and evidence, bounded scope, measurable acceptance,
   dependencies, validation. Stop and ask one question, with your
@@ -27,16 +32,14 @@ auto-merge; the owner merges. Governing rule: *Branches And PRs* in
 ## 2. Branch
 
 ```sh
-base=$(git remote | grep -qx upstream && echo upstream || echo origin)
-git fetch "$base"
-git switch -c <type>/<short-name> "$base/main"
+git fetch "https://github.com/${repo:?resolve repo first}.git" refs/heads/main \
+  && git switch -c "${branch:?set new branch name first}" FETCH_HEAD
 ```
 
-Always cut from the latest canonical `main`. In a fork that is
-`upstream/main`, because the fork's own `main` can be behind; in a direct
-clone it is `origin/main`. Never cut from another feature branch, and never
-onto a branch that already has an open pull request for other work. If the
-working tree holds changes that are not yours, stop and ask.
+Set `$branch` to a fresh branch name. In a fork, fetching from the resolved
+repository also works without a local `upstream` remote. Start each task on
+its own branch from canonical `main`. If the working tree holds changes
+that are not yours, stop and ask.
 
 ## 3. Build
 
@@ -67,8 +70,9 @@ and list it under *Also fixed* in the pull request.
 
 **File a GitHub issue** for everything else:
 
-- Search first (`gh issue list --search "<terms>" --state all --limit 100`). Add new
-  evidence to an existing issue as a comment; do not open a duplicate.
+- Search first (`gh issue list --repo "${repo:?resolve repo first}" --search "<terms>" --state all
+  --limit 100`). Add new evidence to the existing issue when it covers the
+  finding. Pass `--repo "${repo:?resolve repo first}"` when filing or commenting.
 - Write it with the sections of `.github/ISSUE_TEMPLATE/work-item.md`:
   evidence with `file:line` and a reproduction, bounded scope, measurable
   acceptance.
@@ -97,12 +101,31 @@ change.
 
 ## 6. Ship
 
-- Commit with Conventional Commits, then `git push -u origin <branch>`. In a
-  fork, `origin` is the fork and the pull request targets the canonical
-  repository; `gh` asks once which repository is the default
-  (`gh repo set-default`), and issues are read and filed there too.
-- `gh pr create --base main`, ready for review, following
-  `.github/pull_request_template.md`. The body states:
+- If the maintenance task changed only GitHub state, finish with the
+  affected links. For tracked changes, commit with Conventional Commits.
+- Push to `origin` and open a ready-for-review PR on the canonical repository.
+  Prepare `$title` and `$body_file` using `.github/pull_request_template.md`:
+
+  ```sh
+  : "${repo:?resolve repo first}" "${title:?set PR title first}" "${body_file:?prepare PR body first}"
+  branch=$(git branch --show-current) || exit 1
+  origin_url=$(git remote get-url --push origin) || exit 1
+  head_repo=$(gh repo view "${origin_url:?missing origin push URL}" --json nameWithOwner --jq .nameWithOwner) || exit 1
+  : "${head_repo:?resolve the push repository first}"
+  head="$branch"
+  if [ "$head_repo" != "$repo" ]; then
+    head="${head_repo%%/*}:$branch"
+  fi
+  if [ -n "$branch" ] && git push -u origin "$branch"; then
+    gh pr create --repo "${repo:?resolve repo first}" --base main --head "$head" \
+      --title "$title" --body-file "$body_file"
+  else
+    printf '%s\n' 'Branch missing or push failed' >&2
+    false
+  fi
+  ```
+
+  The body states:
   - what changed and why;
   - `Closes #<n>` only when every acceptance item is met, otherwise
     `Refs #<n>` with what remains;
@@ -110,13 +133,13 @@ change.
   - *Also fixed* and *Follow-up issues* from step 4;
   - each decision you made on the owner's behalf.
 - When the issue is a slice of a parent, add a short progress note on the
-  parent linking the pull request.
+  parent with `--repo "${repo:?resolve repo first}"` and link the pull request.
 - Finish by reporting the pull request URL, the validation result and the
   list of findings with their outcome.
 
 ## Review rounds
 
 Review findings come back through the owner. Fix them on the same branch,
-push, and add one pull request comment saying what changed for each finding
-and which tests now cover it. Disagree in that comment, with evidence, rather
-than silently skipping a finding.
+push, and add one pull request comment explaining each change and its
+validation. Pass `--repo "${repo:?resolve repo first}"` when posting it. Explain
+any disagreement with evidence.

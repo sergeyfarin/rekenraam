@@ -7,20 +7,10 @@ description: How to run, debug, validate, review, commit, and document changes i
 
 ## Run the app
 
-```sh
-pnpm install                 # once, repo root
-pnpm dev                     # backend :16888 + frontend :1888 (proxies /api)
-pnpm dev:backend             # native SQLite wrapper, APP_ENV=development
-pnpm dev:frontend
-```
-Open http://localhost:1888. Dev SQLite lives at `backend/var/dev.sqlite`
-(git-ignored). Key env vars: `HTTP_ADDR`, `DATABASE_URL` (`file:...`),
-`APP_ENV` (`development`|`production`, defaults production),
-`REKENRAAM_SECRET_KEY` (base64 32 bytes; required for import connections),
-`TRUST_PROXY_HEADERS` + `TRUSTED_PROXY_CIDRS`, `OPEN_EXCHANGE_RATES_APP_ID`.
-Owner password reset: `recover-owner` command (see
-`docs/developer-workflow.md` § Local Owner Recovery) — it backs up and revokes
-sessions; never edit the users table.
+Run `pnpm install` from the root, then `pnpm dev`. The frontend serves port
+1888 and proxies `/api` to port 16888. See [Development](../../../docs/developer-workflow.md#development)
+for service and environment settings, and [Local Owner Recovery](../../../docs/developer-workflow.md#local-owner-recovery)
+for the `recover-owner` command.
 
 ## Validation matrix (narrowest first — this is the contract; CI runs the same scripts)
 
@@ -45,11 +35,9 @@ checks; CI must not need a separate warm-up or skip catalog validation.
 | User journeys | `./scripts/test-e2e.sh` (self-contained: builds app once, one instance + fresh SQLite per worker under `backend/var/e2e/`, ports from 127.0.0.1:16900; `E2E_SKIP_BUILD=1` to reuse the binary). Playwright covers critical journeys, not every UI branch; pure logic gets a Go or Vitest test. |
 | `.github/workflows/**`, CI scripts | Read *GitHub Actions* in `docs/developer-workflow.md` before editing, then `python3 scripts/test-ci-events.py`. `Backend Tests`, `Frontend Check` and `Integrated Build` are required checks on `main`: never add path filters or a job-level `if:` to `ci.yml`, because a skipped job leaves them pending. Go comes from `go-version-file: backend/go.mod`, Node and pnpm from the versions the repo pins; never a literal. |
 
-For browser diagnostics, the default failure trace is light. `--trace=on` only
-changes its mode and keeps the configured DOM/network exclusions. Use
-`E2E_FULL_TRACE=1 pnpm --dir e2e exec playwright test <spec> --grep <case>` for a
-full local trace with DOM snapshots, screenshots, sources and network records;
-keep it focused and leave CI unset (#473).
+For a full local browser trace, set `E2E_FULL_TRACE=1` on a focused test.
+See [E2E](../../../docs/developer-workflow.md#e2e) for the light defaults and
+diagnostic commands.
 
 Native SQLite requires CGO and a C compiler with development headers. Supported
 commands source `scripts/native-sqlite-env.sh`, which enables `fts5,netgo,osusergo`
@@ -71,11 +59,8 @@ measurements. CI's integrated build runs independently, and every check remains.
 Never invent parallel validation commands; if a command must change, change
 the script and CI together and update `docs/developer-workflow.md`.
 
-CI's workload cache exports `GOCACHE`/`GOMODCACHE`; E2E's child build inherits
-them. `GO_PHASE_TIMINGS=1` separates module download, compile/vet and execution
-in the shared backend/build wrappers (extra compile-only passes, all real
-tests retained). See `docs/developer-workflow.md` → Go caches and measurements
-for key refresh rules and the hosted cold/warm comparison procedure.
+See [Go caches and measurements](../../../docs/developer-workflow.md#go-caches-and-measurements)
+for CI cache inheritance and `GO_PHASE_TIMINGS=1` diagnostics.
 
 ## Review checklist — this repo's recurring bug classes
 
@@ -225,17 +210,8 @@ early-architecture-decisions → ADRs govern all → developer-workflow.
 `AGENTS.md` and skills are guidance, not product sources of truth.
 `.archive/` is historical reference only — never port from it directly.
 
-Tracking is event-driven: update the feature issue when work starts, scope or
-blockers change, and delivery completes. The roadmap alone owns overall order;
-priority is urgency and actual dependencies name their reason. Future initiative
-issues may stay brief, but implementation starts only with actionable acceptance.
-GitHub owns delivery checklists; plans/ADRs own durable scope and behavior.
-
-Before closing, record shipped behavior, commit links, validation (and any
-pending CI), retained limits and linked follow-ups. Close a bounded umbrella
-when its agreed delivery is met; an unmet original acceptance item stays open.
-An independent gap gets its own issue. Retired/duplicate work names its actual
-disposition and successor. See `docs/conventions.md` → Work Tracking.
+Follow [Work Tracking](../../../docs/conventions.md#work-tracking) for progress,
+acceptance, closure evidence and follow-ups.
 
 ## Commits
 
@@ -243,14 +219,9 @@ Conventional Commits, smallest honest scope:
 `feat(backend): ...`, `fix(api): ...`, `docs(requirements): ...`,
 `test(backend): ...`. Don't mix unrelated refactors.
 
-Implementation work goes through a short-lived branch cut from the latest
-canonical `main` (`upstream/main` in a fork) and a pull request, opened without being asked; the owner
-merges. A direct commit to `main` needs the owner's say-so. Long-diverged
-branches are where the 2026-08 merge damage came from, so keep one slice per
-branch. If a change alters product rules, conventions or ADRs, say so in the
-commit and pull request body. *Branches And PRs* in
-`docs/developer-workflow.md` governs; the `work-issue` skill is the
-procedure.
+Follow [Branches And PRs](../../../docs/developer-workflow.md#branches-and-prs)
+and `work-issue` for branch selection, direct commits and PR delivery.
+Record changes to product rules, conventions or ADRs in the commit and PR body.
 
 ## Provider-independent delivery (ADR 0017)
 

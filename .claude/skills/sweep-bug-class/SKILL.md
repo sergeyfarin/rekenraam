@@ -1,6 +1,6 @@
 ---
 name: sweep-bug-class
-description: Hunt for every remaining instance of one known bug class across the whole Rekenraam tree - search for the pattern rather than the copies a ticket named, count and classify every hit, and prove the real ones. A check returns the findings only; a sweep also fixes, files issues, adds a guard and opens a pull request. Use when asked to sweep, hunt, audit or grep for a bug class or pattern, to check whether a bug that was just fixed exists elsewhere, or to work through an entry in the bug-class catalogue.
+description: Hunt for every remaining instance of one known bug class across the whole Rekenraam tree - search for the pattern rather than the copies a ticket named, count and classify every hit, and prove the real ones. An explicit check or audit returns findings, even when invoked by name. A full sweep also fixes or files instances and opens a pull request for tracked changes. Use when asked to sweep, hunt, audit or grep for a bug class or pattern, to check whether a bug that was just fixed exists elsewhere, or to work through an entry in the bug-class catalogue.
 ---
 
 # Sweep One Bug Class
@@ -12,17 +12,19 @@ one class and finds all of it.
 
 ## Outcome
 
-The request decides how far this goes (`AGENTS.md` → Task Modes):
+Select the outcome using [Task Modes](../../../AGENTS.md#task-modes):
 
-- **Check** ("does this exist elsewhere?", "find", "audit", "list"): steps 1–4
+- **Check** ("does this exist elsewhere?", "check", "audit", "only list"): steps 1–4
   and the report. No branch, no edits to the checkout, nothing written to
   GitHub. Any probe that needs code changed (a failing test, a broken
   behaviour) runs in a scratch worktree under `.claude/worktrees/`, is never
   committed, and the worktree is removed afterwards. End by asking whether to
   fix and file.
-- **Sweep** (invoked by name, or asked to sweep, fix or clean up): all steps,
-  run as a `work-issue` task — branch from the canonical `main`, fix small
-  instances, file issues for the rest, finish with an open pull request.
+- **Sweep** (invoked by name without an explicit limit, or asked to fix
+  and file): all steps. Use
+  `work-issue` to branch from canonical `main` when making tracked changes
+  and open a PR for those changes. If all instances are filed and there are
+  no tracked changes, finish with the GitHub links.
 
 An instance that could be a security vulnerability is never filed or
 described publicly; it goes to the owner under `SECURITY.md`.
@@ -31,8 +33,9 @@ described publicly; it goes to the owner under `SECURITY.md`.
 
 The class comes from the prompt: an entry number in
 `.claude/skills/validate-and-ship/bug-classes/`, a bug that was just fixed, or
-a pattern described in words. Read the entry and the fix that closed it. Write
-down, before searching:
+a pattern described in words. Read the entry and the fix that closed it.
+Use [GitHub repository selection](../../../docs/developer-workflow.md#github-repository-selection)
+for issue and PR lookups and filing. Write down before searching:
 
 - the code shape that causes it;
 - the shape of a correct version;
@@ -83,8 +86,8 @@ a new copy, as `TestEffectiveHistoryReadersUseTheOwner` and
 entry rather than a loose pattern. When it cannot be detected mechanically,
 say so.
 
-Update the catalogue entry with the new named tests and the guard. A pattern
-that is not in the catalogue yet gets an entry
+When the sweep adds tests or a guard, record them in the catalogue entry.
+Add an entry when the sweep fixes a new bug class
 (`.claude/skills/README.md` → maintenance rules).
 
 ## 7. Report

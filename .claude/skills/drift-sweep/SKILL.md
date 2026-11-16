@@ -9,13 +9,16 @@ Compare what the repository claims with what is true, and close the gap. Run
 the scopes named in the prompt (`blocked`, `roadmap`, `docs`, `tests`); with
 none named, run all four in that order.
 
-The request decides how far this goes (`AGENTS.md` → Task Modes). Asked only
-to check, list or report: make no changes anywhere — no branch, no edit to
-the checkout, no label change, no comment, no issue — and report what a full
-sweep would do. Any probe that needs code changed (a failing test, a broken
-behaviour) runs in a scratch worktree under `.claude/worktrees/`, is never
-committed, and the worktree is removed afterwards.
-Invoked by name, or asked to sweep, fix or clean up: the full workflow below.
+For a limited request under [Task Modes](../../../AGENTS.md#task-modes),
+return findings and describe what a full sweep would do. Run any
+probe that needs code changes in a scratch worktree under `.claude/worktrees/`.
+Keep the probe uncommitted and remove the worktree afterward.
+Run the full workflow for a request to fix the drift or a named invocation
+without an explicit limit.
+
+Resolve `$repo` using [GitHub repository selection](../../../docs/developer-workflow.md#github-repository-selection)
+before surveying. Use `--repo "${repo:?resolve repo first}"` for issue reads, comments, labels,
+milestones and workflow runs.
 
 Two rules hold for every scope of a full sweep:
 
@@ -23,15 +26,16 @@ Two rules hold for every scope of a full sweep:
   number. It does not reorder the roadmap, change scope, or pick between a
   document and the code when they disagree about behaviour. Those go to the
   owner as an issue or a question.
-- **Small fixes go in one pull request; the rest become issues.** This is a
-  `work-issue` task: branch from the canonical `main`, finish with an open
-  pull request. A sweep that finds nothing to change opens no pull request
-  and says what it checked.
+- **Open a pull request when tracked files change.** Use `work-issue` to
+  branch from canonical `main` before the first repository edit. A
+  GitHub-only sweep, including a `blocked` run, finishes in the session with
+  links to its comments, label changes and issues. A sweep with no changes
+  reports what it checked.
 
 ## `blocked` — blocked issues
 
 ```sh
-gh issue list --label blocked --state open --limit 500 --json number,title,updatedAt
+gh issue list --repo "${repo:?resolve repo first}" --label blocked --state open --limit 500 --json number,title,updatedAt
 ```
 
 Every `gh ... list` defaults to 30 results. Pass `--limit` (or `--paginate`
@@ -55,7 +59,7 @@ the issue it waits on close?
   pull request merged; "next" items already delivered; dated statements that
   have expired.
 - `docs/implemented.md`: features merged since the last sweep that are not
-  recorded (`gh pr list --state merged --limit 500 --search "merged:>=<date>"`).
+  recorded (`gh pr list --repo "${repo:?resolve repo first}" --state merged --limit 500 --search "merged:>=<date>"`).
 - Open issues whose acceptance is fully met, and closed issues with an unmet
   acceptance item.
 - The `v0.1.0` milestone against the roadmap's accepted gates. Report the
@@ -93,8 +97,8 @@ their job.
   (`.claude/skills/validate-and-ship/bug-classes/general.md` and `e2e.md`).
 - `// serial:` opt-outs whose reason no longer applies.
 - Tests that fail intermittently in CI:
-  `gh run list --workflow ci.yml --status failure --limit 100`, then group by
-  failing test.
+  `gh run list --repo "${repo:?resolve repo first}" --workflow ci.yml --status failure --limit 100`,
+  then group by failing test.
 - Comments and test names that cite an issue as pending when it is closed.
 
 A test you believe is vacuous is proved so before you change it: break the
@@ -102,6 +106,6 @@ behaviour it claims to cover and watch it still pass.
 
 ## Report
 
-One table per scope: what was checked, what was fixed in the pull request,
-what was filed, what needs the owner. "Nothing found" is a valid result for a
+One table per scope with what was checked, links to repository or GitHub
+changes, and what needs the owner. "Nothing found" is a valid result for a
 scope when the report says what was checked.
