@@ -938,24 +938,35 @@ this order:
    worth keeping (Settings → Data). Exports need the running app; the new build
    refuses to open the old file at all.
 2. Stop the app.
-3. Move the SQLite file selected by `DATABASE_URL` aside together with its
-   `-wal` and `-shm` sidecars, rather than deleting them. Only the previous
-   build can open that file again, so it is the way back if an export turns
-   out to be missing something. For the default `pnpm dev` database:
+3. Save the SQLite file selected by `DATABASE_URL` together with its `-wal`
+   and `-shm` sidecars, then remove the originals. Only the previous build can
+   open that file again, so it is the way back if an export turns out to be
+   missing something. After a crash the `-wal` file can still hold committed
+   transactions, so the copy is only complete with it. For the default
+   `pnpm dev` database:
 
    ```sh
-   aside=$(mktemp -d "backend/var/pre-reset-$(date +%Y%m%d-%H%M%S)-XXXXXX") &&
-   for f in backend/var/dev.sqlite backend/var/dev.sqlite-wal backend/var/dev.sqlite-shm; do
-     if [ -e "$f" ]; then mv "$f" "$aside/" || break; fi
-   done
+   (
+     set -e
+     db=backend/var/dev.sqlite
+     aside=$(mktemp -d "backend/var/pre-reset-$(date +%Y%m%d-%H%M%S)-XXXXXX")
+     for f in "$db" "$db-wal" "$db-shm"; do
+       if [ -e "$f" ]; then cp -p "$f" "$aside/"; cmp "$f" "$aside/${f##*/}"; fi
+     done
+     rm -f "$db" "$db-wal" "$db-shm"
+     echo "saved in $aside"
+   )
    ```
 
-   `mktemp -d` creates a new, empty directory every time, so a second reset
-   never overwrites the first saved copy. If it fails, nothing is moved.
+   Every file is copied and compared before any original is removed; any
+   failure stops the reset with a non-zero status and leaves the originals in
+   place. `mktemp -d` gives each reset a new, empty folder, so a second reset
+   never overwrites the first saved copy. The parentheses keep `set -e` from
+   closing your shell.
 
 4. Update, start the app to run migrations and repeat owner setup.
 
-If `DATABASE_URL` names another file, move that file and its sidecars instead.
+If `DATABASE_URL` names another file, set `db` to that file instead.
 Delete the moved copy only once you no longer need the previous build to read
 it. For a populated installation, follow
 [the upgrade and restore guide](upgrades.md).
