@@ -154,14 +154,16 @@ func (s *TransactionService) AccountReconciliationAge(ctx context.Context, owner
 	if accountID <= 0 {
 		return nil, 0, ValidationError{Message: "account id is required"}
 	}
-	if _, err := s.accountRepository.CurrentAccountByID(ctx, BookID, accountID); err != nil {
+	// One owner-local day for both the existence check and the judgement: an
+	// account opened today while UTC is still on yesterday exists (#594 review).
+	today, err := s.settings.OwnerTodayAt(ctx, ownerUserID, s.now())
+	if err != nil {
+		return nil, 0, err
+	}
+	if _, err := s.accountRepository.CurrentAccountByID(db.WithReferenceDate(ctx, today), BookID, accountID); err != nil {
 		if errors.Is(err, db.ErrNotFound) || errors.Is(err, sql.ErrNoRows) {
 			return nil, 0, ErrAccountNotFound
 		}
-		return nil, 0, err
-	}
-	today, err := s.settings.OwnerTodayAt(ctx, ownerUserID, s.now())
-	if err != nil {
 		return nil, 0, err
 	}
 	policy, err := s.ReconciliationPolicy(ctx)

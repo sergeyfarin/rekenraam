@@ -319,3 +319,38 @@ func TestAccountReconciliationAgeReadsOneAccountAsTheBookDoes(t *testing.T) {
 	_, _, err = f.transactionService.AccountReconciliationAge(ctx, 1, 999999)
 	require.ErrorIs(t, err, ErrAccountNotFound)
 }
+
+// #594 review: an account opened on the owner's today, while UTC is still on
+// the day before, exists for the Reconcile lookup exactly as it does for the
+// book-wide judgement. The clock is set in 2030 so the database's own date
+// is always earlier than the account's first version.
+func TestAccountReconciliationAgeFindsAnAccountOpenedOnOwnerLocalToday(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f := newInvestmentsTestFixture(t)
+	settings := NewSettingsService(db.NewSettingsRepository(f.database))
+	f.transactionService.SetSettings(settings)
+	_, err := settings.SavePreferences(ctx, SaveUserPreferencesInput{UserID: f.ownerUserID, TimeZone: "Europe/Amsterdam", ChangeReason: "test"})
+	require.NoError(t, err)
+	f.transactionService.SetNowForTest(func() time.Time { return time.Date(2030, 5, 31, 22, 30, 0, 0, time.UTC) })
+
+	result, err := f.database.ExecContext(ctx, `INSERT INTO accounts (book_id, created_at, created_by_user_id) VALUES (?, '2030-05-31T22:30:00Z', 1)`, BookID)
+	require.NoError(t, err)
+	opened, err := result.LastInsertId()
+	require.NoError(t, err)
+	_, err = f.database.ExecContext(ctx, `
+		INSERT INTO account_versions (
+			account_id, version_seq, effective_from, recorded_at, changed_by_user_id,
+			change_reason, status, opened_on, code, name, account_class, account_kind, allows_postings
+		) VALUES (?, 1, '2030-06-01', '2030-05-31T22:30:00Z', 1, 'opened today', 'active', '2030-06-01', 'NEW', 'Opened today', 'asset', 'checking', 1)
+	`, opened)
+	require.NoError(t, err)
+
+	book, err := f.transactionService.AccountReconciliationAges(ctx, f.ownerUserID)
+	require.NoError(t, err)
+	require.Contains(t, book.ByAccount(), opened, "the book-wide judgement sees the account on local 2030-06-01")
+	one, _, err := f.transactionService.AccountReconciliationAge(ctx, f.ownerUserID, opened)
+	require.NoError(t, err, "the lookup must not report the account missing")
+	require.NotNil(t, one)
+	assert.Equal(t, book.ByAccount()[opened], *one)
+}
