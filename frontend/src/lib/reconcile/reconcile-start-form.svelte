@@ -7,6 +7,8 @@
   import { accountsQueryOptions, type AccountResponse } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import { parseStatementBalance } from '#lib/reconcile/statement-balance.ts';
+  import { chooseStatementCommodity, statementCommodityOptions } from '#lib/reconcile/statement-commodity.ts';
+  import { ledgerAccountQueryOptions } from '#lib/api/ledger.ts';
   import {
     startReconciliation,
     type ReconciliationSessionResponse,
@@ -16,6 +18,7 @@
   let {
     csrfToken,
     requestedAccountID,
+    requestedCommodityID,
     onStarted,
     onAccountChange
   }: {
@@ -23,6 +26,9 @@
     // An account named by the page URL (`?account=`), such as a holding's
     // register link. A holding is reconciled only when asked for this way.
     requestedAccountID?: number;
+    // The commodity named by the URL (`?commodity=`), such as the currency
+    // Home's Reconciliation card flagged. It applies to the requested account.
+    requestedCommodityID?: number;
     onStarted: (session: ReconciliationSessionResponse) => void;
     // Lets the page show the selected account's checkpoints beside the form.
     onAccountChange?: (accountID: number | undefined, commodityID: number | undefined) => void;
@@ -76,8 +82,27 @@
   const selectedAccount = $derived(
     accountID !== undefined ? reconcilableAccounts.find((a) => a.id === accountID) : undefined
   );
-  const commodityID = $derived(selectedAccount?.default_commodity_id);
-  const currency = $derived(commodityID !== undefined ? currenciesByID.get(commodityID) : undefined);
+  // A statement covers one commodity. The account's own Ledger read carries
+  // the server's reconciliation judgement, which names every commodity the
+  // account has activity or a statement in, so an account without a default
+  // currency, or with activity in another, can still be reconciled (#594 review).
+  const ledgerQuery = createQuery(() => ({ ...ledgerAccountQueryOptions(accountID ?? 0), enabled: accountID !== undefined }));
+  const commodityOptions = $derived.by(() => {
+    const defaultID = selectedAccount?.default_commodity_id ?? undefined;
+    const defaultCurrency = defaultID !== undefined ? currenciesByID.get(defaultID) : undefined;
+    const row = ledgerQuery.data?.accounts.find((item) => item.account.id === accountID);
+    return statementCommodityOptions(defaultID !== undefined ? { id: defaultID, code: defaultCurrency?.code ?? '' } : undefined, row?.reconciliation?.commodities ?? []);
+  });
+  let chosenCommodityID = $state<number | undefined>(undefined);
+  const commodityID = $derived(
+    chooseStatementCommodity(
+      commodityOptions,
+      chosenCommodityID,
+      accountID !== undefined && accountID === requestedAccountID ? requestedCommodityID : undefined,
+      selectedAccount?.default_commodity_id
+    )
+  );
+  const commodityCode = $derived(commodityOptions.find((option) => option.id === commodityID)?.code ?? '');
 
   $effect(() => {
     onAccountChange?.(selectedAccount?.id, commodityID);
@@ -148,13 +173,28 @@
         </select>
       </div>
 
-      {#if accountID !== undefined && commodityID === undefined}
+      {#if accountID !== undefined && commodityID === undefined && !ledgerQuery.isPending}
         <p class="text-sm text-warning">{m.reconcile_start_no_commodity()}</p>
       {/if}
 
-      {#if currency}
+      {#if commodityOptions.length > 1}
+        <div>
+          <label class={labelClass} for="reconcile-commodity">{m.reconcile_start_currency_label()}</label>
+          <select
+            id="reconcile-commodity"
+            class={inputClass}
+            value={commodityID}
+            onchange={(event) => (chosenCommodityID = Number(event.currentTarget.value))}
+            disabled={pending}
+          >
+            {#each commodityOptions as option (option.id)}
+              <option value={option.id}>{option.code}</option>
+            {/each}
+          </select>
+        </div>
+      {:else if commodityCode}
         <p class="text-xs text-muted">
-          {m.reconcile_start_currency_label()}: <span class="font-semibold text-foreground">{currency.code}</span>
+          {m.reconcile_start_currency_label()}: <span class="font-semibold text-foreground">{commodityCode}</span>
         </p>
       {/if}
 

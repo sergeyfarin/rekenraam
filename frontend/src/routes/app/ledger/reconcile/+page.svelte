@@ -21,6 +21,8 @@
   // `?account=` preselects an account, including a holding, which the
   // default picker leaves out.
   const requestedAccountID = $derived(Number(page.url.searchParams.get('account')) || undefined);
+  // `?commodity=` preselects the statement's commodity (Home names the one it flagged).
+  const requestedCommodityID = $derived(Number(page.url.searchParams.get('commodity')) || undefined);
 
   // ── View state machine ────────────────────────────────────────────
   type View =
@@ -71,7 +73,7 @@
   <div class="lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-6 xl:grid-cols-[minmax(0,1fr)_26rem]">
     <div class="min-w-0">
       <Panel>
-        <ReconcileStartForm {csrfToken} requestedAccountID={requestedAccountID} onStarted={handleStarted} onAccountChange={handleAccountChange} />
+        <ReconcileStartForm {csrfToken} requestedAccountID={requestedAccountID} {requestedCommodityID} onStarted={handleStarted} onAccountChange={handleAccountChange} />
       </Panel>
     </div>
     {#if startSelection}
