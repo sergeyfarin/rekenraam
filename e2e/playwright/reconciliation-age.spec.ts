@@ -1,6 +1,6 @@
 import { test, expect } from './support/owned-book';
 import { apiJSON, csrfTokenFor } from './support/api';
-import { createCashAccount, readyForLedger } from './support/ledger';
+import { createCashAccount, ensureCurrency, readyForLedger } from './support/ledger';
 import { expectNoAccessibilityViolations } from './support/a11y';
 
 // #482: one reconciliation out-of-date window, set in Settings › General,
@@ -74,7 +74,7 @@ test('the reconciliation window drives the account list and Home together', asyn
   await expect(widget).toContainText('0 of 2 accounts reconciled');
   await expect(widget).toContainText('Within the last 2 days');
   await widget.getByRole('link', { name: 'Window never' }).click();
-  await expect(page).toHaveURL(new RegExp(`/app/ledger/reconcile\\?account=${never.id}$`));
+  await expect(page).toHaveURL(new RegExp(`/app/ledger/reconcile\\?account=${never.id}&commodity=${currencyID}$`));
 });
 
 // #594 review: a brokerage's cash account is folded into the brokerage row,
@@ -108,4 +108,55 @@ test('a brokerage row names the reconciliation state of its folded cash account'
 
   await page.goto('/app');
   await expect(page.getByTestId('explore-widget-reconciliation')).toContainText('Folded broker cash · Never reconciled');
+});
+
+// #594 review: an account judged in two currencies. Home names each on a
+// 320px phone without clipping, and its link opens Reconcile on the currency
+// it flagged, even for an account with no default currency.
+test('a currency Home flags can be reconciled from its link, and fits a phone', async ({ page }) => {
+  const { currencyID } = await readyForLedger(page);
+  const { owner_today: today } = await apiJSON<{ owner_today: string }>(page, 'GET', '/api/v1/auth/session');
+  const movedOn = shiftDays(today, -5);
+  let csrfToken = await csrfTokenFor(page);
+  const euro = await ensureCurrency(page, csrfToken, 'EUR', 'Euro');
+  csrfToken = await csrfTokenFor(page);
+  const receivable = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/accounts', csrfToken, {
+    name: 'Two-currency receivable', account_class: 'asset', account_kind: 'receivable', allows_postings: true, opened_on: movedOn
+  });
+  const income = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/categories', csrfToken, { name: 'Two-currency fees', category_type: 'income' });
+  for (const commodity of [currencyID, euro]) {
+    await apiJSON(page, 'POST', '/api/v1/transactions', csrfToken, {
+      transaction_date: movedOn, status: 'posted',
+      journal_entries: [{ entry_date: movedOn, postings: [
+        { account_id: receivable.id, commodity_id: commodity, quantity_value: '700', quantity_scale: 2 },
+        { account_id: income.id, commodity_id: commodity, quantity_value: '-700', quantity_scale: 2 }
+      ] }]
+    });
+  }
+  const session = await apiJSON<{ id: number; candidates: Array<{ posting_id: number }> }>(page, 'POST', `/api/v1/accounts/${receivable.id}/reconciliations/start`, csrfToken, {
+    commodity_id: currencyID, source_kind: 'statement', statement_date: movedOn, statement_balance_value: '700', statement_balance_scale: 2
+  });
+  await apiJSON(page, 'PATCH', `/api/v1/reconciliations/${session.id}`, csrfToken, { posting_version_ids: session.candidates.map(candidate => candidate.posting_id) });
+  await apiJSON(page, 'POST', `/api/v1/reconciliations/${session.id}/finish`, csrfToken, { change_reason: 'statement verified' });
+
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.goto('/app');
+  const widget = page.getByTestId('explore-widget-reconciliation');
+  await expect(widget).toContainText('0 of 1 account reconciled');
+  const text = widget.getByTestId('home-widget-row-text').filter({ hasText: 'Two-currency receivable' });
+  await expect(text).toContainText('EUR: Never reconciled');
+  await expect(text).toContainText('USD: Reconciled to');
+  // Every state is on screen: the row wraps rather than clipping its finding.
+  expect(await text.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
+
+  await text.getByRole('link', { name: 'Two-currency receivable' }).click();
+  await expect(page).toHaveURL(new RegExp(`/app/ledger/reconcile\\?account=${receivable.id}&commodity=${euro}$`));
+  const currency = page.getByLabel('Currency');
+  await expect(currency.locator('option:checked')).toHaveText('EUR');
+  await expect(page.getByText('This account has no default currency.')).toHaveCount(0);
+  await page.getByLabel('Statement closing date').fill(movedOn);
+  await page.getByLabel('Statement ending balance').fill('7.00');
+  await expect(page.getByRole('button', { name: 'Start reconciling' })).toBeEnabled();
+  await expectNoAccessibilityViolations(page, 'reconcile currency choice');
 });

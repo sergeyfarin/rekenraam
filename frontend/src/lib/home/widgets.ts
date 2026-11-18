@@ -31,6 +31,9 @@ export type WidgetRow = {
   bar?: number;
   /** Over budget: carried by the words too, never by colour alone. */
   over?: boolean;
+  /** The label and detail wrap instead of truncating: a detail that is the
+   * finding itself (reconciliation per currency) must stay readable at 320px. */
+  wrap?: boolean;
 };
 
 export type WidgetView = {

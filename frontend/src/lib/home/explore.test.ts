@@ -313,8 +313,8 @@ describe('reconciliation', () => {
     expect(view.scope).toBe('Within the last 60 days');
     expect(view.warning).toBe(true);
     expect(view.rows.map(row => [row.label, row.detail, row.over, row.href])).toEqual([
-      ['Savings', 'Never reconciled', true, '/app/ledger/reconcile?account=7'],
-      ['Checking', 'Reconciled to Sep 30, 2026', false, '/app/ledger/reconcile?account=1']
+      ['Savings', 'Never reconciled', true, '/app/ledger/reconcile?account=7&commodity=1'],
+      ['Checking', 'Reconciled to Sep 30, 2026', false, '/app/ledger/reconcile?account=1&commodity=1']
     ]);
     expect(view.more).toBeNull();
   });
