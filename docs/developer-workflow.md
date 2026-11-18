@@ -953,16 +953,19 @@ this order:
      for f in "$db" "$db-wal" "$db-shm"; do
        if [ -e "$f" ]; then cp -p "$f" "$aside/"; cmp "$f" "$aside/${f##*/}"; fi
      done
+     echo "verified copy saved in $aside; removing the originals"
      rm -f "$db" "$db-wal" "$db-shm"
-     echo "saved in $aside"
    )
    ```
 
-   Every file is copied and compared before any original is removed; any
-   failure stops the reset with a non-zero status and leaves the originals in
-   place. `mktemp -d` gives each reset a new, empty folder, so a second reset
-   never overwrites the first saved copy. The parentheses keep `set -e` from
-   closing your shell.
+   Every file is copied and compared before any original is removed. A failed
+   copy or comparison stops the reset with a non-zero status and leaves the
+   originals in place. If removal itself fails, the originals may be
+   incomplete, but the folder printed just before is a complete, verified copy:
+   **keep the app stopped**, remove whichever of the three files remain by
+   hand, and only then start the app. `mktemp -d` gives each reset a new, empty
+   folder, so a second reset never overwrites the first saved copy. The
+   parentheses keep `set -e` from closing your shell.
 
 4. Update, start the app to run migrations and repeat owner setup.
 
