@@ -131,6 +131,8 @@ paths:
     $ref: "./paths/account-versions.yaml"
   /api/v1/accounts/{account_id}/register:
     $ref: "./paths/account-register.yaml"
+  /api/v1/accounts/{account_id}/reconciliation:
+    $ref: "./paths/account-reconciliation.yaml"
   /api/v1/accounts/{account_id}/reconciliations/start:
     $ref: "./paths/account-reconciliation-start.yaml"
   /api/v1/accounts/{account_id}/reconciliation-checkpoints:
@@ -1402,6 +1404,8 @@ components:
       $ref: "./components/schemas/reconciliation.yaml#/CommodityReconciliation"
     FoldedAccountReconciliation:
       $ref: "./components/schemas/reconciliation.yaml#/FoldedAccountReconciliation"
+    AccountReconciliationLookupResponse:
+      $ref: "./components/schemas/reconciliation.yaml#/AccountReconciliationLookupResponse"
     ReconciliationCheckpointResponse:
       $ref: "./components/schemas/reconciliation.yaml#/ReconciliationCheckpointResponse"
     ReconciliationCheckpointsResponse:

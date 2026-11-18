@@ -347,3 +347,13 @@ FoldedAccountReconciliation:
       required: [account_id]
       properties:
         account_id: { type: integer, format: int64 }
+AccountReconciliationLookupResponse:
+  type: object
+  required: [account_id, out_of_date_after_days, reconciliation]
+  properties:
+    account_id: { type: integer, format: int64 }
+    out_of_date_after_days: { type: integer, minimum: 1 }
+    reconciliation:
+      oneOf:
+        - $ref: "../../openapi.yaml#/components/schemas/AccountReconciliation"
+        - type: 'null'

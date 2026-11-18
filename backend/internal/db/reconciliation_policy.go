@@ -132,7 +132,11 @@ func (r *TransactionRepository) SaveReconciliationPolicy(ctx context.Context, pa
 // Activity is a current posted, undeleted transaction dated on or before
 // today; a checkpoint counts only while active and dated on or before today,
 // so a statement entered for a later date never vouches for today.
-func (r *TransactionRepository) ReconciliationAccountFacts(ctx context.Context, bookID int64, today string) ([]ReconciliationAccountFact, error) {
+//
+// accountID > 0 reads that one account only, through its own postings, so a
+// form that needs one account's commodities does not scan the book (#594
+// review); 0 reads every account.
+func (r *TransactionRepository) ReconciliationAccountFacts(ctx context.Context, bookID int64, today string, accountID int64) ([]ReconciliationAccountFact, error) {
 	ctx = WithReferenceDate(ctx, today)
 	facts := []ReconciliationAccountFact{}
 	err := r.WithLedgerSnapshot(ctx, func(snapshot *LedgerSnapshotReader) error {
@@ -151,8 +155,9 @@ func (r *TransactionRepository) ReconciliationAccountFacts(ctx context.Context, 
 				AND av.allows_postings = 1
 				AND av.account_class IN ('asset', 'liability')
 				AND ak.base_kind != 'security_holding'
+				AND (? = 0 OR a.id = ?)
 			ORDER BY a.id
-		`, bookID)
+		`, bookID, accountID, accountID)
 		if err != nil {
 			return fmt.Errorf("read reconcilable accounts: %w", err)
 		}
@@ -172,19 +177,37 @@ func (r *TransactionRepository) ReconciliationAccountFacts(ctx context.Context, 
 		if err := rows.Close(); err != nil {
 			return err
 		}
-		pairs, err := tx.QueryContext(ctx, `
-			WITH posted AS (
+		if len(facts) == 0 {
+			return nil
+		}
+		// Book-wide, drive from the current transaction versions; for one
+		// account, from its own postings (posting_versions_account_idx).
+		posted := `
 				SELECT DISTINCT pv.account_id, pv.commodity_id
 				FROM current_transaction_versions tv
 				JOIN transactions t ON t.id = tv.transaction_id
 				JOIN journal_entries je ON je.transaction_version_id = tv.id
 				JOIN posting_versions pv ON pv.journal_entry_id = je.id
-				WHERE tv.book_id = ? AND tv.status = 'posted' AND t.deleted_at IS NULL AND je.entry_date <= ?
+				WHERE tv.book_id = ? AND tv.status = 'posted' AND t.deleted_at IS NULL AND je.entry_date <= ?`
+		postedArgs := []any{bookID, today}
+		if accountID > 0 {
+			posted = `
+				SELECT DISTINCT pv.account_id, pv.commodity_id
+				FROM posting_versions pv
+				JOIN current_transaction_versions tv ON tv.id = pv.transaction_version_id
+				JOIN transactions t ON t.id = tv.transaction_id
+				JOIN journal_entries je ON je.id = pv.journal_entry_id
+				WHERE pv.account_id = ? AND tv.book_id = ? AND tv.status = 'posted' AND t.deleted_at IS NULL AND je.entry_date <= ?`
+			postedArgs = []any{accountID, bookID, today}
+		}
+		args := append(postedArgs, bookID, today, accountID, accountID)
+		pairs, err := tx.QueryContext(ctx, `
+			WITH posted AS (`+posted+`
 			),
 			checked AS (
 				SELECT account_id, commodity_id, MAX(statement_date) AS statement_date
 				FROM reconciliation_checkpoints
-				WHERE book_id = ? AND status = 'active' AND statement_date <= ?
+				WHERE book_id = ? AND status = 'active' AND statement_date <= ? AND (? = 0 OR account_id = ?)
 				GROUP BY account_id, commodity_id
 			),
 			pairs AS (
@@ -198,7 +221,7 @@ func (r *TransactionRepository) ReconciliationAccountFacts(ctx context.Context, 
 			JOIN commodities c ON c.id = p.commodity_id
 			LEFT JOIN checked k ON k.account_id = p.account_id AND k.commodity_id = p.commodity_id
 			ORDER BY p.account_id, p.commodity_id
-		`, bookID, today, bookID, today)
+		`, args...)
 		if err != nil {
 			return fmt.Errorf("read reconciliation commodities: %w", err)
 		}

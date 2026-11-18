@@ -83,6 +83,7 @@ TESTS = [
  'TestHomeReturnsWidgetsReadTheLatestSavedRun',
  'TestLedgerOverviewHTTPComposesAccountMetadataAndBalances',
  'TestReconciliationPolicyHTTPSavesTheWindowTheAccountListReads',
+ 'TestAccountReconciliationLookupHTTP',
  'TestSeparateWithholdingAPIAndBundle',
  'TestReverseInternalTransferAPI',
  'TestReplaceInternalTransferAPIPreviewMatchesCommit',

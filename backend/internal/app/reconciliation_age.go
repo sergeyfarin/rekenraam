@@ -3,6 +3,7 @@ package app
 import (
 	"cmp"
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"slices"
@@ -138,11 +139,44 @@ func (s *TransactionService) AccountReconciliationAges(ctx context.Context, owne
 	if err != nil {
 		return ReconciliationAges{}, err
 	}
-	facts, err := s.repository.ReconciliationAccountFacts(ctx, BookID, today)
+	facts, err := s.repository.ReconciliationAccountFacts(ctx, BookID, today, 0)
 	if err != nil {
 		return ReconciliationAges{}, err
 	}
 	return judgeReconciliationAges(facts, today, policy.OutOfDateAfterDays)
+}
+
+// AccountReconciliationAge is one account's judgement, read through that
+// account alone (the Reconcile form's commodity choice, #594 review). The
+// age is nil when the account exists but cannot be reconciled, such as a
+// holding; ErrAccountNotFound when there is no such account.
+func (s *TransactionService) AccountReconciliationAge(ctx context.Context, ownerUserID int64, accountID int64) (*AccountReconciliationAge, int, error) {
+	if accountID <= 0 {
+		return nil, 0, ValidationError{Message: "account id is required"}
+	}
+	if _, err := s.accountRepository.CurrentAccountByID(ctx, BookID, accountID); err != nil {
+		if errors.Is(err, db.ErrNotFound) || errors.Is(err, sql.ErrNoRows) {
+			return nil, 0, ErrAccountNotFound
+		}
+		return nil, 0, err
+	}
+	today, err := s.settings.OwnerTodayAt(ctx, ownerUserID, s.now())
+	if err != nil {
+		return nil, 0, err
+	}
+	policy, err := s.ReconciliationPolicy(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	facts, err := s.repository.ReconciliationAccountFacts(ctx, BookID, today, accountID)
+	if err != nil {
+		return nil, 0, err
+	}
+	ages, err := judgeReconciliationAges(facts, today, policy.OutOfDateAfterDays)
+	if err != nil || len(ages.Accounts) == 0 {
+		return nil, policy.OutOfDateAfterDays, err
+	}
+	return &ages.Accounts[0], policy.OutOfDateAfterDays, nil
 }
 
 func reconciliationAgeRank(state string) int {

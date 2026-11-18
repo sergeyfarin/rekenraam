@@ -73,6 +73,7 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 	mux.HandleFunc("POST /api/v1/accounts", createAccount(logger, services.Auth, services.Account, options))
 	mux.HandleFunc("GET /api/v1/accounts/{account_id}", readAccount(logger, services.Auth, services.Account))
 	mux.HandleFunc("GET /api/v1/accounts/{account_id}/register", accountRegister(logger, services.Auth, services.Transaction))
+	mux.HandleFunc("GET /api/v1/accounts/{account_id}/reconciliation", readAccountReconciliation(logger, services.Auth, services.Transaction))
 	mux.HandleFunc("PATCH /api/v1/accounts/{account_id}", updateAccount(logger, services.Auth, services.Account, options))
 	mux.HandleFunc("DELETE /api/v1/accounts/{account_id}", deleteAccount(logger, services.Auth, services.Account, options))
 	mux.HandleFunc("POST /api/v1/accounts/{account_id}/close", closeAccount(logger, services.Auth, services.Account, options))

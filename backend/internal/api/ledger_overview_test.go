@@ -98,3 +98,39 @@ func TestReconciliationPolicyHTTPSavesTheWindowTheAccountListReads(t *testing.T)
 	handler.ServeHTTP(unauthenticated, httptest.NewRequest("PUT", "/api/v1/reconciliation/policy", strings.NewReader(`{"out_of_date_after_days":30}`)))
 	assert.Equal(t, 401, unauthenticated.Code)
 }
+
+// #594 review: the Reconcile form's account-scoped commodity lookup.
+func TestAccountReconciliationLookupHTTP(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	cookie, csrf, currencyID := setupAccountAPITest(t, handler)
+	account := createLedgerAccount(t, handler, cookie, csrf, "Lookup checking", "asset", "checking", currencyID, 2)
+	income := createCategoryForSession(t, handler, cookie, csrf, `{"name":"Lookup salary","category_type":"income"}`)
+	createTransactionForSession(t, handler, cookie, csrf, balancedBody("2026-10-15", posting(account.ID, 500, 2, currencyID), posting(income.ID, -500, 2, currencyID)), http.StatusCreated)
+
+	get := func(path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("GET", path, nil)
+		req.AddCookie(cookie)
+		res := httptest.NewRecorder()
+		handler.ServeHTTP(res, req)
+		return res
+	}
+	res := get("/api/v1/accounts/" + strconvFormatInt(account.ID) + "/reconciliation")
+	require.Equal(t, 200, res.Code, res.Body.String())
+	var body accountReconciliationLookupResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, account.ID, body.AccountID)
+	assert.Equal(t, 60, body.OutOfDateAfterDays)
+	require.NotNil(t, body.Reconciliation)
+	require.Len(t, body.Reconciliation.Commodities, 1)
+	assert.Equal(t, currencyID, body.Reconciliation.Commodities[0].CommodityID)
+
+	res = get("/api/v1/accounts/" + strconvFormatInt(income.ID) + "/reconciliation")
+	require.Equal(t, 200, res.Code, res.Body.String())
+	assert.Contains(t, res.Body.String(), `"reconciliation":null`, "a category cannot be reconciled")
+	assert.Equal(t, 404, get("/api/v1/accounts/999999/reconciliation").Code)
+	assert.Equal(t, 400, get("/api/v1/accounts/nope/reconciliation").Code)
+	unauthenticated := httptest.NewRecorder()
+	handler.ServeHTTP(unauthenticated, httptest.NewRequest("GET", "/api/v1/accounts/1/reconciliation", nil))
+	assert.Equal(t, 401, unauthenticated.Code)
+}

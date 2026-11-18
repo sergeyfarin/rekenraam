@@ -287,3 +287,35 @@ func TestLedgerOverviewCarriesFoldedAccountReconciliation(t *testing.T) {
 	}
 	t.Fatal("brokerage row not found")
 }
+
+// #594 review: the Reconcile form reads one account's judgement through that
+// account alone; it must agree with the book-wide judgement.
+func TestAccountReconciliationAgeReadsOneAccountAsTheBookDoes(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f := newHomeWidgetFixture(t)
+	savings := f.account(t, "Savings", "asset", "savings")
+	f.move(t, "2026-09-01", f.cashAccountID, f.eurCommodityID, 10000)
+	f.move(t, "2026-09-02", f.cashAccountID, f.usd, 2500)
+	f.move(t, "2026-09-03", savings, f.eurCommodityID, 500)
+	reconcileCash(t, f.investmentsTestFixture, "2026-09-30", 100)
+
+	book, err := f.transactionService.AccountReconciliationAges(ctx, 1)
+	require.NoError(t, err)
+	for _, accountID := range []int64{f.cashAccountID, savings} {
+		one, window, err := f.transactionService.AccountReconciliationAge(ctx, 1, accountID)
+		require.NoError(t, err)
+		require.NotNil(t, one)
+		assert.Equal(t, 60, window)
+		assert.Equal(t, book.ByAccount()[accountID], *one)
+	}
+	cash, _, err := f.transactionService.AccountReconciliationAge(ctx, 1, f.cashAccountID)
+	require.NoError(t, err)
+	require.Len(t, cash.Commodities, 2, "the form offers both currencies the account has activity in")
+
+	holding, _, err := f.transactionService.AccountReconciliationAge(ctx, 1, f.holdingAccountID)
+	require.NoError(t, err)
+	assert.Nil(t, holding, "a holding exists but is not judged")
+	_, _, err = f.transactionService.AccountReconciliationAge(ctx, 1, 999999)
+	require.ErrorIs(t, err, ErrAccountNotFound)
+}

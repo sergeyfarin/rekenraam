@@ -277,3 +277,25 @@ export async function saveReconciliationPolicy(outOfDateAfterDays: number, csrfT
     throw toNetworkError(error);
   }
 }
+
+export type AccountReconciliationLookupResponse = components['schemas']['AccountReconciliationLookupResponse'];
+
+/** One account's reconciliation judgement, read through that account alone (#594 review). */
+export function accountReconciliationQueryOptions(accountID: number) {
+  return {
+    queryKey: [...reconciliationQueryKey, 'account', accountID] as const,
+    queryFn: () => getAccountReconciliation(accountID),
+    staleTime: 10_000
+  };
+}
+
+export async function getAccountReconciliation(accountID: number): Promise<AccountReconciliationLookupResponse> {
+  try {
+    const { data, error, response } = await apiClient.GET('/api/v1/accounts/{account_id}/reconciliation', { params: { path: { account_id: accountID } } });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}

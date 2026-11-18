@@ -6120,6 +6120,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/accounts/{account_id}/reconciliation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one account's reconciliation age
+         * @description The reconciliation out-of-date judgement (#482) for one account, read through that account's own postings and checkpoints rather than the whole book. The Reconcile form uses its commodities to offer the statement currency. reconciliation is null when the account exists but cannot be reconciled (for example a holding). Session-only.
+         */
+        get: operations["getAccountReconciliation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/accounts/{account_id}/reconciliations/start": {
         parameters: {
             query?: never;
@@ -32474,6 +32494,12 @@ export interface components {
             /** Format: int64 */
             account_id: number;
         };
+        AccountReconciliationLookupResponse: {
+            /** Format: int64 */
+            account_id: number;
+            out_of_date_after_days: number;
+            reconciliation: components["schemas"]["AccountReconciliation"] | null;
+        };
         ReconciliationCheckpointResponse: {
             /** Format: int64 */
             id: number;
@@ -36376,6 +36402,69 @@ export interface operations {
                 };
             };
             413: components["responses"]["JSONBodyTooLarge"];
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    "X-Request-ID": components["headers"]["XRequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getAccountReconciliation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: components["parameters"]["AccountID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account's reconciliation age and the book window. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["XRequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountReconciliationLookupResponse"];
+                };
+            };
+            /** @description Invalid account id */
+            400: {
+                headers: {
+                    "X-Request-ID": components["headers"]["XRequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Authentication is required */
+            401: {
+                headers: {
+                    "X-Request-ID": components["headers"]["XRequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Account not found */
+            404: {
+                headers: {
+                    "X-Request-ID": components["headers"]["XRequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Internal server error */
             500: {
                 headers: {

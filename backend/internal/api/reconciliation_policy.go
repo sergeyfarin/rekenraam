@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 
@@ -99,4 +100,35 @@ func saveReconciliationPolicy(logger *slog.Logger, authService *app.AuthService,
 		}
 		writeJSON(w, http.StatusOK, toReconciliationPolicyResponse(policy))
 	}))
+}
+
+type accountReconciliationLookupResponse struct {
+	AccountID          int64                          `json:"account_id"`
+	OutOfDateAfterDays int                            `json:"out_of_date_after_days"`
+	Reconciliation     *accountReconciliationResponse `json:"reconciliation"`
+}
+
+// readAccountReconciliation is one account's judgement, read through that
+// account alone, for the Reconcile form's commodity choice (#594 review).
+func readAccountReconciliation(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		accountID, ok := readAccountID(w, r)
+		if !ok {
+			return
+		}
+		age, window, err := transactionService.AccountReconciliationAge(r.Context(), owner.ID, accountID)
+		if err != nil {
+			if errors.Is(err, app.ErrAccountNotFound) {
+				writeAccountServiceError(w, r, logger, "read account reconciliation", err)
+			} else {
+				writeTransactionServiceError(w, r, logger, "read account reconciliation", err)
+			}
+			return
+		}
+		writeJSON(w, http.StatusOK, accountReconciliationLookupResponse{AccountID: accountID, OutOfDateAfterDays: window, Reconciliation: toAccountReconciliationResponse(age)})
+	}
 }
