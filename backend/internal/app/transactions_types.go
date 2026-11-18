@@ -170,8 +170,26 @@ type ListTransactionsResult struct {
 }
 
 type AccountRegisterResult struct {
-	Entries    []AccountRegisterEntry
+	Entries []AccountRegisterEntry
+	// Statements are the page's statement rows (#595): active reconciliation
+	// checkpoints placed among Entries, never transactions.
+	Statements []AccountRegisterStatement
 	NextCursor string
+}
+
+// AccountRegisterStatement is one active reconciliation checkpoint shown as a
+// statement row in an account register (#595). It moves no money and changes
+// no running balance. BeforeEntryIndex is the index in the page's Entries
+// before which the row sits; len(Entries) when it follows them all.
+type AccountRegisterStatement struct {
+	CheckpointID             int64
+	CommodityID              int64
+	CommodityCode            string
+	CommoditySymbol          *string
+	StatementDate            string
+	StatementAccountSequence int64
+	StatementBalance         BalanceQuantity
+	BeforeEntryIndex         int
 }
 
 type CreateTransactionInput struct {

@@ -233,8 +233,39 @@ type deletedTransactionsResponse struct {
 }
 
 type accountRegisterResponse struct {
-	Entries    []accountRegisterEntryResponse `json:"entries"`
-	NextCursor *string                        `json:"next_cursor"`
+	Entries    []accountRegisterEntryResponse     `json:"entries"`
+	Statements []accountRegisterStatementResponse `json:"statements"`
+	NextCursor *string                            `json:"next_cursor"`
+}
+
+// accountRegisterStatementResponse is a statement row (#595): an active
+// reconciliation checkpoint placed among the page's entries, never an entry.
+type accountRegisterStatementResponse struct {
+	CheckpointID             int64                   `json:"checkpoint_id"`
+	CommodityID              int64                   `json:"commodity_id"`
+	CommodityCode            string                  `json:"commodity_code"`
+	CommoditySymbol          *string                 `json:"commodity_symbol"`
+	StatementDate            string                  `json:"statement_date"`
+	StatementAccountSequence int64                   `json:"statement_account_sequence"`
+	StatementBalance         balanceQuantityResponse `json:"statement_balance"`
+	BeforeEntryIndex         int                     `json:"before_entry_index"`
+}
+
+func toAccountRegisterStatementResponses(statements []app.AccountRegisterStatement) []accountRegisterStatementResponse {
+	responses := make([]accountRegisterStatementResponse, 0, len(statements))
+	for _, statement := range statements {
+		responses = append(responses, accountRegisterStatementResponse{
+			CheckpointID:             statement.CheckpointID,
+			CommodityID:              statement.CommodityID,
+			CommodityCode:            statement.CommodityCode,
+			CommoditySymbol:          statement.CommoditySymbol,
+			StatementDate:            statement.StatementDate,
+			StatementAccountSequence: statement.StatementAccountSequence,
+			StatementBalance:         toBalanceQuantityResponse(statement.StatementBalance),
+			BeforeEntryIndex:         statement.BeforeEntryIndex,
+		})
+	}
+	return responses
 }
 
 type accountRegisterEntryResponse struct {

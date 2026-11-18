@@ -612,16 +612,69 @@ AccountRegisterResponse:
   type: object
   required:
     - entries
+    - statements
     - next_cursor
   properties:
     entries:
       type: array
       items:
         $ref: "../../openapi.yaml#/components/schemas/AccountRegisterEntryResponse"
+    statements:
+      type: array
+      description: >-
+        Statement rows on this page (#595): the account's active
+        reconciliation checkpoints, placed among `entries` at each
+        checkpoint's boundary. They are not transactions and change no
+        running balance. Only the posted register returns them; the date
+        filters apply to the statement date.
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/AccountRegisterStatementResponse"
     next_cursor:
       type:
         - string
         - "null"
+AccountRegisterStatementResponse:
+  type: object
+  required:
+    - checkpoint_id
+    - commodity_id
+    - commodity_code
+    - commodity_symbol
+    - statement_date
+    - statement_account_sequence
+    - statement_balance
+    - before_entry_index
+  properties:
+    checkpoint_id:
+      type: integer
+      format: int64
+    commodity_id:
+      type: integer
+      format: int64
+    commodity_code:
+      type: string
+    commodity_symbol:
+      type:
+        - string
+        - "null"
+    statement_date:
+      type: string
+      format: date
+    statement_account_sequence:
+      type: integer
+      format: int64
+      minimum: 0
+      description: >-
+        The checkpoint's same-day boundary: postings on the statement date
+        with an account day sequence at or below it are covered.
+    statement_balance:
+      $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    before_entry_index:
+      type: integer
+      minimum: 0
+      description: >-
+        Index in this page's `entries` before which the statement row sits;
+        equal to the number of entries when it follows them all.
 PostingRequest:
   type: object
   required:

@@ -31502,7 +31502,27 @@ export interface components {
         };
         AccountRegisterResponse: {
             entries: components["schemas"]["AccountRegisterEntryResponse"][];
+            /** @description Statement rows on this page (#595): the account's active reconciliation checkpoints, placed among `entries` at each checkpoint's boundary. They are not transactions and change no running balance. Only the posted register returns them; the date filters apply to the statement date. */
+            statements: components["schemas"]["AccountRegisterStatementResponse"][];
             next_cursor: string | null;
+        };
+        AccountRegisterStatementResponse: {
+            /** Format: int64 */
+            checkpoint_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            commodity_code: string;
+            commodity_symbol: string | null;
+            /** Format: date */
+            statement_date: string;
+            /**
+             * Format: int64
+             * @description The checkpoint's same-day boundary: postings on the statement date with an account day sequence at or below it are covered.
+             */
+            statement_account_sequence: number;
+            statement_balance: components["schemas"]["BalanceQuantity"];
+            /** @description Index in this page's `entries` before which the statement row sits; equal to the number of entries when it follows them all. */
+            before_entry_index: number;
         };
         PostingRequest: {
             /** @description Server-generated line key from a previous response. Omit for new lines. */

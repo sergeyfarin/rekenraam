@@ -174,7 +174,15 @@ func (r *TransactionRepository) AccountRegister(ctx context.Context, params List
 		where = append(where, "je.entry_date <= ?")
 		args = append(args, params.BeforeDate)
 	}
-	if params.CursorDate != "" && params.CursorID > 0 {
+	if params.CursorDate != "" && params.CursorID > 0 && params.CursorStatement {
+		// After a statement row at (date, sequence), every posting at that
+		// boundary is older than it (#595).
+		where = append(where, `(
+			je.entry_date < ?
+			OR (je.entry_date = ? AND pv.account_day_sequence <= ?)
+		)`)
+		args = append(args, params.CursorDate, params.CursorDate, params.CursorDaySequence)
+	} else if params.CursorDate != "" && params.CursorID > 0 {
 		where = append(where, `(
 			je.entry_date < ?
 			OR (je.entry_date = ? AND pv.account_day_sequence < ?)
@@ -863,12 +871,6 @@ func EncodeRegisterCursor(entryDate string, daySequence int64, postingVersionID 
 		return ""
 	}
 	return base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%s|%d|%d", entryDate, daySequence, postingVersionID)))
-}
-
-// DecodeRegisterCursor decodes a 3-tuple cursor produced by EncodeRegisterCursor.
-func DecodeRegisterCursor(cursor string) (date string, daySequence int64, id int64, err error) {
-	// Register and transaction cursors share the same format; delegate.
-	return DecodeTransactionCursor(cursor)
 }
 
 // EncodeDeletionCursor encodes the 2-tuple (deleted_at, id) used for trash

@@ -97,24 +97,41 @@ func (s *TransactionService) Register(ctx context.Context, accountID int64, inpu
 		return AccountRegisterResult{}, ValidationError{Message: "category type and date basis are not supported on the register"}
 	}
 
+	// The register cursor can stop on a statement row (#595), a shape the
+	// shared transaction cursor does not accept, so it is decoded here.
+	cursor, err := db.DecodeRegisterCursor(input.Cursor)
+	if err != nil {
+		return AccountRegisterResult{}, ValidationError{Message: "cursor is invalid"}
+	}
+	input.Cursor = ""
 	params, err := s.listParams(ctx, input, true)
 	if err != nil {
 		return AccountRegisterResult{}, err
 	}
+	params.CursorDate = cursor.Date
+	params.CursorDaySequence = cursor.DaySequence
+	params.CursorID = cursor.ID
+	params.CursorStatement = cursor.Statement
 
 	records, err := s.repository.AccountRegister(ctx, params)
 	if err != nil {
 		return AccountRegisterResult{}, fmt.Errorf("list register: %w", err)
 	}
+	// Statements are reconciled checkpoints, which only the posted register
+	// shows; the voided register lists voided transactions alone.
+	var statementRecords []db.RegisterStatementRecord
+	if params.Status == "posted" {
+		statementRecords, err = s.repository.AccountRegisterStatements(ctx, params)
+		if err != nil {
+			return AccountRegisterResult{}, fmt.Errorf("list register statements: %w", err)
+		}
+	}
+	page := mergeRegisterPage(records, statementRecords, params.Limit)
+	records = page.Postings
+
 	runningBalances, err := s.accountRegisterRunningBalances(ctx, params, records)
 	if err != nil {
 		return AccountRegisterResult{}, err
-	}
-
-	nextCursor := ""
-	if len(records) == params.Limit {
-		last := records[len(records)-1]
-		nextCursor = db.EncodeRegisterCursor(last.JournalEntry.EntryDate, last.Posting.AccountDaySequence, last.Posting.ID)
 	}
 
 	entries := toAccountRegisterEntries(records, runningBalances)
@@ -124,10 +141,15 @@ func (s *TransactionService) Register(ctx context.Context, accountID int64, inpu
 	if err := s.attachRegisterCorrectionChains(ctx, accountID, entries); err != nil {
 		return AccountRegisterResult{}, err
 	}
+	statements, err := s.registerStatements(ctx, page.Statements)
+	if err != nil {
+		return AccountRegisterResult{}, err
+	}
 
 	return AccountRegisterResult{
 		Entries:    entries,
-		NextCursor: nextCursor,
+		Statements: statements,
+		NextCursor: page.NextCursor,
 	}, nil
 }
 

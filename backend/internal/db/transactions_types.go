@@ -201,8 +201,11 @@ type ListTransactionsParams struct {
 	CursorDate        string
 	CursorDaySequence int64
 	CursorID          int64
-	Limit             int
-	FilterEntryDate   bool
+	// CursorStatement marks a register cursor that stopped on a statement
+	// row; CursorID is then a checkpoint id (#595).
+	CursorStatement bool
+	Limit           int
+	FilterEntryDate bool
 	// EntryDateBasis narrows by journal-entry date the way the reports do:
 	// a transaction matches when one of its entries falls inside the range,
 	// rather than by the transaction's own date. FilterEntryDate is the
