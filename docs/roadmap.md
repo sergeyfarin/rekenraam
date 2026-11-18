@@ -99,7 +99,9 @@ below continue alongside it and do not block it.
    ([#576](https://github.com/sergeyfarin/rekenraam/issues/576)) is enough; a
    target date and a last consolidation are separate optional choices. Two
    preparations do not block it: single-book triggers
-   [#573](https://github.com/sergeyfarin/rekenraam/issues/573), and proving
+   [#573](https://github.com/sergeyfarin/rekenraam/issues/573) (delivered
+   2026-11-18 by [#590](https://github.com/sergeyfarin/rekenraam/pull/590):
+   baseline identity `20261118`), and proving
    SQLite's CHECK-change procedure while moving only individually justified
    constraints
    [#574](https://github.com/sergeyfarin/rekenraam/issues/574). It also

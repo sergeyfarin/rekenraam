@@ -931,18 +931,48 @@ $EDITOR backend/migrations/00NN_short_name.sql
 ./scripts/test-backend.sh
 ```
 
-Reset only a disposable development database after a baseline rewrite. Stop the
-app first, export anything worth keeping, and remove the SQLite file selected
-by `DATABASE_URL` together with its `-wal` and `-shm` sidecars. For the default
-`pnpm dev` database:
+Reset only a disposable development database after a baseline rewrite, in
+this order:
 
-```sh
-rm -f backend/var/dev.sqlite backend/var/dev.sqlite-wal backend/var/dev.sqlite-shm
-```
+1. **Before updating, with the previous build still running**, export anything
+   worth keeping (Settings → Data). Exports need the running app; the new build
+   refuses to open the old file at all.
+2. Stop the app.
+3. Save the SQLite file selected by `DATABASE_URL` together with its `-wal`
+   and `-shm` sidecars, then remove the originals. Only the previous build can
+   open that file again, so it is the way back if an export turns out to be
+   missing something. After a crash the `-wal` file can still hold committed
+   transactions, so the copy is only complete with it. For the default
+   `pnpm dev` database:
 
-Restart the app to run migrations and repeat owner setup. If `DATABASE_URL`
-names another file, remove that file and its sidecars instead. For a populated
-installation, follow [the upgrade and restore guide](upgrades.md).
+   ```sh
+   (
+     set -e
+     db=backend/var/dev.sqlite
+     aside=$(mktemp -d "backend/var/pre-reset-$(date +%Y%m%d-%H%M%S)-XXXXXX")
+     for f in "$db" "$db-wal" "$db-shm"; do
+       if [ -e "$f" ]; then cp -p "$f" "$aside/"; cmp "$f" "$aside/${f##*/}"; fi
+     done
+     echo "verified copy saved in $aside; removing the originals"
+     rm -f "$db" "$db-wal" "$db-shm"
+   )
+   ```
+
+   Every file is copied and compared before any original is removed. A failed
+   copy or comparison stops the reset with a non-zero status and leaves the
+   originals in place. If removal itself fails, the originals may be
+   incomplete, but the folder printed just before is a complete, verified copy:
+   **keep the app stopped**, remove whichever of the three files remain by
+   hand, and only then start the app. `mktemp -d` gives each reset a new, empty
+   folder, so a second reset never overwrites the first saved copy. The
+   parentheses keep `set -e` from closing your shell.
+
+4. Update, start the app to run migrations and repeat owner setup.
+
+If `DATABASE_URL` names another file, set `db` to that file instead.
+Delete the moved copy only once you no longer need the previous build to read
+it. For a populated installation, follow
+[the upgrade and restore guide](upgrades.md).
 
 The per-change reset notices are retained in the
 [pre-release baseline rewrite archive](archive/pre-release-baseline-rewrites.md).
@@ -963,9 +993,18 @@ drops the custom-category exemption from `account_versions_no_delete`, so the
 head is **2** on the same baseline identity. Existing #405 databases and
 backups upgrade in place; nothing needs a reset.
 
-The baseline records generation **20261026** in SQLite's `PRAGMA user_version`,
+**#573 (2026-11-18): BREAKING DEV DATABASE.** `0001_initial_schema.sql` is
+rewritten so that `books.id` is held at 1 by the `books_single_id_insert` and
+`books_id_no_update` triggers instead of `CHECK (id = 1)`, and the baseline
+identity becomes **20261118**. The head stays at the same forward number.
+Before pulling this change, export anything worth keeping with the previous
+build while it still runs, then move the database aside and start fresh with
+the procedure above. This build refuses a `20261026` database at startup and a
+`20261026` backup at restore, so neither step works after updating.
+
+The baseline records generation **20261118** in SQLite's `PRAGMA user_version`,
 separately from Goose's forward migration number. Startup refuses older
-candidate files (including old version-1 files) with `incompatible pre-release
+candidate files (including old version-1 files and #405's `20261026`) with `incompatible pre-release
 baseline`, before running migrations. Populated unversioned files also refuse;
 `recover-owner` still backs them up before refusing admission without resetting
 credentials. Restore refuses backups from that

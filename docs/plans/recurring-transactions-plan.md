@@ -574,8 +574,8 @@ either.
      occurrence shifted index 0 and left index 1 on the same date. The origin
      is now computed once, so shifting it keeps every later index one interval
      apart.
-   - **A second book cannot be created**, because `books.id` carries
-     `CHECK (id = 1)`. The same-book triggers are exercised through the arm a
+   - **A second book cannot be created**, because `books.id` is held at 1
+     (a CHECK then; the `books_single_id_insert` trigger since #573). The same-book triggers are exercised through the arm a
      cross-book row would hit anyway — the target is not in this book — the
      way `TestMigrationsEnforceTransactionAndVersionIntegrity` already does.
 2. **Template CRUD — done 2026-08-30.** `app/recurring.go`, five authenticated

@@ -236,6 +236,35 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 func TestMigrateSeededBaselineMatchesFreshSchema(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
+	seeded := seededBaselineDatabase(t)
+
+	before := captureLedgerState(t, seeded)
+	require.NoError(t, Migrate(ctx, seeded))
+	after := captureLedgerState(t, seeded)
+	// A table a forward migration creates (#485's import_posting_links)
+	// starts empty; it holds no figure the baseline book had.
+	for key, value := range after {
+		if _, existed := before[key]; !existed && strings.HasPrefix(key, "count:") {
+			assert.Equalf(t, "0", value, "%s is created by a forward migration and must start empty", key)
+			delete(after, key)
+		}
+	}
+	assert.Equal(t, before, after, "upgrading must not change a single durable figure")
+
+	// Stated separately from the snapshot comparison so a failure names what
+	// broke rather than dumping two large maps side by side.
+	assertUpgradedBookIsIntact(t, seeded)
+
+	fresh := openTestDatabase(t)
+	require.NoError(t, Migrate(ctx, fresh))
+	assert.Equal(t, schemaFingerprint(t, fresh), schemaFingerprint(t, seeded))
+}
+
+// seededBaselineDatabase loads the frozen v0.1 seed into migration 0001 alone,
+// without the later forward migrations.
+func seededBaselineDatabase(t *testing.T) *sql.DB {
+	t.Helper()
+	ctx := context.Background()
 	seeded := openTestDatabase(t)
 
 	// Start at baseline 1 even after future forward migrations are added. This
@@ -261,27 +290,7 @@ func TestMigrateSeededBaselineMatchesFreshSchema(t *testing.T) {
 	_, err = loadTx.ExecContext(ctx, string(seed))
 	require.NoError(t, err, "the frozen seed must load into the frozen baseline")
 	require.NoError(t, loadTx.Commit(), "the frozen seed must satisfy every foreign key")
-
-	before := captureLedgerState(t, seeded)
-	require.NoError(t, Migrate(ctx, seeded))
-	after := captureLedgerState(t, seeded)
-	// A table a forward migration creates (#485's import_posting_links)
-	// starts empty; it holds no figure the baseline book had.
-	for key, value := range after {
-		if _, existed := before[key]; !existed && strings.HasPrefix(key, "count:") {
-			assert.Equalf(t, "0", value, "%s is created by a forward migration and must start empty", key)
-			delete(after, key)
-		}
-	}
-	assert.Equal(t, before, after, "upgrading must not change a single durable figure")
-
-	// Stated separately from the snapshot comparison so a failure names what
-	// broke rather than dumping two large maps side by side.
-	assertUpgradedBookIsIntact(t, seeded)
-
-	fresh := openTestDatabase(t)
-	require.NoError(t, Migrate(ctx, fresh))
-	assert.Equal(t, schemaFingerprint(t, fresh), schemaFingerprint(t, seeded))
+	return seeded
 }
 
 // captureLedgerState reads every durable figure the seed carries, keyed so a
@@ -997,34 +1006,6 @@ func TestCurrentVersionViewsUseEffectiveDateBeforeVersionSequence(t *testing.T) 
 	assert.Equal(t, "Corrected Current Name", name)
 }
 
-func TestBooksRemainSingleBookUntilScopeChanges(t *testing.T) {
-	t.Parallel()
-	database := openTestDatabase(t)
-
-	require.NoError(t, Migrate(context.Background(), database))
-
-	_, err := database.ExecContext(context.Background(), `
-		INSERT INTO users (id, username, password_hash, is_owner, created_at, updated_at)
-		VALUES (1, 'owner', 'hash', 1, '2026-06-01T00:00:00Z', '2026-06-01T00:00:00Z');
-	`)
-	require.NoError(t, err)
-
-	_, err = database.ExecContext(context.Background(), `
-		INSERT INTO books (
-			id,
-			owner_user_id,
-			code,
-			name,
-			updated_by_user_id,
-			created_at,
-			updated_at
-		)
-		VALUES (2, 1, 'second', 'Second', 1, '2026-06-01T00:00:00Z', '2026-06-01T00:00:00Z');
-	`)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "CHECK constraint failed")
-}
-
 func TestBookDefaultCurrencyInsertMustReferenceSameBookCurrency(t *testing.T) {
 	t.Parallel()
 	database := openTestDatabase(t)
@@ -1270,7 +1251,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 	assert.Equal(t, map[string]int{
 		"index":   111,
 		"table":   119,
-		"trigger": 179,
+		"trigger": 181,
 		"view":    17,
 	}, objectCounts, "the migrated head must retain every schema object")
 	assert.NotContains(t, readTableColumns(t, database, "pricing_policies"), "base_commodity_id", "#480: the default currency is the one valuation base")

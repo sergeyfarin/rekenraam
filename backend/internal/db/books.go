@@ -140,11 +140,12 @@ func (r *BookRepository) CompleteBookSetup(ctx context.Context, params CompleteB
 	committed = true
 
 	return BookRecord{
-		ID:          1,
-		OwnerUserID: params.OwnerUserID,
-		Code:        params.Code,
-		Name:        params.Name,
-		CreatedAt:   params.CreatedAt,
-		UpdatedAt:   params.CreatedAt,
+		ID:              1,
+		OwnerUserID:     params.OwnerUserID,
+		Code:            params.Code,
+		Name:            params.Name,
+		UpdatedByUserID: sql.NullInt64{Int64: params.OwnerUserID, Valid: true},
+		CreatedAt:       params.CreatedAt,
+		UpdatedAt:       params.CreatedAt,
 	}, nil
 }
