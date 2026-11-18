@@ -36,7 +36,7 @@ const keywords = new Set(['inherit', 'current', 'transparent']);
 const colourUtility =
   /(?<![\w/.-])(?:[a-z0-9[\]=&-]+:)*(text|bg|border(?:-[trblxy])?|ring(?:-offset)?|outline|fill|stroke|divide|decoration|accent|caret|from|via|to|placeholder|shadow)-([a-z][a-z0-9-]*)(?:\/\d+)?(?![\w-]|\s*:)/g;
 const nonColour =
-  /^(xs|sm|base|md|lg|xl|\d?xl|left|right|center|justify|start|end|wrap|nowrap|balance|pretty|ellipsis|clip|solid|dashed|dotted|double|none|collapse|separate|x|y|t|b|l|r|s|e|fixed|local|scroll|cover|contain|auto|top|bottom|no-repeat|repeat|origin|offset|inset|underline|thin|thick|slice|clone|linear|radial|conic|opacity|ellipsis|px|panel)(-.*)?$/;
+  /^(xs|sm|base|md|lg|xl|\d?xl|left|right|center|justify|start|end|wrap|nowrap|balance|pretty|ellipsis|clip|solid|dashed|dotted|double|none|collapse|separate|x|y|t|b|l|r|s|e|fixed|local|scroll|cover|contain|auto|top|bottom|no-repeat|repeat|origin|offset|inset|underline|thin|thick|slice|clone|linear|radial|conic|opacity|px|panel)(-.*)?$/;
 
 type Segment = { start: number; end: number };
 
