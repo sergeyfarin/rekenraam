@@ -963,9 +963,17 @@ drops the custom-category exemption from `account_versions_no_delete`, so the
 head is **2** on the same baseline identity. Existing #405 databases and
 backups upgrade in place; nothing needs a reset.
 
-The baseline records generation **20261026** in SQLite's `PRAGMA user_version`,
+**#573 (2026-11-18): BREAKING DEV DATABASE.** `0001_initial_schema.sql` is
+rewritten so that `books.id` is held at 1 by the `books_single_id_insert` and
+`books_id_no_update` triggers instead of `CHECK (id = 1)`, and the baseline
+identity becomes **20261118**. The head stays at the same forward number. A
+database or backup on `20261026` is refused at startup and restore: export
+anything worth keeping with the previous build, then reset the disposable
+development database with the procedure above.
+
+The baseline records generation **20261118** in SQLite's `PRAGMA user_version`,
 separately from Goose's forward migration number. Startup refuses older
-candidate files (including old version-1 files) with `incompatible pre-release
+candidate files (including old version-1 files and #405's `20261026`) with `incompatible pre-release
 baseline`, before running migrations. Populated unversioned files also refuse;
 `recover-owner` still backs them up before refusing admission without resetting
 credentials. Restore refuses backups from that

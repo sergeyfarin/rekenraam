@@ -1,7 +1,8 @@
 # Upgrade Policy And Operator Guide
 
 The current v0.1 candidate schema baseline is migration `0001` (generation
-`20261026`, consolidated from 0001–0027 by #405). Previous development files
+`20261118`: consolidated from 0001–0027 by #405, then rewritten by #573 to keep
+the single book's id with triggers instead of a CHECK). Previous development files
 and backups are incompatible, including earlier files numbered 1. Export with
 their original build before updating, then reset only disposable development
 data using the [developer procedure](developer-workflow.md#migrations-and-resetting-your-database).

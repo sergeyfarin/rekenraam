@@ -358,8 +358,12 @@ attaches the event to the book in the same transaction.
 
 `books` is intentionally mutable setup/profile state in the current single-book
 scope, not append-only financial state. The schema enforces that scope with
-`books.id CHECK (id = 1)`. Adding real multi-book support must explicitly
-revisit book lifecycle/versioning and remove or replace that guard as part of an
+two triggers (#573): `books_single_id_insert` refuses any stored id other than
+1, including a first book with another id, and `books_id_no_update` refuses a
+change of the id; the primary key refuses a second book with id 1. They are
+triggers rather than a CHECK so that a later migration can drop them inside an
+ordinary transaction. Adding real multi-book support must explicitly revisit
+book lifecycle/versioning and remove or replace that guard as part of an
 accepted design change.
 
 Version ordering rules:

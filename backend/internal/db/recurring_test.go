@@ -12,8 +12,8 @@ import (
 	"rekenraam/backend/internal/exact"
 )
 
-// One book, because the schema allows exactly one: books.id carries
-// CHECK (id = 1). The same-book triggers are therefore exercised through the
+// One book, because the schema allows exactly one: the books_single_id_insert
+// trigger keeps books.id at 1 (#573). The same-book triggers are therefore exercised through the
 // arm a cross-book row would hit anyway — the target is not in this book —
 // with ids that exist nowhere.
 func newRecurringTestDatabase(t testing.TB) *sql.DB {

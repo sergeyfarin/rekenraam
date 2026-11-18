@@ -24,6 +24,12 @@ After the first installed release, schema changes use forward migrations.
 
 Forward migration `0002` (#417) makes the head **2** on the same baseline.
 
+#573 rewrites the baseline to identity `20261118`: `books.id` loses its
+`CHECK (id = 1)` and two triggers keep the same rule (an inserted id other than
+1 and any change of the id are refused), so a later scope change can drop them
+in an ordinary transactional migration instead of rebuilding a table 82
+foreign keys reference. Development databases on `20261026` must be reset.
+
 #405 consolidates the previous candidate's 0001–0027 into head **1**, with
 baseline identity `20261026`. It removes two unused provider-lookup tables,
 fifteen indexes (twelve redundant, three belonging to those tables) and five
@@ -450,7 +456,7 @@ rules remain unchanged. See the
 
 | Capability | Status | Notes |
 |---|---|---|
-| Single runtime book (`books.id CHECK (id = 1)`) | ✅ | No book selector by design. |
+| Single runtime book (`books.id` held at 1 by the `books_single_id_insert` and `books_id_no_update` triggers, #573) | ✅ | No book selector by design. |
 | Embedded currency catalog + active-currency derivation | ✅ | Default currency is a preference, not a base currency. |
 | Currency setup & management UI | ✅ | `settings/currencies`. Latest FX rates display through the shared exact `formatRatio` helper in the active app locale, rounded half-up at 8 decimals ([#106](https://github.com/sergeyfarin/rekenraam/issues/106), 2026-10-16). |
 | Commodity metadata (scale, max quantity scale) | ✅ | Lossless precision per ADR 0009. |
