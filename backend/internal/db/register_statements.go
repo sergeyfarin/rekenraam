@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"encoding/base64"
 	"fmt"
 	"strings"
@@ -21,7 +22,7 @@ type RegisterStatementRecord struct {
 	StatementBalanceScale    int
 }
 
-// AccountRegisterStatements returns the account's active checkpoints in
+// accountRegisterStatements returns the account's active checkpoints in
 // register order — statement_date, statement_account_sequence, id, all
 // descending — after the register cursor, filtered by statement date.
 //
@@ -31,7 +32,7 @@ type RegisterStatementRecord struct {
 // after it. In the register's key (date, sequence, kind, id) a posting has kind
 // 0 and a statement kind 1, so at an equal (date, sequence) the statement is
 // the newer row.
-func (r *TransactionRepository) AccountRegisterStatements(ctx context.Context, params ListTransactionsParams) ([]RegisterStatementRecord, error) {
+func accountRegisterStatements(ctx context.Context, source queryer, params ListTransactionsParams) ([]RegisterStatementRecord, error) {
 	where := []string{"book_id = ?", "account_id = ?", "status = 'active'"}
 	args := []any{params.BookID, params.AccountID}
 	if params.AfterDate != "" {
@@ -65,7 +66,7 @@ func (r *TransactionRepository) AccountRegisterStatements(ctx context.Context, p
 		}
 	}
 	args = append(args, params.Limit)
-	rows, err := r.database.QueryContext(ctx, `
+	rows, err := source.QueryContext(ctx, `
 		SELECT id, commodity_id, statement_date, statement_account_sequence,
 			statement_balance_value, statement_balance_scale
 		FROM reconciliation_checkpoints
@@ -90,6 +91,51 @@ func (r *TransactionRepository) AccountRegisterStatements(ctx context.Context, p
 		return nil, fmt.Errorf("iterate register statements: %w", err)
 	}
 	return records, nil
+}
+
+// AccountRegisterPageRecord is everything one register page reads, from one
+// committed ledger state: its postings, its statement rows, and the postings
+// its running balances are summed from.
+type AccountRegisterPageRecord struct {
+	Postings        []AccountRegisterEntryRecord
+	Statements      []RegisterStatementRecord
+	RunningPostings []LedgerPostingRecord
+}
+
+// AccountRegisterPage reads a register page in one read transaction (#595
+// review). Read separately, a reconciliation finished between the reads put a
+// new "Reconciled" statement row beside the old uncleared posting version,
+// whose running balance was then missing because the running-balance read
+// had already moved to the new version.
+func (r *TransactionRepository) AccountRegisterPage(ctx context.Context, params ListTransactionsParams, withStatements bool) (AccountRegisterPageRecord, error) {
+	var page AccountRegisterPageRecord
+	tx, err := r.database.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return page, fmt.Errorf("begin register page: %w", err)
+	}
+	defer rollbackTx(ctx, tx)
+	if page.Postings, err = accountRegister(ctx, tx, params); err != nil {
+		return page, err
+	}
+	r.registerPageStage("postings")
+	if withStatements {
+		if page.Statements, err = accountRegisterStatements(ctx, tx, params); err != nil {
+			return page, err
+		}
+	}
+	r.registerPageStage("statements")
+	if len(page.Postings) > 0 {
+		if page.RunningPostings, err = queryLedgerPostings(ctx, tx, accountRegisterRunningQuery(params)); err != nil {
+			return page, err
+		}
+	}
+	return page, nil
+}
+
+func (r *TransactionRepository) registerPageStage(stage string) {
+	if r.registerPageStageForTest != nil {
+		r.registerPageStageForTest(stage)
+	}
 }
 
 // registerStatementCursorKind marks a register cursor that stops on a

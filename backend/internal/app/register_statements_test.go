@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"rekenraam/backend/internal/db"
 	"rekenraam/backend/internal/exact"
 )
 
@@ -216,4 +217,59 @@ func TestRegisterRejectsMalformedStatementCursor(t *testing.T) {
 	})
 	var validation ValidationError
 	require.ErrorAs(t, err, &validation)
+}
+
+// #595 review. A register page is one committed ledger state. A
+// reconciliation finished from another connection between the page's reads
+// used to put the new "Reconciled" statement row beside the old uncleared
+// posting version, which also lost its running balance because that read had
+// moved to the new version.
+func TestRegisterPageReadsOneLedgerState(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f := newInvestmentsTestFixture(t)
+	postEUR(t, f, "2026-03-10", 10)
+
+	var sequence int
+	var name, path string
+	require.NoError(t, f.database.QueryRowContext(ctx, `PRAGMA database_list`).Scan(&sequence, &name, &path))
+	second, err := db.Open(ctx, db.SQLiteFileURL(path))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = second.Close() })
+	elsewhere := *f
+	accounts := db.NewAccountRepository(second)
+	elsewhere.transactionService = NewTransactionService(db.NewTransactionRepository(second), db.NewPayeeRepository(second), accounts, db.NewCommodityRepository(second))
+
+	interleaved := 0
+	for _, stage := range []string{"postings", "statements"} {
+		t.Run(stage, func(t *testing.T) {
+			f.transactionService.repository.SetRegisterPageStageForTest(func(at string) {
+				if at == stage {
+					interleaved++
+					month := 3 + interleaved
+					postEUR(t, &elsewhere, fmt.Sprintf("2026-%02d-05", month), 5)
+					reconcileCash(t, &elsewhere, fmt.Sprintf("2026-%02d-25", month), int64(10+5*interleaved))
+				}
+			})
+			before := readCashRegister(t, f, ListTransactionsInput{})
+			f.transactionService.repository.SetRegisterPageStageForTest(nil)
+
+			// The page is the state before the concurrent finish: no
+			// statement it did not read postings for, every posting with its
+			// balance and its status as of that state.
+			require.Len(t, before.Statements, interleaved-1)
+			require.Len(t, before.Entries, interleaved)
+			for _, entry := range before.Entries {
+				require.NotEmpty(t, entry.RunningBalance.QuantityValue.String(), "posting %d has a running balance", entry.Posting.ID)
+				require.Equal(t, entry.Posting.CommodityID, entry.RunningBalance.CommodityID, "posting %d has a running balance", entry.Posting.ID)
+			}
+			requireRunningBalanceBelowStatementEqualsStatementBalance(t, before)
+
+			after := readCashRegister(t, f, ListTransactionsInput{})
+			require.Len(t, after.Statements, interleaved)
+			require.Len(t, after.Entries, interleaved+1)
+			assert.Equal(t, "reconciled", after.Entries[0].Posting.ReconciliationStatus)
+			requireRunningBalanceBelowStatementEqualsStatementBalance(t, after)
+		})
+	}
 }

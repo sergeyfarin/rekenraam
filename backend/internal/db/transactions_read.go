@@ -156,7 +156,7 @@ func (r *TransactionRepository) ListTransactions(ctx context.Context, params Lis
 	return records, nil
 }
 
-func (r *TransactionRepository) AccountRegister(ctx context.Context, params ListTransactionsParams) ([]AccountRegisterEntryRecord, error) {
+func accountRegister(ctx context.Context, source queryer, params ListTransactionsParams) ([]AccountRegisterEntryRecord, error) {
 	where := []string{"t.book_id = ?", "t.deleted_at IS NULL", "pv.account_id = ?"}
 	args := []any{params.BookID, params.AccountID}
 
@@ -196,7 +196,7 @@ func (r *TransactionRepository) AccountRegister(ctx context.Context, params List
 	}
 
 	args = append(args, params.Limit)
-	rows, err := r.database.QueryContext(ctx, accountRegisterSelect(`
+	rows, err := source.QueryContext(ctx, accountRegisterSelect(`
 		WHERE `+strings.Join(where, " AND ")+`
 		ORDER BY je.entry_date DESC, pv.account_day_sequence DESC, pv.id DESC
 		LIMIT ?
@@ -210,7 +210,7 @@ func (r *TransactionRepository) AccountRegister(ctx context.Context, params List
 	if err != nil {
 		return nil, err
 	}
-	if err := r.loadAccountRegisterTags(ctx, entries); err != nil {
+	if err := loadAccountRegisterTags(ctx, source, entries); err != nil {
 		return nil, err
 	}
 
@@ -249,15 +249,15 @@ func (r *TransactionRepository) loadTransactionChildren(ctx context.Context, rec
 	return loadTransactionChildrenQuery(ctx, r.database, records)
 }
 
-func (r *TransactionRepository) loadAccountRegisterTags(ctx context.Context, entries []AccountRegisterEntryRecord) error {
+func loadAccountRegisterTags(ctx context.Context, source queryer, entries []AccountRegisterEntryRecord) error {
 	for index := range entries {
-		tagIDs, err := transactionTagIDs(ctx, r.database, entries[index].Transaction.ID)
+		tagIDs, err := transactionTagIDs(ctx, source, entries[index].Transaction.ID)
 		if err != nil {
 			return err
 		}
 		entries[index].Transaction.TagIDs = tagIDs
 
-		postingTagIDs, err := postingTagIDs(ctx, r.database, entries[index].Posting.PostingLineID)
+		postingTagIDs, err := postingTagIDs(ctx, source, entries[index].Posting.PostingLineID)
 		if err != nil {
 			return err
 		}

@@ -113,23 +113,17 @@ func (s *TransactionService) Register(ctx context.Context, accountID int64, inpu
 	params.CursorID = cursor.ID
 	params.CursorStatement = cursor.Statement
 
-	records, err := s.repository.AccountRegister(ctx, params)
+	// Statements are reconciled checkpoints, which only the posted register
+	// shows; the voided register lists voided transactions alone. Postings,
+	// statements and running-balance inputs come from one snapshot.
+	read, err := s.repository.AccountRegisterPage(ctx, params, params.Status == "posted")
 	if err != nil {
 		return AccountRegisterResult{}, fmt.Errorf("list register: %w", err)
 	}
-	// Statements are reconciled checkpoints, which only the posted register
-	// shows; the voided register lists voided transactions alone.
-	var statementRecords []db.RegisterStatementRecord
-	if params.Status == "posted" {
-		statementRecords, err = s.repository.AccountRegisterStatements(ctx, params)
-		if err != nil {
-			return AccountRegisterResult{}, fmt.Errorf("list register statements: %w", err)
-		}
-	}
-	page := mergeRegisterPage(records, statementRecords, params.Limit)
-	records = page.Postings
+	page := mergeRegisterPage(read.Postings, read.Statements, params.Limit)
+	records := page.Postings
 
-	runningBalances, err := s.accountRegisterRunningBalances(ctx, params, records)
+	runningBalances, err := accountRegisterRunningBalances(read.RunningPostings)
 	if err != nil {
 		return AccountRegisterResult{}, err
 	}

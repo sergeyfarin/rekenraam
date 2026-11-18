@@ -30,6 +30,16 @@ var (
 
 type TransactionRepository struct {
 	database *sql.DB
+	// registerPageStageForTest runs between a register page's reads; tests
+	// use it to commit a write from another connection there (#595 review).
+	registerPageStageForTest func(stage string)
+}
+
+// SetRegisterPageStageForTest installs a deterministic interleaving between a
+// register page's reads. Set it before serving requests; production leaves
+// it nil.
+func (r *TransactionRepository) SetRegisterPageStageForTest(hook func(stage string)) {
+	r.registerPageStageForTest = hook
 }
 
 func (r *TransactionRepository) withTx(ctx context.Context, op string, fn func(*sql.Tx) error) error {

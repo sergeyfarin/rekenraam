@@ -846,15 +846,9 @@ func calendarBucketEnd(date time.Time, bucket string) time.Time {
 	}
 }
 
-func (s *TransactionService) accountRegisterRunningBalances(ctx context.Context, params db.ListTransactionsParams, entries []db.AccountRegisterEntryRecord) (map[int64]BalanceQuantity, error) {
-	if len(entries) == 0 {
-		return map[int64]BalanceQuantity{}, nil
-	}
-	postings, err := s.repository.AccountRegisterRunningPostings(ctx, params)
-	if err != nil {
-		return nil, fmt.Errorf("read register running postings: %w", err)
-	}
-
+// accountRegisterRunningBalances sums the register's running balances from
+// postings read in the same snapshot as the page (#595 review).
+func accountRegisterRunningBalances(postings []db.LedgerPostingRecord) (map[int64]BalanceQuantity, error) {
 	running := map[int64]*exact.ScaledInt{}
 	byPostingID := map[int64]BalanceQuantity{}
 	for _, posting := range postings {
