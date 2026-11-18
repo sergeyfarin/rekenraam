@@ -8,10 +8,10 @@
   import APIFormError from '#lib/components/api-form-error.svelte';
   import ModalDialog from '#lib/components/modal-dialog.svelte';
   import { formatQuantity } from '#lib/money/format.ts';
+  import { invalidateReconciliationReads } from '#lib/reconcile/invalidate.ts';
   import { coveredByLaterActiveCheckpoint } from '#lib/reconcile/checkpoint-chain.ts';
   import {
     reconciliationCheckpointsQueryOptions,
-    reconciliationQueryKey,
     voidReconciliationCheckpoint,
     type ReconciliationCheckpointResponse
   } from '#lib/api/reconciliation.ts';
@@ -110,7 +110,7 @@
       const voided = await voidReconciliationCheckpoint(voidTarget.id, { change_reason: voidReason.trim() }, csrfToken);
       voidedNotice = m.reconcile_checkpoint_voided({ date: voided.statement_date });
       voidTarget = undefined;
-      await queryClient.invalidateQueries({ queryKey: reconciliationQueryKey });
+      await invalidateReconciliationReads(queryClient, voided.account_id);
     } catch (error) {
       voidError = error;
     } finally {

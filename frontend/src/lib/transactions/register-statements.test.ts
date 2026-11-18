@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   markersByRowIndex,
-  reconcileHref,
   registerStatementMarkers,
   type AccountRegisterStatementResponse
 } from './register-statements.ts';
@@ -65,11 +64,5 @@ describe('markersByRowIndex', () => {
     const grouped = markersByRowIndex([{ beforeIndex: 0 }, { beforeIndex: 0 }, { beforeIndex: 7 }], 3);
     expect(grouped.get(0)).toHaveLength(2);
     expect(grouped.get(3)).toHaveLength(1);
-  });
-});
-
-describe('reconcileHref', () => {
-  it('opens Reconcile for the account', () => {
-    expect(reconcileHref(12)).toBe('/app/ledger/reconcile?account=12');
   });
 });

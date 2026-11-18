@@ -32,7 +32,8 @@
   import { placePosition, sameDayNeighbor, type ReorderDirection } from './reorder';
   import { hasPostingDay } from './posted-on';
   import { adjacentCalendarDate, formatCalendarDate } from '#lib/dates/calendar-date.ts';
-  import { reconcileHref, registerStatementMarkers, type RegisterStatementMarker } from './register-statements.ts';
+  import { registerStatementMarkers, type RegisterStatementMarker } from './register-statements.ts';
+  import { reconcileHref } from '#lib/reconcile/reconcile-link.ts';
 
   import type { TransactionWorkspaceActions } from './transaction-workspace.svelte';
   import TransactionRowActions from './transaction-row-actions.svelte';
@@ -295,7 +296,7 @@
       </span>
       <span class="tabular-nums text-foreground">{m.register_statement_balance({ balance: statementBalance(marker) })}</span>
       <StatusBadge tone="positive">{m.register_recon_reconciled()}</StatusBadge>
-      <a class="ml-auto inline-flex min-h-11 items-center text-sm font-semibold underline" href={reconcileHref(accountID)}>
+      <a class="ml-auto inline-flex min-h-11 items-center text-sm font-semibold underline" href={reconcileHref(accountID, marker.statement.commodity_id)}>
         {m.register_statement_open_reconcile()}
       </a>
     </div>

@@ -10,6 +10,7 @@
   import ReconcileStartForm from '#lib/reconcile/reconcile-start-form.svelte';
   import ReconcileSession from '#lib/reconcile/reconcile-session.svelte';
   import ReconcileCheckpoints from '#lib/reconcile/reconcile-checkpoints.svelte';
+  import { parseReconcileRequest } from '#lib/reconcile/reconcile-link.ts';
 
   // ── Session + CSRF ────────────────────────────────────────────────
   const sessionQuery = createQuery(() => authSessionQueryOptions());
@@ -19,8 +20,11 @@
   const accountsQuery = createQuery(() => accountsQueryOptions(false, false));
 
   // `?account=` preselects an account, including a holding, which the
-  // default picker leaves out.
-  const requestedAccountID = $derived(Number(page.url.searchParams.get('account')) || undefined);
+  // default picker leaves out. `&commodity=` (a register statement row's
+  // link) reconciles that commodity instead of the account's default.
+  const request = $derived(parseReconcileRequest(page.url.searchParams));
+  const requestedAccountID = $derived(request.accountID);
+  const requestedCommodityID = $derived(request.commodityID);
 
   // ── View state machine ────────────────────────────────────────────
   type View =
@@ -71,7 +75,7 @@
   <div class="lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-6 xl:grid-cols-[minmax(0,1fr)_26rem]">
     <div class="min-w-0">
       <Panel>
-        <ReconcileStartForm {csrfToken} requestedAccountID={requestedAccountID} onStarted={handleStarted} onAccountChange={handleAccountChange} />
+        <ReconcileStartForm {csrfToken} {requestedAccountID} {requestedCommodityID} onStarted={handleStarted} onAccountChange={handleAccountChange} />
       </Panel>
     </div>
     {#if startSelection}

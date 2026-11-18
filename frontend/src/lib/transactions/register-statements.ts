@@ -46,8 +46,3 @@ export function markersByRowIndex<M extends { beforeIndex: number }>(markers: re
   }
   return grouped;
 }
-
-/** Link to reconcile the account; voiding a statement happens there (#595). */
-export function reconcileHref(accountID: number): string {
-  return `/app/ledger/reconcile?account=${accountID}`;
-}
