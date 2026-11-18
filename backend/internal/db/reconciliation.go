@@ -187,6 +187,13 @@ func (r *TransactionRepository) CreateReconciliationSession(ctx context.Context,
 		startingValue = checkpoint.StatementBalanceValue
 		startingScale = checkpoint.StatementBalanceScale
 	}
+	// #596. Nothing is selected yet, so the difference is the statement
+	// balance less the starting balance. Leaving the column at its default 0
+	// showed every new session as balanced.
+	difference, err := emptyReconciliationDifference(params.StatementBalanceValue, params.StatementBalanceScale, startingValue, startingScale)
+	if err != nil {
+		return ReconciliationSessionRecord{}, err
+	}
 
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
 		BookID:        params.BookID,
@@ -215,6 +222,8 @@ func (r *TransactionRepository) CreateReconciliationSession(ctx context.Context,
 			starting_checkpoint_id,
 			starting_balance_value,
 			starting_balance_scale,
+			difference_value,
+			difference_scale,
 			metadata_json,
 			created_at,
 			created_by_user_id,
@@ -224,8 +233,8 @@ func (r *TransactionRepository) CreateReconciliationSession(ctx context.Context,
 			created_audit_event_id,
 			updated_audit_event_id
 		)
-		VALUES (?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, params.BookID, params.AccountID, params.CommodityID, params.SourceKind, params.StatementDate, params.StatementBalanceValue, params.StatementBalanceScale, nullableInt64Value(startingCheckpointID), startingValue, startingScale, params.MetadataJSON, params.OccurredAt, params.ActorUserID, params.OccurredAt, params.ActorUserID, params.ChangeReason, auditEventID, auditEventID)
+		VALUES (?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, params.BookID, params.AccountID, params.CommodityID, params.SourceKind, params.StatementDate, params.StatementBalanceValue, params.StatementBalanceScale, nullableInt64Value(startingCheckpointID), startingValue, startingScale, difference.Value, difference.Scale, params.MetadataJSON, params.OccurredAt, params.ActorUserID, params.OccurredAt, params.ActorUserID, params.ChangeReason, auditEventID, auditEventID)
 	if err != nil {
 		return ReconciliationSessionRecord{}, fmt.Errorf("insert reconciliation session: %w", err)
 	}
@@ -363,9 +372,6 @@ func (r *TransactionRepository) FinishReconciliationSession(ctx context.Context,
 	if session.Status != "open" {
 		return ReconciliationSessionRecord{}, ErrReconciliationClosed
 	}
-	if session.DifferenceValue.Sign() != 0 {
-		return ReconciliationSessionRecord{}, ErrReconciliationNotBalanced
-	}
 	// #240. The new checkpoint chains from the session's starting balance, so
 	// that balance must still be the account's latest active one. A checkpoint
 	// invalidated or voided while the session was open, or another session
@@ -382,12 +388,28 @@ func (r *TransactionRepository) FinishReconciliationSession(ctx context.Context,
 	case !session.StartingCheckpointID.Valid || session.StartingCheckpointID.Int64 != current.ID:
 		return ReconciliationSessionRecord{}, ErrReconciliationStartStale
 	}
+	// The difference is measured against the starting balance, so a stale
+	// start is the refusal that explains it.
+	if session.DifferenceValue.Sign() != 0 {
+		return ReconciliationSessionRecord{}, ErrReconciliationNotBalanced
+	}
 	selected, err := reconciliationSessionPostings(ctx, tx, params.BookID, params.SessionID)
 	if err != nil {
 		return ReconciliationSessionRecord{}, err
 	}
+	// #596. A statement with no movement since the starting balance finishes
+	// with nothing selected (a dormant account's periodic check). Its balance
+	// must equal the starting balance; this is checked here rather than
+	// trusted from the stored difference, which a session started before the
+	// difference was computed at start still holds as 0.
 	if len(selected) == 0 {
-		return ReconciliationSessionRecord{}, ErrReconciliationPosting
+		empty, err := emptyReconciliationDifference(session.StatementBalanceValue, session.StatementBalanceScale, session.StartingBalanceValue, session.StartingBalanceScale)
+		if err != nil {
+			return ReconciliationSessionRecord{}, err
+		}
+		if empty.Value.Sign() != 0 {
+			return ReconciliationSessionRecord{}, ErrReconciliationNotBalanced
+		}
 	}
 	currentSelected, err := currentReconciliationPostingsByID(ctx, tx, session, postingIDs(selected))
 	if err != nil {
@@ -1571,4 +1593,24 @@ func distinctPositiveCount(values []int64) int {
 	}
 	slices.Sort(sorted)
 	return len(slices.Compact(sorted))
+}
+
+type reconciliationDifference struct {
+	Value exact.Coefficient
+	Scale int
+}
+
+// emptyReconciliationDifference is a session's difference with nothing
+// selected: the statement balance less the starting balance (#596).
+func emptyReconciliationDifference(statementValue exact.Coefficient, statementScale int, startingValue exact.Coefficient, startingScale int) (reconciliationDifference, error) {
+	difference := exact.NewScaledInt()
+	difference.AddCoefficient(statementValue, statementScale)
+	starting := exact.NewScaledInt()
+	starting.AddCoefficient(startingValue, startingScale)
+	difference.SubScaled(starting)
+	value, err := difference.Coefficient()
+	if err != nil {
+		return reconciliationDifference{}, fmt.Errorf("reconciliation difference: %w", err)
+	}
+	return reconciliationDifference{Value: value, Scale: difference.Scale()}, nil
 }
