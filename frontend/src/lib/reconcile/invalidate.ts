@@ -13,7 +13,22 @@ export function reconciliationWriteReadKeys(accountID: number) {
   return [reconciliationQueryKey, [...accountRegisterQueryKey, accountID], transactionsQueryKey] as const;
 }
 
-export async function invalidateReconciliationReads(queryClient: Pick<QueryClient, 'invalidateQueries'>, accountID: number): Promise<void> {
+/**
+ * Cancels the reads a statement change affects that are still in flight. A
+ * response requested before the write would otherwise land after it, replace
+ * the cache with the earlier state and clear the stale mark, so a voided
+ * statement came back as reconciled (#595 review). Cancelling first keeps the
+ * cache at what it held before the request; invalidation then fetches anew.
+ */
+export async function cancelReconciliationReads(queryClient: Pick<QueryClient, 'cancelQueries'>, accountID: number): Promise<void> {
+  await Promise.all(reconciliationWriteReadKeys(accountID).map((queryKey) => queryClient.cancelQueries({ queryKey })));
+}
+
+export async function invalidateReconciliationReads(
+  queryClient: Pick<QueryClient, 'cancelQueries' | 'invalidateQueries'>,
+  accountID: number
+): Promise<void> {
+  await cancelReconciliationReads(queryClient, accountID);
   await Promise.all(reconciliationWriteReadKeys(accountID).map((queryKey) => queryClient.invalidateQueries({ queryKey })));
 }
 
@@ -46,12 +61,17 @@ export function dropStatementFromCachedRegister(
   );
 }
 
-/** A voided statement: drop its cached row, then refetch what it changed. */
+/**
+ * A voided statement: cancel the account's in-flight reads, drop its cached
+ * row, then refetch what it changed. In that order, no response requested
+ * before the void can put the row back.
+ */
 export async function afterStatementVoided(
-  queryClient: Pick<QueryClient, 'setQueriesData' | 'invalidateQueries'>,
+  queryClient: Pick<QueryClient, 'cancelQueries' | 'setQueriesData' | 'invalidateQueries'>,
   accountID: number,
   checkpointID: number
 ): Promise<void> {
+  await cancelReconciliationReads(queryClient, accountID);
   dropStatementFromCachedRegister(queryClient, accountID, checkpointID);
   await invalidateReconciliationReads(queryClient, accountID);
 }

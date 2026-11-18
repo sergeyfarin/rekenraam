@@ -17,7 +17,12 @@ function prefixOf(prefix: readonly unknown[], key: readonly unknown[]): boolean 
 describe('invalidateReconciliationReads', () => {
   it('refreshes the account register with the reconciliation reads (#595 review)', async () => {
     const keys: (readonly unknown[])[] = [];
-    await invalidateReconciliationReads({ invalidateQueries: async (filters) => { keys.push(filters?.queryKey ?? []); } }, 12);
+    const cancelled: (readonly unknown[])[] = [];
+    await invalidateReconciliationReads({
+      cancelQueries: async (filters) => { cancelled.push(filters?.queryKey ?? []); },
+      invalidateQueries: async (filters) => { keys.push(filters?.queryKey ?? []); }
+    }, 12);
+    expect(cancelled).toEqual(keys);
 
     expect(keys).toContainEqual(reconciliationQueryKey);
     expect(keys).toContainEqual(transactionsQueryKey);
@@ -64,5 +69,34 @@ describe('afterStatementVoided', () => {
     // Another account's register is untouched.
     const other = queryClient.getQueryData<AccountRegisterInfiniteData>(otherKey)!;
     expect(other.pages[0].statements.map((s) => s.checkpoint_id)).toEqual([9, 8]);
+  });
+
+  it('keeps a register response requested before the void from restoring the row (#595 review)', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const options = accountRegisterInfiniteQueryOptions(12, { status: 'posted' });
+    const before = {
+      pageParams: [''],
+      pages: [{ entries: [], statements: [statement(9, 0), statement(8, 0)], next_cursor: null }]
+    } as unknown as AccountRegisterInfiniteData;
+    queryClient.setQueryData(options.queryKey, before);
+
+    // A refetch requested before the void, answered only after it succeeded.
+    let answer: (page: AccountRegisterInfiniteData['pages'][number]) => void = () => {};
+    const held = new Promise<AccountRegisterInfiniteData['pages'][number]>((resolve) => { answer = resolve; });
+    let requested = 0;
+    const inflight = queryClient
+      .fetchInfiniteQuery({ ...options, staleTime: 0, queryFn: () => { requested++; return held; } })
+      .catch(() => undefined);
+    await Promise.resolve();
+    expect(requested).toBe(1);
+    expect(queryClient.getQueryState(options.queryKey)?.fetchStatus).toBe('fetching');
+
+    await afterStatementVoided(queryClient, 12, 8);
+    answer(before.pages[0]);
+    await inflight;
+
+    const cached = queryClient.getQueryData<AccountRegisterInfiniteData>(options.queryKey)!;
+    expect(cached.pages[0].statements.map((s) => s.checkpoint_id)).toEqual([9]);
+    expect(queryClient.getQueryState(options.queryKey)?.isInvalidated).toBe(true);
   });
 });
