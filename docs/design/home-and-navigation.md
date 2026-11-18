@@ -889,10 +889,18 @@ is remembered with #438) and *Add to Home* arrives with #438.
 | Planning | Forecast | None (the recurring summary Home already has) | Labelled *Estimate*, names the 90-day horizon and the active schedules it projects, calculated when opened; no schedule is *not set up* |
 | Ledger & data | Imports | The shared attention read's `imports` source | Batches to review, the same count Review shows; its own Retry refetches the attention read |
 | | Prices | The net-worth headline's `missing` and `stale` inputs | Named as the status line names them, linking to the same filtered Prices list. The headline judges its inputs even when an unclassified short leaves it unavailable, so empty lists always mean checked and current |
+| | Reconciliation | The reconciliation out-of-date rule (#482), the account list's own judgement | Of the accounts with something to reconcile, how many were reconciled within the book's window (*1 of 2 accounts reconciled*, *Within the last 60 days*), and the oldest three, never reconciled first, each opening Reconcile for that account. Accounts with nothing to reconcile are in neither figure. Never reconciled and out of date carry a warning in words. No account with activity is *zero* |
 | | Backups | The Data screen's backup status | Off is *not set up*; a failed latest run says whether it will retry; otherwise the last backup and the next run. Shown in an empty book too |
 
-Reconciliation joins Ledger & data with the reconciliation out-of-date rule
-(#482), which the account list uses as well.
+The reconciliation window is a book setting on Settings › General (default
+60 days, 1–3650). The server judges each account that can be reconciled (an
+active, posting, non-system asset or liability outside the investment
+subledger) on owner-local today: its latest active checkpoint's statement date
+within the window is *reconciled* (the boundary day counts), older is *out of
+date*, no active checkpoint with posted activity is *never reconciled*, and no
+checkpoint and no posted activity is *nothing to reconcile*, never out of date.
+The account list and Home read that one judgement. Out-of-date reconciliations
+are informational and add nothing to Review counts (#482; owner may revisit).
 
 ## Customization
 
@@ -958,7 +966,8 @@ steppers or filters. On phones the tab row scrolls horizontally.
   Tags*; Import *Files · Connections · Rules and profiles · Dividends*;
   Investments Overview *Positions · Splits · Suggestions*.
 - Settings has five pages in one side list, the same list as the settings
-  menu: *General* (default currency, time zone, version), *Preferences*
+  menu: *General* (default currency, time zone, version, the reconciliation
+  window), *Preferences*
   (language, theme and the Home page: the Customize panel and Reset),
   *Currencies and FX rates*, *Security*, *Data and backups* (backups,
   self-check, a link to Export). The settings overview's link cards go.
