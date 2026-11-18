@@ -30,6 +30,7 @@ const (
 	homeHoldingRows    = 3
 	homeAllocationRows = 3
 	homeIncomeRows     = 3
+	homeReconcileRows  = 3
 )
 
 // HomeCashflowSummary is the Cashflow report for this month to date over its
@@ -134,6 +135,44 @@ type HomeBackupsSummary struct {
 	// LatestStatus is the newest run's status; empty when nothing ever ran.
 	LatestStatus    string
 	LatestWillRetry bool
+}
+
+// HomeReconciliationSummary is the account list's reconciliation judgement
+// (#482): of the accounts with something to reconcile, how many were
+// reconciled within the window, and the oldest of them first. Accounts with
+// nothing to reconcile count in neither figure.
+type HomeReconciliationSummary struct {
+	OutOfDateAfterDays   int
+	AccountCount         int
+	ReconciledCount      int
+	OutOfDateCount       int
+	NeverReconciledCount int
+	Accounts             []AccountReconciliationAge
+}
+
+func (s *HomeService) reconciliationSummary(ctx context.Context, ownerUserID int64) (*HomeReconciliationSummary, error) {
+	ages, err := s.transactions.AccountReconciliationAges(ctx, ownerUserID)
+	if err != nil {
+		return nil, fmt.Errorf("home reconciliation: %w", err)
+	}
+	summary := &HomeReconciliationSummary{OutOfDateAfterDays: ages.OutOfDateAfterDays, Accounts: []AccountReconciliationAge{}}
+	for _, account := range ages.Accounts {
+		switch account.State {
+		case ReconciliationAgeNothingToReconcile:
+			continue
+		case ReconciliationAgeReconciled:
+			summary.ReconciledCount++
+		case ReconciliationAgeOutOfDate:
+			summary.OutOfDateCount++
+		case ReconciliationAgeNeverReconciled:
+			summary.NeverReconciledCount++
+		}
+		summary.AccountCount++
+		if len(summary.Accounts) < homeReconcileRows {
+			summary.Accounts = append(summary.Accounts, account)
+		}
+	}
+	return summary, nil
 }
 
 func (s *HomeService) cashflowSummary(ctx context.Context, asOf string, reportingID int64) (*HomeCashflowSummary, error) {

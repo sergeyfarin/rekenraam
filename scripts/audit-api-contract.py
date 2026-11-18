@@ -81,6 +81,8 @@ TESTS = [
  'TestCashInLieuAPICorrectReverseAndPreviewValidParentReversal',
  'TestHomeReadAuthenticationShapeAndPurity',
  'TestHomeReturnsWidgetsReadTheLatestSavedRun',
+ 'TestLedgerOverviewHTTPComposesAccountMetadataAndBalances',
+ 'TestReconciliationPolicyHTTPSavesTheWindowTheAccountListReads',
  'TestSeparateWithholdingAPIAndBundle',
  'TestReverseInternalTransferAPI',
  'TestReplaceInternalTransferAPIPreviewMatchesCommit',

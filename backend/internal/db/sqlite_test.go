@@ -1220,7 +1220,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 
 	version, err := EmbeddedMigrationVersion()
 	require.NoError(t, err)
-	assert.Equal(t, int64(12), version, "the unused v0.1 baseline, #417 category guard, #481 transfer sides, #485 posting links/history/evidence, #411 allocation revisions/reference guards, #480 retired policy base, #532 holding FX wakeup, #540 later quote-currency wakeups and #561 split facts lookup")
+	assert.Equal(t, int64(13), version, "the unused v0.1 baseline, #417 category guard, #481 transfer sides, #485 posting links/history/evidence, #411 allocation revisions/reference guards, #480 retired policy base, #532 holding FX wakeup, #540 later quote-currency wakeups, #561 split facts lookup and #482 reconciliation policy")
 
 	ctx := context.Background()
 	database, err := Open(ctx, SQLiteFileURL(filepath.Join(t.TempDir(), "schema.sqlite")))
@@ -1250,7 +1250,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 	}
 	assert.Equal(t, map[string]int{
 		"index":   111,
-		"table":   119,
+		"table":   120,
 		"trigger": 181,
 		"view":    17,
 	}, objectCounts, "the migrated head must retain every schema object")
@@ -1260,6 +1260,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 	assert.Equal(t, "trigger", objects["fx_work_after_held_commodity_observation_insert"], "#540: the first observation in a new currency wakes coverage")
 	assert.Equal(t, "index", objects["posting_versions_commodity_idx"], "#540: holding wakeups look up the ledger by commodity")
 	assert.Equal(t, "index", objects["investment_split_facts_lookup_idx"], "#561: split reads select split facts by instrument and date")
+	assert.Equal(t, "table", objects["reconciliation_policies"], "#482: the reconciliation out-of-date window is a book setting")
 	assert.Equal(t, "table", objects["investment_allocation_revisions"])
 	assert.Equal(t, "trigger", objects["investment_allocation_revisions_no_update"])
 	assert.Equal(t, "trigger", objects["investment_allocation_revisions_no_delete"])

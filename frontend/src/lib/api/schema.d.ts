@@ -14750,6 +14750,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reconciliation/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the reconciliation out-of-date window
+         * @description After how many days an account's reconciliation is out of date (#482). The account list and Home's Reconciliation widget judge with this one setting. A book that never saved it reads the default of 60 days with a null updated_at. Session-only.
+         */
+        get: operations["getReconciliationPolicy"];
+        /**
+         * Save the reconciliation out-of-date window
+         * @description Writes the window with an audit event. Every place that judges reconciliation age reads the new value.
+         */
+        put: operations["saveReconciliationPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/pricing/source-assignments": {
         parameters: {
             query?: never;
@@ -28515,6 +28539,8 @@ export interface components {
             cash_accounts: components["schemas"]["AccountResponse"][];
             /** @description Other ordinary child accounts counted in this row's value but not presented as cash. */
             other_accounts: components["schemas"]["AccountResponse"][];
+            /** @description The row account's own reconciliation age on owner-local today, whatever as_of asks (#482). Null when the account cannot be reconciled: not an active posting asset or liability, or an investment holding. */
+            reconciliation: components["schemas"]["AccountReconciliation"] | null;
             /** @description Hidden holding accounts in this row's scope, whatever their status. They are never index rows; clients use them for holding register links and archive/delete dependency checks. */
             holding_accounts: components["schemas"]["AccountResponse"][];
         };
@@ -28525,6 +28551,8 @@ export interface components {
             institutions: components["schemas"]["InstitutionResponse"][];
             commodities: components["schemas"]["HomeReportingCurrency"][];
             next_cursor: string | null;
+            /** @description The reconciliation window every row was judged against (#482). */
+            reconciliation_out_of_date_after_days: number;
         };
         CreatePersonalAccessTokenResponse: {
             /** @description Returned only by successful creation. Never persisted by the browser or returned by listing. */
@@ -30017,6 +30045,10 @@ export interface components {
                 status: components["schemas"]["HomeWidgetStatus"];
                 summary: components["schemas"]["HomeBackupsSummary"] | null;
             };
+            reconciliation: {
+                status: components["schemas"]["HomeWidgetStatus"];
+                summary: components["schemas"]["HomeReconciliationSummary"] | null;
+            };
         };
         /** @description The Spending report for this month to date, by category, over every account, in the default currency. */
         HomeSpendingSummary: {
@@ -30223,6 +30255,25 @@ export interface components {
             /** @enum {string|null} */
             latest_status: "pending" | "running" | "completed" | "failed" | null;
             latest_will_retry: boolean;
+        };
+        /** @description The account list's reconciliation judgement (#482). account_count counts accounts with something to reconcile (nothing_to_reconcile is in no figure); accounts lists the oldest three of them, never reconciled first. */
+        HomeReconciliationSummary: {
+            out_of_date_after_days: number;
+            account_count: number;
+            reconciled_count: number;
+            out_of_date_count: number;
+            never_reconciled_count: number;
+            accounts: components["schemas"]["HomeReconciliationAccount"][];
+        };
+        HomeReconciliationAccount: {
+            /** Format: int64 */
+            account_id: number;
+            /** @description Empty when the account has no name; label it by code. */
+            name: string;
+            code: string;
+            state: components["schemas"]["AccountReconciliationState"];
+            /** Format: date */
+            last_statement_date: string | null;
         };
         AccountBalance: {
             /** Format: int64 */
@@ -32372,6 +32423,31 @@ export interface components {
             /** @description Posted postings dated on or before the statement date that no covering checkpoint links (an active checkpoint or one on an active checkpoint's previous-checkpoint chain). A candidate whose reconciliation_status is still reconciled was verified by a checkpoint that has since been invalidated or voided and needs re-verification; it starts selected, like a cleared posting. */
             candidates: components["schemas"]["ReconciliationPostingResponse"][];
             selected_postings: components["schemas"]["ReconciliationPostingResponse"][];
+        };
+        ReconciliationPolicyResponse: {
+            /** @description A reconciliation whose statement date is more than this many days before owner-local today is out of date. Default 60. */
+            out_of_date_after_days: number;
+            /**
+             * Format: date-time
+             * @description Null while the book uses the default it never saved.
+             */
+            updated_at: string | null;
+        };
+        ReconciliationPolicyRequest: {
+            out_of_date_after_days: number;
+        };
+        /**
+         * @description One account's reconciliation age on owner-local today (#482). reconciled: the latest active checkpoint's statement date is within the window (the boundary day counts as within). out_of_date: it is older. never_reconciled: no active checkpoint but posted activity. nothing_to_reconcile: no active checkpoint and no posted activity, which is never called out of date.
+         * @enum {string}
+         */
+        AccountReconciliationState: "reconciled" | "out_of_date" | "never_reconciled" | "nothing_to_reconcile";
+        AccountReconciliation: {
+            state: components["schemas"]["AccountReconciliationState"];
+            /**
+             * Format: date
+             * @description Statement date of the latest active checkpoint, over any of the account's commodities; null when it has none.
+             */
+            last_statement_date: string | null;
         };
         ReconciliationCheckpointResponse: {
             /** Format: int64 */
@@ -36245,6 +36321,116 @@ export interface operations {
                 };
             };
             /** @description Invalid request body or validation failure */
+            400: {
+                headers: {
+                    "X-Request-ID": components["headers"]["XRequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Authentication is required */
+            401: {
+                headers: {
+                    "X-Request-ID": components["headers"]["XRequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Origin or CSRF validation failed */
+            403: {
+                headers: {
+                    "X-Request-ID": components["headers"]["XRequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            413: components["responses"]["JSONBodyTooLarge"];
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    "X-Request-ID": components["headers"]["XRequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getReconciliationPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reconciliation policy */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["XRequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconciliationPolicyResponse"];
+                };
+            };
+            /** @description Authentication is required */
+            401: {
+                headers: {
+                    "X-Request-ID": components["headers"]["XRequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    "X-Request-ID": components["headers"]["XRequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    saveReconciliationPolicy: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound CSRF token for authenticated mutating requests. */
+                "X-CSRF-Token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconciliationPolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description Reconciliation policy saved */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["XRequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconciliationPolicyResponse"];
+                };
+            };
+            /** @description Invalid request body, or a window outside 1–3650 days (VALIDATION_FAILED) */
             400: {
                 headers: {
                     "X-Request-ID": components["headers"]["XRequestID"];

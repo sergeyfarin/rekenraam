@@ -88,6 +88,7 @@ export function widgets(overrides: Partial<HomeWidgets> = {}): HomeWidgets {
     },
     income: { status: 'ok', summary: { instrument_count: 2, unassigned_count: 0, unassigned: [] } },
     backups: { status: 'ok', summary: { enabled: true, next_run_at: '2026-10-16T01:15:00Z', last_success_at: '2026-10-15T01:15:05Z', latest_status: 'completed', latest_will_retry: false } },
+    reconciliation: { status: 'ok', summary: { out_of_date_after_days: 60, account_count: 2, reconciled_count: 1, out_of_date_count: 0, never_reconciled_count: 1, accounts: [{ account_id: 7, name: 'Savings', code: '', state: 'never_reconciled', last_statement_date: null }, { account_id: 1, name: '', code: 'Checking', state: 'reconciled', last_statement_date: '2026-09-30' }] } },
     ...overrides
   };
 }

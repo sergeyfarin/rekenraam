@@ -4,7 +4,7 @@ import type { AttentionState } from '#lib/attention/model.ts';
 import { amountPrivacy } from '#lib/money/privacy.svelte.ts';
 import {
   allocationWidget, backupsWidget, cashflowWidget, exploreCategories, exploreWidgets, forecastWidget, holdingsWidget, importsWidget,
-  incomeWidget, pricesWidget, returnsWidget
+  incomeWidget, pricesWidget, reconciliationWidget, returnsWidget
 } from './explore.ts';
 import { home, q, TEST, USD, widgets } from './home-fixture.ts';
 import { defaultWidgetOrder } from './widgets.ts';
@@ -29,7 +29,7 @@ describe('More to explore', () => {
     const groups = exploreWidgets(home(), 'en', attention([imports(0)]));
     expect(groups.map(group => group.title)).toEqual(['Everyday', 'Wealth & investments', 'Planning', 'Ledger & data']);
     const ids = groups.flatMap(group => group.widgets.map(widget => widget.id));
-    expect(ids).toEqual(['cashflow', 'holdings', 'returns', 'allocation', 'income', 'forecast', 'imports', 'prices', 'backups']);
+    expect(ids).toEqual(['cashflow', 'holdings', 'returns', 'allocation', 'income', 'forecast', 'imports', 'prices', 'reconciliation', 'backups']);
     expect(ids.filter(id => (defaultWidgetOrder as readonly string[]).includes(id))).toEqual([]);
     expect(exploreCategories.flatMap(category => category.widgets)).toEqual(ids);
   });
@@ -301,5 +301,40 @@ describe('backups', () => {
     expect(view.action?.text).toBe('Turn on backups');
     const none = backupsWidget(home({ backups: { status: 'ok', summary: { ...summary, last_success_at: null, latest_status: null } } }), 'en');
     expect(none.fact).toBe('No backup yet');
+  });
+});
+
+describe('reconciliation', () => {
+  const summary = widgets().reconciliation.summary!;
+  it('counts the accounts reconciled within the book window, oldest first', () => {
+    const view = reconciliationWidget(home(), 'en');
+    expect(view.state).toBe('ready');
+    expect(view.fact).toBe('1 of 2 accounts reconciled');
+    expect(view.scope).toBe('Within the last 60 days');
+    expect(view.warning).toBe(true);
+    expect(view.rows.map(row => [row.label, row.detail, row.over, row.href])).toEqual([
+      ['Savings', 'Never reconciled', true, '/app/ledger/reconcile?account=7'],
+      ['Checking', 'Reconciled to Sep 30, 2026', false, '/app/ledger/reconcile?account=1']
+    ]);
+    expect(view.more).toBeNull();
+  });
+
+  it('reads the window from the summary, never a Home rule', () => {
+    const view = reconciliationWidget(home({ reconciliation: { status: 'ok', summary: { ...summary, out_of_date_after_days: 1 } } }), 'en');
+    expect(view.scope).toBe('Within the last day');
+  });
+
+  it('is calm when everything is reconciled, and counts what the rows leave out', () => {
+    const accounts = [1, 2, 3].map(id => ({ account_id: id, name: `A${id}`, code: '', state: 'reconciled' as const, last_statement_date: '2026-10-01' }));
+    const view = reconciliationWidget(home({ reconciliation: { status: 'ok', summary: { ...summary, account_count: 5, reconciled_count: 5, never_reconciled_count: 0, accounts } } }), 'en');
+    expect(view.warning).toBe(false);
+    expect(view.fact).toBe('5 of 5 accounts reconciled');
+    expect(view.more).toBe('2 more accounts');
+  });
+
+  it('shows zero, no data and failed states', () => {
+    expect(reconciliationWidget(home({ reconciliation: { status: 'ok', summary: { ...summary, account_count: 0, reconciled_count: 0, never_reconciled_count: 0, accounts: [] } } }), 'en').state).toBe('zero');
+    expect(reconciliationWidget(home({}, { empty_book: true }), 'en').state).toBe('no_data');
+    expect(reconciliationWidget(home({ reconciliation: { status: 'failed', summary: null } }), 'en').state).toBe('failed');
   });
 });

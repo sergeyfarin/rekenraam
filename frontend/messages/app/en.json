@@ -2098,5 +2098,61 @@
   "ledger_account_children_block": "Accounts under this one hold back some actions: Close waits for active ones, Archive for any not archived, and Delete for all of them.",
   "ledger_archived_accounts": "Archived accounts",
   "ledger_archived_accounts_copy": "Archived accounts are left out of the tree. Open one to restore or delete it.",
-  "ledger_account_children": "Accounts under this one"
+  "ledger_account_children": "Accounts under this one",
+  "reconciliation_age_reconciled": "Reconciled to {date}",
+  "reconciliation_age_out_of_date": "Out of date: reconciled to {date}",
+  "reconciliation_age_never": "Never reconciled",
+  "reconciliation_age_nothing": "Nothing to reconcile",
+  "home_reconciliation_title": "Reconciliation",
+  "home_reconciliation_open": "Open reconcile",
+  "home_reconciliation_zero": "No account has anything to reconcile yet",
+  "home_reconciliation_fact": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "input reconciled",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{reconciled} of {n} account reconciled",
+        "countPlural=*": "{reconciled} of {n} accounts reconciled"
+      }
+    }
+  ],
+  "home_reconciliation_scope": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Within the last day",
+        "countPlural=*": "Within the last {n} days"
+      }
+    }
+  ],
+  "home_reconciliation_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} more account",
+        "countPlural=*": "{n} more accounts"
+      }
+    }
+  ]
 }

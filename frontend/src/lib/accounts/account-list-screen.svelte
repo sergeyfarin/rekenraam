@@ -65,6 +65,11 @@
   let editor = $state<EditorState>({ type: 'none' });
 
   const overview = createQuery(() => ledgerOverviewQueryOptions());
+  // Each row account's reconciliation age, judged by the server against the
+  // book's one window (#482); absent for accounts that cannot be reconciled.
+  const reconciliations = $derived(
+    new Map((overview.data?.accounts ?? []).flatMap((row) => (row.reconciliation ? [[row.account.id, row.reconciliation] as const] : [])))
+  );
   const accountsQuery = $derived({ data: overview.data ? { accounts: overview.data.accounts.map(row => row.account) } : undefined, error: overview.error, isError: overview.isError, isPending: overview.isPending, refetch: () => overview.refetch() });
   const institutionsQuery = $derived({ data: overview.data ? { institutions: overview.data.institutions } : undefined, error: overview.error, isError: overview.isError, isPending: overview.isPending, refetch: () => overview.refetch() });
   const currenciesQuery = createQuery(() => ({ ...currenciesQueryOptions(), enabled: editor.type === 'account-create' || editor.type === 'account-edit' }));
@@ -566,6 +571,7 @@
     <AccountTreeSection
       accounts={visibleAccounts}
       values={new Map(overview.data?.accounts.map(row => [row.account.id, row.value]) ?? [])}
+      {reconciliations}
       commodities={overview.data?.commodities ?? []}
       institutions={visibleInstitutions}
       {currenciesByID}

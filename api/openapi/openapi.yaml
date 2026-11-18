@@ -309,6 +309,8 @@ paths:
     $ref: "./paths/pricing-sources.yaml"
   /api/v1/pricing/policy:
     $ref: "./paths/pricing-policy.yaml"
+  /api/v1/reconciliation/policy:
+    $ref: "./paths/reconciliation-policy.yaml"
   /api/v1/pricing/source-assignments:
     $ref: "./paths/pricing-source-assignments.yaml"
   /api/v1/pricing/source-assignments/{assignment_id}:
@@ -1086,6 +1088,10 @@ components:
       $ref: "./components/schemas/home.yaml#/HomeIncomeUnassigned"
     HomeBackupsSummary:
       $ref: "./components/schemas/home.yaml#/HomeBackupsSummary"
+    HomeReconciliationSummary:
+      $ref: "./components/schemas/home.yaml#/HomeReconciliationSummary"
+    HomeReconciliationAccount:
+      $ref: "./components/schemas/home.yaml#/HomeReconciliationAccount"
     AccountBalance:
       $ref: "./components/schemas/ledger.yaml#/AccountBalance"
     AccountBalancesResponse:
@@ -1384,6 +1390,14 @@ components:
       $ref: "./components/schemas/reconciliation.yaml#/ReconciliationPostingResponse"
     ReconciliationSessionResponse:
       $ref: "./components/schemas/reconciliation.yaml#/ReconciliationSessionResponse"
+    ReconciliationPolicyResponse:
+      $ref: "./components/schemas/reconciliation.yaml#/ReconciliationPolicyResponse"
+    ReconciliationPolicyRequest:
+      $ref: "./components/schemas/reconciliation.yaml#/ReconciliationPolicyRequest"
+    AccountReconciliationState:
+      $ref: "./components/schemas/reconciliation.yaml#/AccountReconciliationState"
+    AccountReconciliation:
+      $ref: "./components/schemas/reconciliation.yaml#/AccountReconciliation"
     ReconciliationCheckpointResponse:
       $ref: "./components/schemas/reconciliation.yaml#/ReconciliationCheckpointResponse"
     ReconciliationCheckpointsResponse:

@@ -47,6 +47,7 @@ LedgerAccount:
   - cash_accounts
   - other_accounts
   - holding_accounts
+  - reconciliation
   properties:
     account:
       $ref: ../../openapi.yaml#/components/schemas/AccountResponse
@@ -91,6 +92,14 @@ LedgerAccount:
       type: array
       items:
         $ref: ../../openapi.yaml#/components/schemas/AccountResponse
+    reconciliation:
+      description: >-
+        The row account's own reconciliation age on owner-local today, whatever
+        as_of asks (#482). Null when the account cannot be reconciled: not an
+        active posting asset or liability, or an investment holding.
+      oneOf:
+      - $ref: ../../openapi.yaml#/components/schemas/AccountReconciliation
+      - type: 'null'
     holding_accounts:
       description: Hidden holding accounts in this row's scope, whatever their status. They are never index rows; clients use them for holding register links and archive/delete dependency checks.
       type: array
@@ -104,6 +113,7 @@ LedgerOverviewResponse:
   - institutions
   - commodities
   - next_cursor
+  - reconciliation_out_of_date_after_days
   properties:
     as_of:
       type: string
@@ -124,3 +134,7 @@ LedgerOverviewResponse:
       type:
       - string
       - 'null'
+    reconciliation_out_of_date_after_days:
+      type: integer
+      minimum: 1
+      description: The reconciliation window every row was judged against (#482).

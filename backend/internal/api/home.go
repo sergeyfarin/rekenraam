@@ -49,17 +49,35 @@ type homeWidgetResponse[T any] struct {
 }
 
 type homeWidgetsResponse struct {
-	Spending      homeWidgetResponse[homeSpendingSummaryResponse]      `json:"spending"`
-	Budgets       homeWidgetResponse[homeBudgetSummaryResponse]        `json:"budgets"`
-	Accounts      homeWidgetResponse[homeAccountsSummaryResponse]      `json:"accounts"`
-	Recurring     homeWidgetResponse[homeRecurringSummaryResponse]     `json:"recurring"`
-	NetWorthTrend homeWidgetResponse[homeNetWorthTrendSummaryResponse] `json:"net_worth_trend"`
-	Cashflow      homeWidgetResponse[homeCashflowSummaryResponse]      `json:"cashflow"`
-	Holdings      homeWidgetResponse[homeHoldingsSummaryResponse]      `json:"holdings"`
-	Returns       homeWidgetResponse[homeReturnsSummaryResponse]       `json:"returns"`
-	Allocation    homeWidgetResponse[homeAllocationSummaryResponse]    `json:"allocation"`
-	Income        homeWidgetResponse[homeIncomeSummaryResponse]        `json:"income"`
-	Backups       homeWidgetResponse[homeBackupsSummaryResponse]       `json:"backups"`
+	Spending       homeWidgetResponse[homeSpendingSummaryResponse]       `json:"spending"`
+	Budgets        homeWidgetResponse[homeBudgetSummaryResponse]         `json:"budgets"`
+	Accounts       homeWidgetResponse[homeAccountsSummaryResponse]       `json:"accounts"`
+	Recurring      homeWidgetResponse[homeRecurringSummaryResponse]      `json:"recurring"`
+	NetWorthTrend  homeWidgetResponse[homeNetWorthTrendSummaryResponse]  `json:"net_worth_trend"`
+	Cashflow       homeWidgetResponse[homeCashflowSummaryResponse]       `json:"cashflow"`
+	Holdings       homeWidgetResponse[homeHoldingsSummaryResponse]       `json:"holdings"`
+	Returns        homeWidgetResponse[homeReturnsSummaryResponse]        `json:"returns"`
+	Allocation     homeWidgetResponse[homeAllocationSummaryResponse]     `json:"allocation"`
+	Income         homeWidgetResponse[homeIncomeSummaryResponse]         `json:"income"`
+	Backups        homeWidgetResponse[homeBackupsSummaryResponse]        `json:"backups"`
+	Reconciliation homeWidgetResponse[homeReconciliationSummaryResponse] `json:"reconciliation"`
+}
+
+type homeReconciliationSummaryResponse struct {
+	OutOfDateAfterDays   int                                 `json:"out_of_date_after_days"`
+	AccountCount         int                                 `json:"account_count"`
+	ReconciledCount      int                                 `json:"reconciled_count"`
+	OutOfDateCount       int                                 `json:"out_of_date_count"`
+	NeverReconciledCount int                                 `json:"never_reconciled_count"`
+	Accounts             []homeReconciliationAccountResponse `json:"accounts"`
+}
+
+type homeReconciliationAccountResponse struct {
+	AccountID         int64   `json:"account_id"`
+	Name              string  `json:"name"`
+	Code              string  `json:"code"`
+	State             string  `json:"state"`
+	LastStatementDate *string `json:"last_statement_date"`
 }
 
 type homeCashflowSummaryResponse struct {
@@ -241,17 +259,18 @@ func homeRead(logger *slog.Logger, authService *app.AuthService, homeService *ap
 			response.Commodities = append(response.Commodities, homeReportingCurrencyResponse{CommodityID: commodity.ID, Code: commodity.Code, Kind: commodity.Kind, Symbol: commodity.DisplaySymbol, Scale: commodity.StandardScale})
 		}
 		response.Widgets = homeWidgetsResponse{
-			Spending:      toHomeWidget(r, logger, "spending", home.Spending, toHomeSpendingSummary),
-			Budgets:       toHomeWidget(r, logger, "budgets", home.Budgets, toHomeBudgetSummary),
-			Accounts:      toHomeWidget(r, logger, "accounts", home.Accounts, toHomeAccountsSummary),
-			Recurring:     toHomeWidget(r, logger, "recurring", home.Recurring, toHomeRecurringSummary),
-			NetWorthTrend: toHomeWidget(r, logger, "net_worth_trend", home.NetWorthTrend, toHomeNetWorthTrendSummary),
-			Cashflow:      toHomeWidget(r, logger, "cashflow", home.Cashflow, toHomeCashflowSummary),
-			Holdings:      toHomeWidget(r, logger, "holdings", home.Holdings, toHomeHoldingsSummary),
-			Returns:       toHomeWidget(r, logger, "returns", home.Returns, toHomeReturnsSummary),
-			Allocation:    toHomeWidget(r, logger, "allocation", home.Allocation, toHomeAllocationSummary),
-			Income:        toHomeWidget(r, logger, "income", home.Income, toHomeIncomeSummary),
-			Backups:       toHomeWidget(r, logger, "backups", home.Backups, toHomeBackupsSummary),
+			Spending:       toHomeWidget(r, logger, "spending", home.Spending, toHomeSpendingSummary),
+			Budgets:        toHomeWidget(r, logger, "budgets", home.Budgets, toHomeBudgetSummary),
+			Accounts:       toHomeWidget(r, logger, "accounts", home.Accounts, toHomeAccountsSummary),
+			Recurring:      toHomeWidget(r, logger, "recurring", home.Recurring, toHomeRecurringSummary),
+			NetWorthTrend:  toHomeWidget(r, logger, "net_worth_trend", home.NetWorthTrend, toHomeNetWorthTrendSummary),
+			Cashflow:       toHomeWidget(r, logger, "cashflow", home.Cashflow, toHomeCashflowSummary),
+			Holdings:       toHomeWidget(r, logger, "holdings", home.Holdings, toHomeHoldingsSummary),
+			Returns:        toHomeWidget(r, logger, "returns", home.Returns, toHomeReturnsSummary),
+			Allocation:     toHomeWidget(r, logger, "allocation", home.Allocation, toHomeAllocationSummary),
+			Income:         toHomeWidget(r, logger, "income", home.Income, toHomeIncomeSummary),
+			Backups:        toHomeWidget(r, logger, "backups", home.Backups, toHomeBackupsSummary),
+			Reconciliation: toHomeWidget(r, logger, "reconciliation", home.Reconciliation, toHomeReconciliationSummary),
 		}
 		for _, headline := range result.Headlines {
 			item := homeHeadlineResponse{
@@ -402,6 +421,15 @@ func toHomeIncomeSummary(summary app.HomeIncomeSummary) homeIncomeSummaryRespons
 func toHomeBackupsSummary(summary app.HomeBackupsSummary) homeBackupsSummaryResponse {
 	return homeBackupsSummaryResponse{Enabled: summary.Enabled, NextRunAt: optionalHomeString(summary.NextRunAt), LastSuccessAt: optionalHomeString(summary.LastSuccessAt),
 		LatestStatus: optionalHomeString(summary.LatestStatus), LatestWillRetry: summary.LatestWillRetry}
+}
+
+func toHomeReconciliationSummary(summary app.HomeReconciliationSummary) homeReconciliationSummaryResponse {
+	response := homeReconciliationSummaryResponse{OutOfDateAfterDays: summary.OutOfDateAfterDays, AccountCount: summary.AccountCount, ReconciledCount: summary.ReconciledCount,
+		OutOfDateCount: summary.OutOfDateCount, NeverReconciledCount: summary.NeverReconciledCount, Accounts: []homeReconciliationAccountResponse{}}
+	for _, account := range summary.Accounts {
+		response.Accounts = append(response.Accounts, homeReconciliationAccountResponse{AccountID: account.AccountID, Name: account.Name, Code: account.Code, State: account.State, LastStatementDate: optionalHomeString(account.LastStatementDate)})
+	}
+	return response
 }
 
 func optionalHomeString(value string) *string {

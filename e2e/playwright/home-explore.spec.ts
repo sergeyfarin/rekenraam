@@ -9,7 +9,7 @@ import { translationLocales } from './support/locales';
 // the same Home read and the shell's attention read. An owned book, because
 // every widget is a book-wide summary.
 
-const exploreWidgets = ['cashflow', 'holdings', 'returns', 'allocation', 'income', 'forecast', 'imports', 'prices', 'backups'];
+const exploreWidgets = ['cashflow', 'holdings', 'returns', 'allocation', 'income', 'forecast', 'imports', 'prices', 'reconciliation', 'backups'];
 
 async function bookWithCashflow(page: Parameters<typeof readyForLedger>[0]) {
   const { currencyID } = await readyForLedger(page);
@@ -54,6 +54,10 @@ test('More to explore shows every other widget from the same reads, collapses, a
   await expect(page.getByTestId('explore-widget-returns')).toHaveAttribute('data-state', 'not_set_up');
   await expect(page.getByTestId('explore-widget-forecast').getByText('Estimate')).toBeVisible();
   await expect(page.getByTestId('explore-widget-imports')).toHaveAttribute('data-state', 'zero');
+  const reconciliation = page.getByTestId('explore-widget-reconciliation');
+  await expect(reconciliation).toHaveAttribute('data-state', 'ready');
+  await expect(reconciliation).toContainText('0 of 1 account reconciled');
+  await expect(reconciliation).toContainText('Explore checking · Never reconciled');
 
   // Mounting More to explore adds no request: one Home read, the shell's
   // attention read, and no report, returns, forecast, import or backup call.

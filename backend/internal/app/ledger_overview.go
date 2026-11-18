@@ -21,6 +21,9 @@ type LedgerOverview struct {
 	Institutions []Institution
 	Commodities  []db.ReportingCurrencyRecord
 	NextCursor   string
+	// ReconciliationOutOfDateAfterDays is the window every row's
+	// Reconciliation was judged against, on owner-local today (#482).
+	ReconciliationOutOfDateAfterDays int
 }
 type LedgerAccount struct {
 	// CashAccounts are the row's cash-kind child registers; OtherAccounts its
@@ -39,6 +42,10 @@ type LedgerAccount struct {
 	Valuation         *ValuationCoverage
 	UnclassifiedShort bool
 	Sources           []db.LedgerImportSource
+	// Reconciliation is the row account's own reconciliation age; nil when
+	// it cannot be reconciled. It is judged on owner-local today whatever
+	// AsOf asks, since the rule is about the book as it stands.
+	Reconciliation *AccountReconciliationAge
 }
 type LedgerPosition struct {
 	HoldingAccountID int64
@@ -133,6 +140,12 @@ func (s *LedgerService) Overview(ctx context.Context, input LedgerOverviewInput)
 	if err != nil {
 		return result, err
 	}
+	ages, err := s.transactions.AccountReconciliationAges(ctx, input.OwnerUserID)
+	if err != nil {
+		return result, err
+	}
+	result.ReconciliationOutOfDateAfterDays = ages.OutOfDateAfterDays
+	agesByAccount := ages.ByAccount()
 	pending := unsettled.at(asOf)
 	// All visible rows use direct balances plus their hidden holding descendants.
 	// Ordinary children outside brokerages retain their own rows.
@@ -330,6 +343,9 @@ func (s *LedgerService) Overview(ctx context.Context, input LedgerOverviewInput)
 			}
 			coverage := local.Coverage("")
 			row.Valuation = &coverage
+		}
+		if age, ok := agesByAccount[a.ID]; ok {
+			row.Reconciliation = &age
 		}
 		row.Sources = []db.LedgerImportSource{}
 		for _, source := range sources {

@@ -1026,8 +1026,9 @@ Credentials and secrets, authentication sessions and multi-factor enrolment,
 audit and authentication events, import profiles and batches, connection
 configuration, background work, and superseded, draft, or voided transaction
 versions. Nor does it contain budget targets and on-budget account treatment,
-recurring templates and occurrences, reconciliation checkpoints and sessions
-(ledger.csv keeps each posting's reconciliation status and cleared date), the
+recurring templates and occurrences, reconciliation checkpoints, sessions and
+the out-of-date window (ledger.csv keeps each posting's reconciliation status
+and cleared date), the
 effective-dated history of accounts, categories, payees and instruments (their
 current values are here), instrument identifiers and institution details beyond
 names, cost-basis method profiles (each disposal decision records its method),

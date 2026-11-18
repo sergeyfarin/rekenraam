@@ -9,6 +9,8 @@
   import Lock from '@lucide/svelte/icons/lock';
   import Trash from '@lucide/svelte/icons/trash';
   import type { AccountResponse } from '#lib/api/accounts.ts';
+  import type { AccountReconciliation } from '#lib/api/reconciliation.ts';
+  import { reconciliationAgeView } from '#lib/reconcile/reconciliation-age.ts';
   import type { CurrencyResponse } from '#lib/api/currencies.ts';
   import type { InstitutionResponse } from '#lib/api/institutions.ts';
   import StatusBadge from '#lib/components/status-badge.svelte';
@@ -42,6 +44,7 @@
   let {
     accounts,
     values = new Map(),
+    reconciliations = new Map(),
     commodities = [],
     institutions,
     currenciesByID,
@@ -60,6 +63,7 @@
   }: {
     accounts: AccountResponse[];
     values?: ReadonlyMap<number, LedgerAccount['value']>;
+    reconciliations?: ReadonlyMap<number, AccountReconciliation>;
     commodities?: LedgerOverview['commodities'];
     institutions: InstitutionResponse[];
     currenciesByID: ReadonlyMap<number, CurrencyResponse>;
@@ -304,6 +308,7 @@
           {@const hasChildren = (visibleAccountChildCounts.get(account.id) ?? 0) > 0}
           {@const dependents = childDependentCounts.get(account.id) ?? noDependents}
           {@const accountCollapsed = collapsedNodeIDs.has(accountNodeID(account.id))}
+          {@const reconciliation = reconciliations.get(account.id)}
           <!--
             Stretched-link pattern: the <a> for the register covers the whole row via
             ::after. Action buttons sit at relative z-[1] so clicks on them don't
@@ -358,10 +363,14 @@
               {/if}
             </div>
 
-            <div class="flex min-w-0 items-center justify-start">
+            <div class="flex min-w-0 flex-col items-start justify-center gap-1">
               <StatusBadge tone={account.status === 'closed' ? 'danger' : 'accent'}>
                 {accountStatusLabel(account.status)}
               </StatusBadge>
+              {#if reconciliation}
+                {@const age = reconciliationAgeView(reconciliation, getLocale())}
+                <p class="max-w-full text-xs {age.attention ? 'font-semibold text-warning' : 'text-muted'}" data-testid="account-reconciliation-age">{age.text}</p>
+              {/if}
             </div>
 
             <!-- Action buttons are siblings at z-[1], above the stretched-link ::after overlay -->

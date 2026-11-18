@@ -76,6 +76,8 @@ type Home struct {
 	Allocation HomeWidget[HomeAllocationSummary]
 	Income     HomeWidget[HomeIncomeSummary]
 	Backups    HomeWidget[HomeBackupsSummary]
+	// Reconciliation is the account list's out-of-date rule (#482).
+	Reconciliation HomeWidget[HomeReconciliationSummary]
 	// Commodities describes every commodity any summary names, so Home needs no
 	// second read to label an amount.
 	Commodities []db.ReportingCurrencyRecord
@@ -262,9 +264,10 @@ func (s *HomeService) compose(ctx context.Context, ownerUserID int64) (Home, err
 	home.Returns, home.Allocation = homeWidget(returns, returnsErr), homeWidget(allocation, returnsErr)
 	home.Income = homeWidget(s.incomeSummary(ctx))
 	home.Backups = homeWidget(s.backupsSummary(ctx))
+	home.Reconciliation = homeWidget(s.reconciliationSummary(ctx, ownerUserID))
 	// A cancelled request is not a widget failure.
 	for _, widgetErr := range []error{home.Spending.Err, home.Budgets.Err, home.Accounts.Err, home.Recurring.Err, home.NetWorthTrend.Err,
-		home.Cashflow.Err, home.Holdings.Err, home.Returns.Err, home.Income.Err, home.Backups.Err} {
+		home.Cashflow.Err, home.Holdings.Err, home.Returns.Err, home.Income.Err, home.Backups.Err, home.Reconciliation.Err} {
 		if errors.Is(widgetErr, context.Canceled) || errors.Is(widgetErr, context.DeadlineExceeded) {
 			return Home{}, widgetErr
 		}
