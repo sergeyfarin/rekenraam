@@ -40,6 +40,11 @@ const nonColour =
 
 type Segment = { start: number; end: number };
 
+// Svelte AST keys that never lead to class text. `loc` and `name_loc` hold
+// line/column objects on every script node: about 70% of the objects a walk
+// would otherwise visit (#570).
+const skippedKeys = new Set(['metadata', 'leadingComments', 'trailingComments', 'loc', 'name_loc']);
+
 // Source ranges that can hold class names: see the comment at the top.
 function classSegments(file: string, text: string): Segment[] {
   const segments: Segment[] = [];
@@ -62,7 +67,7 @@ function classSegments(file: string, text: string): Segment[] {
     if (type === 'Attribute' && Array.isArray(value)) {
       for (const part of value as { type: string; start: number; end: number }[]) if (part.type === 'Text') segments.push(part);
     }
-    for (const [key, child] of Object.entries(node)) if (key !== 'metadata' && key !== 'leadingComments' && key !== 'trailingComments') visit(child);
+    for (const [key, child] of Object.entries(node)) if (!skippedKeys.has(key)) visit(child);
   };
   visit(parse(text, { modern: true }));
   return segments.sort((a, b) => a.start - b.start);
@@ -123,7 +128,11 @@ describe('theme tokens', () => {
     expect(unknownUtilities('fixture.ts', module)).toEqual(['fixture.ts:2 text-destructive', 'fixture.ts:3 bg-warning-subtle']);
   });
 
-  it('uses only colour utilities that name a semantic token', () => {
+  // Parsing every source file is the cost: 1.7 s idle on 8 cores for 370
+  // files, 3.7-4.5 s in the full suite beside a backend test run (load 16-22,
+  // 2026-11-18). That crossed vitest's 5 s default (#570); the budget leaves
+  // room for heavier load and for src to grow.
+  it('uses only colour utilities that name a semantic token', { timeout: 20_000 }, () => {
     const unknown = sources(src).flatMap((file) => unknownUtilities(path.relative(src, file), readFileSync(file, 'utf8')));
     expect(unknown).toEqual([]);
   });
