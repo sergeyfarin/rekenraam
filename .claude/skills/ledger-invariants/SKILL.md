@@ -129,7 +129,7 @@ Persistence) and `docs/product-requirements.md`. When in doubt, read those.
 ## Accounts and structure
 
 - `book_id` stays in core financial tables even though runtime is single-book
-  (`books.id CHECK (id = 1)`, `app.BookID` constant).
+  (`books.id` held at 1 by triggers since #573, `app.BookID` constant).
 - Accounts with posted activity have **locked structural fields** (class/kind,
   parent, institution, default commodity, quantity scale, opened date);
   descriptive fields stay editable.

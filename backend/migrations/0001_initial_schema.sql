@@ -1,7 +1,8 @@
 -- +goose Up
 -- #405: unused v0.1 baseline consolidated from head 27.
 -- Baseline identity is independent of forward migration numbers (see db/schema_baseline.go).
-PRAGMA user_version = 20261026;
+-- #573 (20261118): the single-book rule moved from a CHECK to triggers.
+PRAGMA user_version = 20261118;
 
 -- TABLES
 
@@ -57,8 +58,12 @@ CREATE TABLE login_throttles (
   PRIMARY KEY (scope_type, scope_key)
 );
 
+-- Single runtime book: books_single_id_insert and books_id_no_update keep
+-- its id at 1 (#573). Triggers, not a CHECK, so a later scope change can drop
+-- them in an ordinary migration instead of rebuilding a table 82 foreign keys
+-- reference.
 CREATE TABLE books (
-  id INTEGER PRIMARY KEY CHECK (id = 1),
+  id INTEGER PRIMARY KEY,
   owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   code TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
@@ -2469,6 +2474,25 @@ WHERE root.correction_of_operation_id IS NULL;
 
 -- TRIGGERS
 
+-- AFTER INSERT sees the stored id, so it matches the former CHECK (id = 1)
+-- exactly: an omitted id on an empty table becomes 1 and is accepted. The
+-- primary key refuses a second book with id 1; this refuses any other id,
+-- including a first book with id 2 that CurrentBook would never find.
+-- +goose StatementBegin
+CREATE TRIGGER books_single_id_insert
+AFTER INSERT ON books
+WHEN NEW.id IS NOT 1
+BEGIN SELECT RAISE(ABORT, 'books_single_id_insert: the single book must have id 1'); END;
+-- +goose StatementEnd
+
+-- Not UPDATE OF id: id is the rowid alias, and SET rowid = 2 would bypass it.
+-- +goose StatementBegin
+CREATE TRIGGER books_id_no_update
+BEFORE UPDATE ON books
+WHEN NEW.id IS NOT OLD.id
+BEGIN SELECT RAISE(ABORT, 'books_id_no_update: a book id cannot change'); END;
+-- +goose StatementEnd
+
 -- +goose StatementBegin
 CREATE TRIGGER investment_lots_operation_same_book
 BEFORE INSERT ON investment_lots
@@ -4867,6 +4891,10 @@ DROP TRIGGER IF EXISTS investment_lot_state_same_book_insert;
 DROP VIEW IF EXISTS current_investment_lots;
 
 DROP TRIGGER IF EXISTS investment_lots_operation_same_book;
+
+DROP TRIGGER IF EXISTS books_id_no_update;
+
+DROP TRIGGER IF EXISTS books_single_id_insert;
 
 DROP VIEW IF EXISTS current_transaction_versions;
 

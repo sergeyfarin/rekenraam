@@ -61,11 +61,14 @@ func TestBaselineIndexesKeepOrderedAndForeignKeyLookups(t *testing.T) {
 
 func TestMigrateRefusesIncompatibleDevelopmentBaselinesWithoutWrites(t *testing.T) {
 	t.Parallel()
-	for _, version := range []int{1, 26, 27} {
-		t.Run(strconv.Itoa(version), func(t *testing.T) {
+	// Old version-numbered candidates carry no identity; a #405 database
+	// carries 20261026, which #573's books-trigger rewrite superseded.
+	for _, test := range []struct{ identity, version int }{{0, 1}, {0, 26}, {0, 27}, {20261026, 12}} {
+		version := test.version
+		t.Run(strconv.Itoa(test.identity)+"/"+strconv.Itoa(version), func(t *testing.T) {
 			database := openTestDatabase(t)
 			require.NoError(t, Migrate(context.Background(), database))
-			_, err := database.Exec(`PRAGMA user_version=0; DELETE FROM goose_db_version; INSERT INTO goose_db_version(version_id,is_applied) VALUES(0,1); INSERT INTO goose_db_version(version_id,is_applied) VALUES(?,1)`, version)
+			_, err := database.Exec(`PRAGMA user_version=`+strconv.Itoa(test.identity)+`; DELETE FROM goose_db_version; INSERT INTO goose_db_version(version_id,is_applied) VALUES(0,1); INSERT INTO goose_db_version(version_id,is_applied) VALUES(?,1)`, version)
 			require.NoError(t, err)
 			_, err = database.Exec(`CREATE TABLE preserved(value TEXT); INSERT INTO preserved VALUES('owner data')`)
 			require.NoError(t, err)
