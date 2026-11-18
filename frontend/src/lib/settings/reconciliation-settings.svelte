@@ -83,7 +83,7 @@
       </label>
       <button
         type="submit"
-        class="min-h-11 rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+        class="min-h-11 rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition-colors hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
         disabled={pending || policyQuery.isPending}
       >
         {pending ? m.settings_reconciliation_saving() : m.settings_reconciliation_save()}
