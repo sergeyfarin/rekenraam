@@ -123,7 +123,7 @@ func (s *TransactionService) Register(ctx context.Context, accountID int64, inpu
 	page := mergeRegisterPage(read.Postings, read.Statements, params.Limit)
 	records := page.Postings
 
-	runningBalances, err := accountRegisterRunningBalances(read.RunningPostings)
+	runningBalances, err := accountRegisterRunningBalances(read.RunningPostings, records)
 	if err != nil {
 		return AccountRegisterResult{}, err
 	}

@@ -847,12 +847,27 @@ func calendarBucketEnd(date time.Time, bucket string) time.Time {
 }
 
 // accountRegisterRunningBalances sums the register's running balances from
-// postings read in the same snapshot as the page (#595 review).
-func accountRegisterRunningBalances(postings []db.LedgerPostingRecord) (map[int64]BalanceQuantity, error) {
-	running := map[int64]*exact.ScaledInt{}
+// postings read in the same snapshot as the page (#595 review), and states a
+// balance only for the postings the page keeps after the merge with its
+// statement rows. Sums stay exact throughout; only a kept posting whose own
+// running balance is out of range makes the page LEDGER_OVERFLOW, so a page
+// of statement rows, or of postings after an out-of-range stretch, still
+// reads.
+func accountRegisterRunningBalances(postings []db.LedgerPostingRecord, page []db.AccountRegisterEntryRecord) (map[int64]BalanceQuantity, error) {
 	byPostingID := map[int64]BalanceQuantity{}
+	if len(page) == 0 {
+		return byPostingID, nil
+	}
+	wanted := make(map[int64]bool, len(page))
+	for _, record := range page {
+		wanted[record.Posting.ID] = true
+	}
+	running := map[int64]*exact.ScaledInt{}
 	for _, posting := range postings {
 		addPosting(running, posting)
+		if !wanted[posting.PostingID] {
+			continue
+		}
 		amount := running[posting.CommodityID]
 		value, err := amount.Coefficient()
 		if err != nil {

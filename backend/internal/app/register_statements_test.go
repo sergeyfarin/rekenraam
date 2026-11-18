@@ -273,3 +273,37 @@ func TestRegisterPageReadsOneLedgerState(t *testing.T) {
 		})
 	}
 }
+
+// #595 review. Running balances are stated only for the postings a page keeps.
+// An out-of-range running balance among older postings made every page
+// LEDGER_OVERFLOW, even a page holding only a valid statement row.
+func TestRegisterPageStatesBalancesOnlyForItsPostings(t *testing.T) {
+	t.Parallel()
+	large, err := exact.Parse("99999999999999999999999999999999999999")
+	require.NoError(t, err)
+	almost, err := exact.Parse("-99999999999999999999999999999999999998")
+	require.NoError(t, err)
+	f := newInvestmentsTestFixture(t)
+	// The running balance after the second posting has 39 digits; the four
+	// postings together leave 1.
+	postEURCoefficient(t, f, "2026-01-10", large)
+	postEURCoefficient(t, f, "2026-01-10", large)
+	postEURCoefficient(t, f, "2026-01-10", large.Negated())
+	postEURCoefficient(t, f, "2026-01-10", almost)
+	statement := reconcileCash(t, f, "2026-01-31", 1)
+
+	page := readCashRegister(t, f, ListTransactionsInput{Limit: 1})
+	require.Empty(t, page.Entries)
+	require.Len(t, page.Statements, 1)
+	assert.Equal(t, statement, page.Statements[0].CheckpointID)
+
+	// The next page keeps the newest posting, whose own balance is 1.
+	next := readCashRegister(t, f, ListTransactionsInput{Limit: 1, Cursor: page.NextCursor})
+	require.Len(t, next.Entries, 1)
+	assert.Equal(t, exact.New(1), next.Entries[0].RunningBalance.QuantityValue)
+
+	// A page that keeps the out-of-range posting is still LEDGER_OVERFLOW.
+	_, err = f.transactionService.Register(context.Background(), f.cashAccountID, ListTransactionsInput{Limit: 500})
+	var overflow LedgerOverflowError
+	require.ErrorAs(t, err, &overflow)
+}
