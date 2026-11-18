@@ -944,12 +944,14 @@ this order:
    out to be missing something. For the default `pnpm dev` database:
 
    ```sh
-   aside=backend/var/pre-reset-$(date +%Y%m%d-%H%M%S)
-   mkdir -p "$aside"
+   aside=$(mktemp -d "backend/var/pre-reset-$(date +%Y%m%d-%H%M%S)-XXXXXX") &&
    for f in backend/var/dev.sqlite backend/var/dev.sqlite-wal backend/var/dev.sqlite-shm; do
-     if [ -e "$f" ]; then mv "$f" "$aside/"; fi
+     if [ -e "$f" ]; then mv "$f" "$aside/" || break; fi
    done
    ```
+
+   `mktemp -d` creates a new, empty directory every time, so a second reset
+   never overwrites the first saved copy. If it fails, nothing is moved.
 
 4. Update, start the app to run migrations and repeat owner setup.
 
