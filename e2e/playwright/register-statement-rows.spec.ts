@@ -136,8 +136,21 @@ test('a statement row opens Reconcile in its own currency, and a void there clea
   await dialog.getByRole('button', { name: 'Void statement' }).click();
   await expect(dialog).toBeHidden();
 
+  // Hold the register's refetch open: going back must not show the voided
+  // statement from cache while it is pending.
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  let refetches = 0;
+  await page.route(`**/api/v1/accounts/${account.id}/register**`, async (route) => {
+    refetches++;
+    await held;
+    await route.continue();
+  });
   await page.goBack();
   await expect(page).toHaveURL(new RegExp(`/app/ledger/accounts/${account.id}/register`));
+  await expect.poll(() => refetches).toBeGreaterThan(0);
   await expect(page.getByText('No transactions', { exact: true })).toBeVisible();
   await expect(page.locator('[data-register-statement]')).toHaveCount(0);
+  release();
+  await expect(page.getByText('No transactions', { exact: true })).toBeVisible();
 });
