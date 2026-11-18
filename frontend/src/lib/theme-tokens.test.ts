@@ -130,8 +130,8 @@ describe('theme tokens', () => {
 
   // Parsing every source file is the cost: 1.7 s idle on 8 cores for 370
   // files, 3.7-4.5 s in the full suite beside a backend test run (load 16-22,
-  // 2026-11-18). That crossed vitest's 5 s default (#570); the budget leaves
-  // room for heavier load and for src to grow.
+  // 2026-11-18). Earlier runs on a loaded machine timed out at vitest's 5 s
+  // default (#570); the budget leaves room for heavier load and for src to grow.
   it('uses only colour utilities that name a semantic token', { timeout: 20_000 }, () => {
     const unknown = sources(src).flatMap((file) => unknownUtilities(path.relative(src, file), readFileSync(file, 'utf8')));
     expect(unknown).toEqual([]);
