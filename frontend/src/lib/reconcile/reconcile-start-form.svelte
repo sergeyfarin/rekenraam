@@ -7,9 +7,9 @@
   import { accountsQueryOptions, type AccountResponse } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import { parseStatementBalance } from '#lib/reconcile/statement-balance.ts';
-  import { chooseStatementCommodity, statementCommodityOptions } from '#lib/reconcile/statement-commodity.ts';
-  import { ledgerAccountQueryOptions } from '#lib/api/ledger.ts';
+  import { statementCommodityChoice, statementCommodityOptions } from '#lib/reconcile/statement-commodity.ts';
   import {
+    accountReconciliationQueryOptions,
     startReconciliation,
     type ReconciliationSessionResponse,
     type StartReconciliationRequest
@@ -82,26 +82,38 @@
   const selectedAccount = $derived(
     accountID !== undefined ? reconcilableAccounts.find((a) => a.id === accountID) : undefined
   );
-  // A statement covers one commodity. The account's own Ledger read carries
-  // the server's reconciliation judgement, which names every commodity the
-  // account has activity or a statement in, so an account without a default
-  // currency, or with activity in another, can still be reconciled (#594 review).
-  const ledgerQuery = createQuery(() => ({ ...ledgerAccountQueryOptions(accountID ?? 0), enabled: accountID !== undefined }));
+  // A statement covers one commodity. The account's reconciliation lookup,
+  // read through that account alone, names every commodity it has activity or
+  // a statement in, so an account without a default currency, or with
+  // activity in another, can still be reconciled (#594 review). A holding's
+  // commodity is its instrument, so it needs no lookup.
+  const lookupEnabled = $derived(accountID !== undefined && !isSubledgerManagedAccountKind(selectedAccount?.account_kind));
+  const lookupQuery = createQuery(() => ({ ...accountReconciliationQueryOptions(accountID ?? 0), enabled: lookupEnabled }));
+  const lookupReady = $derived(!lookupEnabled || lookupQuery.data !== undefined);
   const commodityOptions = $derived.by(() => {
     const defaultID = selectedAccount?.default_commodity_id ?? undefined;
     const defaultCurrency = defaultID !== undefined ? currenciesByID.get(defaultID) : undefined;
-    const row = ledgerQuery.data?.accounts.find((item) => item.account.id === accountID);
-    return statementCommodityOptions(defaultID !== undefined ? { id: defaultID, code: defaultCurrency?.code ?? '' } : undefined, row?.reconciliation?.commodities ?? []);
+    const judged = lookupEnabled && lookupQuery.data?.account_id === accountID ? (lookupQuery.data?.reconciliation?.commodities ?? []) : [];
+    return statementCommodityOptions(defaultID !== undefined ? { id: defaultID, code: defaultCurrency?.code ?? '' } : undefined, judged);
   });
-  let chosenCommodityID = $state<number | undefined>(undefined);
-  const commodityID = $derived(
-    chooseStatementCommodity(
+  // The working copy's commodity is locked once the form settles on it (or
+  // the owner picks one), so a refetch can never move a typed balance to
+  // another currency; a locked commodity no longer offered asks for a pick.
+  let locked = $state<{ accountID: number; commodityID: number } | undefined>(undefined);
+  const lockedForAccount = $derived(locked !== undefined && locked.accountID === accountID ? locked.commodityID : undefined);
+  const choice = $derived(
+    statementCommodityChoice(
       commodityOptions,
-      chosenCommodityID,
+      lockedForAccount,
       accountID !== undefined && accountID === requestedAccountID ? requestedCommodityID : undefined,
       selectedAccount?.default_commodity_id
     )
   );
+  $effect(() => {
+    if (accountID === undefined || !lookupReady || lockedForAccount !== undefined || choice.commodityID === undefined) return;
+    locked = { accountID, commodityID: choice.commodityID };
+  });
+  const commodityID = $derived(lookupReady ? choice.commodityID : undefined);
   const commodityCode = $derived(commodityOptions.find((option) => option.id === commodityID)?.code ?? '');
 
   $effect(() => {
@@ -173,20 +185,37 @@
         </select>
       </div>
 
-      {#if accountID !== undefined && commodityID === undefined && !ledgerQuery.isPending}
+      {#if lookupEnabled && lookupQuery.data === undefined && lookupQuery.isError}
+        <!-- A failed lookup is not an account without currencies: say so and offer a retry. -->
+        <div class="space-y-2">
+          <APIFormError error={lookupQuery.error} id="reconcile-commodity-error" />
+          <button type="button" class="min-h-11 rounded-(--radius-control) border border-border bg-control px-3 text-sm font-semibold transition-colors hover:bg-control-hover" onclick={() => lookupQuery.refetch()}>
+            {m.reconcile_session_retry()}
+          </button>
+        </div>
+      {:else if accountID !== undefined && lookupReady && commodityOptions.length === 0}
         <p class="text-sm text-warning">{m.reconcile_start_no_commodity()}</p>
       {/if}
 
-      {#if commodityOptions.length > 1}
+      {#if choice.lost}
+        <p class="text-sm text-warning" role="alert">{m.reconcile_start_commodity_lost()}</p>
+      {/if}
+
+      {#if commodityOptions.length > 1 || choice.lost}
         <div>
           <label class={labelClass} for="reconcile-commodity">{m.reconcile_start_currency_label()}</label>
           <select
             id="reconcile-commodity"
             class={inputClass}
-            value={commodityID}
-            onchange={(event) => (chosenCommodityID = Number(event.currentTarget.value))}
+            value={commodityID ?? ''}
+            onchange={(event) => {
+              if (accountID !== undefined) locked = { accountID, commodityID: Number(event.currentTarget.value) };
+            }}
             disabled={pending}
           >
+            {#if commodityID === undefined}
+              <option value="" disabled>{m.reconcile_start_currency_placeholder()}</option>
+            {/if}
             {#each commodityOptions as option (option.id)}
               <option value={option.id}>{option.code}</option>
             {/each}
@@ -230,7 +259,7 @@
 
       <button
         type="submit"
-        class="inline-flex items-center gap-2 rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+        class="inline-flex items-center gap-2 rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition-colors hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
         disabled={!canSubmit}
       >
         {pending ? m.reconcile_start_submitting() : m.reconcile_start_submit()}

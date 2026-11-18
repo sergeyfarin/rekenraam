@@ -2156,5 +2156,7 @@
     }
   ],
   "reconciliation_age_commodity": "{code}: {state}",
-  "reconciliation_age_folded": "{account}: {state}"
+  "reconciliation_age_folded": "{account}: {state}",
+  "reconcile_start_commodity_lost": "The currency this statement was for is no longer offered for this account. Choose the statement currency before starting.",
+  "reconcile_start_currency_placeholder": "Choose a currency"
 }

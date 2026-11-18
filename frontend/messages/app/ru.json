@@ -2226,5 +2226,7 @@
     }
   ],
   "reconciliation_age_commodity": "{code}: {state}",
-  "reconciliation_age_folded": "{account}: {state}"
+  "reconciliation_age_folded": "{account}: {state}",
+  "reconcile_start_commodity_lost": "Валюта этой выписки больше не предлагается для этого счёта. Выберите валюту выписки перед началом.",
+  "reconcile_start_currency_placeholder": "Выберите валюту"
 }

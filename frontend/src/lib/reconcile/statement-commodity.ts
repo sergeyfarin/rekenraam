@@ -31,3 +31,22 @@ export function chooseStatementCommodity(
   }
   return options[0]?.id;
 }
+
+/**
+ * The statement's commodity for a working copy. Once a commodity is locked
+ * (the first one the form settled on, or the owner's pick) a later lookup
+ * never switches it: a balance typed for USD must not be sent as EUR. If the
+ * locked commodity is no longer offered, there is none until the owner picks
+ * again (`lost`).
+ */
+export function statementCommodityChoice(
+  options: readonly StatementCommodityOption[],
+  locked: number | undefined,
+  requested: number | undefined,
+  defaultID: number | null | undefined
+): { commodityID: number | undefined; lost: boolean } {
+  if (locked !== undefined) {
+    return options.some(option => option.id === locked) ? { commodityID: locked, lost: false } : { commodityID: undefined, lost: true };
+  }
+  return { commodityID: chooseStatementCommodity(options, undefined, requested, defaultID), lost: false };
+}
