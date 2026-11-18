@@ -12,7 +12,7 @@ test('an empty book starts with an account, not a briefing of zeroes', async ({ 
   await page.route('**/api/v1/home', route => route.fulfill({ json: {
     as_of: '2026-10-30', start_boundary: '2026-09-30', reporting_currency: null, empty_book: true,
     headlines: ['net_worth', 'cash'].map(id => ({ id, account_count: 0, value: null, start_value: null, change: null, unavailable: 'no_accounts', missing: [], stale: [] })),
-    widgets: Object.fromEntries(['spending', 'budgets', 'accounts', 'recurring', 'net_worth_trend', 'cashflow', 'holdings', 'returns', 'allocation', 'income', 'backups'].map(id => [id, { status: 'failed', summary: null }])),
+    widgets: Object.fromEntries(['spending', 'budgets', 'accounts', 'recurring', 'net_worth_trend', 'cashflow', 'holdings', 'returns', 'allocation', 'income', 'backups', 'reconciliation'].map(id => [id, { status: 'failed', summary: null }])),
     commodities: [], consistent: true
   } }));
   await page.goto('/app');
@@ -24,8 +24,14 @@ test('an empty book starts with an account, not a briefing of zeroes', async ({ 
   await expect(page.getByTestId('home-widgets').getByText('No data yet')).toHaveCount(5);
   await expect(page.getByTestId('home-widgets').getByRole('alert')).toHaveCount(0);
   // More to explore says so too (#479); only backups, which protect an empty
-  // book anyway, show their own state.
-  await expect(page.getByTestId('home-explore').getByText('No data yet')).toHaveCount(8);
+  // book anyway, show their own state. Asserted per widget, so a new card is
+  // named rather than shifting a count (#594 review).
+  const explore = page.getByTestId('home-explore');
+  for (const id of ['cashflow', 'holdings', 'returns', 'allocation', 'income', 'forecast', 'imports', 'prices', 'reconciliation']) {
+    await expect(explore.getByTestId(`explore-widget-${id}`), id).toHaveAttribute('data-state', 'no_data');
+  }
+  await expect(explore.getByTestId('explore-widget-backups')).not.toHaveAttribute('data-state', 'no_data');
+  await expect(explore.getByText('No data yet')).toHaveCount(9);
 });
 
 for (const theme of ['light', 'dark'] as const) {
