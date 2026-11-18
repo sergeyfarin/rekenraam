@@ -48,6 +48,7 @@ LedgerAccount:
   - other_accounts
   - holding_accounts
   - reconciliation
+  - folded_reconciliations
   properties:
     account:
       $ref: ../../openapi.yaml#/components/schemas/AccountResponse
@@ -100,6 +101,11 @@ LedgerAccount:
       oneOf:
       - $ref: ../../openapi.yaml#/components/schemas/AccountReconciliation
       - type: 'null'
+    folded_reconciliations:
+      description: Reconciliation ages of the accounts folded into this row (cash_accounts and other_accounts that can be reconciled), weakest first, so a brokerage's cash account is judged in the list too.
+      type: array
+      items:
+        $ref: ../../openapi.yaml#/components/schemas/FoldedAccountReconciliation
     holding_accounts:
       description: Hidden holding accounts in this row's scope, whatever their status. They are never index rows; clients use them for holding register links and archive/delete dependency checks.
       type: array

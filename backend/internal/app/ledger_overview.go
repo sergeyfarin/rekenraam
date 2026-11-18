@@ -46,6 +46,10 @@ type LedgerAccount struct {
 	// it cannot be reconciled. It is judged on owner-local today whatever
 	// AsOf asks, since the rule is about the book as it stands.
 	Reconciliation *AccountReconciliationAge
+	// FoldedReconciliations are the judgements of the row's folded accounts
+	// (a brokerage's cash and other children), which have no row of their
+	// own, in the judgement's weakest-first order.
+	FoldedReconciliations []AccountReconciliationAge
 }
 type LedgerPosition struct {
 	HoldingAccountID int64
@@ -346,6 +350,19 @@ func (s *LedgerService) Overview(ctx context.Context, input LedgerOverviewInput)
 		}
 		if age, ok := agesByAccount[a.ID]; ok {
 			row.Reconciliation = &age
+		}
+		row.FoldedReconciliations = []AccountReconciliationAge{}
+		folded := map[int64]bool{}
+		for _, account := range row.CashAccounts {
+			folded[account.ID] = true
+		}
+		for _, account := range row.OtherAccounts {
+			folded[account.ID] = true
+		}
+		for _, age := range ages.Accounts {
+			if folded[age.AccountID] {
+				row.FoldedReconciliations = append(row.FoldedReconciliations, age)
+			}
 		}
 		row.Sources = []db.LedgerImportSource{}
 		for _, source := range sources {

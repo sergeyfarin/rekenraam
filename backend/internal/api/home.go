@@ -73,11 +73,14 @@ type homeReconciliationSummaryResponse struct {
 }
 
 type homeReconciliationAccountResponse struct {
-	AccountID         int64   `json:"account_id"`
-	Name              string  `json:"name"`
-	Code              string  `json:"code"`
-	State             string  `json:"state"`
-	LastStatementDate *string `json:"last_statement_date"`
+	AccountID         int64                             `json:"account_id"`
+	Name              string                            `json:"name"`
+	Code              string                            `json:"code"`
+	StarterKey        *string                           `json:"starter_key"`
+	CurrencyCode      *string                           `json:"currency_code"`
+	State             string                            `json:"state"`
+	LastStatementDate *string                           `json:"last_statement_date"`
+	Commodities       []commodityReconciliationResponse `json:"commodities"`
 }
 
 type homeCashflowSummaryResponse struct {
@@ -427,7 +430,9 @@ func toHomeReconciliationSummary(summary app.HomeReconciliationSummary) homeReco
 	response := homeReconciliationSummaryResponse{OutOfDateAfterDays: summary.OutOfDateAfterDays, AccountCount: summary.AccountCount, ReconciledCount: summary.ReconciledCount,
 		OutOfDateCount: summary.OutOfDateCount, NeverReconciledCount: summary.NeverReconciledCount, Accounts: []homeReconciliationAccountResponse{}}
 	for _, account := range summary.Accounts {
-		response.Accounts = append(response.Accounts, homeReconciliationAccountResponse{AccountID: account.AccountID, Name: account.Name, Code: account.Code, State: account.State, LastStatementDate: optionalHomeString(account.LastStatementDate)})
+		response.Accounts = append(response.Accounts, homeReconciliationAccountResponse{AccountID: account.AccountID, Name: account.Name, Code: account.Code,
+			StarterKey: optionalHomeString(account.StarterKey), CurrencyCode: optionalHomeString(account.CurrencyCode), State: account.State,
+			LastStatementDate: optionalHomeString(account.LastStatementDate), Commodities: toCommodityReconciliationResponses(account.Commodities)})
 	}
 	return response
 }

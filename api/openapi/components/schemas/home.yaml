@@ -517,7 +517,7 @@ HomeReconciliationSummary:
   description: >-
     The account list's reconciliation judgement (#482). account_count counts
     accounts with something to reconcile (nothing_to_reconcile is in no
-    figure); accounts lists the oldest three of them, never reconciled first.
+    figure); accounts lists the weakest three of them (never reconciled, then out of date, oldest first). An account counts as reconciled only when every commodity it has activity in is.
   required: [out_of_date_after_days, account_count, reconciled_count, out_of_date_count, never_reconciled_count, accounts]
   properties:
     out_of_date_after_days: { type: integer, minimum: 1 }
@@ -530,10 +530,15 @@ HomeReconciliationSummary:
       items: { $ref: '../../openapi.yaml#/components/schemas/HomeReconciliationAccount' }
 HomeReconciliationAccount:
   type: object
-  required: [account_id, name, code, state, last_statement_date]
+  required: [account_id, name, code, starter_key, currency_code, state, last_statement_date, commodities]
   properties:
     account_id: { type: integer, format: int64 }
-    name: { type: string, description: Empty when the account has no name; label it by code. }
+    name: { type: string, description: Empty when the account has no name; label it as the account list does. }
     code: { type: string }
+    starter_key: { type: [string, 'null'], description: A starter account's key (metadata starter_key) for its localized label. }
+    currency_code: { type: [string, 'null'], description: A starter account's currency (metadata currency_code). }
+    commodities:
+      type: array
+      items: { $ref: '../../openapi.yaml#/components/schemas/CommodityReconciliation' }
     state: { $ref: '../../openapi.yaml#/components/schemas/AccountReconciliationState' }
     last_statement_date: { type: [string, 'null'], format: date }

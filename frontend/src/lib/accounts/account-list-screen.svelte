@@ -70,6 +70,22 @@
   const reconciliations = $derived(
     new Map((overview.data?.accounts ?? []).flatMap((row) => (row.reconciliation ? [[row.account.id, row.reconciliation] as const] : [])))
   );
+  // A brokerage folds its cash and other children into its row, so their
+  // judgements travel on it, each named (#594 review). Accounts with nothing
+  // to reconcile are left out.
+  const foldedReconciliations = $derived(
+    new Map(
+      (overview.data?.accounts ?? []).map((row) => {
+        const folded = new Map([...row.cash_accounts, ...row.other_accounts].map((account) => [account.id, account]));
+        return [
+          row.account.id,
+          row.folded_reconciliations
+            .filter((age) => age.state !== 'nothing_to_reconcile' && folded.has(age.account_id))
+            .map((age) => ({ accountID: age.account_id, label: accountDisplayName(folded.get(age.account_id)!), age }))
+        ] as const;
+      })
+    )
+  );
   const accountsQuery = $derived({ data: overview.data ? { accounts: overview.data.accounts.map(row => row.account) } : undefined, error: overview.error, isError: overview.isError, isPending: overview.isPending, refetch: () => overview.refetch() });
   const institutionsQuery = $derived({ data: overview.data ? { institutions: overview.data.institutions } : undefined, error: overview.error, isError: overview.isError, isPending: overview.isPending, refetch: () => overview.refetch() });
   const currenciesQuery = createQuery(() => ({ ...currenciesQueryOptions(), enabled: editor.type === 'account-create' || editor.type === 'account-edit' }));
@@ -572,6 +588,7 @@
       accounts={visibleAccounts}
       values={new Map(overview.data?.accounts.map(row => [row.account.id, row.value]) ?? [])}
       {reconciliations}
+      {foldedReconciliations}
       commodities={overview.data?.commodities ?? []}
       institutions={visibleInstitutions}
       {currenciesByID}

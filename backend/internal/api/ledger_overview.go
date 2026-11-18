@@ -20,19 +20,20 @@ type ledgerImportSourceResponse struct {
 	Name string `json:"name"`
 }
 type ledgerAccountResponse struct {
-	CashAccounts      []accountResponse              `json:"cash_accounts"`
-	OtherAccounts     []accountResponse              `json:"other_accounts"`
-	HoldingAccounts   []accountResponse              `json:"holding_accounts"`
-	Sources           []ledgerImportSourceResponse   `json:"sources"`
-	Account           accountResponse                `json:"account"`
-	Balances          []balanceQuantityResponse      `json:"balances"`
-	Cash              []balanceQuantityResponse      `json:"cash"`
-	Unsettled         []balanceQuantityResponse      `json:"unsettled"`
-	Positions         []ledgerPositionResponse       `json:"positions"`
-	Value             *balanceQuantityResponse       `json:"value"`
-	Valuation         *valuationResponse             `json:"valuation"`
-	UnclassifiedShort bool                           `json:"unclassified_short"`
-	Reconciliation    *accountReconciliationResponse `json:"reconciliation"`
+	CashAccounts          []accountResponse                     `json:"cash_accounts"`
+	OtherAccounts         []accountResponse                     `json:"other_accounts"`
+	HoldingAccounts       []accountResponse                     `json:"holding_accounts"`
+	Sources               []ledgerImportSourceResponse          `json:"sources"`
+	Account               accountResponse                       `json:"account"`
+	Balances              []balanceQuantityResponse             `json:"balances"`
+	Cash                  []balanceQuantityResponse             `json:"cash"`
+	Unsettled             []balanceQuantityResponse             `json:"unsettled"`
+	Positions             []ledgerPositionResponse              `json:"positions"`
+	Value                 *balanceQuantityResponse              `json:"value"`
+	Valuation             *valuationResponse                    `json:"valuation"`
+	UnclassifiedShort     bool                                  `json:"unclassified_short"`
+	Reconciliation        *accountReconciliationResponse        `json:"reconciliation"`
+	FoldedReconciliations []foldedAccountReconciliationResponse `json:"folded_reconciliations"`
 }
 type ledgerOverviewResponse struct {
 	AsOf         string                          `json:"as_of"`
@@ -76,7 +77,7 @@ func ledgerOverview(logger *slog.Logger, auth *app.AuthService, service *app.Led
 			response.Commodities = append(response.Commodities, homeReportingCurrencyResponse{CommodityID: c.ID, Code: c.Code, Kind: c.Kind, Symbol: c.DisplaySymbol, Scale: c.StandardScale})
 		}
 		for _, row := range result.Accounts {
-			item := ledgerAccountResponse{Account: toAccountResponse(row.Account), CashAccounts: toAccountResponses(row.CashAccounts), OtherAccounts: toAccountResponses(row.OtherAccounts), HoldingAccounts: toAccountResponses(row.HoldingAccounts), Balances: toBalanceQuantityResponses(row.Balances), Cash: toBalanceQuantityResponses(row.Cash), Unsettled: toBalanceQuantityResponses(row.Unsettled), Positions: []ledgerPositionResponse{}, Value: optionalBalanceQuantity(row.Value), Valuation: toValuationResponse(row.Valuation), UnclassifiedShort: row.UnclassifiedShort, Reconciliation: toAccountReconciliationResponse(row.Reconciliation)}
+			item := ledgerAccountResponse{Account: toAccountResponse(row.Account), CashAccounts: toAccountResponses(row.CashAccounts), OtherAccounts: toAccountResponses(row.OtherAccounts), HoldingAccounts: toAccountResponses(row.HoldingAccounts), Balances: toBalanceQuantityResponses(row.Balances), Cash: toBalanceQuantityResponses(row.Cash), Unsettled: toBalanceQuantityResponses(row.Unsettled), Positions: []ledgerPositionResponse{}, Value: optionalBalanceQuantity(row.Value), Valuation: toValuationResponse(row.Valuation), UnclassifiedShort: row.UnclassifiedShort, Reconciliation: toAccountReconciliationResponse(row.Reconciliation), FoldedReconciliations: toFoldedAccountReconciliationResponses(row.FoldedReconciliations)}
 			for _, p := range row.Positions {
 				item.Positions = append(item.Positions, ledgerPositionResponse{HoldingAccountID: p.HoldingAccountID, CommodityID: p.CommodityID, Quantity: toBalanceQuantityResponse(p.Quantity), Value: optionalBalanceQuantity(p.Value)})
 			}

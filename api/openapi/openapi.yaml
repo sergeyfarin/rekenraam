@@ -1398,6 +1398,10 @@ components:
       $ref: "./components/schemas/reconciliation.yaml#/AccountReconciliationState"
     AccountReconciliation:
       $ref: "./components/schemas/reconciliation.yaml#/AccountReconciliation"
+    CommodityReconciliation:
+      $ref: "./components/schemas/reconciliation.yaml#/CommodityReconciliation"
+    FoldedAccountReconciliation:
+      $ref: "./components/schemas/reconciliation.yaml#/FoldedAccountReconciliation"
     ReconciliationCheckpointResponse:
       $ref: "./components/schemas/reconciliation.yaml#/ReconciliationCheckpointResponse"
     ReconciliationCheckpointsResponse:

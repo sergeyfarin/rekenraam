@@ -27,15 +27,26 @@ type SaveReconciliationPolicyParams struct {
 	ChangeReason       string
 }
 
-// ReconciliationAccountFact is what judging one account's reconciliation age
-// needs: its latest active checkpoint's statement date (empty when it has
-// none) and whether a current posted transaction posts to it.
+// ReconciliationAccountFact is an account that can be reconciled and, per
+// commodity it has posted activity in or an active checkpoint for, what
+// judging that commodity's reconciliation age needs. Commodities is empty when
+// the account has neither.
 type ReconciliationAccountFact struct {
 	AccountID int64
-	// Name and Code are empty when the account has none (a starter account
-	// is labelled by its built-in key).
-	Name                string
-	Code                string
+	// Name and Code are empty when the account has none; StarterKey and
+	// CurrencyCode label a starter account as everywhere else.
+	Name         string
+	Code         string
+	StarterKey   string
+	CurrencyCode string
+	Commodities  []ReconciliationCommodityFact
+}
+
+type ReconciliationCommodityFact struct {
+	CommodityID   int64
+	CommodityCode string
+	// LatestStatementDate is the latest active checkpoint dated on or before
+	// today; empty when there is none.
 	LatestStatementDate string
 	HasPostedPostings   bool
 }
@@ -112,57 +123,100 @@ func (r *TransactionRepository) SaveReconciliationPolicy(ctx context.Context, pa
 	return record, nil
 }
 
-// ReconciliationAccountFacts reads every account that can be reconciled, with
-// its latest active checkpoint and whether it has posted activity, in one
-// statement so both facts describe one state of the book. An account can be
-// reconciled when it is an active, posting, non-system asset or liability
-// outside the investment subledger (holdings are reconciled through their
-// investment commands, as the Reconcile picker's default list says). Voided
-// and invalidated checkpoints never count; neither do drafts, voided versions
-// or deleted transactions.
-func (r *TransactionRepository) ReconciliationAccountFacts(ctx context.Context, bookID int64) ([]ReconciliationAccountFact, error) {
-	rows, err := r.database.QueryContext(ctx, `
-		SELECT
-			a.id,
-			COALESCE(av.name, ''),
-			COALESCE(av.code, ''),
-			COALESCE((
-				SELECT MAX(rc.statement_date)
-				FROM reconciliation_checkpoints rc
-				WHERE rc.book_id = a.book_id AND rc.account_id = a.id AND rc.status = 'active'
-			), ''),
-			EXISTS (
-				SELECT 1
-				FROM posting_versions pv
-				JOIN current_transaction_versions tv ON tv.id = pv.transaction_version_id
-				JOIN transactions t ON t.id = tv.transaction_id
-				WHERE pv.account_id = a.id AND tv.status = 'posted' AND t.deleted_at IS NULL
-			)
-		FROM accounts a
-		JOIN `+CurrentReferenceVersions(ctx, "account")+` av ON av.account_id = a.id
-		JOIN account_kinds ak ON ak.code = av.account_kind
-		WHERE a.book_id = ?
-			AND a.system_role IS NULL
-			AND av.status = 'active'
-			AND av.allows_postings = 1
-			AND av.account_class IN ('asset', 'liability')
-			AND ak.base_kind != 'security_holding'
-		ORDER BY a.id
-	`, bookID)
-	if err != nil {
-		return nil, fmt.Errorf("read reconciliation account facts: %w", err)
-	}
-	defer rows.Close()
+// ReconciliationAccountFacts reads, in one snapshot and on the given
+// owner-local today, every account that can be reconciled with its posted
+// activity and latest active checkpoint per commodity. An account can be
+// reconciled when, on today, it is an active, posting, non-system asset or
+// liability outside the investment subledger (holdings are reconciled through
+// their investment commands, as the Reconcile picker's default list says).
+// Activity is a current posted, undeleted transaction dated on or before
+// today; a checkpoint counts only while active and dated on or before today,
+// so a statement entered for a later date never vouches for today.
+func (r *TransactionRepository) ReconciliationAccountFacts(ctx context.Context, bookID int64, today string) ([]ReconciliationAccountFact, error) {
+	ctx = WithReferenceDate(ctx, today)
 	facts := []ReconciliationAccountFact{}
-	for rows.Next() {
-		var fact ReconciliationAccountFact
-		if err := rows.Scan(&fact.AccountID, &fact.Name, &fact.Code, &fact.LatestStatementDate, &fact.HasPostedPostings); err != nil {
-			return nil, fmt.Errorf("scan reconciliation account fact: %w", err)
+	err := r.WithLedgerSnapshot(ctx, func(snapshot *LedgerSnapshotReader) error {
+		tx := snapshot.transaction
+		byID := map[int64]int{}
+		rows, err := tx.QueryContext(ctx, `
+			SELECT a.id, COALESCE(av.name, ''), COALESCE(av.code, ''),
+				COALESCE(json_extract(av.metadata_json, '$.starter_key'), ''),
+				COALESCE(json_extract(av.metadata_json, '$.currency_code'), '')
+			FROM accounts a
+			JOIN `+CurrentReferenceVersions(ctx, "account")+` av ON av.account_id = a.id
+			JOIN account_kinds ak ON ak.code = av.account_kind
+			WHERE a.book_id = ?
+				AND a.system_role IS NULL
+				AND av.status = 'active'
+				AND av.allows_postings = 1
+				AND av.account_class IN ('asset', 'liability')
+				AND ak.base_kind != 'security_holding'
+			ORDER BY a.id
+		`, bookID)
+		if err != nil {
+			return fmt.Errorf("read reconcilable accounts: %w", err)
 		}
-		facts = append(facts, fact)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate reconciliation account facts: %w", err)
+		defer rows.Close()
+		for rows.Next() {
+			var fact ReconciliationAccountFact
+			if err := rows.Scan(&fact.AccountID, &fact.Name, &fact.Code, &fact.StarterKey, &fact.CurrencyCode); err != nil {
+				return fmt.Errorf("scan reconcilable account: %w", err)
+			}
+			fact.Commodities = []ReconciliationCommodityFact{}
+			byID[fact.AccountID] = len(facts)
+			facts = append(facts, fact)
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("iterate reconcilable accounts: %w", err)
+		}
+		if err := rows.Close(); err != nil {
+			return err
+		}
+		pairs, err := tx.QueryContext(ctx, `
+			WITH posted AS (
+				SELECT DISTINCT pv.account_id, pv.commodity_id
+				FROM current_transaction_versions tv
+				JOIN transactions t ON t.id = tv.transaction_id
+				JOIN journal_entries je ON je.transaction_version_id = tv.id
+				JOIN posting_versions pv ON pv.journal_entry_id = je.id
+				WHERE tv.book_id = ? AND tv.status = 'posted' AND t.deleted_at IS NULL AND je.entry_date <= ?
+			),
+			checked AS (
+				SELECT account_id, commodity_id, MAX(statement_date) AS statement_date
+				FROM reconciliation_checkpoints
+				WHERE book_id = ? AND status = 'active' AND statement_date <= ?
+				GROUP BY account_id, commodity_id
+			),
+			pairs AS (
+				SELECT account_id, commodity_id FROM posted
+				UNION
+				SELECT account_id, commodity_id FROM checked
+			)
+			SELECT p.account_id, p.commodity_id, c.code, COALESCE(k.statement_date, ''),
+				EXISTS (SELECT 1 FROM posted x WHERE x.account_id = p.account_id AND x.commodity_id = p.commodity_id)
+			FROM pairs p
+			JOIN commodities c ON c.id = p.commodity_id
+			LEFT JOIN checked k ON k.account_id = p.account_id AND k.commodity_id = p.commodity_id
+			ORDER BY p.account_id, p.commodity_id
+		`, bookID, today, bookID, today)
+		if err != nil {
+			return fmt.Errorf("read reconciliation commodities: %w", err)
+		}
+		defer pairs.Close()
+		for pairs.Next() {
+			var accountID int64
+			var fact ReconciliationCommodityFact
+			if err := pairs.Scan(&accountID, &fact.CommodityID, &fact.CommodityCode, &fact.LatestStatementDate, &fact.HasPostedPostings); err != nil {
+				return fmt.Errorf("scan reconciliation commodity: %w", err)
+			}
+			if index, ok := byID[accountID]; ok {
+				facts[index].Commodities = append(facts[index].Commodities, fact)
+			}
+		}
+		return pairs.Err()
+	})
+	if err != nil {
+		return nil, err
 	}
 	return facts, nil
 }

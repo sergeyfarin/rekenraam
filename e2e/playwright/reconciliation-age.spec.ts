@@ -76,3 +76,36 @@ test('the reconciliation window drives the account list and Home together', asyn
   await widget.getByRole('link', { name: 'Window never' }).click();
   await expect(page).toHaveURL(new RegExp(`/app/ledger/reconcile\\?account=${never.id}$`));
 });
+
+// #594 review: a brokerage's cash account is folded into the brokerage row,
+// so its judgement is named there; Ledger and Home agree.
+test('a brokerage row names the reconciliation state of its folded cash account', async ({ page }) => {
+  const { currencyID } = await readyForLedger(page);
+  const { owner_today: today } = await apiJSON<{ owner_today: string }>(page, 'GET', '/api/v1/auth/session');
+  const movedOn = shiftDays(today, -5);
+  const csrfToken = await csrfTokenFor(page);
+  const broker = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/accounts', csrfToken, {
+    name: 'Folded broker', account_class: 'asset', account_kind: 'brokerage', default_commodity_id: currencyID, allows_postings: true, opened_on: movedOn
+  });
+  const cash = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/accounts', csrfToken, {
+    name: 'Folded broker cash', account_class: 'asset', account_kind: 'brokerage_cash', default_commodity_id: currencyID, allows_postings: true,
+    parent_account_id: broker.id, opened_on: movedOn
+  });
+  const income = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/categories', csrfToken, { name: 'Folded interest', category_type: 'income' });
+  await apiJSON(page, 'POST', '/api/v1/transactions', csrfToken, {
+    transaction_date: movedOn, status: 'posted',
+    journal_entries: [{ entry_date: movedOn, postings: [
+      { account_id: cash.id, commodity_id: currencyID, quantity_value: '500', quantity_scale: 2 },
+      { account_id: income.id, commodity_id: currencyID, quantity_value: '-500', quantity_scale: 2 }
+    ] }]
+  });
+
+  await page.goto('/app/ledger');
+  const row = page.locator('article').filter({ hasText: 'Folded broker' });
+  await expect(row.getByTestId('account-folded-reconciliation-age')).toHaveText('Folded broker cash: Never reconciled');
+  await expect(row.getByTestId('account-reconciliation-age')).toHaveCount(0);
+  await expectNoAccessibilityViolations(page, 'folded reconciliation state');
+
+  await page.goto('/app');
+  await expect(page.getByTestId('explore-widget-reconciliation')).toContainText('Folded broker cash · Never reconciled');
+});

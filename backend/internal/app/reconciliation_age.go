@@ -47,22 +47,38 @@ type SaveReconciliationPolicyInput struct {
 }
 
 // ReconciliationAges judges every account that can be reconciled on
-// owner-local Today against the window. Accounts are oldest first: never
-// reconciled, then by their latest statement date, then those with nothing to
-// reconcile.
+// owner-local Today against the window. Accounts are weakest first: never
+// reconciled, out of date, reconciled (each oldest first), then those with
+// nothing to reconcile.
 type ReconciliationAges struct {
 	Today              string
 	OutOfDateAfterDays int
 	Accounts           []AccountReconciliationAge
 }
 
+// AccountReconciliationAge is one account's judgement. An account in several
+// commodities is judged per commodity (a checkpoint covers one), and the
+// account takes its weakest commodity's state: never reconciled, then out of
+// date, then reconciled. One reconciled currency never vouches for another.
 type AccountReconciliationAge struct {
-	AccountID int64
-	Name      string
-	Code      string
-	State     string
-	// LastStatementDate is the latest active checkpoint's statement date;
-	// empty when the account has none.
+	AccountID    int64
+	Name         string
+	Code         string
+	StarterKey   string
+	CurrencyCode string
+	State        string
+	// LastStatementDate is the oldest statement date among the commodities
+	// in State (how far the weakest coverage reaches); empty for never
+	// reconciled and nothing to reconcile.
+	LastStatementDate string
+	// Commodities are the per-commodity judgements, weakest first.
+	Commodities []CommodityReconciliationAge
+}
+
+type CommodityReconciliationAge struct {
+	CommodityID       int64
+	CommodityCode     string
+	State             string
 	LastStatementDate string
 }
 
@@ -122,43 +138,63 @@ func (s *TransactionService) AccountReconciliationAges(ctx context.Context, owne
 	if err != nil {
 		return ReconciliationAges{}, err
 	}
-	facts, err := s.repository.ReconciliationAccountFacts(ctx, BookID)
+	facts, err := s.repository.ReconciliationAccountFacts(ctx, BookID, today)
 	if err != nil {
 		return ReconciliationAges{}, err
 	}
 	return judgeReconciliationAges(facts, today, policy.OutOfDateAfterDays)
 }
 
+func reconciliationAgeRank(state string) int {
+	switch state {
+	case ReconciliationAgeNeverReconciled:
+		return 0
+	case ReconciliationAgeOutOfDate:
+		return 1
+	case ReconciliationAgeReconciled:
+		return 2
+	default:
+		return 3
+	}
+}
+
+func compareReconciliationAge(aState, aDate string, aID int64, bState, bDate string, bID int64) int {
+	return cmp.Or(cmp.Compare(reconciliationAgeRank(aState), reconciliationAgeRank(bState)), cmp.Compare(aDate, bDate), cmp.Compare(aID, bID))
+}
+
 func judgeReconciliationAges(facts []db.ReconciliationAccountFact, today string, window int) (ReconciliationAges, error) {
 	result := ReconciliationAges{Today: today, OutOfDateAfterDays: window, Accounts: make([]AccountReconciliationAge, 0, len(facts))}
 	for _, fact := range facts {
-		state, err := reconciliationAgeState(fact, today, window)
-		if err != nil {
-			return ReconciliationAges{}, err
+		age := AccountReconciliationAge{AccountID: fact.AccountID, Name: fact.Name, Code: fact.Code, StarterKey: fact.StarterKey, CurrencyCode: fact.CurrencyCode,
+			State: ReconciliationAgeNothingToReconcile, Commodities: make([]CommodityReconciliationAge, 0, len(fact.Commodities))}
+		for _, commodity := range fact.Commodities {
+			state, err := reconciliationAgeState(commodity, today, window)
+			if err != nil {
+				return ReconciliationAges{}, err
+			}
+			age.Commodities = append(age.Commodities, CommodityReconciliationAge{CommodityID: commodity.CommodityID, CommodityCode: commodity.CommodityCode, State: state, LastStatementDate: commodity.LatestStatementDate})
 		}
-		result.Accounts = append(result.Accounts, AccountReconciliationAge{AccountID: fact.AccountID, Name: fact.Name, Code: fact.Code, State: state, LastStatementDate: fact.LatestStatementDate})
-	}
-	rank := func(state string) int {
-		switch state {
-		case ReconciliationAgeNeverReconciled:
-			return 0
-		case ReconciliationAgeNothingToReconcile:
-			return 2
-		default:
-			return 1
+		slices.SortStableFunc(age.Commodities, func(a, b CommodityReconciliationAge) int {
+			return compareReconciliationAge(a.State, a.LastStatementDate, a.CommodityID, b.State, b.LastStatementDate, b.CommodityID)
+		})
+		if len(age.Commodities) > 0 {
+			// Weakest first, and within one state the oldest date first.
+			age.State, age.LastStatementDate = age.Commodities[0].State, age.Commodities[0].LastStatementDate
 		}
+		result.Accounts = append(result.Accounts, age)
 	}
 	slices.SortStableFunc(result.Accounts, func(a, b AccountReconciliationAge) int {
-		return cmp.Or(cmp.Compare(rank(a.State), rank(b.State)), cmp.Compare(a.LastStatementDate, b.LastStatementDate), cmp.Compare(a.AccountID, b.AccountID))
+		return compareReconciliationAge(a.State, a.LastStatementDate, a.AccountID, b.State, b.LastStatementDate, b.AccountID)
 	})
 	return result, nil
 }
 
-// reconciliationAgeState judges one account. A checkpoint whose statement
-// date is exactly window days before today is still within the window; one
-// day earlier is out of date. The statement date, not the day the owner
-// finished reconciling, is what the reconciliation vouches for.
-func reconciliationAgeState(fact db.ReconciliationAccountFact, today string, window int) (string, error) {
+// reconciliationAgeState judges one commodity of an account. A checkpoint
+// whose statement date is exactly window days before today is still within
+// the window; one day earlier is out of date. The statement date, not the day
+// the owner finished reconciling, is what the reconciliation vouches for, and
+// the facts read already ignores statements dated after today.
+func reconciliationAgeState(fact db.ReconciliationCommodityFact, today string, window int) (string, error) {
 	if fact.LatestStatementDate == "" {
 		if fact.HasPostedPostings {
 			return ReconciliationAgeNeverReconciled, nil

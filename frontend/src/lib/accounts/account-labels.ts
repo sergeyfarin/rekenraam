@@ -156,26 +156,35 @@ export function accountLabelWithStatus(account: AccountResponse): string {
 }
 
 export function accountDisplayName(account: AccountResponse): string {
-  const starterName = starterAccountDisplayName(account);
-  if (starterName) {
-    return starterName;
-  }
-
-  return account.name?.trim() || account.code?.trim() || m.accounts_unnamed_account({ id: account.id });
-}
-
-function starterAccountDisplayName(account: AccountResponse): string {
-  if (account.name?.trim()) {
-    return '';
-  }
-
   const starterKey = account.metadata['starter_key'];
   const currencyCode = account.metadata['currency_code'];
-  if (starterKey === 'cash' && typeof currencyCode === 'string' && currencyCode.trim() !== '') {
-    return m.accounts_starter_cash_name({ currency: currencyCode.trim() });
-  }
+  return accountLabelFromParts({
+    id: account.id,
+    name: account.name,
+    code: account.code,
+    starterKey: typeof starterKey === 'string' ? starterKey : null,
+    currencyCode: typeof currencyCode === 'string' ? currencyCode : null
+  });
+}
 
-  return '';
+/**
+ * The account label from its parts, for reads that carry the starter fields
+ * rather than a whole AccountResponse (Home's Reconciliation card, #594
+ * review): an unnamed starter account reads as the localized "Cash USD",
+ * never its raw `cash:USD` code.
+ */
+export function accountLabelFromParts(parts: {
+  id: number;
+  name?: string | null;
+  code?: string | null;
+  starterKey?: string | null;
+  currencyCode?: string | null;
+}): string {
+  const name = parts.name?.trim();
+  if (name) return name;
+  const currency = parts.currencyCode?.trim();
+  if (parts.starterKey === 'cash' && currency) return m.accounts_starter_cash_name({ currency });
+  return parts.code?.trim() || m.accounts_unnamed_account({ id: parts.id });
 }
 
 export function accountInstitutionLabel(

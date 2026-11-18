@@ -19,8 +19,21 @@ type reconciliationPolicyRequest struct {
 }
 
 type accountReconciliationResponse struct {
+	State             string                            `json:"state"`
+	LastStatementDate *string                           `json:"last_statement_date"`
+	Commodities       []commodityReconciliationResponse `json:"commodities"`
+}
+
+type commodityReconciliationResponse struct {
+	CommodityID       int64   `json:"commodity_id"`
+	CommodityCode     string  `json:"commodity_code"`
 	State             string  `json:"state"`
 	LastStatementDate *string `json:"last_statement_date"`
+}
+
+type foldedAccountReconciliationResponse struct {
+	AccountID int64 `json:"account_id"`
+	accountReconciliationResponse
 }
 
 func toReconciliationPolicyResponse(policy app.ReconciliationPolicy) reconciliationPolicyResponse {
@@ -31,7 +44,24 @@ func toAccountReconciliationResponse(age *app.AccountReconciliationAge) *account
 	if age == nil {
 		return nil
 	}
-	return &accountReconciliationResponse{State: age.State, LastStatementDate: optionalHomeString(age.LastStatementDate)}
+	response := &accountReconciliationResponse{State: age.State, LastStatementDate: optionalHomeString(age.LastStatementDate), Commodities: toCommodityReconciliationResponses(age.Commodities)}
+	return response
+}
+
+func toCommodityReconciliationResponses(ages []app.CommodityReconciliationAge) []commodityReconciliationResponse {
+	response := make([]commodityReconciliationResponse, 0, len(ages))
+	for _, age := range ages {
+		response = append(response, commodityReconciliationResponse{CommodityID: age.CommodityID, CommodityCode: age.CommodityCode, State: age.State, LastStatementDate: optionalHomeString(age.LastStatementDate)})
+	}
+	return response
+}
+
+func toFoldedAccountReconciliationResponses(ages []app.AccountReconciliationAge) []foldedAccountReconciliationResponse {
+	response := make([]foldedAccountReconciliationResponse, 0, len(ages))
+	for _, age := range ages {
+		response = append(response, foldedAccountReconciliationResponse{AccountID: age.AccountID, accountReconciliationResponse: *toAccountReconciliationResponse(&age)})
+	}
+	return response
 }
 
 func getReconciliationPolicy(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService) http.HandlerFunc {

@@ -19,16 +19,15 @@ func TestReconciliationAgeStateAtWindowBoundary(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name string
-		fact db.ReconciliationAccountFact
+		fact db.ReconciliationCommodityFact
 		want string
 	}{
-		{"statement exactly the window ago is within it", db.ReconciliationAccountFact{LatestStatementDate: "2026-04-01", HasPostedPostings: true}, ReconciliationAgeReconciled},
-		{"one day older is out of date", db.ReconciliationAccountFact{LatestStatementDate: "2026-03-31", HasPostedPostings: true}, ReconciliationAgeOutOfDate},
-		{"statement today", db.ReconciliationAccountFact{LatestStatementDate: "2026-05-31", HasPostedPostings: true}, ReconciliationAgeReconciled},
-		{"statement dated after today", db.ReconciliationAccountFact{LatestStatementDate: "2026-06-30", HasPostedPostings: true}, ReconciliationAgeReconciled},
-		{"posted activity and no checkpoint", db.ReconciliationAccountFact{HasPostedPostings: true}, ReconciliationAgeNeverReconciled},
-		{"no activity and no checkpoint is never out of date", db.ReconciliationAccountFact{}, ReconciliationAgeNothingToReconcile},
-		{"an old checkpoint without later activity is still judged by its date", db.ReconciliationAccountFact{LatestStatementDate: "2026-01-01"}, ReconciliationAgeOutOfDate},
+		{"statement exactly the window ago is within it", db.ReconciliationCommodityFact{LatestStatementDate: "2026-04-01", HasPostedPostings: true}, ReconciliationAgeReconciled},
+		{"one day older is out of date", db.ReconciliationCommodityFact{LatestStatementDate: "2026-03-31", HasPostedPostings: true}, ReconciliationAgeOutOfDate},
+		{"statement today", db.ReconciliationCommodityFact{LatestStatementDate: "2026-05-31", HasPostedPostings: true}, ReconciliationAgeReconciled},
+		{"posted activity and no checkpoint", db.ReconciliationCommodityFact{HasPostedPostings: true}, ReconciliationAgeNeverReconciled},
+		{"no activity and no checkpoint is never out of date", db.ReconciliationCommodityFact{}, ReconciliationAgeNothingToReconcile},
+		{"an old checkpoint without later activity is still judged by its date", db.ReconciliationCommodityFact{LatestStatementDate: "2026-01-01"}, ReconciliationAgeOutOfDate},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -40,20 +39,52 @@ func TestReconciliationAgeStateAtWindowBoundary(t *testing.T) {
 	}
 }
 
-func TestReconciliationAgesAreOldestFirst(t *testing.T) {
+func commodityFacts(facts ...db.ReconciliationCommodityFact) []db.ReconciliationCommodityFact {
+	return facts
+}
+
+func TestReconciliationAgesAreWeakestFirst(t *testing.T) {
 	t.Parallel()
 	ages, err := judgeReconciliationAges([]db.ReconciliationAccountFact{
-		{AccountID: 1, LatestStatementDate: "2026-05-01", HasPostedPostings: true},
-		{AccountID: 2},
-		{AccountID: 3, LatestStatementDate: "2026-01-01", HasPostedPostings: true},
-		{AccountID: 4, HasPostedPostings: true},
+		{AccountID: 1, Commodities: commodityFacts(db.ReconciliationCommodityFact{CommodityID: 1, LatestStatementDate: "2026-05-01", HasPostedPostings: true})},
+		{AccountID: 2, Commodities: commodityFacts()},
+		{AccountID: 3, Commodities: commodityFacts(db.ReconciliationCommodityFact{CommodityID: 1, LatestStatementDate: "2026-01-01", HasPostedPostings: true})},
+		{AccountID: 4, Commodities: commodityFacts(db.ReconciliationCommodityFact{CommodityID: 1, HasPostedPostings: true})},
 	}, "2026-05-31", 60)
 	require.NoError(t, err)
 	ids := []int64{}
 	for _, account := range ages.Accounts {
 		ids = append(ids, account.AccountID)
 	}
-	assert.Equal(t, []int64{4, 3, 1, 2}, ids, "never reconciled, then by statement date, then nothing to reconcile")
+	assert.Equal(t, []int64{4, 3, 1, 2}, ids, "never reconciled, out of date, reconciled, then nothing to reconcile")
+	assert.Equal(t, ReconciliationAgeNothingToReconcile, ages.ByAccount()[2].State)
+}
+
+// #594 review: a checkpoint covers one commodity. Reconciling EUR says
+// nothing about USD in the same account.
+func TestReconciledCurrencyNeverVouchesForAnother(t *testing.T) {
+	t.Parallel()
+	ages, err := judgeReconciliationAges([]db.ReconciliationAccountFact{{AccountID: 1, Commodities: commodityFacts(
+		db.ReconciliationCommodityFact{CommodityID: 1, CommodityCode: "EUR", LatestStatementDate: "2026-05-20", HasPostedPostings: true},
+		db.ReconciliationCommodityFact{CommodityID: 2, CommodityCode: "USD", HasPostedPostings: true},
+		db.ReconciliationCommodityFact{CommodityID: 3, CommodityCode: "GBP", LatestStatementDate: "2026-05-01", HasPostedPostings: true},
+	)}}, "2026-05-31", 60)
+	require.NoError(t, err)
+	account := ages.Accounts[0]
+	assert.Equal(t, ReconciliationAgeNeverReconciled, account.State, "the weakest commodity decides")
+	codes := []string{}
+	for _, commodity := range account.Commodities {
+		codes = append(codes, commodity.CommodityCode+":"+commodity.State)
+	}
+	assert.Equal(t, []string{"USD:never_reconciled", "GBP:reconciled", "EUR:reconciled"}, codes)
+
+	ages, err = judgeReconciliationAges([]db.ReconciliationAccountFact{{AccountID: 1, Commodities: commodityFacts(
+		db.ReconciliationCommodityFact{CommodityID: 1, LatestStatementDate: "2026-05-20", HasPostedPostings: true},
+		db.ReconciliationCommodityFact{CommodityID: 3, LatestStatementDate: "2026-05-01", HasPostedPostings: true},
+	)}}, "2026-05-31", 60)
+	require.NoError(t, err)
+	assert.Equal(t, ReconciliationAgeReconciled, ages.Accounts[0].State)
+	assert.Equal(t, "2026-05-01", ages.Accounts[0].LastStatementDate, "coverage reaches only as far as the oldest commodity")
 }
 
 func TestReconciliationPolicyDefaultsAndValidates(t *testing.T) {
@@ -149,6 +180,20 @@ func TestAccountReconciliationAgesJudgeTheBookOnOwnerLocalToday(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, ReconciliationAgeReconciled, judge(time.Date(2026, 5, 31, 22, 30, 0, 0, time.UTC))[f.cashAccountID].State, "the setting moves the judgement")
 
+	// #594 review: an account closed on the owner's today (local 06-01,
+	// still 05-31 in UTC) can no longer be reconciled, so it is not judged.
+	closing := seedTestAccountWithClass(t, f.database, "active", true, "asset", "checking")
+	_, err = f.database.ExecContext(ctx, `
+		INSERT INTO account_versions (
+			account_id, version_seq, effective_from, recorded_at, changed_by_user_id, change_reason, status, opened_on, closed_on,
+			code, name, account_class, account_kind, allows_postings)
+		SELECT account_id, version_seq + 1, '2026-06-01', '2026-05-31T22:00:00Z', 1, 'closed', 'closed', opened_on, '2026-06-01',
+			code, name, account_class, account_kind, allows_postings
+		FROM account_versions WHERE account_id = ? ORDER BY version_seq DESC LIMIT 1`, closing)
+	require.NoError(t, err)
+	assert.Contains(t, judge(time.Date(2026, 5, 31, 21, 30, 0, 0, time.UTC)), closing, "still open on local 05-31")
+	assert.NotContains(t, judge(time.Date(2026, 5, 31, 22, 30, 0, 0, time.UTC)), closing, "closed on local 06-01, though UTC is still 05-31")
+
 	checkpoints := activeCheckpointIDs(t, f)
 	require.Len(t, checkpoints, 1)
 	voidCashCheckpoint(t, f, checkpoints[0])
@@ -188,4 +233,57 @@ func TestHomeReconciliationWidgetCountsTheAccountListRule(t *testing.T) {
 	assert.Equal(t, 14, summary.OutOfDateAfterDays)
 	assert.Zero(t, summary.ReconciledCount, "2026-09-30 is 15 days before 2026-10-15")
 	assert.Equal(t, 1, summary.OutOfDateCount)
+}
+
+// #594 review: an account with USD activity is not reconciled by its EUR
+// statement, and a statement dated after today never vouches for today.
+func TestHomeReconciliationJudgesEachCurrencyAndIgnoresLaterStatements(t *testing.T) {
+	t.Parallel()
+	f := newHomeWidgetFixture(t)
+	f.move(t, "2026-09-01", f.cashAccountID, f.eurCommodityID, 10000)
+	f.move(t, "2026-09-02", f.cashAccountID, f.usd, 2500)
+	reconcileCash(t, f.investmentsTestFixture, "2026-09-30", 100)
+
+	summary := f.read(t).Reconciliation.Summary
+	require.NotNil(t, summary)
+	assert.Zero(t, summary.ReconciledCount, "USD was never reconciled")
+	assert.Equal(t, 1, summary.NeverReconciledCount)
+	require.Len(t, summary.Accounts, 1)
+	require.Len(t, summary.Accounts[0].Commodities, 2)
+	assert.Equal(t, "USD", summary.Accounts[0].Commodities[0].CommodityCode)
+	assert.Equal(t, ReconciliationAgeNeverReconciled, summary.Accounts[0].Commodities[0].State)
+	assert.Equal(t, ReconciliationAgeReconciled, summary.Accounts[0].Commodities[1].State)
+
+	later := newHomeWidgetFixture(t)
+	later.move(t, "2026-09-01", later.cashAccountID, later.eurCommodityID, 10000)
+	reconcileCash(t, later.investmentsTestFixture, "2027-12-31", 100)
+	summary = later.read(t).Reconciliation.Summary
+	require.NotNil(t, summary)
+	assert.Zero(t, summary.ReconciledCount, "a statement dated 2027-12-31 does not count on 2026-10-15")
+	assert.Equal(t, 1, summary.NeverReconciledCount)
+}
+
+// #594 review / #592: a brokerage's folded cash account has no row of its
+// own, so its judgement travels on the brokerage row.
+func TestLedgerOverviewCarriesFoldedAccountReconciliation(t *testing.T) {
+	t.Parallel()
+	f := newHomeWidgetFixture(t)
+	broker := f.account(t, "Broker", "asset", "brokerage")
+	cashChild := f.account(t, "Broker cash", "asset", "brokerage_cash")
+	reviseHomeAccount(t, f.homeFixture, cashChild, "Broker cash", &broker)
+	f.move(t, "2026-09-10", cashChild, f.eurCommodityID, 50000)
+	service := NewLedgerService(f.transactionService, f.accountService, NewInstitutionService(db.NewInstitutionRepository(f.database)))
+	result, err := service.Overview(context.Background(), LedgerOverviewInput{OwnerUserID: 1})
+	require.NoError(t, err)
+	for _, row := range result.Accounts {
+		assert.NotEqual(t, cashChild, row.Account.ID, "the cash account is folded into the brokerage")
+		if row.Account.ID != broker {
+			continue
+		}
+		require.Len(t, row.FoldedReconciliations, 1)
+		assert.Equal(t, cashChild, row.FoldedReconciliations[0].AccountID)
+		assert.Equal(t, ReconciliationAgeNeverReconciled, row.FoldedReconciliations[0].State)
+		return
+	}
+	t.Fatal("brokerage row not found")
 }

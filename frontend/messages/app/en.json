@@ -2154,5 +2154,7 @@
         "countPlural=*": "{n} more accounts"
       }
     }
-  ]
+  ],
+  "reconciliation_age_commodity": "{code}: {state}",
+  "reconciliation_age_folded": "{account}: {state}"
 }

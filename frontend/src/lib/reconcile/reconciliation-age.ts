@@ -14,7 +14,25 @@ export type ReconciliationAgeView = { text: string; attention: boolean };
 /** Whole days the window accepts; the server validates the same bounds. */
 export const reconciliationWindowBounds = { min: 1, max: 3650 } as const;
 
+type Age = Pick<AccountReconciliation['commodities'][number], 'state' | 'last_statement_date'>;
+
+/**
+ * An account in several currencies is judged per currency (a statement covers
+ * one), so its words name each currency rather than letting a reconciled one
+ * stand for the rest (#594 review).
+ */
 export function reconciliationAgeView(age: AccountReconciliation, locale: string): ReconciliationAgeView {
+  if (age.commodities.length > 1) {
+    const parts = age.commodities.map(commodity => ({ code: commodity.commodity_code, view: singleAgeView(commodity, locale) }));
+    return {
+      text: parts.map(part => m.reconciliation_age_commodity({ code: part.code, state: part.view.text })).join(' · '),
+      attention: parts.some(part => part.view.attention)
+    };
+  }
+  return singleAgeView(age, locale);
+}
+
+function singleAgeView(age: Age, locale: string): ReconciliationAgeView {
   const date = age.last_statement_date
     ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(parseISO(age.last_statement_date))
     : '';

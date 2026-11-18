@@ -325,11 +325,17 @@ describe('reconciliation', () => {
   });
 
   it('is calm when everything is reconciled, and counts what the rows leave out', () => {
-    const accounts = [1, 2, 3].map(id => ({ account_id: id, name: `A${id}`, code: '', state: 'reconciled' as const, last_statement_date: '2026-10-01' }));
+    const accounts = [1, 2, 3].map(id => ({ account_id: id, name: `A${id}`, code: '', starter_key: null, currency_code: null, state: 'reconciled' as const, last_statement_date: '2026-10-01', commodities: [] }));
     const view = reconciliationWidget(home({ reconciliation: { status: 'ok', summary: { ...summary, account_count: 5, reconciled_count: 5, never_reconciled_count: 0, accounts } } }), 'en');
     expect(view.warning).toBe(false);
     expect(view.fact).toBe('5 of 5 accounts reconciled');
     expect(view.more).toBe('2 more accounts');
+  });
+
+  it('labels an unnamed starter account as the account list does', () => {
+    const starter = { account_id: 9, name: '', code: 'cash:USD', starter_key: 'cash', currency_code: 'USD', state: 'never_reconciled' as const, last_statement_date: null, commodities: [] };
+    const view = reconciliationWidget(home({ reconciliation: { status: 'ok', summary: { ...summary, accounts: [starter] } } }), 'en');
+    expect(view.rows[0].label).toBe('Cash USD');
   });
 
   it('shows zero, no data and failed states', () => {

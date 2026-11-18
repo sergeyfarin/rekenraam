@@ -1,8 +1,8 @@
 {
   "counts": {
-    "es": 169,
-    "fr": 169,
-    "de": 169
+    "es": 171,
+    "fr": 171,
+    "de": 171
   },
   "keys": {
     "es": [
@@ -158,6 +158,8 @@
       "ledger_unparented_holdings",
       "ledger_unparented_holdings_copy",
       "ledger_unsettled",
+      "reconciliation_age_commodity",
+      "reconciliation_age_folded",
       "reconciliation_age_never",
       "reconciliation_age_nothing",
       "reconciliation_age_out_of_date",
@@ -329,6 +331,8 @@
       "ledger_unparented_holdings",
       "ledger_unparented_holdings_copy",
       "ledger_unsettled",
+      "reconciliation_age_commodity",
+      "reconciliation_age_folded",
       "reconciliation_age_never",
       "reconciliation_age_nothing",
       "reconciliation_age_out_of_date",
@@ -500,6 +504,8 @@
       "ledger_unparented_holdings",
       "ledger_unparented_holdings_copy",
       "ledger_unsettled",
+      "reconciliation_age_commodity",
+      "reconciliation_age_folded",
       "reconciliation_age_never",
       "reconciliation_age_nothing",
       "reconciliation_age_out_of_date",

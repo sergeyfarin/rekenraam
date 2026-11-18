@@ -303,18 +303,47 @@ AccountReconciliationState:
   type: string
   enum: [reconciled, out_of_date, never_reconciled, nothing_to_reconcile]
   description: >-
-    One account's reconciliation age on owner-local today (#482). reconciled:
-    the latest active checkpoint's statement date is within the window (the
-    boundary day counts as within). out_of_date: it is older. never_reconciled:
-    no active checkpoint but posted activity. nothing_to_reconcile: no active
-    checkpoint and no posted activity, which is never called out of date.
+    A reconciliation age on owner-local today (#482), judged per commodity
+    because a checkpoint covers one. reconciled: the latest active checkpoint
+    dated on or before today is within the window (the boundary day counts as
+    within); a statement dated after today never counts. out_of_date: it is
+    older. never_reconciled: posted activity dated on or before today but no
+    such checkpoint. nothing_to_reconcile: neither, which is never called out
+    of date. An account takes its weakest commodity's state (never reconciled,
+    then out of date, then reconciled), so one reconciled currency never
+    vouches for another.
 AccountReconciliation:
   type: object
-  required: [state, last_statement_date]
+  required: [state, last_statement_date, commodities]
   properties:
     state:
       $ref: "../../openapi.yaml#/components/schemas/AccountReconciliationState"
     last_statement_date:
       type: [string, 'null']
       format: date
-      description: Statement date of the latest active checkpoint, over any of the account's commodities; null when it has none.
+      description: The oldest statement date among the commodities in this state (how far the weakest coverage reaches); null for never_reconciled and nothing_to_reconcile.
+    commodities:
+      type: array
+      description: Per-commodity judgements, weakest first. Empty for nothing_to_reconcile.
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/CommodityReconciliation"
+CommodityReconciliation:
+  type: object
+  required: [commodity_id, commodity_code, state, last_statement_date]
+  properties:
+    commodity_id: { type: integer, format: int64 }
+    commodity_code: { type: string }
+    state:
+      $ref: "../../openapi.yaml#/components/schemas/AccountReconciliationState"
+    last_statement_date:
+      type: [string, 'null']
+      format: date
+      description: Latest active checkpoint for this commodity dated on or before today; null when there is none.
+FoldedAccountReconciliation:
+  description: A folded account's judgement (a brokerage's cash or other child, which has no row of its own).
+  allOf:
+    - $ref: "../../openapi.yaml#/components/schemas/AccountReconciliation"
+    - type: object
+      required: [account_id]
+      properties:
+        account_id: { type: integer, format: int64 }

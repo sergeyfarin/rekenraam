@@ -28541,6 +28541,8 @@ export interface components {
             other_accounts: components["schemas"]["AccountResponse"][];
             /** @description The row account's own reconciliation age on owner-local today, whatever as_of asks (#482). Null when the account cannot be reconciled: not an active posting asset or liability, or an investment holding. */
             reconciliation: components["schemas"]["AccountReconciliation"] | null;
+            /** @description Reconciliation ages of the accounts folded into this row (cash_accounts and other_accounts that can be reconciled), weakest first, so a brokerage's cash account is judged in the list too. */
+            folded_reconciliations: components["schemas"]["FoldedAccountReconciliation"][];
             /** @description Hidden holding accounts in this row's scope, whatever their status. They are never index rows; clients use them for holding register links and archive/delete dependency checks. */
             holding_accounts: components["schemas"]["AccountResponse"][];
         };
@@ -30256,7 +30258,7 @@ export interface components {
             latest_status: "pending" | "running" | "completed" | "failed" | null;
             latest_will_retry: boolean;
         };
-        /** @description The account list's reconciliation judgement (#482). account_count counts accounts with something to reconcile (nothing_to_reconcile is in no figure); accounts lists the oldest three of them, never reconciled first. */
+        /** @description The account list's reconciliation judgement (#482). account_count counts accounts with something to reconcile (nothing_to_reconcile is in no figure); accounts lists the weakest three of them (never reconciled, then out of date, oldest first). An account counts as reconciled only when every commodity it has activity in is. */
         HomeReconciliationSummary: {
             out_of_date_after_days: number;
             account_count: number;
@@ -30268,9 +30270,14 @@ export interface components {
         HomeReconciliationAccount: {
             /** Format: int64 */
             account_id: number;
-            /** @description Empty when the account has no name; label it by code. */
+            /** @description Empty when the account has no name; label it as the account list does. */
             name: string;
             code: string;
+            /** @description A starter account's key (metadata starter_key) for its localized label. */
+            starter_key: string | null;
+            /** @description A starter account's currency (metadata currency_code). */
+            currency_code: string | null;
+            commodities: components["schemas"]["CommodityReconciliation"][];
             state: components["schemas"]["AccountReconciliationState"];
             /** Format: date */
             last_statement_date: string | null;
@@ -32437,7 +32444,7 @@ export interface components {
             out_of_date_after_days: number;
         };
         /**
-         * @description One account's reconciliation age on owner-local today (#482). reconciled: the latest active checkpoint's statement date is within the window (the boundary day counts as within). out_of_date: it is older. never_reconciled: no active checkpoint but posted activity. nothing_to_reconcile: no active checkpoint and no posted activity, which is never called out of date.
+         * @description A reconciliation age on owner-local today (#482), judged per commodity because a checkpoint covers one. reconciled: the latest active checkpoint dated on or before today is within the window (the boundary day counts as within); a statement dated after today never counts. out_of_date: it is older. never_reconciled: posted activity dated on or before today but no such checkpoint. nothing_to_reconcile: neither, which is never called out of date. An account takes its weakest commodity's state (never reconciled, then out of date, then reconciled), so one reconciled currency never vouches for another.
          * @enum {string}
          */
         AccountReconciliationState: "reconciled" | "out_of_date" | "never_reconciled" | "nothing_to_reconcile";
@@ -32445,9 +32452,27 @@ export interface components {
             state: components["schemas"]["AccountReconciliationState"];
             /**
              * Format: date
-             * @description Statement date of the latest active checkpoint, over any of the account's commodities; null when it has none.
+             * @description The oldest statement date among the commodities in this state (how far the weakest coverage reaches); null for never_reconciled and nothing_to_reconcile.
              */
             last_statement_date: string | null;
+            /** @description Per-commodity judgements, weakest first. Empty for nothing_to_reconcile. */
+            commodities: components["schemas"]["CommodityReconciliation"][];
+        };
+        CommodityReconciliation: {
+            /** Format: int64 */
+            commodity_id: number;
+            commodity_code: string;
+            state: components["schemas"]["AccountReconciliationState"];
+            /**
+             * Format: date
+             * @description Latest active checkpoint for this commodity dated on or before today; null when there is none.
+             */
+            last_statement_date: string | null;
+        };
+        /** @description A folded account's judgement (a brokerage's cash or other child, which has no row of its own). */
+        FoldedAccountReconciliation: components["schemas"]["AccountReconciliation"] & {
+            /** Format: int64 */
+            account_id: number;
         };
         ReconciliationCheckpointResponse: {
             /** Format: int64 */

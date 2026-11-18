@@ -4,6 +4,7 @@ import type { AttentionState } from '#lib/attention/model.ts';
 import { assetTypeText, formatReturn, formatWeight, returnDirection, returnReasonText } from '#lib/investments/returns-model.ts';
 import { m } from '#lib/paraglide/messages.js';
 import { reconciliationAgeView } from '#lib/reconcile/reconciliation-age.ts';
+import { accountLabelFromParts } from '#lib/accounts/account-labels.ts';
 import { valuationHref, valuationText } from './briefing.ts';
 import {
   commodityMap, day, failed, money, noData, number, range, reportQuery, sign,
@@ -354,7 +355,7 @@ export function reconciliationWidget(home: Home, locale: string): WidgetView {
     scope: m.home_reconciliation_scope({ count: summary.out_of_date_after_days, n: number(summary.out_of_date_after_days, locale) }),
     rows: summary.accounts.map(account => {
       const age = reconciliationAgeView(account, locale);
-      const label = account.name.trim() || account.code.trim() || m.accounts_unnamed_account({ id: account.account_id });
+      const label = accountLabelFromParts({ id: account.account_id, name: account.name, code: account.code, starterKey: account.starter_key, currencyCode: account.currency_code });
       return { key: String(account.account_id), label, href: `/app/ledger/reconcile?account=${account.account_id}`, detail: age.text, over: age.attention, amount: '' };
     }),
     more: hidden > 0 ? m.home_reconciliation_more({ count: hidden, n: number(hidden, locale) }) : null
