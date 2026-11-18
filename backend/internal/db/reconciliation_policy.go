@@ -146,16 +146,7 @@ func (r *TransactionRepository) ReconciliationAccountFacts(ctx context.Context, 
 			SELECT a.id, COALESCE(av.name, ''), COALESCE(av.code, ''),
 				COALESCE(json_extract(av.metadata_json, '$.starter_key'), ''),
 				COALESCE(json_extract(av.metadata_json, '$.currency_code'), '')
-			FROM accounts a
-			JOIN `+CurrentReferenceVersions(ctx, "account")+` av ON av.account_id = a.id
-			JOIN account_kinds ak ON ak.code = av.account_kind
-			WHERE a.book_id = ?
-				AND a.system_role IS NULL
-				AND av.status = 'active'
-				AND av.allows_postings = 1
-				AND av.account_class IN ('asset', 'liability')
-				AND ak.base_kind != 'security_holding'
-				AND (? = 0 OR a.id = ?)
+			`+reconcilableAccountsFrom(ctx)+`
 			ORDER BY a.id
 		`, bookID, accountID, accountID)
 		if err != nil {
@@ -180,34 +171,38 @@ func (r *TransactionRepository) ReconciliationAccountFacts(ctx context.Context, 
 		if len(facts) == 0 {
 			return nil
 		}
-		// Book-wide, drive from the current transaction versions; for one
-		// account, from its own postings (posting_versions_account_idx).
-		posted := `
-				SELECT DISTINCT pv.account_id, pv.commodity_id
-				FROM current_transaction_versions tv
-				JOIN transactions t ON t.id = tv.transaction_id
-				JOIN journal_entries je ON je.transaction_version_id = tv.id
-				JOIN posting_versions pv ON pv.journal_entry_id = je.id
-				WHERE tv.book_id = ? AND tv.status = 'posted' AND t.deleted_at IS NULL AND je.entry_date <= ?`
-		postedArgs := []any{bookID, today}
-		if accountID > 0 {
-			posted = `
+		// Candidate (account, commodity) pairs come from the reconcilable
+		// accounts' postings alone, without joins; each is then confirmed by
+		// one current posted posting dated on or before today, which usually
+		// stops at its first row. Joining every posting to its current
+		// version instead cost 1.9 s on the 250k-posting book (#594 review).
+		pairs, err := tx.QueryContext(ctx, `
+			WITH eligible AS MATERIALIZED (
+				SELECT a.id `+reconcilableAccountsFrom(ctx)+`
+			),
+			candidates AS MATERIALIZED (
 				SELECT DISTINCT pv.account_id, pv.commodity_id
 				FROM posting_versions pv
-				JOIN current_transaction_versions tv ON tv.id = pv.transaction_version_id
-				JOIN transactions t ON t.id = tv.transaction_id
-				JOIN journal_entries je ON je.id = pv.journal_entry_id
-				WHERE pv.account_id = ? AND tv.book_id = ? AND tv.status = 'posted' AND t.deleted_at IS NULL AND je.entry_date <= ?`
-			postedArgs = []any{accountID, bookID, today}
-		}
-		args := append(postedArgs, bookID, today, accountID, accountID)
-		pairs, err := tx.QueryContext(ctx, `
-			WITH posted AS (`+posted+`
+				WHERE pv.book_id = ? AND pv.account_id IN (SELECT id FROM eligible)
 			),
-			checked AS (
+			posted AS MATERIALIZED (
+				SELECT c.account_id, c.commodity_id
+				FROM candidates c
+				WHERE EXISTS (
+					SELECT 1
+					FROM posting_versions pv
+					JOIN current_transaction_versions tv ON tv.id = pv.transaction_version_id
+					JOIN transactions t ON t.id = tv.transaction_id
+					JOIN journal_entries je ON je.id = pv.journal_entry_id
+					WHERE pv.account_id = c.account_id AND pv.commodity_id = c.commodity_id
+						AND tv.status = 'posted' AND t.deleted_at IS NULL AND je.entry_date <= ?
+				)
+			),
+			checked AS MATERIALIZED (
 				SELECT account_id, commodity_id, MAX(statement_date) AS statement_date
 				FROM reconciliation_checkpoints
-				WHERE book_id = ? AND status = 'active' AND statement_date <= ? AND (? = 0 OR account_id = ?)
+				WHERE book_id = ? AND status = 'active' AND statement_date <= ?
+					AND account_id IN (SELECT id FROM eligible)
 				GROUP BY account_id, commodity_id
 			),
 			pairs AS (
@@ -221,7 +216,7 @@ func (r *TransactionRepository) ReconciliationAccountFacts(ctx context.Context, 
 			JOIN commodities c ON c.id = p.commodity_id
 			LEFT JOIN checked k ON k.account_id = p.account_id AND k.commodity_id = p.commodity_id
 			ORDER BY p.account_id, p.commodity_id
-		`, args...)
+		`, bookID, accountID, accountID, bookID, today, bookID, today)
 		if err != nil {
 			return fmt.Errorf("read reconciliation commodities: %w", err)
 		}
@@ -242,4 +237,20 @@ func (r *TransactionRepository) ReconciliationAccountFacts(ctx context.Context, 
 		return nil, err
 	}
 	return facts, nil
+}
+
+// reconcilableAccountsFrom is the FROM and WHERE of the accounts that can be
+// reconciled on the context's reference date, one rule for both reads above.
+// Its parameters are the book id and an account id twice (0 for every account).
+func reconcilableAccountsFrom(ctx context.Context) string {
+	return `FROM accounts a
+			JOIN ` + CurrentReferenceVersions(ctx, "account") + ` av ON av.account_id = a.id
+			JOIN account_kinds ak ON ak.code = av.account_kind
+			WHERE a.book_id = ?
+				AND a.system_role IS NULL
+				AND av.status = 'active'
+				AND av.allows_postings = 1
+				AND av.account_class IN ('asset', 'liability')
+				AND ak.base_kind != 'security_holding'
+				AND (? = 0 OR a.id = ?)`
 }

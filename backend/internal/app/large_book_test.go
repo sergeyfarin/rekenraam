@@ -350,6 +350,34 @@ func TestLargeBookExportAndSelfCheckStayBounded(t *testing.T) {
 	assert.Less(t, ledgerUsage.Wall, 10*time.Second, "ledger overview wall time")
 	assert.Less(t, ledgerUsage.PeakHeap, uint64(256<<20), "ledger overview peak heap")
 
+	// The Reconcile form's commodity lookup reads one account through its own
+	// postings, never the whole book (#594 review: the Ledger detail read it
+	// replaced took 6.9 s here).
+	var reconcilable int64
+	for _, row := range ledgerPage.Accounts {
+		if row.Reconciliation != nil && len(row.Reconciliation.Commodities) > 0 {
+			reconcilable = row.Account.ID
+			break
+		}
+	}
+	require.NotZero(t, reconcilable, "the large book has a reconcilable account with activity")
+	probe = startResourceProbe()
+	ages, err := transactions.AccountReconciliationAges(context.Background(), 1)
+	agesUsage := probe.finish()
+	require.NoError(t, err)
+	require.NotEmpty(t, ages.Accounts)
+	t.Logf("reconciliation ages (book-wide, part of home and ledger overview): wall=%s allocated=%dMiB peak-heap=%dMiB", agesUsage.Wall.Round(time.Millisecond), agesUsage.Allocated>>20, agesUsage.PeakHeap>>20)
+	// Joining every posting to its current version took 1.9 s here; candidate
+	// pairs confirmed one posting each take about 0.1 s (#594 review).
+	assert.Less(t, agesUsage.Wall, time.Second, "book-wide reconciliation ages wall time")
+	probe = startResourceProbe()
+	accountAge, _, err := transactions.AccountReconciliationAge(context.Background(), 1, reconcilable)
+	lookupUsage := probe.finish()
+	require.NoError(t, err)
+	require.NotNil(t, accountAge)
+	t.Logf("account reconciliation lookup: wall=%s allocated=%dMiB peak-heap=%dMiB", lookupUsage.Wall.Round(time.Millisecond), lookupUsage.Allocated>>20, lookupUsage.PeakHeap>>20)
+	assert.Less(t, lookupUsage.Wall, 500*time.Millisecond, "account reconciliation lookup wall time")
+
 	// Entry account choices are complete beyond the ordinary account-list cap
 	// (#507). Reading hierarchy and command eligibility must not scan holdings
 	// or issue one request/query per account.
