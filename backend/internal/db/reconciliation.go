@@ -434,6 +434,14 @@ func (r *TransactionRepository) FinishReconciliationSession(ctx context.Context,
 	case !session.StartingCheckpointID.Valid || session.StartingCheckpointID.Int64 != current.ID:
 		return ReconciliationSessionRecord{}, ErrReconciliationStartStale
 	}
+	// Start refuses a statement dated before its starting checkpoint, but a
+	// session saved before that rule (or written any other way) reaches
+	// finish unchecked. Its checkpoint would chain from the later statement
+	// with an earlier boundary, so the date rule is enforced here too, in the
+	// transaction that writes the checkpoint (#596 review).
+	if session.StartingCheckpointID.Valid && session.StatementDate < current.StatementDate {
+		return ReconciliationSessionRecord{}, ErrReconciliationStatementBeforeStart
+	}
 	// The difference is measured against the starting balance, so a stale
 	// start is the refusal that explains it.
 	if session.DifferenceValue.Sign() != 0 {

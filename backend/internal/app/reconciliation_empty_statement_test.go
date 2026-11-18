@@ -236,3 +236,31 @@ func finishCashSession(t *testing.T, f *investmentsTestFixture, sessionID int64,
 	})
 	require.NoError(t, err)
 }
+
+// #596 review. Start refuses a backdated statement, but a session saved before
+// that rule reaches finish unchecked. Finish enforces the same rule in its own
+// transaction, so such a session cannot chain an earlier boundary from a later
+// statement.
+func TestFinishRefusesSessionDatedBeforeStartingCheckpoint(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f := newInvestmentsTestFixture(t)
+	deposit := postEUR(t, f, "2026-04-10", 100)
+	april := reconcileCash(t, f, "2026-04-30", 100)
+	session := startCashReconciliation(t, f, "2026-04-30", 100)
+	// The row a pre-upgrade March session would have left.
+	_, err := f.database.ExecContext(ctx, `UPDATE reconciliation_sessions SET statement_date = '2026-03-31' WHERE id = ?`, session.ID)
+	require.NoError(t, err)
+
+	_, err = f.transactionService.FinishReconciliation(ctx, FinishReconciliationInput{
+		OriginType: "browser_api", OwnerUserID: f.ownerUserID, SessionID: session.ID, ChangeReason: "statement verified",
+	})
+	var validation ValidationError
+	require.ErrorAs(t, err, &validation)
+	require.Equal(t, []int64{april}, activeCheckpointIDs(t, f), "no checkpoint was written")
+
+	voidCashCheckpoint(t, f, april)
+	again := startCashReconciliation(t, f, "2026-04-30", 100)
+	require.Len(t, again.Candidates, 1, "April's posting is offered again")
+	require.Equal(t, cashPostingLineID(t, f, deposit), currentPostingLine(t, f, again.Candidates[0].PostingID))
+}
