@@ -83,8 +83,10 @@ make that rejection explicit and tested per call site (catalogue entry 14).
 When the pattern can be detected mechanically, add a guard test that fails on
 a new copy, as `TestEffectiveHistoryReadersUseTheOwner` and
 `src/lib/theme-tokens.test.ts` do. Give it an allow-list with a reason per
-entry rather than a loose pattern. When it cannot be detected mechanically,
-say so.
+entry rather than a loose pattern. A guard that parses the whole tree gets an
+explicit timeout sized from its measured time under load, with the
+measurement in a comment: the default 5 s budget turned the local gate red on
+a busy machine (#570). When it cannot be detected mechanically, say so.
 
 When the sweep adds tests or a guard, record them in the catalogue entry.
 Add an entry when the sweep fixes a new bug class
