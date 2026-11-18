@@ -6184,6 +6184,15 @@ export interface paths {
                     };
                 };
                 413: components["responses"]["JSONBodyTooLarge"];
+                /** @description The statement difference exceeds supported precision (LEDGER_OVERFLOW). */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
             };
         };
         delete?: never;
@@ -13450,6 +13459,15 @@ export interface paths {
                     };
                 };
                 413: components["responses"]["JSONBodyTooLarge"];
+                /** @description The statement difference exceeds supported precision (LEDGER_OVERFLOW). */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
             };
         };
         trace?: never;
@@ -13527,6 +13545,15 @@ export interface paths {
                     };
                 };
                 413: components["responses"]["JSONBodyTooLarge"];
+                /** @description The statement difference exceeds supported precision (LEDGER_OVERFLOW). */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
             };
         };
         delete?: never;

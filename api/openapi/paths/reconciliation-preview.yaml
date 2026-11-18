@@ -22,6 +22,12 @@ post:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ReconciliationSessionResponse"
+    "422":
+      description: The statement difference exceeds supported precision (LEDGER_OVERFLOW).
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "400":
       description: Invalid request
       content:
