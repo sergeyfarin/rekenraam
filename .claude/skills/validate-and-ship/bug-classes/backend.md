@@ -174,5 +174,20 @@ day (`pinnedOwnerDay(ctx)`), and keep `s.now()` only for instants such as
 `recorded_at`. A test arms a clock that crosses midnight right before the
 service call and asserts all three effects: a date of tomorrow is refused, an
 omitted date defaults to the pinned day, and the response equals the read on
-that day. Named check: `TestAccountWritesUseThePinnedOwnerDay`. #605 tracks
-the other services.
+that day. A helper that resolves "today" reads its caller's day:
+`pinnedOwnerDay` alone when every caller pins (`cleanLedgerAsOfAndStatus`,
+whose ledger overview caller now pins first), or `referenceContext` then
+`pinnedOwnerDay` when some caller does not (`AccountReconciliationAges`)
+(#605). Named checks:
+`TestAccountWritesUseThePinnedOwnerDay`,
+`TestCategoryWritesUseThePinnedOwnerDay`,
+`TestPayeeWritesUseThePinnedOwnerDay`,
+`TestInstitutionWritesUseThePinnedOwnerDay`,
+`TestInstrumentWritesUseThePinnedOwnerDay`,
+`TestTransactionDefaultDateUsesThePinnedOwnerDay`,
+`TestLedgerReadsDefaultAsOfToThePinnedOwnerDay` and
+`TestReconciliationAgesJudgeOnTheCallersPinnedDay`. Guard:
+`TestOwnerTodayCallersHaveNoPinnedDay` fails when a function both pins and
+calls `OwnerTodayAt`, and requires every other `OwnerTodayAt` caller to be
+listed with why it has no pinned day to share. It scans one function at a
+time, so a helper reached from a pinned caller still needs review.
