@@ -50,10 +50,6 @@ var (
 	// ErrAccountHasDependents refuses archiving a parent while a child account
 	// is not archived; the child could no longer be edited under it (#294).
 	ErrAccountHasDependents = errors.New("account cannot be archived while child accounts are not archived")
-	// ErrAccountVersionBackdated refuses a lifecycle or structural change
-	// dated before the account's latest version (#293). The wrapped message
-	// names the earliest allowed date.
-	ErrAccountVersionBackdated = errors.New("account change is dated before the account's latest version")
 	// ErrAccountPostingsOutsideDates refuses a version — usually a close dated
 	// before the account's last posting — that would leave an existing posting
 	// on a day the account no longer accepts it (#292). The wrapped message
@@ -816,8 +812,11 @@ func accountWriteRefusal(err error) (error, bool) {
 	case errors.Is(err, db.ErrAccountParentNotAllowed), errors.Is(err, db.ErrAccountParentCycle):
 		return ErrAccountParentInvalid, true
 	}
-	if backdated, ok := errors.AsType[db.AccountVersionBackdatedError](err); ok {
-		return fmt.Errorf("%w: %s", ErrAccountVersionBackdated, backdated.Error()), true
+	// A lifecycle or structural change dated before the latest version, or a
+	// correction dated before the first one (#293), refused with the shared
+	// reference-data errors (#552, #566).
+	if refusal, ok := referenceBackdatingError(err); ok {
+		return refusal, true
 	}
 	var outside db.AccountPostingsOutsideDatesError
 	if !errors.As(err, &outside) {

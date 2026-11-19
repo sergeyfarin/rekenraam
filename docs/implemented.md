@@ -79,7 +79,11 @@ changed, so an earlier-dated edit does not copy today's values into the past;
 they still show today's values, with a hint, until #568 loads the as-of
 values. A fill
 from a version that changed before the write is refused with `409 CONFLICT`,
-and updates answer with today's state. The
+and updates answer with today's state. Accounts (#566) answer an
+earlier-dated correction with today's state too, and refuse backdated
+lifecycle or structural changes and pre-first-version corrections with the
+same two coded refusals, so the account editor and lifecycle dialogs explain
+them through the same boundary. The
 [per-kind contract and named regressions](design/accounts-system-design.md)
 record the field split, the window rule, and API and translation coverage.
 

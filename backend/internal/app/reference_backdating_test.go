@@ -19,17 +19,48 @@ type referenceBackdatingFixture struct {
 	referenceVersionFixture
 	id         int64
 	table, key string
-	rename     func(string, string) (string, error)
-	lifecycle  func(string, bool) (string, error)
-	read       func(string) (string, error)
+	// inactive is the status the fixture's lifecycle command sets: archived,
+	// or closed for an account, whose archive needs a close first.
+	inactive  string
+	rename    func(string, string) (string, error)
+	lifecycle func(string, bool) (string, error)
+	read      func(string) (string, error)
 }
 
 func newReferenceBackdatingFixture(t *testing.T, kind string) referenceBackdatingFixture {
 	t.Helper()
 	f := newReferenceVersionFixture(t)
 	ctx := context.Background()
-	b := referenceBackdatingFixture{referenceVersionFixture: f}
+	b := referenceBackdatingFixture{referenceVersionFixture: f, inactive: "archived"}
 	switch kind {
+	case "account":
+		// Opened before its first version, so a date between the two is
+		// accepted by the opened-date rule and reaches the before-first one.
+		item, err := f.accountService.CreateAccount(ctx, CreateAccountInput{
+			OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "account.create",
+			Name: "Original", AccountClass: "asset", AccountKind: "checking",
+			DefaultCommodityID: &f.eurCommodityID, OpenedOn: "2024-01-01", EffectiveFrom: "2026-01-01",
+		})
+		require.NoError(t, err)
+		b.id, b.table, b.key, b.inactive = item.ID, "account_versions", "account_id", "closed"
+		b.rename = func(name, date string) (string, error) {
+			v, err := tryRenameAccount(f, item.ID, name, date)
+			return v.Status, err
+		}
+		b.lifecycle = func(date string, toInactive bool) (string, error) {
+			input := AccountLifecycleInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", AccountID: item.ID, EffectiveFrom: date}
+			if toInactive {
+				input.ClosedOn = date
+				v, err := f.accountService.CloseAccount(ctx, input)
+				return v.Status, err
+			}
+			v, err := f.accountService.ReopenAccount(ctx, input)
+			return v.Status, err
+		}
+		b.read = func(date string) (string, error) {
+			v, err := db.NewAccountRepository(f.database).CurrentAccountByID(db.WithReferenceDate(ctx, date), BookID, item.ID)
+			return v.Status, err
+		}
 	case "category":
 		item, err := f.categories.CreateCategory(ctx, CreateCategoryInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "category.create", Name: "Original", CategoryType: "expense"})
 		require.NoError(t, err)
@@ -109,7 +140,7 @@ func (f referenceBackdatingFixture) counts(t *testing.T) [2]int {
 
 func TestReferenceBackdatedDescriptionPreservesHistoricalLifecycle(t *testing.T) {
 	t.Parallel()
-	for _, kind := range []string{"category", "payee", "institution"} {
+	for _, kind := range []string{"account", "category", "payee", "institution"} {
 		t.Run(kind, func(t *testing.T) {
 			t.Parallel()
 			f := newReferenceBackdatingFixture(t, kind)
@@ -117,13 +148,13 @@ func TestReferenceBackdatedDescriptionPreservesHistoricalLifecycle(t *testing.T)
 			require.NoError(t, err)
 			status, err := f.rename("March correction", "2026-03-01")
 			require.NoError(t, err)
-			assert.Equal(t, "archived", status, "the response is today's state, not the past window's")
+			assert.Equal(t, f.inactive, status, "the response is today's state, not the past window's")
 			status, err = f.read("2026-04-01")
 			require.NoError(t, err)
 			assert.Equal(t, "active", status)
 			status, err = f.read("2026-10-15")
 			require.NoError(t, err)
-			assert.Equal(t, "archived", status)
+			assert.Equal(t, f.inactive, status)
 
 			_, err = f.lifecycle("2026-09-01", false)
 			require.NoError(t, err)
@@ -132,11 +163,11 @@ func TestReferenceBackdatedDescriptionPreservesHistoricalLifecycle(t *testing.T)
 			assert.Equal(t, "active", status, "the response is today's state, not the past window's")
 			status, err = f.read("2026-08-01")
 			require.NoError(t, err)
-			assert.Equal(t, "archived", status)
+			assert.Equal(t, f.inactive, status)
 			status, err = f.read("2026-10-15")
 			require.NoError(t, err)
 			assert.Equal(t, "active", status)
-			if kind == "category" {
+			if kind == "category" || kind == "account" {
 				var closedOn sql.NullString
 				require.NoError(t, f.database.QueryRow("SELECT closed_on FROM account_versions WHERE account_id = ? AND effective_from = '2026-07-01'", f.id).Scan(&closedOn))
 				assert.Equal(t, sql.NullString{String: "2026-06-01", Valid: true}, closedOn)
@@ -174,7 +205,7 @@ func TestReferenceBackdatedLifecycleRefusesWithoutWritesAndSameDateWorks(t *test
 
 func TestReferenceCorrectionBeforeFirstVersionIsRefused(t *testing.T) {
 	t.Parallel()
-	for _, kind := range []string{"payee", "institution"} {
+	for _, kind := range []string{"account", "payee", "institution"} {
 		t.Run(kind, func(t *testing.T) {
 			t.Parallel()
 			f := newReferenceBackdatingFixture(t, kind)

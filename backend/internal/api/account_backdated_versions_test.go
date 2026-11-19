@@ -45,8 +45,9 @@ func TestBackdatedLifecycleAndStructureVersionsAreRefused(t *testing.T) {
 	} {
 		res := referenceDataRequest(handler, cookie, csrf, refusal.method, path+refusal.suffix, refusal.body)
 		require.Equalf(t, http.StatusConflict, res.Code, "%s: %s", refusal.name, res.Body.String())
-		assert.Contains(t, res.Body.String(), "2026-06-01", refusal.name)
-		assert.Equal(t, "CONFLICT", apiErrorCode(t, res), refusal.name)
+		// The shared reference-data refusal (#552, #566), so the client
+		// names the earliest allowed date in every locale.
+		assert.JSONEq(t, `{"error":{"code":"REFERENCE_VERSION_BACKDATED","message":"reference version is backdated: lifecycle or structural changes must take effect on or after 2026-06-01","conflict_date":"2026-06-01"}}`, res.Body.String(), refusal.name)
 	}
 	current := readAccountForSession(t, handler, cookie, savings.ID)
 	assert.Equal(t, "active", current.Status)
@@ -83,14 +84,17 @@ func TestBackdatedRenameKeepsTheStructureAndLifecycleOfItsDate(t *testing.T) {
 
 	// The editor sends today's full account, closed. The correction takes the
 	// name only; on 2026-03-01 the account was open, and it stays open there.
+	// The response is the account as it stands today, closed and named B,
+	// not the March version just written (#566).
 	corrected := patchAccount(t, handler, cookie, csrf, savings.ID, `{
 		"name":"C","account_class":"asset","account_kind":"savings",
 		"default_commodity_id":`+usdText+`,"effective_from":"2026-03-01"
 	}`, http.StatusOK)
-	assert.Equal(t, "C", corrected.Name)
-	assert.Equal(t, "2026-03-01", corrected.EffectiveFrom)
-	assert.Equal(t, "active", corrected.Status)
-	assert.Empty(t, corrected.ClosedOn)
+	assert.Equal(t, readAccountForSession(t, handler, cookie, savings.ID), corrected)
+	assert.Equal(t, "B", corrected.Name)
+	assert.Equal(t, "2026-08-01", corrected.EffectiveFrom)
+	assert.Equal(t, "closed", corrected.Status)
+	assert.Equal(t, "2026-08-01", corrected.ClosedOn)
 
 	for _, read := range []struct{ asOf, name, status string }{
 		{"2026-02-01", "A", "active"},
@@ -106,6 +110,42 @@ func TestBackdatedRenameKeepsTheStructureAndLifecycleOfItsDate(t *testing.T) {
 	current := readAccountForSession(t, handler, cookie, savings.ID)
 	assert.Equal(t, "B", current.Name)
 	assert.Equal(t, "closed", current.Status)
+
+	// An ordinary edit, dated on the latest version, answers with its own
+	// values: the version written is today's state.
+	renamed := patchAccount(t, handler, cookie, csrf, savings.ID, `{
+		"name":"D","account_class":"asset","account_kind":"savings",
+		"default_commodity_id":`+usdText+`,"effective_from":"2026-08-01"
+	}`, http.StatusOK)
+	assert.Equal(t, "D", renamed.Name)
+	assert.Equal(t, "closed", renamed.Status)
+	assert.Equal(t, readAccountForSession(t, handler, cookie, savings.ID), renamed)
+}
+
+// An account opened before its first version has no version to correct on
+// the days in between: the shared before-first refusal names the first
+// version's date (#566).
+func TestAccountCorrectionBeforeFirstVersionReturnsCodedConflict(t *testing.T) {
+	t.Parallel()
+
+	handler, database := newSetupTestHandler(t)
+	cookie, csrf, usd := setupAccountAPITest(t, handler)
+	usdText := strconvFormatInt(usd)
+	savings := createAccountForSession(t, handler, cookie, csrf, `{
+		"name":"Savings","account_class":"asset","account_kind":"savings",
+		"default_commodity_id":`+usdText+`,"opened_on":"2026-01-01","effective_from":"2026-02-01"
+	}`)
+	var before, after int
+	require.NoError(t, database.QueryRow("SELECT COUNT(*) FROM audit_events").Scan(&before))
+	res := referenceDataRequest(handler, cookie, csrf, http.MethodPatch, "/api/v1/accounts/"+strconvFormatInt(savings.ID), `{
+		"name":"January name","account_class":"asset","account_kind":"savings",
+		"default_commodity_id":`+usdText+`,"effective_from":"2026-01-15"
+	}`)
+	require.Equal(t, http.StatusConflict, res.Code, res.Body.String())
+	assert.JSONEq(t, `{"error":{"code":"REFERENCE_VERSION_BEFORE_FIRST","message":"reference version is dated before the record's first version: the record starts on 2026-02-01","conflict_date":"2026-02-01"}}`, res.Body.String())
+	require.NoError(t, database.QueryRow("SELECT COUNT(*) FROM audit_events").Scan(&after))
+	assert.Equal(t, before, after)
+	assert.Equal(t, "Savings", readAccountForSession(t, handler, cookie, savings.ID).Name)
 }
 
 func TestParentCycleIsRefusedOnEveryDateTheVersionGoverns(t *testing.T) {

@@ -50,10 +50,20 @@ func requireLatestVersionSeq(t *testing.T, f referenceVersionFixture, table, col
 
 func updateAccountVersion(t *testing.T, f referenceVersionFixture, accountID int64, name, effectiveFrom string) Account {
 	t.Helper()
-	current, err := f.accountService.Account(context.Background(), accountID)
+	updated, err := tryRenameAccount(f, accountID, name, effectiveFrom)
 	require.NoError(t, err)
+	return updated
+}
+
+// tryRenameAccount sends today's full account with a new name, as the account
+// editor does, dated effectiveFrom.
+func tryRenameAccount(f referenceVersionFixture, accountID int64, name, effectiveFrom string) (Account, error) {
+	current, err := f.accountService.Account(context.Background(), accountID)
+	if err != nil {
+		return Account{}, err
+	}
 	allowsPostings := current.AllowsPostings
-	updated, err := f.accountService.UpdateAccount(context.Background(), UpdateAccountInput{
+	return f.accountService.UpdateAccount(context.Background(), UpdateAccountInput{
 		OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "account.update", AccountID: accountID,
 		Code: current.Code, Name: name, AccountClass: current.AccountClass, AccountKind: current.AccountKind,
 		ParentAccountID: current.ParentAccountID, InstitutionID: current.InstitutionID,
@@ -64,8 +74,6 @@ func updateAccountVersion(t *testing.T, f referenceVersionFixture, accountID int
 		OpenedOn: current.OpenedOn, CostBasisMethod: current.CostBasisMethod,
 		EffectiveFrom: effectiveFrom, ChangeReason: "version sequence regression",
 	})
-	require.NoError(t, err)
-	return updated
 }
 
 func updateInstitutionVersion(t *testing.T, f referenceVersionFixture, institutionID int64, name, effectiveFrom string) Institution {
