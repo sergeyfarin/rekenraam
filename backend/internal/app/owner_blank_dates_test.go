@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 	"time"
 
@@ -152,14 +153,13 @@ func TestUndatedFXRefreshSelectsAssignmentsOnOwnerDay(t *testing.T) {
 }
 
 // #605 review. A refresh pins the owner day once; if the owner's time zone
-// changes mid-run, source selection and the future-date cutoff still use the
-// pinned day rather than resolving the same instant in the new zone. Here the
-// run pinned the 18th (UTC) and the zone is now Amsterdam, where it is the 19th.
-func TestUndatedFXRefreshUsesTheDayTheRunPinned(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
+// changes mid-run, undated FX work still uses the pinned day rather than
+// resolving the same instant in the new zone. Here the run pinned the 18th
+// (UTC) and the zone is now Amsterdam, where it is the 19th.
+func newPinnedDayFXService(t *testing.T, ecbPublishedAt string) (*sql.DB, *PricingService, time.Time) {
+	t.Helper()
 	registry := marketdata.NewRegistry(
-		fakeFXProvider{code: "ecb_euro_reference_rates", rates: map[string]fakeFXRate{"USD/EUR": {value: 90, scale: 2, publishedAt: "2026-10-19T00:00:00Z"}}},
+		fakeFXProvider{code: "ecb_euro_reference_rates", rates: map[string]fakeFXRate{"USD/EUR": {value: 90, scale: 2, publishedAt: ecbPublishedAt}}},
 		fakeFXProvider{code: "frankfurter", rates: map[string]fakeFXRate{"USD/EUR": {value: 95, scale: 2, publishedAt: "2026-10-18T00:00:00Z"}}},
 	)
 	database, s := newPricingRefreshTestService(t, []string{"USD", "EUR"}, registry)
@@ -167,6 +167,17 @@ func TestUndatedFXRefreshUsesTheDayTheRunPinned(t *testing.T) {
 	setOwnerTimeZone(t, database, "Europe/Amsterdam")
 	s.SetSettings(NewSettingsService(db.NewSettingsRepository(database)))
 	s.SetNowForTest(func() time.Time { return now })
+	return database, s, now
+}
+
+var pinnedDayFXTarget = fxRefreshTarget{Base: db.PricingCurrencyRecord{ID: 1, Code: "USD"}, Quote: db.PricingCurrencyRecord{ID: 2, Code: "EUR"}}
+
+// Both providers answer with a rate valid on the pinned day, so only the
+// assignment lookup decides which one is stored.
+func TestUndatedFXSourceSelectionUsesTheDayTheRunPinned(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	database, s, now := newPinnedDayFXService(t, "2026-10-18T00:00:00Z")
 	ecbID := marketDataSourceIDByCode(t, database, "ecb_euro_reference_rates")
 	assignedID := marketDataSourceIDByCode(t, database, "frankfurter")
 	_, err := s.SaveSourceAssignment(ctx, PricingSourceAssignmentInput{
@@ -174,19 +185,23 @@ func TestUndatedFXRefreshUsesTheDayTheRunPinned(t *testing.T) {
 		EffectiveFrom: "2026-10-01", EffectiveTo: "2026-10-18",
 	})
 	require.NoError(t, err)
-	pinned := db.WithReferenceDate(ctx, "2026-10-18")
-	target := fxRefreshTarget{Base: db.PricingCurrencyRecord{ID: 1, Code: "USD"}, Quote: db.PricingCurrencyRecord{ID: 2, Code: "EUR"}}
 
-	outcome, err := s.fetchAndStoreDirectFX(pinned, 1, target, PricingPolicy{DefaultSourceID: &ecbID}, 0, "", now)
+	outcome, err := s.fetchAndStoreDirectFX(db.WithReferenceDate(ctx, "2026-10-18"), 1, pinnedDayFXTarget, PricingPolicy{DefaultSourceID: &ecbID}, 0, "", now)
 	require.NoError(t, err)
 	assert.Equal(t, assignedID, outcome.SourceID, "the assignment is still valid on the pinned day")
 	assert.Equal(t, int64(95), outcome.Observation.PriceValue)
+}
 
-	// ECB answers with the 19th, which is in the future on the pinned day, so
-	// the refresh falls through to the next source.
-	outcome, err = s.fetchAndStoreDirectFX(pinned, 1, target, PricingPolicy{}, ecbID, "", now)
+// No assignment: ECB is tried first and answers with the 19th, which is in
+// the future on the pinned day, so the refresh falls through to Frankfurter.
+func TestUndatedFXCutoffUsesTheDayTheRunPinned(t *testing.T) {
+	t.Parallel()
+	database, s, now := newPinnedDayFXService(t, "2026-10-19T00:00:00Z")
+	ecbID := marketDataSourceIDByCode(t, database, "ecb_euro_reference_rates")
+
+	outcome, err := s.fetchAndStoreDirectFX(db.WithReferenceDate(context.Background(), "2026-10-18"), 1, pinnedDayFXTarget, PricingPolicy{}, ecbID, "", now)
 	require.NoError(t, err)
-	assert.Equal(t, assignedID, outcome.SourceID, "an observation after the pinned day is refused")
+	assert.Equal(t, marketDataSourceIDByCode(t, database, "frankfurter"), outcome.SourceID, "an observation after the pinned day is refused")
 	assert.Equal(t, "2026-10-18", outcome.Observation.ValuationDate)
 }
 
