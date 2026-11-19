@@ -181,12 +181,46 @@ func (s *TransactionService) AccountReconciliationAge(ctx context.Context, owner
 	return &ages.Accounts[0], policy.OutOfDateAfterDays, nil
 }
 
-// AccountStatementCommodities lists the commodities the account has an
-// active statement in, at any date, for the Reconcile form: a statement dated
-// after today is outside the age judgement but can still be opened and
-// voided in its own commodity (#594 review).
-func (s *TransactionService) AccountStatementCommodities(ctx context.Context, accountID int64) ([]db.StatementCommodity, error) {
-	return s.repository.AccountStatementCommodities(ctx, BookID, accountID)
+// AccountStatementCommodities are the commodities Reconcile may open an
+// account in beyond its reconciliation age: its default commodity, named with
+// its code (a holding's instrument is not a currency the form knows), and
+// every commodity it has an active statement in at any date. A statement
+// dated after today is outside the age judgement, and a holding has none,
+// but a register link to either still opens Reconcile in its commodity so it
+// can be seen and voided (#594 review).
+type AccountStatementCommodities struct {
+	Default    *db.StatementCommodity
+	Statements []db.StatementCommodity
+}
+
+func (s *TransactionService) AccountStatementCommodities(ctx context.Context, ownerUserID int64, accountID int64) (AccountStatementCommodities, error) {
+	today, err := s.settings.OwnerTodayAt(ctx, ownerUserID, s.now())
+	if err != nil {
+		return AccountStatementCommodities{}, err
+	}
+	ctx = db.WithReferenceDate(ctx, today)
+	account, err := s.accountRepository.CurrentAccountByID(ctx, BookID, accountID)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) || errors.Is(err, sql.ErrNoRows) {
+			return AccountStatementCommodities{}, ErrAccountNotFound
+		}
+		return AccountStatementCommodities{}, err
+	}
+	var result AccountStatementCommodities
+	if account.DefaultCommodityID.Valid {
+		commodity, err := s.accountRepository.CurrentCommodityByID(ctx, BookID, account.DefaultCommodityID.Int64)
+		if err != nil && !errors.Is(err, db.ErrNotFound) {
+			return AccountStatementCommodities{}, err
+		}
+		if err == nil {
+			result.Default = &db.StatementCommodity{CommodityID: commodity.ID, CommodityCode: commodity.Code}
+		}
+	}
+	result.Statements, err = s.repository.AccountStatementCommodities(ctx, BookID, accountID)
+	if err != nil {
+		return AccountStatementCommodities{}, err
+	}
+	return result, nil
 }
 
 func reconciliationAgeRank(state string) int {

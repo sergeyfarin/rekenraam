@@ -32546,12 +32546,15 @@ export interface components {
             account_id: number;
             out_of_date_after_days: number;
             reconciliation: components["schemas"]["AccountReconciliation"] | null;
-            /** @description Every commodity the account has an active statement in, whatever its statement date. The judgement leaves out statements dated after today; Reconcile still offers their commodity so they can be opened and voided. */
-            statement_commodities: {
-                /** Format: int64 */
-                commodity_id: number;
-                commodity_code: string;
-            }[];
+            /** @description Every commodity the account has an active statement in, whatever its statement date. The judgement leaves out statements dated after today; Reconcile still offers their commodity so they can be opened and voided, and on a holding (which has no reconciliation age) a statement in another commodity than its instrument. */
+            statement_commodities: components["schemas"]["StatementCommodity"][];
+            /** @description The account's default commodity with its code (a holding's is its instrument, which is not a currency); null when the account has none. */
+            default_commodity: components["schemas"]["StatementCommodity"] | null;
+        };
+        StatementCommodity: {
+            /** Format: int64 */
+            commodity_id: number;
+            commodity_code: string;
         };
         ReconciliationCheckpointResponse: {
             /** Format: int64 */

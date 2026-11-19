@@ -32,6 +32,37 @@ export function lookupStatementCommodities(lookup: {
   return [...(lookup.reconciliation?.commodities ?? []), ...lookup.statement_commodities];
 }
 
+/**
+ * Whether the form reads the account's reconciliation lookup. Every
+ * reconcilable account does. A holding is reconciled in its instrument and
+ * has no age, so it reads the lookup only when a link names another
+ * commodity: a statement in it, such as a cash statement, must be verified
+ * and offered so it can be opened and voided (#594 review).
+ */
+export function needsCommodityLookup(input: {
+  subledgerManaged: boolean;
+  requestedCommodityID: number | undefined;
+  defaultID: number | null | undefined;
+}): boolean {
+  if (!input.subledgerManaged) return true;
+  return input.requestedCommodityID !== undefined && input.requestedCommodityID !== (input.defaultID ?? undefined);
+}
+
+/**
+ * The account's default commodity as an option: its currency code, or the
+ * code the lookup names when the currency list does not hold it (a
+ * holding's instrument).
+ */
+export function defaultStatementCommodity(
+  defaultID: number | null | undefined,
+  currencyCode: string | undefined,
+  lookupDefault: { commodity_id: number; commodity_code: string } | null | undefined
+): StatementCommodityOption | undefined {
+  if (defaultID === null || defaultID === undefined) return undefined;
+  const code = currencyCode || (lookupDefault?.commodity_id === defaultID ? lookupDefault.commodity_code : '');
+  return { id: defaultID, code };
+}
+
 /** The owner's choice when it is one of the options, else the request, else the default, else the first (weakest) judged commodity. */
 export function chooseStatementCommodity(
   options: readonly StatementCommodityOption[],

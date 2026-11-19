@@ -147,13 +147,49 @@ func TestAccountReconciliationLookupHTTP(t *testing.T) {
 	require.Len(t, body.Reconciliation.Commodities, 1, "a future statement is not judged")
 	assert.Equal(t, currencyID, body.Reconciliation.Commodities[0].CommodityID)
 	assert.Equal(t, []statementCommodityResponse{{CommodityID: franc.ID, CommodityCode: "CHF"}}, body.StatementCommodities)
+	require.NotNil(t, body.DefaultCommodity)
+	assert.Equal(t, currencyID, body.DefaultCommodity.CommodityID)
 
 	res = get("/api/v1/accounts/" + strconvFormatInt(income.ID) + "/reconciliation")
 	require.Equal(t, 200, res.Code, res.Body.String())
 	assert.Contains(t, res.Body.String(), `"reconciliation":null`, "a category cannot be reconciled")
+	assert.Contains(t, res.Body.String(), `"default_commodity":null`, "a category has no default commodity")
 	assert.Equal(t, 404, get("/api/v1/accounts/999999/reconciliation").Code)
 	assert.Equal(t, 400, get("/api/v1/accounts/nope/reconciliation").Code)
 	unauthenticated := httptest.NewRecorder()
 	handler.ServeHTTP(unauthenticated, httptest.NewRequest("GET", "/api/v1/accounts/1/reconciliation", nil))
 	assert.Equal(t, 401, unauthenticated.Code)
+}
+
+// #594 review: a holding is reconciled through its investment commands, so it
+// has no age, but a statement in another commodity than its instrument (here
+// the cash currency) is still named, with the instrument's own code, so a
+// register link to it opens Reconcile in that commodity.
+func TestAccountReconciliationLookupNamesAHoldingsOtherStatementCommodity(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "LKUP")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	session := startReconciliationForSession(t, handler, f.sessionCookie, f.csrfToken, holding.ID, `{
+		"commodity_id":`+strconvFormatInt(f.commodityID)+`,
+		"source_kind":"statement",
+		"statement_date":"2026-03-31",
+		"statement_balance_value":"0",
+		"statement_balance_scale":2
+	}`, http.StatusCreated)
+	finishReconciliationForSession(t, handler, f.sessionCookie, f.csrfToken, session.ID, `{"change_reason":"cash statement"}`, http.StatusOK)
+
+	req := httptest.NewRequest("GET", "/api/v1/accounts/"+strconvFormatInt(holding.ID)+"/reconciliation", nil)
+	req.AddCookie(f.sessionCookie)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	require.Equal(t, 200, res.Code, res.Body.String())
+	var body accountReconciliationLookupResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Nil(t, body.Reconciliation, "a holding has no reconciliation age")
+	require.NotNil(t, body.DefaultCommodity)
+	assert.Equal(t, statementCommodityResponse{CommodityID: instrument.CommodityID, CommodityCode: "LKUP"}, *body.DefaultCommodity)
+	require.Len(t, body.StatementCommodities, 1)
+	assert.Equal(t, f.commodityID, body.StatementCommodities[0].CommodityID)
 }

@@ -189,3 +189,45 @@ test('a future-dated statement in another currency opens Reconcile in that curre
   await expect(dialog).toBeHidden();
   await expect(voidButton).toBeHidden();
 });
+
+/**
+ * #594 review. A holding is reconciled in its instrument, but a statement in
+ * another commodity (a cash statement entered through the API) still shows in
+ * its register, and its link opens Reconcile in that commodity.
+ */
+test('a holding statement in a currency opens Reconcile in that currency', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const suffix = Date.now();
+  const opened = daysFromTodayISO(-60);
+  const instrument = await apiJSON<{ id: number; commodity_id: number }>(page, 'POST', '/api/v1/investments/instruments', csrfToken, {
+    commodity_code: `RH${suffix}`, instrument_type: 'stock', display_name: `Register shares ${suffix}`,
+    quantity_scale: 0, price_scale: 2, quote_commodity_id: currencyID, effective_from: opened
+  });
+  const holding = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/holding-accounts', csrfToken, {
+    instrument_id: instrument.id, name: `Register holding ${suffix}`, opened_on: opened, effective_from: opened
+  });
+  const statementDate = daysFromTodayISO(-5);
+  const session = await apiJSON<{ id: number }>(page, 'POST', `/api/v1/accounts/${holding.id}/reconciliations/start`, csrfToken, {
+    commodity_id: currencyID, source_kind: 'statement', statement_date: statementDate,
+    statement_balance_value: '0', statement_balance_scale: 2
+  });
+  await apiJSON(page, 'POST', `/api/v1/reconciliations/${session.id}/finish`, csrfToken, { change_reason: 'statement verified' });
+
+  await page.goto(`/app/ledger/accounts/${holding.id}/register`);
+  const row = page.locator('[data-register-statement]');
+  await expect(row).toHaveCount(1);
+  await row.getByRole('link', { name: 'Open in Reconcile' }).click();
+  await expect(page).toHaveURL(new RegExp(`/app/ledger/reconcile\\?account=${holding.id}&commodity=${currencyID}$`));
+
+  const currency = page.getByLabel('Currency');
+  await expect(currency).toHaveValue(String(currencyID));
+  await expect(currency.locator('option')).toHaveText([`RH${suffix}`, /\S/]);
+  const voidButton = page.getByRole('button', { name: `Void the statement of ${statementDate}` });
+  await expect(voidButton).toBeVisible();
+  await voidButton.click();
+  const dialog = page.getByRole('alertdialog', { name: 'Void this statement?' });
+  await dialog.getByLabel('Reason for voiding').fill(`Cash statement ${suffix}`);
+  await dialog.getByRole('button', { name: 'Void statement' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(voidButton).toBeHidden();
+});

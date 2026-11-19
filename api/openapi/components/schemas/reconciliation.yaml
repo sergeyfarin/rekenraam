@@ -349,7 +349,7 @@ FoldedAccountReconciliation:
         account_id: { type: integer, format: int64 }
 AccountReconciliationLookupResponse:
   type: object
-  required: [account_id, out_of_date_after_days, reconciliation, statement_commodities]
+  required: [account_id, out_of_date_after_days, reconciliation, statement_commodities, default_commodity]
   properties:
     account_id: { type: integer, format: int64 }
     out_of_date_after_days: { type: integer, minimum: 1 }
@@ -362,10 +362,21 @@ AccountReconciliationLookupResponse:
       description: >-
         Every commodity the account has an active statement in, whatever its
         statement date. The judgement leaves out statements dated after today;
-        Reconcile still offers their commodity so they can be opened and voided.
+        Reconcile still offers their commodity so they can be opened and
+        voided, and on a holding (which has no reconciliation age) a statement
+        in another commodity than its instrument.
       items:
-        type: object
-        required: [commodity_id, commodity_code]
-        properties:
-          commodity_id: { type: integer, format: int64 }
-          commodity_code: { type: string }
+        $ref: "../../openapi.yaml#/components/schemas/StatementCommodity"
+    default_commodity:
+      description: >-
+        The account's default commodity with its code (a holding's is its
+        instrument, which is not a currency); null when the account has none.
+      oneOf:
+        - $ref: "../../openapi.yaml#/components/schemas/StatementCommodity"
+        - type: 'null'
+StatementCommodity:
+  type: object
+  required: [commodity_id, commodity_code]
+  properties:
+    commodity_id: { type: integer, format: int64 }
+    commodity_code: { type: string }

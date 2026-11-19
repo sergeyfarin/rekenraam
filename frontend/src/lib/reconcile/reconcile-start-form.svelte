@@ -7,7 +7,13 @@
   import { accountsQueryOptions, type AccountResponse } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import { parseStatementBalance } from '#lib/reconcile/statement-balance.ts';
-  import { lookupStatementCommodities, statementCommodityChoice, statementCommodityOptions } from '#lib/reconcile/statement-commodity.ts';
+  import {
+    defaultStatementCommodity,
+    lookupStatementCommodities,
+    needsCommodityLookup,
+    statementCommodityChoice,
+    statementCommodityOptions
+  } from '#lib/reconcile/statement-commodity.ts';
   import {
     accountReconciliationQueryOptions,
     startReconciliation,
@@ -88,17 +94,24 @@
   // a statement in (an active statement at any date, so a future-dated one a
   // register link names can be opened and voided), so an account without a
   // default currency, or with activity in another, can still be reconciled
-  // (#594 review). A holding's
-  // commodity is its instrument, so it needs no lookup.
-  const lookupEnabled = $derived(accountID !== undefined && !isSubledgerManagedAccountKind(selectedAccount?.account_kind));
+  // (#594 review). A holding's commodity is its instrument, so it reads the
+  // lookup only when a link names another commodity, to verify and offer it.
+  const linkedCommodityID = $derived(accountID !== undefined && accountID === requestedAccountID ? requestedCommodityID : undefined);
+  const lookupEnabled = $derived(
+    accountID !== undefined &&
+      needsCommodityLookup({
+        subledgerManaged: isSubledgerManagedAccountKind(selectedAccount?.account_kind),
+        requestedCommodityID: linkedCommodityID,
+        defaultID: selectedAccount?.default_commodity_id
+      })
+  );
   const lookupQuery = createQuery(() => ({ ...accountReconciliationQueryOptions(accountID ?? 0), enabled: lookupEnabled }));
   const lookupReady = $derived(!lookupEnabled || lookupQuery.data !== undefined);
   const commodityOptions = $derived.by(() => {
     const defaultID = selectedAccount?.default_commodity_id ?? undefined;
-    const defaultCurrency = defaultID !== undefined ? currenciesByID.get(defaultID) : undefined;
-    const lookup = lookupQuery.data;
-    const judged = lookupEnabled && lookup !== undefined && lookup.account_id === accountID ? lookupStatementCommodities(lookup) : [];
-    return statementCommodityOptions(defaultID !== undefined ? { id: defaultID, code: defaultCurrency?.code ?? '' } : undefined, judged);
+    const lookup = lookupEnabled && lookupQuery.data !== undefined && lookupQuery.data.account_id === accountID ? lookupQuery.data : undefined;
+    const fallback = defaultStatementCommodity(defaultID, defaultID !== undefined ? currenciesByID.get(defaultID)?.code : undefined, lookup?.default_commodity);
+    return statementCommodityOptions(fallback, lookup ? lookupStatementCommodities(lookup) : []);
   });
   // The working copy's commodity is locked once the form settles on it (or
   // the owner picks one), so a refetch can never move a typed balance to
@@ -109,7 +122,7 @@
     statementCommodityChoice(
       commodityOptions,
       lockedForAccount,
-      accountID !== undefined && accountID === requestedAccountID ? requestedCommodityID : undefined,
+      linkedCommodityID,
       selectedAccount?.default_commodity_id
     )
   );

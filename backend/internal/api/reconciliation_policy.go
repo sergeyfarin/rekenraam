@@ -110,6 +110,9 @@ type accountReconciliationLookupResponse struct {
 	// statements at any date, so a statement dated after today, which the
 	// judgement leaves out, still opens in its commodity (#594 review).
 	StatementCommodities []statementCommodityResponse `json:"statement_commodities"`
+	// DefaultCommodity names the account's default commodity with its code;
+	// a holding's is its instrument, which the currency list does not hold.
+	DefaultCommodity *statementCommodityResponse `json:"default_commodity"`
 }
 
 type statementCommodityResponse struct {
@@ -138,15 +141,23 @@ func readAccountReconciliation(logger *slog.Logger, authService *app.AuthService
 			}
 			return
 		}
-		statements, err := transactionService.AccountStatementCommodities(r.Context(), accountID)
+		commodities, err := transactionService.AccountStatementCommodities(r.Context(), owner.ID, accountID)
 		if err != nil {
-			writeTransactionServiceError(w, r, logger, "read account statement commodities", err)
+			if errors.Is(err, app.ErrAccountNotFound) {
+				writeAccountServiceError(w, r, logger, "read account statement commodities", err)
+			} else {
+				writeTransactionServiceError(w, r, logger, "read account statement commodities", err)
+			}
 			return
 		}
-		statementCommodities := make([]statementCommodityResponse, 0, len(statements))
-		for _, commodity := range statements {
+		statementCommodities := make([]statementCommodityResponse, 0, len(commodities.Statements))
+		for _, commodity := range commodities.Statements {
 			statementCommodities = append(statementCommodities, statementCommodityResponse{CommodityID: commodity.CommodityID, CommodityCode: commodity.CommodityCode})
 		}
-		writeJSON(w, http.StatusOK, accountReconciliationLookupResponse{AccountID: accountID, OutOfDateAfterDays: window, Reconciliation: toAccountReconciliationResponse(age), StatementCommodities: statementCommodities})
+		var defaultCommodity *statementCommodityResponse
+		if commodities.Default != nil {
+			defaultCommodity = &statementCommodityResponse{CommodityID: commodities.Default.CommodityID, CommodityCode: commodities.Default.CommodityCode}
+		}
+		writeJSON(w, http.StatusOK, accountReconciliationLookupResponse{AccountID: accountID, OutOfDateAfterDays: window, Reconciliation: toAccountReconciliationResponse(age), StatementCommodities: statementCommodities, DefaultCommodity: defaultCommodity})
 	}
 }

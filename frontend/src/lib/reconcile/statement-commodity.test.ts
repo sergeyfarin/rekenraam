@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { chooseStatementCommodity, lookupStatementCommodities, statementCommodityChoice, statementCommodityOptions } from './statement-commodity.ts';
+import {
+  chooseStatementCommodity,
+  defaultStatementCommodity,
+  lookupStatementCommodities,
+  needsCommodityLookup,
+  statementCommodityChoice,
+  statementCommodityOptions
+} from './statement-commodity.ts';
 
 const usd = { id: 1, code: 'USD' };
 const judged = [{ commodity_id: 2, commodity_code: 'EUR' }, { commodity_id: 1, commodity_code: 'USD' }];
@@ -61,5 +68,31 @@ describe('lookupStatementCommodities', () => {
   it('offers statement currencies of an account that cannot be judged', () => {
     expect(lookupStatementCommodities({ reconciliation: null, statement_commodities: [{ commodity_id: 3, commodity_code: 'CHF' }] }))
       .toEqual([{ commodity_id: 3, commodity_code: 'CHF' }]);
+  });
+});
+
+describe('a linked holding statement in another commodity (#594 review)', () => {
+  const instrument = 40;
+  const lookup = { reconciliation: null, statement_commodities: [{ commodity_id: 1, commodity_code: 'USD' }], default_commodity: { commodity_id: instrument, commodity_code: 'ACME' } };
+
+  it('reads the lookup only when the link names a commodity other than the instrument', () => {
+    expect(needsCommodityLookup({ subledgerManaged: true, requestedCommodityID: 1, defaultID: instrument })).toBe(true);
+    expect(needsCommodityLookup({ subledgerManaged: true, requestedCommodityID: instrument, defaultID: instrument })).toBe(false);
+    expect(needsCommodityLookup({ subledgerManaged: true, requestedCommodityID: undefined, defaultID: instrument })).toBe(false);
+    expect(needsCommodityLookup({ subledgerManaged: false, requestedCommodityID: undefined, defaultID: 1 })).toBe(true);
+  });
+
+  it('opens on the linked cash statement and names the instrument by its code', () => {
+    const fallback = defaultStatementCommodity(instrument, undefined, lookup.default_commodity);
+    expect(fallback).toEqual({ id: instrument, code: 'ACME' });
+    const options = statementCommodityOptions(fallback, lookupStatementCommodities(lookup));
+    expect(options).toEqual([{ id: instrument, code: 'ACME' }, { id: 1, code: 'USD' }]);
+    expect(statementCommodityChoice(options, undefined, 1, instrument)).toEqual({ commodityID: 1, lost: false });
+  });
+
+  it('prefers the currency list\'s code and ignores a lookup default for another commodity', () => {
+    expect(defaultStatementCommodity(1, 'USD', { commodity_id: 1, commodity_code: 'X' })).toEqual({ id: 1, code: 'USD' });
+    expect(defaultStatementCommodity(1, undefined, { commodity_id: 2, commodity_code: 'EUR' })).toEqual({ id: 1, code: '' });
+    expect(defaultStatementCommodity(null, 'USD', null)).toBeUndefined();
   });
 });
