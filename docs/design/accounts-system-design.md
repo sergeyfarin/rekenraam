@@ -426,7 +426,10 @@ therefore enforces this contract inside its transaction:
   owner day pinned for the request's reads, never on a second clock reading.
   A request that crosses midnight therefore cannot accept or default to a
   date its own response treats as the future
-  (`TestAccountWritesUseThePinnedOwnerDay`). Named regressions: `TestAccountBackdatedRenameReturnsTodaysState`,
+  (`TestAccountWritesUseThePinnedOwnerDay`). Category, payee, institution and
+  instrument writes follow the same rule (#605,
+  `TestCategoryWritesUseThePinnedOwnerDay` and its siblings in
+  `reference_pinned_owner_day_test.go`). Named regressions: `TestAccountBackdatedRenameReturnsTodaysState`,
   `TestAccountLifecycleCommandsReturnTodaysState`, and the `account` cases of
   `TestReferenceBackdatedDescriptionPreservesHistoricalLifecycle` and
   `TestReferenceCorrectionBeforeFirstVersionIsRefused`; over HTTP,

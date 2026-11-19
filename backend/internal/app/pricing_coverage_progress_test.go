@@ -382,6 +382,8 @@ func TestFXRefreshValuationCeilingUsesOwnerLocalToday(t *testing.T) {
 		writeFXProgressRate(w, r, "2026-06-13")
 	})
 	setOwnerTimeZone(t, f.database, "Europe/Amsterdam")
+	// The run pins the owner day through settings, as production wires it.
+	f.service.SetSettings(NewSettingsService(db.NewSettingsRepository(f.database)))
 	f.service.SetNowForTest(func() time.Time { return time.Date(2026, 6, 12, 22, 30, 0, 0, time.UTC) })
 	run, err := f.service.runFXRefresh(context.Background(), 1, 0, "manual")
 	require.NoError(t, err)

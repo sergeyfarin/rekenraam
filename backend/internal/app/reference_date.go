@@ -15,19 +15,32 @@ func (s *SettingsService) referenceContext(ctx context.Context, now time.Time) (
 	if db.ReferenceDate(ctx) != "" {
 		return ctx, nil
 	}
+	ctx, _, err := s.referenceContextInZone(ctx, now)
+	return ctx, err
+}
+
+// referenceContextInZone is referenceContext for a caller that also schedules
+// by the owner's clock. It reads the owner's zone once and returns it with the
+// pinned context, so a zone change mid-run cannot pair the pinned day with
+// another zone's midnight (#605 review). A day the caller already pinned is
+// kept.
+func (s *SettingsService) referenceContextInZone(ctx context.Context, now time.Time) (context.Context, *time.Location, error) {
 	zone := "UTC"
 	if s != nil {
 		var err error
 		zone, err = s.repository.OwnerTimeZone(ctx)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	location, err := time.LoadLocation(zone)
 	if err != nil {
-		return nil, fmt.Errorf("load owner time zone: %w", err)
+		return nil, nil, fmt.Errorf("load owner time zone: %w", err)
 	}
-	return db.WithReferenceDate(ctx, now.In(location).Format(time.DateOnly)), nil
+	if db.ReferenceDate(ctx) != "" {
+		return ctx, location, nil
+	}
+	return db.WithReferenceDate(ctx, now.In(location).Format(time.DateOnly)), location, nil
 }
 
 // pinnedOwnerDay returns the owner day referenceContext pinned on ctx. A write

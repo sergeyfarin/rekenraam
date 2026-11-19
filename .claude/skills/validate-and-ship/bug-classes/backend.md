@@ -174,5 +174,39 @@ day (`pinnedOwnerDay(ctx)`), and keep `s.now()` only for instants such as
 `recorded_at`. A test arms a clock that crosses midnight right before the
 service call and asserts all three effects: a date of tomorrow is refused, an
 omitted date defaults to the pinned day, and the response equals the read on
-that day. Named check: `TestAccountWritesUseThePinnedOwnerDay`. #605 tracks
-the other services.
+that day. A helper that resolves "today" reads its caller's day:
+`pinnedOwnerDay` alone when every caller pins (`cleanLedgerAsOfAndStatus`,
+whose ledger overview caller now pins first), or `referenceContext` then
+`pinnedOwnerDay` when some caller does not (`AccountReconciliationAges`)
+(#605). Named checks:
+`TestAccountWritesUseThePinnedOwnerDay`,
+`TestCategoryWritesUseThePinnedOwnerDay`,
+`TestPayeeWritesUseThePinnedOwnerDay`,
+`TestInstitutionWritesUseThePinnedOwnerDay`,
+`TestInstrumentWritesUseThePinnedOwnerDay`,
+`TestTransactionDefaultDateUsesThePinnedOwnerDay`,
+`TestLedgerReadsDefaultAsOfToThePinnedOwnerDay`,
+`TestReconciliationAgesJudgeOnTheCallersPinnedDay`,
+`TestUndatedFXSourceSelectionUsesTheDayTheRunPinned`,
+`TestUndatedFXCutoffUsesTheDayTheRunPinned`,
+`TestFXRefreshDemandEligibilityUsesTheDayTheRunPinned` and
+`TestFXCoverageUsesTheZoneTheWorkerReadAtEntry`. Passing the pinned
+instant is not enough: anything that resolves a day from an instant reads the
+owner's zone again (`OwnerTodayAt`, `CurrentObservationBoundary`, a direct
+`BookOwnerTimeZone` read), so a zone change mid-run moves the day. The FX
+refresh did this for source selection, demand eligibility and its
+future-date cutoff, and the FX coverage worker for due dates and wakeups
+(#605 review). A caller that also needs the zone, for example to schedule a
+wakeup at the owner's midnight, takes day and zone from one read with
+`referenceContextInZone`. When two checks guard one outcome, test each with
+inputs the other accepts: a selection test whose fallback provider answers
+with a future date passes on the cutoff alone. A zone-change test changes the
+saved zone after the code under test read it (the worker test uses a trigger
+on its run row); a pre-pinned context with the new zone already saved cannot
+tell one zone read from two. #608 (transaction response
+enrichment), #609 (valuation cutoff) and #610 (other services' own zone
+reads) track the remaining instances. Guard:
+`TestOwnerTodayCallersHaveNoPinnedDay` fails when a function both pins and
+calls `OwnerTodayAt`, and requires every other `OwnerTodayAt` caller to be
+listed with why it has no pinned day to share. It scans one function at a
+time, so a helper reached from a pinned caller still needs review.

@@ -839,7 +839,7 @@ func (s *InvestmentService) CreateInstrument(ctx context.Context, input Investme
 	}
 
 	now := s.now().UTC()
-	today, err := s.settings.OwnerTodayAt(ctx, input.OwnerUserID, now)
+	today, err := pinnedOwnerDay(ctx)
 	if err != nil {
 		return InvestmentInstrument{}, err
 	}
@@ -1019,7 +1019,7 @@ func (s *InvestmentService) UpdateInstrument(ctx context.Context, input Investme
 	}
 
 	now := s.now().UTC()
-	today, err := s.settings.OwnerTodayAt(ctx, input.OwnerUserID, now)
+	today, err := pinnedOwnerDay(ctx)
 	if err != nil {
 		return InvestmentInstrument{}, err
 	}

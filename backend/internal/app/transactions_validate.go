@@ -189,7 +189,7 @@ func (s *TransactionService) cleanTransactionSpec(ctx context.Context, input Tra
 		transactionDate = strings.TrimSpace(input.JournalEntries[0].EntryDate)
 	}
 	if transactionDate == "" {
-		today, err := s.settings.OwnerTodayAt(ctx, options.OwnerUserID, s.now())
+		today, err := pinnedOwnerDay(ctx)
 		if err != nil {
 			return db.TransactionSpec{}, err
 		}

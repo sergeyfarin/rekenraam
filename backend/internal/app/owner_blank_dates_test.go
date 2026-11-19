@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 	"time"
 
@@ -149,4 +150,69 @@ func TestUndatedFXRefreshSelectsAssignmentsOnOwnerDay(t *testing.T) {
 			assert.Equal(t, ecbID, outcome.SourceID)
 		})
 	}
+}
+
+// #605 review. A refresh pins the owner day once; if the owner's time zone
+// changes mid-run, undated FX work still uses the pinned day rather than
+// resolving the same instant in the new zone. Here the run pinned the 18th
+// (UTC) and the zone is now Amsterdam, where it is the 19th.
+func newPinnedDayFXService(t *testing.T, ecbPublishedAt string) (*sql.DB, *PricingService, time.Time) {
+	t.Helper()
+	registry := marketdata.NewRegistry(
+		fakeFXProvider{code: "ecb_euro_reference_rates", rates: map[string]fakeFXRate{"USD/EUR": {value: 90, scale: 2, publishedAt: ecbPublishedAt}}},
+		fakeFXProvider{code: "frankfurter", rates: map[string]fakeFXRate{"USD/EUR": {value: 95, scale: 2, publishedAt: "2026-10-18T00:00:00Z"}}},
+	)
+	database, s := newPricingRefreshTestService(t, []string{"USD", "EUR"}, registry)
+	now := time.Date(2026, 10, 18, 23, 30, 0, 0, time.UTC)
+	setOwnerTimeZone(t, database, "Europe/Amsterdam")
+	s.SetSettings(NewSettingsService(db.NewSettingsRepository(database)))
+	s.SetNowForTest(func() time.Time { return now })
+	return database, s, now
+}
+
+var pinnedDayFXTarget = fxRefreshTarget{Base: db.PricingCurrencyRecord{ID: 1, Code: "USD"}, Quote: db.PricingCurrencyRecord{ID: 2, Code: "EUR"}}
+
+// Both providers answer with a rate valid on the pinned day, so only the
+// assignment lookup decides which one is stored.
+func TestUndatedFXSourceSelectionUsesTheDayTheRunPinned(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	database, s, now := newPinnedDayFXService(t, "2026-10-18T00:00:00Z")
+	ecbID := marketDataSourceIDByCode(t, database, "ecb_euro_reference_rates")
+	assignedID := marketDataSourceIDByCode(t, database, "frankfurter")
+	_, err := s.SaveSourceAssignment(ctx, PricingSourceAssignmentInput{
+		OwnerUserID: 1, CommodityID: 1, QuoteCommodityID: 2, SourceID: assignedID,
+		EffectiveFrom: "2026-10-01", EffectiveTo: "2026-10-18",
+	})
+	require.NoError(t, err)
+
+	outcome, err := s.fetchAndStoreDirectFX(db.WithReferenceDate(ctx, "2026-10-18"), 1, pinnedDayFXTarget, PricingPolicy{DefaultSourceID: &ecbID}, 0, "", now)
+	require.NoError(t, err)
+	assert.Equal(t, assignedID, outcome.SourceID, "the assignment is still valid on the pinned day")
+	assert.Equal(t, int64(95), outcome.Observation.PriceValue)
+}
+
+// No assignment: ECB is tried first and answers with the 19th, which is in
+// the future on the pinned day, so the refresh falls through to Frankfurter.
+func TestUndatedFXCutoffUsesTheDayTheRunPinned(t *testing.T) {
+	t.Parallel()
+	database, s, now := newPinnedDayFXService(t, "2026-10-19T00:00:00Z")
+	ecbID := marketDataSourceIDByCode(t, database, "ecb_euro_reference_rates")
+
+	outcome, err := s.fetchAndStoreDirectFX(db.WithReferenceDate(context.Background(), "2026-10-18"), 1, pinnedDayFXTarget, PricingPolicy{}, ecbID, "", now)
+	require.NoError(t, err)
+	assert.Equal(t, marketDataSourceIDByCode(t, database, "frankfurter"), outcome.SourceID, "an observation after the pinned day is refused")
+	assert.Equal(t, "2026-10-18", outcome.Observation.ValuationDate)
+}
+
+// #605 review. Demand that starts after the pinned day waits, even when the
+// owner's zone has since moved to a day on which it would be current.
+func TestFXRefreshDemandEligibilityUsesTheDayTheRunPinned(t *testing.T) {
+	t.Parallel()
+	f := newFutureFXFixture(t, "Europe/Amsterdam", time.Date(2026, 6, 12, 22, 30, 0, 0, time.UTC))
+	f.post(t, "2026-06-13", "posted", "10000", 2)
+	run, err := f.pricing.RunRefresh(db.WithReferenceDate(context.Background(), "2026-06-12"), 1, marketDataSourceIDByCode(t, f.database, "frankfurter"), "manual")
+	require.NoError(t, err)
+	assert.Zero(t, run.ItemsTotal, "demand from the 13th is future on the pinned 12th")
+	assert.Zero(t, f.calls.Load())
 }

@@ -264,7 +264,7 @@ func (s *InstitutionService) UpdateInstitution(ctx context.Context, input Update
 	}
 
 	now := s.now().UTC()
-	today, err := s.settings.OwnerTodayAt(ctx, input.OwnerUserID, now)
+	today, err := pinnedOwnerDay(ctx)
 	if err != nil {
 		return Institution{}, err
 	}
@@ -399,7 +399,7 @@ func (s *InstitutionService) changeInstitutionStatus(ctx context.Context, input 
 	current := toInstitution(stored)
 
 	now := s.now().UTC()
-	today, err := s.settings.OwnerTodayAt(ctx, input.OwnerUserID, now)
+	today, err := pinnedOwnerDay(ctx)
 	if err != nil {
 		return Institution{}, err
 	}

@@ -169,7 +169,7 @@ func (s *PayeeService) CreatePayee(ctx context.Context, input CreatePayeeInput) 
 		return Payee{}, err
 	}
 
-	today, err := s.settings.OwnerTodayAt(ctx, input.OwnerUserID, now)
+	today, err := pinnedOwnerDay(ctx)
 	if err != nil {
 		return Payee{}, err
 	}
@@ -219,7 +219,7 @@ func (s *PayeeService) UpdatePayee(ctx context.Context, input UpdatePayeeInput) 
 	}
 
 	now := s.now().UTC()
-	today, err := s.settings.OwnerTodayAt(ctx, input.OwnerUserID, now)
+	today, err := pinnedOwnerDay(ctx)
 	if err != nil {
 		return Payee{}, err
 	}
@@ -350,7 +350,7 @@ func (s *PayeeService) changePayeeStatus(ctx context.Context, input PayeeLifecyc
 	}
 
 	now := s.now().UTC()
-	today, err := s.settings.OwnerTodayAt(ctx, input.OwnerUserID, now)
+	today, err := pinnedOwnerDay(ctx)
 	if err != nil {
 		return Payee{}, err
 	}

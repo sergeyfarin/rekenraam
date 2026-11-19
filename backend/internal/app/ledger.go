@@ -887,7 +887,7 @@ func accountRegisterRunningBalances(postings []db.LedgerPostingRecord, page []db
 func (s *TransactionService) cleanLedgerAsOfAndStatus(ctx context.Context, ownerUserID int64, asOfInput string, statusInput string) (string, string, error) {
 	asOf := strings.TrimSpace(asOfInput)
 	if asOf == "" {
-		today, err := s.settings.OwnerTodayAt(ctx, ownerUserID, s.now())
+		today, err := pinnedOwnerDay(ctx)
 		if err != nil {
 			return "", "", err
 		}
