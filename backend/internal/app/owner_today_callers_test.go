@@ -24,7 +24,6 @@ var ownerTodayCallers = map[string]string{
 	"reconciliation.go:ChangePostingReconciliationStatus": "pins nothing; cleared_on is a stored date, not a dated reference selection",
 	"reconciliation_age.go:AccountReconciliationAge":      "reads the clock once and pins that day itself with WithReferenceDate",
 	"reconciliation_age.go:AccountStatementCommodities":   "reads the clock once and pins that day itself with WithReferenceDate",
-	"pricing_refresh.go:sourcesForFXPair":                 "now is the instant runFXRefresh pinned (startedAt), so it resolves the same day",
 }
 
 func TestOwnerTodayCallersHaveNoPinnedDay(t *testing.T) {

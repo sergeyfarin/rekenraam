@@ -105,12 +105,13 @@ func (s *PricingService) runFXRefresh(ctx context.Context, ownerUserID int64, so
 		counters.LastError = targetErr.Error()
 		return s.finishFXRefreshRun(ctx, runRecord.ID, counters)
 	}
-	location, locationErr := s.bookLocation(ctx)
-	if locationErr != nil {
-		counters.LastError = locationErr.Error()
+	// Demand eligibility uses the day the run pinned, not the zone read again
+	// (#605 review).
+	today, dayErr := pinnedOwnerDay(ctx)
+	if dayErr != nil {
+		counters.LastError = dayErr.Error()
 		return s.finishFXRefreshRun(ctx, runRecord.ID, counters)
 	}
-	today := startedAt.In(location).Format(time.DateOnly)
 
 	for _, target := range targets {
 		if target.DemandStartDate > today {
@@ -276,17 +277,22 @@ func (s *PricingService) refreshFXTargetWithDemand(ctx context.Context, ownerUse
 }
 
 func (s *PricingService) fetchAndStoreDirectFX(ctx context.Context, ownerUserID int64, target fxRefreshTarget, policy PricingPolicy, overrideSourceID int64, valuationDate string, now time.Time) (fxRefreshOutcome, error) {
-	sources, err := s.sourcesForFXPair(ctx, ownerUserID, target, policy, overrideSourceID, valuationDate, now)
+	// An undated refresh selects its source and refuses future observations
+	// on one owner day: the one its run pinned, else this call's (#605 review).
+	ctx, err := s.settings.referenceContext(ctx, now)
+	if err != nil {
+		return fxRefreshOutcome{}, err
+	}
+	sources, err := s.sourcesForFXPair(ctx, target, policy, overrideSourceID, valuationDate)
 	if err != nil {
 		return fxRefreshOutcome{}, err
 	}
 	ceiling := valuationDate
 	if ceiling == "" {
-		boundary, err := s.repository.CurrentObservationBoundary(ctx, BookID, now)
+		ceiling, err = pinnedOwnerDay(ctx)
 		if err != nil {
 			return fxRefreshOutcome{}, err
 		}
-		ceiling = boundary.AsOf
 	}
 
 	var lastErr error
@@ -467,14 +473,14 @@ func searchFXPath(from db.PricingCurrencyRecord, quote db.PricingCurrencyRecord,
 	return nil
 }
 
-func (s *PricingService) sourcesForFXPair(ctx context.Context, ownerUserID int64, target fxRefreshTarget, policy PricingPolicy, overrideSourceID int64, valuationDate string, now time.Time) ([]fxRefreshSource, error) {
+func (s *PricingService) sourcesForFXPair(ctx context.Context, target fxRefreshTarget, policy PricingPolicy, overrideSourceID int64, valuationDate string) ([]fxRefreshSource, error) {
 	sourceIDs := []int64{}
 	if overrideSourceID > 0 {
 		sourceIDs = append(sourceIDs, overrideSourceID)
 	} else {
 		date := valuationDate
 		if date == "" {
-			today, err := s.settings.OwnerTodayAt(ctx, ownerUserID, now)
+			today, err := pinnedOwnerDay(ctx)
 			if err != nil {
 				return nil, err
 			}
