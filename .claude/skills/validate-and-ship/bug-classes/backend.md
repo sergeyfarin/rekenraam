@@ -185,8 +185,16 @@ whose ledger overview caller now pins first), or `referenceContext` then
 `TestInstitutionWritesUseThePinnedOwnerDay`,
 `TestInstrumentWritesUseThePinnedOwnerDay`,
 `TestTransactionDefaultDateUsesThePinnedOwnerDay`,
-`TestLedgerReadsDefaultAsOfToThePinnedOwnerDay` and
-`TestReconciliationAgesJudgeOnTheCallersPinnedDay`. Guard:
+`TestLedgerReadsDefaultAsOfToThePinnedOwnerDay`,
+`TestReconciliationAgesJudgeOnTheCallersPinnedDay`,
+`TestUndatedFXRefreshUsesTheDayTheRunPinned` and
+`TestFXRefreshDemandEligibilityUsesTheDayTheRunPinned`. Passing the pinned
+instant is not enough: anything that resolves a day from an instant reads the
+owner's zone again (`OwnerTodayAt`, `CurrentObservationBoundary`,
+`bookLocation`), so a zone change mid-run moves the day. The FX refresh did
+this for source selection, demand eligibility and its future-date cutoff
+(#605 review). #608 (transaction response enrichment) and #609 (valuation
+cutoff) track the remaining instances. Guard:
 `TestOwnerTodayCallersHaveNoPinnedDay` fails when a function both pins and
 calls `OwnerTodayAt`, and requires every other `OwnerTodayAt` caller to be
 listed with why it has no pinned day to share. It scans one function at a
