@@ -19,7 +19,6 @@
     placeTransaction,
     type AccountRegisterEntryResponse
   } from '#lib/api/transactions.ts';
-  import { formatQuantity } from '#lib/money/format.ts';
   import { formatSignedAmount, statusTone } from './transaction-labels';
   import type { AccountClass } from './transaction-labels';
   import TransactionTable from './transaction-table.svelte';
@@ -32,7 +31,7 @@
   import { placePosition, sameDayNeighbor, type ReorderDirection } from './reorder';
   import { hasPostingDay } from './posted-on';
   import { adjacentCalendarDate, formatCalendarDate } from '#lib/dates/calendar-date.ts';
-  import { registerStatementMarkers, type RegisterStatementMarker } from './register-statements.ts';
+  import { registerBalanceView, registerStatementMarkers, type RegisterStatementMarker } from './register-statements.ts';
   import { reconcileHref } from '#lib/reconcile/reconcile-link.ts';
 
   import type { TransactionWorkspaceActions } from './transaction-workspace.svelte';
@@ -103,16 +102,8 @@
 
   function statementBalance(marker: RegisterStatementMarker): string {
     const s = marker.statement;
-    const amount = formatQuantity(s.statement_balance.quantity_value, s.statement_balance.quantity_scale, locale);
+    const amount = registerBalanceView(s.statement_balance, locale).text;
     return multiCommodity ? `${s.commodity_code} ${amount}` : `${s.commodity_symbol ?? s.commodity_code}${amount}`;
-  }
-
-  // Format the running balance amount for a register entry.
-  // BalanceQuantity uses normal_quantity_value (class-normalized sign) for display.
-  function formatBalance(entry: AccountRegisterEntryResponse): string {
-    const bal = entry.running_balance;
-    // normal_quantity_value is already sign-flipped for liability/income/equity.
-    return formatQuantity(bal.normal_quantity_value, bal.quantity_scale, locale);
   }
 
   // Format the posting amount using the inflow/outflow sign convention for this
@@ -236,10 +227,9 @@
   {/snippet}
 
   {#snippet balanceCell(entry: AccountRegisterEntryResponse)}
-    {@const bal = formatBalance(entry)}
-    {@const balNeg = entry.running_balance.normal_quantity_value.startsWith('-')}
-    <span class={`tabular-nums ${balNeg ? 'text-danger' : 'text-foreground'}`}>
-      {bal}
+    {@const bal = registerBalanceView(entry.running_balance, locale)}
+    <span class={`tabular-nums ${bal.negative ? 'text-danger' : 'text-foreground'}`}>
+      {bal.text}
     </span>
   {/snippet}
 

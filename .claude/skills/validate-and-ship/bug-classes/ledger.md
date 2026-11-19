@@ -83,3 +83,17 @@ still count, while exact zero, drafts, voids, deleted and superseded versions
 do not add exposure. Compare the real reporting consumer and manual-rate
 recovery; counts are not a certificate of historical or reporting-currency
 coverage. Named checks: `TestPricingPostedCurrency*` and `attention.spec.ts`.
+
+## 81. A raw debit-positive balance in a class-normalized field
+
+`BalanceQuantity.normal_quantity_value` is the account's normal sign:
+liability, equity and income balances are negated, so a card owing 500 reads
+500. The account register built its running balance with the raw value, and
+its screen trusted the field, so a card owing 500 showed −500 in the danger
+colour beside the Ledger screens' 500 (#598). An account-scoped balance gets
+its normal value from `normalBalanceValue` (`app/ledger.go`) with the
+account's class, and a row shown beside it (a statement balance) uses the same
+field. Net, expense and valuation totals may keep the raw value. Reconciliation
+responses still do (#600). Named checks:
+`TestRegisterLiabilityBalancesAreClassNormalized`, `register-statements.test.ts`
+(`registerBalanceView`).

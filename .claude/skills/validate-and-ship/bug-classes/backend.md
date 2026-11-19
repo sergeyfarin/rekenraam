@@ -129,3 +129,33 @@ Lifetime tests need writes that change the state: a transaction without payee
 or description leaves the FTS5 index unchanged. Keep
 `TestSQLiteIntegrityOnAReusedReaderAfterSearchWrites` (with its canary) and
 `TestRepeatedSelfCheckRunsPassAfterNewEntries` green.
+
+## 82. A reference read before the owner's day is pinned
+
+Current account, category, institution, commodity, payee and instrument
+versions are selected on the owner's local day (#385), but only when the
+context carries it; without one the SQL falls back to `date('now')`, SQLite's
+UTC day. The register's account-class lookup (#598) ran before
+`enrichRegisterPostings` pinned the day, so just after midnight in Amsterdam
+a card created today was invisible and the register returned 500. The
+statement rows' commodity lookup (#595) had the same gap. A service method
+that makes reference reads pins the day once at its top with
+`s.settings.referenceContext(ctx, s.now())` and passes that context to every
+read; a helper pinning it for itself does not cover reads made before it.
+An unpinned read uses SQLite's real UTC day, not the test's frozen Go clock,
+so a test of this class freezes an instant derived from the real day, never a
+hard-coded date: a fixed future instant stops exposing the fallback once the
+calendar passes it (#601 review). It reads the real day once
+(`testdb.RealUTCToday`, or `realUTCToday` in
+`e2e/playwright/support/reference-date.ts`) and derives the instant and every
+expected date from that reading (`testdb.UTCDayInstant`, `testdb.UTCDay`);
+separate clock reads disagree when UTC midnight falls between them. Leave
+headroom (owner day a week past the real day) so the gap the test relies on
+survives a run that crosses midnight, and check that every case fails with
+`referenceContext` disabled: an owner day before SQLite's day is visible to
+an unpinned read, so such a case catches nothing without a later version. Named checks:
+`TestAccountRegisterReadsTheCardCreatedJustAfterOwnerMidnight`,
+`TestOwnerCurrentReferenceHTTPCreateListAndFutureExclusion`,
+`TestCurrentReferenceReadsFollowOwnerDay`,
+`TestCurrentReferenceSiblingsAndComposedReadsUseOwnerDay`,
+`owner-current-reference.spec.ts`.

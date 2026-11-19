@@ -1,10 +1,13 @@
-import { test, expect } from './support/reference-date';
+import { test, expect, realUTCToday, utcDay } from './support/reference-date';
 import { readyForLedger, createCashAccount } from './support/ledger';
 import { apiJSON } from './support/api';
 
+// Both owner days sit a week past SQLite's real UTC day, so an account opened
+// on the owner's day is future-dated to any read the server forgot to pin.
+const today = realUTCToday();
 for (const control of [
-  { name: 'east just after local midnight', instant: '2027-01-01T23:01:00Z', zone: 'Europe/Amsterdam', today: '2027-01-02' },
-  { name: 'west while UTC is tomorrow', instant: '2027-01-02T03:00:00Z', zone: 'America/Los_Angeles', today: '2027-01-01' }
+  { name: 'east just after local midnight', instant: `${utcDay(today, 7)}T23:01:00Z`, zone: 'Europe/Amsterdam', today: utcDay(today, 8) },
+  { name: 'west while UTC is tomorrow', instant: `${utcDay(today, 8)}T03:00:00Z`, zone: 'America/Los_Angeles', today: utcDay(today, 7) }
 ]) {
   test.describe(control.name, () => {
     test.use({ referenceInstant: control.instant, timezoneId: control.zone, viewport: { width: 390, height: 844 } });

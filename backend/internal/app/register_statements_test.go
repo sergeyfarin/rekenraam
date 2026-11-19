@@ -307,3 +307,56 @@ func TestRegisterPageStatesBalancesOnlyForItsPostings(t *testing.T) {
 	var overflow LedgerOverflowError
 	require.ErrorAs(t, err, &overflow)
 }
+
+// #598. The register's running balance and statement rows are class-normalized
+// like every other balance read: a card owing 500 reads 500 in the register,
+// beside the Ledger screens' 500, not the raw debit-positive −500. Asset
+// registers are unchanged.
+func TestRegisterLiabilityBalancesAreClassNormalized(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f := newInvestmentsTestFixture(t)
+	card := seedTestAccountWithClass(t, f.database, "active", true, "liability", "credit_card")
+	// A 500 cash advance: the card is credited (owes more), cash debited.
+	_, err := f.transactionService.CreateTransaction(ctx, CreateTransactionInput{
+		OwnerUserID: f.ownerUserID, OriginType: "browser_api",
+		Spec: TransactionInput{
+			TransactionDate: "2026-03-10",
+			JournalEntries: []JournalEntryInput{{Postings: []PostingInput{
+				{AccountID: card, CommodityID: f.eurCommodityID, QuantityValue: exact.New(-500)},
+				{AccountID: f.cashAccountID, CommodityID: f.eurCommodityID, QuantityValue: exact.New(500)},
+			}}},
+		},
+	})
+	require.NoError(t, err)
+	reconcileAccount(t, f, card, f.eurCommodityID, "2026-03-31", -500)
+	reconcileCash(t, f, "2026-03-31", 500)
+
+	balances, err := f.transactionService.AccountBalances(ctx, AccountBalancesInput{OwnerUserID: f.ownerUserID, AsOf: "2026-03-31"})
+	require.NoError(t, err)
+	ledgerNormal := map[int64]exact.Coefficient{}
+	for _, account := range balances.Accounts {
+		for _, balance := range account.DirectBalances {
+			ledgerNormal[account.AccountID] = balance.NormalQuantityValue
+		}
+	}
+	require.Equal(t, exact.New(500), ledgerNormal[card], "the Ledger screens read the card's balance as owing 500")
+
+	cardPage, err := f.transactionService.Register(ctx, card, ListTransactionsInput{})
+	require.NoError(t, err)
+	require.Len(t, cardPage.Entries, 1)
+	require.Len(t, cardPage.Statements, 1)
+	running := cardPage.Entries[0].RunningBalance
+	assert.Equal(t, exact.New(-500), running.QuantityValue, "quantity_value keeps the debit-positive sign")
+	assert.Equal(t, ledgerNormal[card], running.NormalQuantityValue, "the register's running balance equals the Ledger balance")
+	statement := cardPage.Statements[0].StatementBalance
+	assert.Equal(t, exact.New(-500), statement.QuantityValue, "the statement keeps the debit-positive sign")
+	assert.Equal(t, running.NormalQuantityValue, statement.NormalQuantityValue, "the statement row uses the running balance's convention")
+
+	cashPage := readCashRegister(t, f, ListTransactionsInput{})
+	require.Len(t, cashPage.Entries, 1)
+	require.Len(t, cashPage.Statements, 1)
+	assert.Equal(t, exact.New(500), cashPage.Entries[0].RunningBalance.NormalQuantityValue, "asset registers are unchanged")
+	assert.Equal(t, ledgerNormal[f.cashAccountID], cashPage.Entries[0].RunningBalance.NormalQuantityValue)
+	assert.Equal(t, exact.New(500), cashPage.Statements[0].StatementBalance.NormalQuantityValue)
+}

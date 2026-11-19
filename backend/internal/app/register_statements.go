@@ -72,8 +72,10 @@ func mergeRegisterPage(postings []db.AccountRegisterEntryRecord, statements []db
 }
 
 // registerStatements resolves the page's statement rows for the response,
-// with the commodity code and symbol each balance is shown in.
-func (s *TransactionService) registerStatements(ctx context.Context, rows []registerPageStatement) ([]AccountRegisterStatement, error) {
+// with the commodity code and symbol each balance is shown in. The statement
+// balance's NormalQuantityValue uses the register account's class sign, the
+// same convention as the running balance beside it (#598).
+func (s *TransactionService) registerStatements(ctx context.Context, rows []registerPageStatement, accountClass string) ([]AccountRegisterStatement, error) {
 	statements := make([]AccountRegisterStatement, 0, len(rows))
 	if len(rows) == 0 {
 		return statements, nil
@@ -102,8 +104,13 @@ func (s *TransactionService) registerStatements(ctx context.Context, rows []regi
 			CommodityCode:            commodity.Code,
 			StatementDate:            record.StatementDate,
 			StatementAccountSequence: record.StatementAccountSequence,
-			StatementBalance:         reconciliationQuantity(record.CommodityID, record.StatementBalanceValue, record.StatementBalanceScale),
-			BeforeEntryIndex:         row.BeforeEntryIndex,
+			StatementBalance: BalanceQuantity{
+				CommodityID:         record.CommodityID,
+				QuantityValue:       record.StatementBalanceValue,
+				QuantityScale:       record.StatementBalanceScale,
+				NormalQuantityValue: normalBalanceValue(record.StatementBalanceValue, accountClass),
+			},
+			BeforeEntryIndex: row.BeforeEntryIndex,
 		}
 		if commodity.DisplaySymbol != "" {
 			symbol := commodity.DisplaySymbol

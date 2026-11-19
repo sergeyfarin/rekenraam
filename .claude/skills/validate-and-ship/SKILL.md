@@ -103,6 +103,7 @@ item 31"); they are not an order and are never reused. To read one entry:
 - 59 — Mutation journals bypassing display enrichment
 - 61 — JSON decoder limits drifting from operations and EOF checks
 - 66 — A fresh connection per call hiding connection-lifetime state
+- 82 — A reference read before the owner's day is pinned
 
 **Auth, sessions and secrets** — `bug-classes/auth-security.md`
 
@@ -120,6 +121,7 @@ item 31"); they are not an order and are never reused. To read one entry:
 - 27 — A self-check that reports damage on healthy books
 - 39 — Browser “today” and refreshes rewriting working copies
 - 74 — Account defaults mistaken for currencies actually held
+- 81 — A raw debit-positive balance in a class-normalized field
 
 **Investments** — `bug-classes/investments.md`
 
