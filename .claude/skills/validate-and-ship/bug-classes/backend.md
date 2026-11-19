@@ -187,14 +187,22 @@ whose ledger overview caller now pins first), or `referenceContext` then
 `TestTransactionDefaultDateUsesThePinnedOwnerDay`,
 `TestLedgerReadsDefaultAsOfToThePinnedOwnerDay`,
 `TestReconciliationAgesJudgeOnTheCallersPinnedDay`,
-`TestUndatedFXRefreshUsesTheDayTheRunPinned` and
-`TestFXRefreshDemandEligibilityUsesTheDayTheRunPinned`. Passing the pinned
+`TestUndatedFXSourceSelectionUsesTheDayTheRunPinned`,
+`TestUndatedFXCutoffUsesTheDayTheRunPinned`,
+`TestFXRefreshDemandEligibilityUsesTheDayTheRunPinned` and
+`TestFXCoverageEligibilityUsesTheDayTheWorkerPinned`. Passing the pinned
 instant is not enough: anything that resolves a day from an instant reads the
-owner's zone again (`OwnerTodayAt`, `CurrentObservationBoundary`,
-`bookLocation`), so a zone change mid-run moves the day. The FX refresh did
-this for source selection, demand eligibility and its future-date cutoff
-(#605 review). #608 (transaction response enrichment) and #609 (valuation
-cutoff) track the remaining instances. Guard:
+owner's zone again (`OwnerTodayAt`, `CurrentObservationBoundary`, a direct
+`BookOwnerTimeZone` read), so a zone change mid-run moves the day. The FX
+refresh did this for source selection, demand eligibility and its
+future-date cutoff, and the FX coverage worker for due dates and wakeups
+(#605 review). A caller that also needs the zone, for example to schedule a
+wakeup at the owner's midnight, takes day and zone from one read with
+`referenceContextInZone`. When two checks guard one outcome, test each with
+inputs the other accepts: a selection test whose fallback provider answers
+with a future date passes on the cutoff alone. #608 (transaction response
+enrichment), #609 (valuation cutoff) and #610 (other services' own zone
+reads) track the remaining instances. Guard:
 `TestOwnerTodayCallersHaveNoPinnedDay` fails when a function both pins and
 calls `OwnerTodayAt`, and requires every other `OwnerTodayAt` caller to be
 listed with why it has no pinned day to share. It scans one function at a
