@@ -329,23 +329,32 @@ func TestFXFutureDemandSurvivesAnotherCurrencyChunkLimit(t *testing.T) {
 	assert.True(t, continuation)
 }
 
-// #605 review. The coverage worker decides which dates are due on the owner day
-// it pinned, not on its start instant resolved again in a zone that has since
-// changed. The run pinned Monday the 15th (UTC); the zone is now Amsterdam,
-// where it is already the 16th. Demand from the 16th waits for a deferred
-// wakeup. Weekdays, so the weekend policy cannot hide an early fetch.
-func TestFXCoverageEligibilityUsesTheDayTheWorkerPinned(t *testing.T) {
+// #605 review. The coverage worker reads the owner's zone once, at entry, and
+// uses that reading for due dates and for deferred wakeups. The run starts at
+// 22:30 UTC on Monday June 15 with the zone saved as UTC; recording the run
+// then switches the saved zone to Amsterdam, where it is already the 16th. A
+// second zone read would fetch the 16th's rates now, or schedule the wakeup at
+// Amsterdam's midnight (22:00 UTC, before the run started) instead of UTC's.
+// Weekdays, so the weekend policy cannot hide an early fetch.
+func TestFXCoverageUsesTheZoneTheWorkerReadAtEntry(t *testing.T) {
 	t.Parallel()
-	f := newFutureFXFixture(t, "Europe/Amsterdam", time.Date(2026, 6, 15, 22, 30, 0, 0, time.UTC))
+	f := newFutureFXFixture(t, "UTC", time.Date(2026, 6, 15, 22, 30, 0, 0, time.UTC))
 	f.post(t, "2026-06-16", "posted", "10000", 2)
-	run, successors, err := f.pricing.runFXCoverage(db.WithReferenceDate(context.Background(), "2026-06-15"), 1, fxCoverageWorkPayload{Reason: "manual"})
+	_, err := f.database.Exec(`CREATE TRIGGER switch_owner_zone_mid_run AFTER INSERT ON market_data_ingest_runs
+		BEGIN UPDATE user_preferences SET time_zone = 'Europe/Amsterdam' WHERE user_id = 1; END`)
 	require.NoError(t, err)
-	assert.Zero(t, run.ItemsTotal, "the 16th is in the future on the pinned 15th")
+
+	run, successors, err := f.pricing.runFXCoverage(context.Background(), 1, fxCoverageWorkPayload{Reason: "manual"})
+	require.NoError(t, err)
+	var zone string
+	require.NoError(t, f.database.QueryRow(`SELECT time_zone FROM user_preferences WHERE user_id = 1`).Scan(&zone))
+	require.Equal(t, "Europe/Amsterdam", zone, "the zone changed after the worker read it")
+	assert.Zero(t, run.ItemsTotal, "the 16th is in the future on the UTC day the worker read")
 	assert.Zero(t, f.calls.Load())
 	require.Len(t, successors, 1)
 	var payload fxCoverageWorkPayload
 	require.NoError(t, json.Unmarshal([]byte(successors[0].PayloadJSON), &payload))
 	assert.Equal(t, "deferred", payload.Reason)
 	assert.Equal(t, "2026-06-16", payload.StartDate)
-	assert.Equal(t, "2026-06-15T22:00:00Z", successors[0].AvailableAt, "the wakeup is the owner's midnight in the zone read with the day")
+	assert.Equal(t, "2026-06-16T00:00:00Z", successors[0].AvailableAt, "the wakeup is midnight in the zone read at entry")
 }
