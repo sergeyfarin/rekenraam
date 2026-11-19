@@ -3,6 +3,7 @@ import type { Home, HomeValuationInput } from '#lib/api/home.ts';
 import type { AttentionState } from '#lib/attention/model.ts';
 import { assetTypeText, formatReturn, formatWeight, returnDirection, returnReasonText } from '#lib/investments/returns-model.ts';
 import { m } from '#lib/paraglide/messages.js';
+import { reconcileHref } from '#lib/reconcile/reconcile-link.ts';
 import { reconciliationAgeView } from '#lib/reconcile/reconciliation-age.ts';
 import { accountLabelFromParts } from '#lib/accounts/account-labels.ts';
 import { valuationHref, valuationText } from './briefing.ts';
@@ -329,11 +330,6 @@ export function pricesWidget(home: Home, locale: string): WidgetView {
   return view('prices', title, open, { state: 'ready', fact: m.home_prices_current(), scope: m.home_prices_scope() });
 }
 
-/** Reconcile for one account, on the commodity the card flagged first (its weakest). */
-function reconcileHref(accountID: number, commodityID: number | undefined): string {
-  return `/app/ledger/reconcile?account=${accountID}` + (commodityID !== undefined ? `&commodity=${commodityID}` : '');
-}
-
 /** The account list's reconciliation rule (#482), counted: accounts with
  * something to reconcile, how many are within the book's window, and the
  * oldest first. The window is the book setting, never a Home rule. */
@@ -361,7 +357,7 @@ export function reconciliationWidget(home: Home, locale: string): WidgetView {
     rows: summary.accounts.map(account => {
       const age = reconciliationAgeView(account, locale);
       const label = accountLabelFromParts({ id: account.account_id, name: account.name, code: account.code, starterKey: account.starter_key, currencyCode: account.currency_code });
-      return { key: String(account.account_id), label, wrap: true, href: reconcileHref(account.account_id, account.commodities[0]?.commodity_id), detail: age.text, over: age.attention, amount: '' };
+      return { key: String(account.account_id), label, wrap: true, href: reconcileHref(account.account_id, account.commodities[0]?.commodity_id) /* the weakest commodity, which the card flagged */, detail: age.text, over: age.attention, amount: '' };
     }),
     more: hidden > 0 ? m.home_reconciliation_more({ count: hidden, n: number(hidden, locale) }) : null
   });
