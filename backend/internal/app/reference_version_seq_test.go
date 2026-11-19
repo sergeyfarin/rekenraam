@@ -58,12 +58,20 @@ func updateAccountVersion(t *testing.T, f referenceVersionFixture, accountID int
 // tryRenameAccount sends today's full account with a new name, as the account
 // editor does, dated effectiveFrom.
 func tryRenameAccount(f referenceVersionFixture, accountID int64, name, effectiveFrom string) (Account, error) {
-	current, err := f.accountService.Account(context.Background(), accountID)
+	input, err := accountRenameInput(f, accountID, name, effectiveFrom)
 	if err != nil {
 		return Account{}, err
 	}
+	return f.accountService.UpdateAccount(context.Background(), input)
+}
+
+func accountRenameInput(f referenceVersionFixture, accountID int64, name, effectiveFrom string) (UpdateAccountInput, error) {
+	current, err := f.accountService.Account(context.Background(), accountID)
+	if err != nil {
+		return UpdateAccountInput{}, err
+	}
 	allowsPostings := current.AllowsPostings
-	return f.accountService.UpdateAccount(context.Background(), UpdateAccountInput{
+	return UpdateAccountInput{
 		OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "account.update", AccountID: accountID,
 		Code: current.Code, Name: name, AccountClass: current.AccountClass, AccountKind: current.AccountKind,
 		ParentAccountID: current.ParentAccountID, InstitutionID: current.InstitutionID,
@@ -73,7 +81,7 @@ func tryRenameAccount(f referenceVersionFixture, accountID int64, name, effectiv
 		CommentMarkdown: current.CommentMarkdown, MetadataJSON: current.MetadataJSON,
 		OpenedOn: current.OpenedOn, CostBasisMethod: current.CostBasisMethod,
 		EffectiveFrom: effectiveFrom, ChangeReason: "version sequence regression",
-	})
+	}, nil
 }
 
 func updateInstitutionVersion(t *testing.T, f referenceVersionFixture, institutionID int64, name, effectiveFrom string) Institution {

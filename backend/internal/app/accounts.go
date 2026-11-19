@@ -404,7 +404,7 @@ func (s *AccountService) CreateAccount(ctx context.Context, input CreateAccountI
 	}
 
 	now := s.now().UTC()
-	today, err := s.settings.OwnerTodayAt(ctx, input.OwnerUserID, now)
+	today, err := pinnedOwnerDay(ctx)
 	if err != nil {
 		return Account{}, err
 	}
@@ -519,7 +519,7 @@ func (s *AccountService) UpdateAccount(ctx context.Context, input UpdateAccountI
 	}
 
 	now := s.now().UTC()
-	today, err := s.settings.OwnerTodayAt(ctx, input.OwnerUserID, now)
+	today, err := pinnedOwnerDay(ctx)
 	if err != nil {
 		return Account{}, err
 	}
@@ -646,7 +646,7 @@ func (s *AccountService) EnsureSystemAccounts(ctx context.Context, input EnsureS
 	}
 
 	now := s.now().UTC()
-	today, err := s.settings.OwnerTodayAt(ctx, input.OwnerUserID, now)
+	today, err := pinnedOwnerDay(ctx)
 	if err != nil {
 		return EnsureSystemAccountsResult{}, err
 	}
@@ -718,7 +718,7 @@ func (s *AccountService) changeAccountStatus(ctx context.Context, input AccountL
 	}
 
 	now := s.now().UTC()
-	today, err := s.settings.OwnerTodayAt(ctx, input.OwnerUserID, now)
+	today, err := pinnedOwnerDay(ctx)
 	if err != nil {
 		return Account{}, err
 	}

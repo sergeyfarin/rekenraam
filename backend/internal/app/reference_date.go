@@ -29,3 +29,16 @@ func (s *SettingsService) referenceContext(ctx context.Context, now time.Time) (
 	}
 	return db.WithReferenceDate(ctx, now.In(location).Format(time.DateOnly)), nil
 }
+
+// pinnedOwnerDay returns the owner day referenceContext pinned on ctx. A write
+// validates and defaults its dates on this day rather than reading the clock
+// again: a second reading can fall after midnight, and the write would then
+// accept or default to a date its own reads and response treat as the future
+// (#566 review).
+func pinnedOwnerDay(ctx context.Context) (string, error) {
+	day := db.ReferenceDate(ctx)
+	if _, err := time.Parse(time.DateOnly, day); err != nil {
+		return "", fmt.Errorf("owner day is not pinned (%q): %w", day, err)
+	}
+	return day, nil
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -105,4 +106,64 @@ func TestAccountLifecycleCommandsReturnTodaysState(t *testing.T) {
 		assert.Equal(t, command.status, changed.Status, command.name)
 		latest = command.date
 	}
+}
+
+// #566 review. A write pins the owner day for its reads and its response;
+// date validation and defaults must use that same day. Here the clock crosses
+// midnight between the pin and any later reading, so a second "today" would be
+// the 16th while the response is selected on the 15th.
+func TestAccountWritesUseThePinnedOwnerDay(t *testing.T) {
+	t.Parallel()
+	f := newReferenceBackdatingFixture(t, "account")
+	ctx := context.Background()
+	crossMidnight := func() {
+		calls := 0
+		f.accountService.SetNowForTest(func() time.Time {
+			calls++
+			if calls == 1 {
+				return time.Date(2026, 10, 15, 23, 59, 59, 0, time.UTC)
+			}
+			return time.Date(2026, 10, 16, 0, 0, 1, 0, time.UTC)
+		})
+	}
+	current := func() Account {
+		t.Helper()
+		account, err := f.accountService.Account(db.WithReferenceDate(ctx, "2026-10-15"), f.id)
+		require.NoError(t, err)
+		return account
+	}
+
+	rename := func(name, date string) (Account, error) {
+		t.Helper()
+		input, err := accountRenameInput(f.referenceVersionFixture, f.id, name, date)
+		require.NoError(t, err)
+		crossMidnight()
+		return f.accountService.UpdateAccount(ctx, input)
+	}
+
+	_, err := rename("Tomorrow", "2026-10-16")
+	require.Error(t, err, "the 16th is in the future on the pinned day")
+	var invalid ValidationError
+	require.ErrorAs(t, err, &invalid)
+
+	renamed, err := rename("Renamed", "")
+	require.NoError(t, err)
+	assert.Equal(t, "2026-10-15", renamed.EffectiveFrom, "an omitted date defaults to the pinned day")
+	assert.Equal(t, current(), renamed)
+
+	crossMidnight()
+	closed, err := f.accountService.CloseAccount(ctx, AccountLifecycleInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", AccountID: f.id})
+	require.NoError(t, err)
+	assert.Equal(t, "2026-10-15", closed.ClosedOn)
+	assert.Equal(t, "2026-10-15", closed.EffectiveFrom)
+	assert.Equal(t, current(), closed)
+
+	crossMidnight()
+	created, err := f.accountService.CreateAccount(ctx, CreateAccountInput{
+		OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "account.create",
+		Name: "Created at midnight", AccountClass: "asset", AccountKind: "checking", DefaultCommodityID: &f.eurCommodityID,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "2026-10-15", created.OpenedOn)
+	assert.Equal(t, "2026-10-15", created.EffectiveFrom)
 }
