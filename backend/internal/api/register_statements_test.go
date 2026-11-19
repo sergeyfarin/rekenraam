@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"rekenraam/backend/internal/app"
+	"rekenraam/backend/internal/testdb"
 )
 
 // #595. The register always carries a statements array — empty, never null —
@@ -47,8 +48,9 @@ func TestAccountRegisterAlwaysReturnsStatementsArray(t *testing.T) {
 // date the test runs on, even if the run crosses UTC midnight.
 func TestAccountRegisterReadsTheCardCreatedJustAfterOwnerMidnight(t *testing.T) {
 	t.Parallel()
-	instance := fixedReferenceDateInstance(t, realUTCDayInstant(7, "23:01:00"))
-	ownerDay := realUTCDay(8)
+	today := testdb.RealUTCToday()
+	instance := fixedReferenceDateInstance(t, testdb.UTCDayInstant(today, 7, "23:01:00"))
+	ownerDay := testdb.UTCDay(today, 8)
 	handler := instance.handler
 	cookie, csrf, _ := setupAccountAPITest(t, handler)
 	_, err := instance.services.Settings.SavePreferences(context.Background(), app.SaveUserPreferencesInput{UserID: 1, TimeZone: "Europe/Amsterdam"})
@@ -57,7 +59,7 @@ func TestAccountRegisterReadsTheCardCreatedJustAfterOwnerMidnight(t *testing.T) 
 	card := createAccountForSession(t, handler, cookie, csrf, `{"name":"Midnight card","account_class":"liability","account_kind":"credit_card","default_commodity_id":`+strconvFormatInt(currencyID)+`}`)
 	checking := createAccountForSession(t, handler, cookie, csrf, `{"name":"Midnight checking","account_class":"asset","account_kind":"checking","default_commodity_id":`+strconvFormatInt(currencyID)+`}`)
 	require.Equal(t, ownerDay, card.EffectiveFrom, "the card exists from the owner's day, a day after UTC's")
-	require.Greater(t, card.EffectiveFrom, realUTCDay(1), "the card is future-dated to SQLite's real UTC day")
+	require.Greater(t, card.EffectiveFrom, testdb.UTCDay(today, 1), "the card is future-dated to SQLite's real UTC day")
 	createTransactionForSession(t, handler, cookie, csrf, balancedBody(ownerDay,
 		posting(card.ID, -50000, 2, currencyID),
 		posting(checking.ID, 50000, 2, currencyID),

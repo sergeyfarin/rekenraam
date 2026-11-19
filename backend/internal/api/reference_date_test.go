@@ -38,29 +38,16 @@ func fixedReferenceDateInstance(t *testing.T, instant string) testInstance {
 	return instance
 }
 
-// realUTCDayInstant is clock (HH:MM:SS) on the UTC day offset days from the
-// real current UTC day. A reference read the service forgot to pin falls back
-// to SQLite's date('now'), which follows the real clock, not the frozen Go
-// clock; a hard-coded instant stops exposing that fallback once the real date
-// passes it. Deriving the instant from today keeps the gap the test relies on.
-func realUTCDayInstant(days int, clock string) string {
-	return time.Now().UTC().AddDate(0, 0, days).Format(time.DateOnly) + "T" + clock + "Z"
-}
-
-// realUTCDay is the real UTC day offset days from today, as a calendar date.
-func realUTCDay(days int) string {
-	return time.Now().UTC().AddDate(0, 0, days).Format(time.DateOnly)
-}
-
 func TestOwnerCurrentReferenceHTTPCreateListAndFutureExclusion(t *testing.T) {
 	t.Parallel()
-	// Both sides are relative to SQLite's real UTC day (realUTCDayInstant):
+	// Both sides are relative to SQLite's real UTC day (testdb.RealUTCToday):
 	// east, the owner's day is a week past it, so today's version is future to
 	// an unpinned read; west, the owner's day is the one before it, so the
 	// version appended for the owner's tomorrow is SQLite's today.
+	today := testdb.RealUTCToday()
 	for _, tc := range []struct{ name, instant, zone, today string }{
-		{"east just after local midnight", realUTCDayInstant(7, "23:01:00"), "Europe/Amsterdam", realUTCDay(8)},
-		{"west while UTC is tomorrow", realUTCDayInstant(0, "03:00:00"), "America/Los_Angeles", realUTCDay(-1)},
+		{"east just after local midnight", testdb.UTCDayInstant(today, 7, "23:01:00"), "Europe/Amsterdam", testdb.UTCDay(today, 8)},
+		{"west while UTC is tomorrow", testdb.UTCDayInstant(today, 0, "03:00:00"), "America/Los_Angeles", testdb.UTCDay(today, -1)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
