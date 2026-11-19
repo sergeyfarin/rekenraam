@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/testdb"
 )
 
 func TestOwnerTodayUsesServerClockAndSavedZone(t *testing.T) {
@@ -156,9 +157,13 @@ func TestOwnerEnteredDatesFollowOwnerDay(t *testing.T) {
 // #385: a write and a current read must use the same owner-local day.
 func TestCurrentReferenceReadsFollowOwnerDay(t *testing.T) {
 	t.Parallel()
+	// Both owner days sit a week past SQLite's real UTC day
+	// (testdb.RealUTCToday), so the account opened today is future-dated to an
+	// unpinned read on either side of UTC.
+	today := testdb.RealUTCToday()
 	for _, tc := range []struct{ name, instant, zone, today string }{
-		{"east just after local midnight", "2027-01-01T23:01:00Z", "Europe/Amsterdam", "2027-01-02"},
-		{"west while UTC is tomorrow", "2027-01-02T03:00:00Z", "America/Los_Angeles", "2027-01-01"},
+		{"east just after local midnight", testdb.UTCDayInstant(today, 7, "23:01:00"), "Europe/Amsterdam", testdb.UTCDay(today, 8)},
+		{"west while UTC is tomorrow", testdb.UTCDayInstant(today, 8, "03:00:00"), "America/Los_Angeles", testdb.UTCDay(today, 7)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

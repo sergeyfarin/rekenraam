@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/testdb"
 )
 
 // cloneReferenceVersion appends fixture history without changing any source row.
@@ -55,9 +56,14 @@ func cloneReferenceVersion(t *testing.T, database *sql.DB, table, key string, id
 
 func TestCurrentReferenceSiblingsAndComposedReadsUseOwnerDay(t *testing.T) {
 	t.Parallel()
+	// Relative to SQLite's real UTC day (testdb.RealUTCToday): east, the owner's
+	// day is a week past it, so today's version is future to an unpinned read;
+	// west, the owner's day is the one before it, so the owner's tomorrow is
+	// SQLite's today.
+	today := testdb.RealUTCToday()
 	for _, tc := range []struct{ name, instant, zone, today string }{
-		{"east local midnight", "2027-01-01T23:01:00Z", "Europe/Amsterdam", "2027-01-02"},
-		{"west UTC tomorrow", "2027-01-02T03:00:00Z", "America/Los_Angeles", "2027-01-01"},
+		{"east local midnight", testdb.UTCDayInstant(today, 7, "23:01:00"), "Europe/Amsterdam", testdb.UTCDay(today, 8)},
+		{"west UTC tomorrow", testdb.UTCDayInstant(today, 0, "03:00:00"), "America/Los_Angeles", testdb.UTCDay(today, -1)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
