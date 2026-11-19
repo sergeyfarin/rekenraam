@@ -552,7 +552,7 @@ func (r *AccountRepository) UpdateAccount(ctx context.Context, params UpdateAcco
 		status = current.Status
 	}
 	next := params.Spec
-	latest, err := latestAccountVersionDateTx(ctx, tx, params.AccountID)
+	latest, err := latestReferenceVersionDateTx(ctx, tx, accountVersionTable, params.AccountID)
 	if err != nil {
 		return AccountRecord{}, err
 	}
@@ -717,14 +717,6 @@ func requireArchiveConsistencyTx(ctx context.Context, tx *sql.Tx, bookID int64, 
 		}
 	}
 	return nil
-}
-
-func latestAccountVersionDateTx(ctx context.Context, tx *sql.Tx, accountID int64) (string, error) {
-	var latest sql.NullString
-	if err := tx.QueryRowContext(ctx, `SELECT MAX(effective_from) FROM account_versions WHERE account_id = ?`, accountID).Scan(&latest); err != nil {
-		return "", fmt.Errorf("read latest account version date: %w", err)
-	}
-	return latest.String, nil
 }
 
 func accountVersionAsOfTx(ctx context.Context, tx *sql.Tx, bookID int64, accountID int64, date string) (AccountRecord, error) {
