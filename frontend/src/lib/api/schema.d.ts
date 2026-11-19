@@ -5539,7 +5539,7 @@ export interface paths {
         head?: never;
         /**
          * Update an account by appending a new account version
-         * @description Full update: the request carries the whole account. A version dated before the account's latest version is a correction of descriptive fields (name, code, number hint, country, comment, metadata); its structural fields must equal those of the version in effect on its date, and it keeps that version's status and closed_on. Such a correction governs only until the next version. The response is the account as it stands today, which for such a correction is not the version just written; the versions endpoint lists it.
+         * @description Full update: the request carries the whole account. A version dated before the account's latest version is a correction of descriptive fields (name, code, number hint, country, comment, metadata); its structural fields must equal those of the version in effect on its date, and it keeps that version's status and closed_on. Such a correction governs only until the next version. The response is the account as it stands on the owner's current day: the version in effect on that day, selected inside the write. That is usually a later version than an earlier-dated correction, but it is the correction itself when the correction is the version in effect on that day. The versions endpoint lists every version.
          */
         patch: {
             parameters: {
@@ -5609,7 +5609,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description REFERENCE_VERSION_BACKDATED for a structural edit dated before the account's latest version; REFERENCE_VERSION_BEFORE_FIRST for an edit dated before the account's first version; CONFLICT for a system account, a category (managed through the category API), a structural edit after postings exist, or a version that would leave an existing posting outside the account's open dates. */
+                /** @description REFERENCE_VERSION_BACKDATED for a structural edit dated before the account's latest version; REFERENCE_VERSION_BEFORE_FIRST for an edit dated on or after opened_on but before the account's first version (a date before opened_on is 400 VALIDATION_FAILED); CONFLICT for a system account, a category (managed through the category API), a structural edit after postings exist, or a version that would leave an existing posting outside the account's open dates. */
                 409: components["responses"]["ReferenceVersionConflict"];
                 413: components["responses"]["JSONBodyTooLarge"];
             };

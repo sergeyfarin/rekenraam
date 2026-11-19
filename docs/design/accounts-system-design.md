@@ -408,15 +408,25 @@ therefore enforces this contract inside its transaction:
   write a later close into March. A date on or after `opened_on` but before the
   account's first version has no version to correct and is refused with
   `409 REFERENCE_VERSION_BEFORE_FIRST`, with the first version's date as
-  `conflict_date`.
+  `conflict_date`. A date before `opened_on` stays
+  `400 VALIDATION_FAILED`.
 - **The response is today's state** (#566), as for the kinds below. The write
-  re-reads the account inside its transaction, on the caller's reference date,
-  after inserting an earlier-dated correction, so the response never reports
-  the past window's status, name or `effective_from` as the account's current
-  state. The version written is listed by `/accounts/{id}/versions`. An
-  ordinary edit dated on or after the latest version, and every lifecycle
-  command (which cannot be dated earlier), writes today's state and returns
-  it. Named regressions: `TestAccountBackdatedRenameReturnsTodaysState`,
+  re-reads the account inside its transaction, on the owner day the request
+  pinned, after inserting an earlier-dated correction. The response is the
+  version in effect on that day: usually a later one, so a past window's
+  status, name or `effective_from` is never reported as current, but the
+  correction itself when it is the version in effect on that day (for
+  example after the owner's time zone moved back a day, leaving the latest
+  version in the future). The version written is listed by
+  `/accounts/{id}/versions`. An ordinary edit dated on or after the latest
+  version, and every lifecycle command (which cannot be dated earlier),
+  writes today's state and returns it.
+- **One owner day per write** (#566 review). Account create, update,
+  lifecycle and system-account setup validate and default their dates on the
+  owner day pinned for the request's reads, never on a second clock reading.
+  A request that crosses midnight therefore cannot accept or default to a
+  date its own response treats as the future
+  (`TestAccountWritesUseThePinnedOwnerDay`). Named regressions: `TestAccountBackdatedRenameReturnsTodaysState`,
   `TestAccountLifecycleCommandsReturnTodaysState`, and the `account` cases of
   `TestReferenceBackdatedDescriptionPreservesHistoricalLifecycle` and
   `TestReferenceCorrectionBeforeFirstVersionIsRefused`; over HTTP,
