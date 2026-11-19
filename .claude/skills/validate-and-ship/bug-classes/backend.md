@@ -142,5 +142,9 @@ statement rows' commodity lookup (#595) had the same gap. A service method
 that makes reference reads pins the day once at its top with
 `s.settings.referenceContext(ctx, s.now())` and passes that context to every
 read; a helper pinning it for itself does not cover reads made before it.
-Named check: `TestAccountRegisterReadsTheCardCreatedJustAfterOwnerMidnight`
-(fixed instant on each side of UTC midnight via `fixedReferenceDateInstance`).
+An unpinned read uses SQLite's real UTC day, not the test's frozen Go clock,
+so a test of this class freezes an instant derived from the real day
+(`realUTCDayInstant`), never a hard-coded date: a fixed future instant stops
+exposing the fallback once the calendar passes it (#601 review). Named checks:
+`TestAccountRegisterReadsTheCardCreatedJustAfterOwnerMidnight`,
+`TestOwnerCurrentReferenceHTTPCreateListAndFutureExclusion`.

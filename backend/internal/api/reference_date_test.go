@@ -38,6 +38,20 @@ func fixedReferenceDateInstance(t *testing.T, instant string) testInstance {
 	return instance
 }
 
+// realUTCDayInstant is clock (HH:MM:SS) on the UTC day offset days from the
+// real current UTC day. A reference read the service forgot to pin falls back
+// to SQLite's date('now'), which follows the real clock, not the frozen Go
+// clock; a hard-coded instant stops exposing that fallback once the real date
+// passes it. Deriving the instant from today keeps the gap the test relies on.
+func realUTCDayInstant(days int, clock string) string {
+	return time.Now().UTC().AddDate(0, 0, days).Format(time.DateOnly) + "T" + clock + "Z"
+}
+
+// realUTCDay is the real UTC day offset days from today, as a calendar date.
+func realUTCDay(days int) string {
+	return time.Now().UTC().AddDate(0, 0, days).Format(time.DateOnly)
+}
+
 func TestOwnerCurrentReferenceHTTPCreateListAndFutureExclusion(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct{ name, instant, zone, today string }{
