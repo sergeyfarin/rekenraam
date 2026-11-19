@@ -82,6 +82,12 @@ func (s *LedgerService) Overview(ctx context.Context, input LedgerOverviewInput)
 			return result, ValidationError{Message: "cursor is invalid"}
 		}
 	}
+	// Pin once so the as-of default and every nested metadata read share the
+	// owner day; each nested service would otherwise read the clock again.
+	ctx, err := s.transactions.settings.referenceContext(ctx, s.transactions.now())
+	if err != nil {
+		return result, err
+	}
 	asOf, _, err := s.transactions.cleanLedgerAsOfAndStatus(ctx, input.OwnerUserID, input.AsOf, "posted")
 	if err != nil {
 		return result, err

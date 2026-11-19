@@ -129,9 +129,15 @@ func (s *TransactionService) SaveReconciliationPolicy(ctx context.Context, input
 }
 
 // AccountReconciliationAges is the one judgement of every reconcilable
-// account's reconciliation age, on the owner's local today.
+// account's reconciliation age, on the owner's local today. A caller that
+// already pinned the owner day (the ledger overview) shares it, rather than
+// reading the clock again after midnight (#605).
 func (s *TransactionService) AccountReconciliationAges(ctx context.Context, ownerUserID int64) (ReconciliationAges, error) {
-	today, err := s.settings.OwnerTodayAt(ctx, ownerUserID, s.now())
+	ctx, err := s.settings.referenceContext(ctx, s.now())
+	if err != nil {
+		return ReconciliationAges{}, err
+	}
+	today, err := pinnedOwnerDay(ctx)
 	if err != nil {
 		return ReconciliationAges{}, err
 	}

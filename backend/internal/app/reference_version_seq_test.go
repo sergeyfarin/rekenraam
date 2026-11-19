@@ -123,13 +123,23 @@ func updateInstrumentVersion(t *testing.T, f referenceVersionFixture, instrument
 
 func updateInstrumentFields(t *testing.T, f referenceVersionFixture, instrumentID int64, name string, quoteCommodityID *int64, identifiersJSON, metadataJSON, effectiveFrom string) InvestmentInstrument {
 	t.Helper()
+	input := instrumentUpdateInput(t, f, instrumentID, name, quoteCommodityID, identifiersJSON, metadataJSON, effectiveFrom)
+	updated, err := f.investmentService.UpdateInstrument(context.Background(), input)
+	require.NoError(t, err)
+	return updated
+}
+
+// instrumentUpdateInput sends today's instrument with the given changes, as
+// the instrument editor does, dated effectiveFrom.
+func instrumentUpdateInput(t *testing.T, f referenceVersionFixture, instrumentID int64, name string, quoteCommodityID *int64, identifiersJSON, metadataJSON, effectiveFrom string) InvestmentInstrumentInput {
+	t.Helper()
 	current, err := f.investmentService.Instrument(context.Background(), instrumentID)
 	require.NoError(t, err)
 	tradingCommodityID := current.TradingCommodityID
 	if quoteCommodityID != nil {
 		tradingCommodityID = quoteCommodityID
 	}
-	updated, err := f.investmentService.UpdateInstrument(context.Background(), InvestmentInstrumentInput{
+	return InvestmentInstrumentInput{
 		OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "investment.instrument.update",
 		InstrumentID: instrumentID, CommodityCode: current.CommodityCode, InstrumentType: current.InstrumentType,
 		DisplayName: name, Symbol: current.Symbol, ExchangeCode: current.ExchangeCode, MIC: current.MIC,
@@ -137,9 +147,7 @@ func updateInstrumentFields(t *testing.T, f referenceVersionFixture, instrumentI
 		TradingCommodityID: tradingCommodityID, QuantityScale: current.QuantityScale, PriceScale: current.PriceScale,
 		IdentifiersJSON: identifiersJSON, MetadataJSON: metadataJSON,
 		EffectiveFrom: effectiveFrom, ChangeReason: "version sequence regression",
-	})
-	require.NoError(t, err)
-	return updated
+	}
 }
 
 // #549: a backdated descriptive version must not make the next update reuse

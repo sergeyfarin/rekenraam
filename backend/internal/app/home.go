@@ -111,7 +111,7 @@ func (s *TransactionService) HomeBriefing(ctx context.Context, ownerUserID int64
 	if referenceErr != nil {
 		return HomeBriefing{}, referenceErr
 	}
-	asOf, err := s.settings.OwnerTodayAt(ctx, ownerUserID, s.now())
+	asOf, err := pinnedOwnerDay(ctx)
 	if err != nil {
 		return HomeBriefing{}, err
 	}

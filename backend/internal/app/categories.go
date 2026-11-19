@@ -292,7 +292,7 @@ func (s *CategoryService) UpdateCategory(ctx context.Context, input UpdateCatego
 	}
 
 	now := s.now().UTC()
-	today, err := s.settings.OwnerTodayAt(ctx, input.OwnerUserID, now)
+	today, err := pinnedOwnerDay(ctx)
 	if err != nil {
 		return Category{}, err
 	}
@@ -492,7 +492,7 @@ func (s *CategoryService) changeCategoryStatus(ctx context.Context, input Catego
 	}
 
 	now := s.now().UTC()
-	today, err := s.settings.OwnerTodayAt(ctx, input.OwnerUserID, now)
+	today, err := pinnedOwnerDay(ctx)
 	if err != nil {
 		return Category{}, err
 	}
