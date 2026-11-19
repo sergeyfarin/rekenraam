@@ -16,6 +16,7 @@
   let {
     csrfToken,
     requestedAccountID,
+    requestedCommodityID,
     onStarted,
     onAccountChange
   }: {
@@ -23,6 +24,9 @@
     // An account named by the page URL (`?account=`), such as a holding's
     // register link. A holding is reconciled only when asked for this way.
     requestedAccountID?: number;
+    // The commodity a statement link names (`&commodity=`), used while the
+    // requested account is selected; otherwise the account's default.
+    requestedCommodityID?: number;
     onStarted: (session: ReconciliationSessionResponse) => void;
     // Lets the page show the selected account's checkpoints beside the form.
     onAccountChange?: (accountID: number | undefined, commodityID: number | undefined) => void;
@@ -76,7 +80,11 @@
   const selectedAccount = $derived(
     accountID !== undefined ? reconcilableAccounts.find((a) => a.id === accountID) : undefined
   );
-  const commodityID = $derived(selectedAccount?.default_commodity_id);
+  const commodityID = $derived(
+    selectedAccount !== undefined && selectedAccount.id === requestedAccountID && requestedCommodityID !== undefined
+      ? requestedCommodityID
+      : selectedAccount?.default_commodity_id
+  );
   const currency = $derived(commodityID !== undefined ? currenciesByID.get(commodityID) : undefined);
 
   $effect(() => {

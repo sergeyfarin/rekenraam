@@ -449,6 +449,8 @@ func mapTransactionDBError(err error) error {
 		return ErrReconciliationNotBalanced
 	case errors.Is(err, db.ErrReconciliationStartStale):
 		return ErrReconciliationStartStale
+	case errors.Is(err, db.ErrReconciliationStatementBeforeStart):
+		return ValidationError{Message: db.ErrReconciliationStatementBeforeStart.Error()}
 	case errors.Is(err, db.ErrReconciliationPosting), errors.Is(err, db.ErrReconciliationCheckpoint):
 		return ErrReconciliationPosting
 	case errors.Is(err, db.ErrReconciliationOverrideRequired):

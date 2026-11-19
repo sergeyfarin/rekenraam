@@ -30,6 +30,16 @@ var (
 
 type TransactionRepository struct {
 	database *sql.DB
+	// registerPageStageForTest runs between a register page's reads; tests
+	// use it to commit a write from another connection there (#595 review).
+	registerPageStageForTest func(stage string)
+}
+
+// SetRegisterPageStageForTest installs a deterministic interleaving between a
+// register page's reads. Set it before serving requests; production leaves
+// it nil.
+func (r *TransactionRepository) SetRegisterPageStageForTest(hook func(stage string)) {
+	r.registerPageStageForTest = hook
 }
 
 func (r *TransactionRepository) withTx(ctx context.Context, op string, fn func(*sql.Tx) error) error {
@@ -201,8 +211,11 @@ type ListTransactionsParams struct {
 	CursorDate        string
 	CursorDaySequence int64
 	CursorID          int64
-	Limit             int
-	FilterEntryDate   bool
+	// CursorStatement marks a register cursor that stopped on a statement
+	// row; CursorID is then a checkpoint id (#595).
+	CursorStatement bool
+	Limit           int
+	FilterEntryDate bool
 	// EntryDateBasis narrows by journal-entry date the way the reports do:
 	// a transaction matches when one of its entries falls inside the range,
 	// rather than by the transaction's own date. FilterEntryDate is the

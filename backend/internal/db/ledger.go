@@ -359,13 +359,13 @@ func investmentOperationPostings(ctx context.Context, source queryer, bookID int
 	return postings, links, nil
 }
 
-func (r *TransactionRepository) AccountRegisterRunningPostings(ctx context.Context, params ListTransactionsParams) ([]LedgerPostingRecord, error) {
-	return r.ledgerPostings(ctx, ledgerPostingQuery{
+func accountRegisterRunningQuery(params ListTransactionsParams) ledgerPostingQuery {
+	return ledgerPostingQuery{
 		BookID:     params.BookID,
 		AccountID:  params.AccountID,
 		Status:     params.Status,
 		BeforeDate: params.BeforeDate,
-	})
+	}
 }
 
 type ledgerPostingQuery struct {

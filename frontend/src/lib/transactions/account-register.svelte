@@ -7,6 +7,7 @@
   import { createInfiniteQuery, useQueryClient } from '@tanstack/svelte-query';
   import CircleCheckBig from '@lucide/svelte/icons/circle-check-big';
   import Circle from '@lucide/svelte/icons/circle';
+  import FileCheck from '@lucide/svelte/icons/file-check';
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import Panel from '#lib/components/panel.svelte';
@@ -30,7 +31,9 @@
   import { ReorderMode } from './reorder-mode.svelte.ts';
   import { placePosition, sameDayNeighbor, type ReorderDirection } from './reorder';
   import { hasPostingDay } from './posted-on';
-  import { adjacentCalendarDate } from '#lib/dates/calendar-date.ts';
+  import { adjacentCalendarDate, formatCalendarDate } from '#lib/dates/calendar-date.ts';
+  import { registerStatementMarkers, type RegisterStatementMarker } from './register-statements.ts';
+  import { reconcileHref } from '#lib/reconcile/reconcile-link.ts';
 
   import type { TransactionWorkspaceActions } from './transaction-workspace.svelte';
   import TransactionRowActions from './transaction-row-actions.svelte';
@@ -83,6 +86,26 @@
   const rows = $derived(
     query.data?.pages.flatMap((p) => p.entries ?? []) ?? []
   );
+
+  // Statement rows (#595): each active reconciliation checkpoint, placed by
+  // the server at its boundary. They are not rows of `rows`, so reorder,
+  // row keys and row actions never see them.
+  const statementMarkers = $derived(registerStatementMarkers(query.data?.pages ?? []));
+
+  // With more than one commodity in view a symbol alone can be ambiguous
+  // ($ for USD and CAD), so statement balances name their code.
+  const multiCommodity = $derived(
+    new Set([
+      ...rows.map((entry) => entry.posting.commodity_id),
+      ...statementMarkers.map((marker) => marker.statement.commodity_id)
+    ]).size > 1
+  );
+
+  function statementBalance(marker: RegisterStatementMarker): string {
+    const s = marker.statement;
+    const amount = formatQuantity(s.statement_balance.quantity_value, s.statement_balance.quantity_scale, locale);
+    return multiCommodity ? `${s.commodity_code} ${amount}` : `${s.commodity_symbol ?? s.commodity_code}${amount}`;
+  }
 
   // Format the running balance amount for a register entry.
   // BalanceQuantity uses normal_quantity_value (class-normalized sign) for display.
@@ -265,8 +288,24 @@
     </div>
   {/snippet}
 
+  {#snippet statementRow(marker: RegisterStatementMarker)}
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm" data-register-statement={marker.statement.checkpoint_id}>
+      <FileCheck size={15} class="shrink-0 text-positive" aria-hidden="true" />
+      <span class="font-medium text-foreground">
+        {m.register_statement_title({ date: formatCalendarDate(marker.statement.statement_date, locale) })}
+      </span>
+      <span class="tabular-nums text-foreground">{m.register_statement_balance({ balance: statementBalance(marker) })}</span>
+      <StatusBadge tone="positive">{m.register_recon_reconciled()}</StatusBadge>
+      <a class="ml-auto inline-flex min-h-11 items-center text-sm font-semibold underline" href={reconcileHref(accountID, marker.statement.commodity_id)}>
+        {m.register_statement_open_reconcile()}
+      </a>
+    </div>
+  {/snippet}
+
   <TransactionTable
     {rows}
+    markers={statementMarkers}
+    marker={statementRow}
     rowId={rowKey}
     columns={[
       { key: 'date', header: m.register_col_date(), priority: 1, width: '9rem', cell: dateCell },

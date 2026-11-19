@@ -8,6 +8,7 @@
   import StatusBadge from '#lib/components/status-badge.svelte';
   import APIFormError from '#lib/components/api-form-error.svelte';
   import { formatQuantity } from '#lib/money/format.ts';
+  import { invalidateReconciliationReads } from '#lib/reconcile/invalidate.ts';
   import {
     reconciliationSessionQueryOptions,
     reconciliationQueryKey,
@@ -90,7 +91,7 @@
     actionError = undefined;
     try {
       const finished = await finishReconciliation(reconciliationID, { change_reason: reason.trim() }, csrfToken);
-      await queryClient.invalidateQueries({ queryKey: reconciliationQueryKey });
+      await invalidateReconciliationReads(queryClient, finished.account_id);
       onFinished(finished);
     } catch (error) {
       actionError = error;
