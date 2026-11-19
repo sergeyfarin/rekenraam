@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,6 +33,10 @@ func TestLedgerOverviewHTTPComposesAccountMetadataAndBalances(t *testing.T) {
 		assert.Equal(t, "12345", body.Accounts[0].Balances[0].QuantityValue.String())
 		assert.Empty(t, body.Accounts[0].Positions)
 		assert.Nil(t, body.NextCursor)
+		assert.Equal(t, 60, body.ReconciliationOutOfDateAfterDays)
+		require.NotNil(t, body.Accounts[0].Reconciliation)
+		assert.Equal(t, "never_reconciled", body.Accounts[0].Reconciliation.State)
+		assert.Nil(t, body.Accounts[0].Reconciliation.LastStatementDate)
 	}
 	for _, path := range []string{"/api/v1/ledger/overview?cursor=bad", "/api/v1/ledger/overview?as_of=2026-02-31", "/api/v1/ledger/accounts/nope"} {
 		req := httptest.NewRequest("GET", path, nil)
@@ -44,4 +49,147 @@ func TestLedgerOverviewHTTPComposesAccountMetadataAndBalances(t *testing.T) {
 	res := httptest.NewRecorder()
 	handler.ServeHTTP(res, req)
 	assert.Equal(t, 401, res.Code)
+}
+
+// #482: the window is one book setting, read back by every judgement.
+func TestReconciliationPolicyHTTPSavesTheWindowTheAccountListReads(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	cookie, csrf, currencyID := setupAccountAPITest(t, handler)
+	createLedgerAccount(t, handler, cookie, csrf, "Window checking", "asset", "checking", currencyID, 2)
+
+	read := func() reconciliationPolicyResponse {
+		t.Helper()
+		req := httptest.NewRequest("GET", "/api/v1/reconciliation/policy", nil)
+		req.AddCookie(cookie)
+		res := httptest.NewRecorder()
+		handler.ServeHTTP(res, req)
+		require.Equal(t, 200, res.Code, res.Body.String())
+		var body reconciliationPolicyResponse
+		require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+		return body
+	}
+	initial := read()
+	assert.Equal(t, 60, initial.OutOfDateAfterDays)
+	assert.Nil(t, initial.UpdatedAt)
+
+	for _, body := range []string{`{"out_of_date_after_days":0}`, `{"out_of_date_after_days":3651}`, `{"out_of_date_after_days":"30"}`, `{"out_of_date_after_days":30,"extra":1}`} {
+		mutateBackup(t, handler, cookie, csrf, "PUT", "/api/v1/reconciliation/policy", body, http.StatusBadRequest)
+	}
+	mutateBackup(t, handler, cookie, "", "PUT", "/api/v1/reconciliation/policy", `{"out_of_date_after_days":30}`, http.StatusForbidden)
+	mutateBackup(t, handler, cookie, csrf, "PUT", "/api/v1/reconciliation/policy", `{"out_of_date_after_days":30}`, http.StatusOK)
+	saved := read()
+	assert.Equal(t, 30, saved.OutOfDateAfterDays)
+	assert.NotNil(t, saved.UpdatedAt)
+
+	req := httptest.NewRequest("GET", "/api/v1/ledger/overview", nil)
+	req.AddCookie(cookie)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	require.Equal(t, 200, res.Code, res.Body.String())
+	var overview ledgerOverviewResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&overview))
+	assert.Equal(t, 30, overview.ReconciliationOutOfDateAfterDays)
+	require.Len(t, overview.Accounts, 1)
+	require.NotNil(t, overview.Accounts[0].Reconciliation)
+	assert.Equal(t, "nothing_to_reconcile", overview.Accounts[0].Reconciliation.State, "an account without postings is not out of date")
+
+	unauthenticated := httptest.NewRecorder()
+	handler.ServeHTTP(unauthenticated, httptest.NewRequest("PUT", "/api/v1/reconciliation/policy", strings.NewReader(`{"out_of_date_after_days":30}`)))
+	assert.Equal(t, 401, unauthenticated.Code)
+}
+
+// #594 review: the Reconcile form's account-scoped commodity lookup.
+func TestAccountReconciliationLookupHTTP(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	cookie, csrf, currencyID := setupAccountAPITest(t, handler)
+	account := createLedgerAccount(t, handler, cookie, csrf, "Lookup checking", "asset", "checking", currencyID, 2)
+	income := createCategoryForSession(t, handler, cookie, csrf, `{"name":"Lookup salary","category_type":"income"}`)
+	createTransactionForSession(t, handler, cookie, csrf, balancedBody("2026-10-15", posting(account.ID, 500, 2, currencyID), posting(income.ID, -500, 2, currencyID)), http.StatusCreated)
+
+	get := func(path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("GET", path, nil)
+		req.AddCookie(cookie)
+		res := httptest.NewRecorder()
+		handler.ServeHTTP(res, req)
+		return res
+	}
+	res := get("/api/v1/accounts/" + strconvFormatInt(account.ID) + "/reconciliation")
+	require.Equal(t, 200, res.Code, res.Body.String())
+	var body accountReconciliationLookupResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, account.ID, body.AccountID)
+	assert.Equal(t, 60, body.OutOfDateAfterDays)
+	require.NotNil(t, body.Reconciliation)
+	require.Len(t, body.Reconciliation.Commodities, 1)
+	assert.Equal(t, currencyID, body.Reconciliation.Commodities[0].CommodityID)
+
+	assert.Equal(t, []statementCommodityResponse{}, body.StatementCommodities)
+
+	// A finished statement dated after today, in another currency than the
+	// account's default: the age judgement leaves it out, but Reconcile must
+	// still open in its currency so it can be voided (#594 review).
+	franc := createCurrencyForSession(t, handler, cookie, csrf, `{"code":"CHF","name":"Swiss franc"}`)
+	future := startReconciliationForSession(t, handler, cookie, csrf, account.ID, `{
+		"commodity_id":`+strconvFormatInt(franc.ID)+`,
+		"source_kind":"statement",
+		"statement_date":"2099-01-31",
+		"statement_balance_value":"0",
+		"statement_balance_scale":2
+	}`, http.StatusCreated)
+	finishReconciliationForSession(t, handler, cookie, csrf, future.ID, `{"change_reason":"future statement"}`, http.StatusOK)
+	res = get("/api/v1/accounts/" + strconvFormatInt(account.ID) + "/reconciliation")
+	require.Equal(t, 200, res.Code, res.Body.String())
+	body = accountReconciliationLookupResponse{}
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	require.NotNil(t, body.Reconciliation)
+	require.Len(t, body.Reconciliation.Commodities, 1, "a future statement is not judged")
+	assert.Equal(t, currencyID, body.Reconciliation.Commodities[0].CommodityID)
+	assert.Equal(t, []statementCommodityResponse{{CommodityID: franc.ID, CommodityCode: "CHF"}}, body.StatementCommodities)
+	require.NotNil(t, body.DefaultCommodity)
+	assert.Equal(t, currencyID, body.DefaultCommodity.CommodityID)
+
+	res = get("/api/v1/accounts/" + strconvFormatInt(income.ID) + "/reconciliation")
+	require.Equal(t, 200, res.Code, res.Body.String())
+	assert.Contains(t, res.Body.String(), `"reconciliation":null`, "a category cannot be reconciled")
+	assert.Contains(t, res.Body.String(), `"default_commodity":null`, "a category has no default commodity")
+	assert.Equal(t, 404, get("/api/v1/accounts/999999/reconciliation").Code)
+	assert.Equal(t, 400, get("/api/v1/accounts/nope/reconciliation").Code)
+	unauthenticated := httptest.NewRecorder()
+	handler.ServeHTTP(unauthenticated, httptest.NewRequest("GET", "/api/v1/accounts/1/reconciliation", nil))
+	assert.Equal(t, 401, unauthenticated.Code)
+}
+
+// #594 review: a holding is reconciled through its investment commands, so it
+// has no age, but a statement in another commodity than its instrument (here
+// the cash currency) is still named, with the instrument's own code, so a
+// register link to it opens Reconcile in that commodity.
+func TestAccountReconciliationLookupNamesAHoldingsOtherStatementCommodity(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "LKUP")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	session := startReconciliationForSession(t, handler, f.sessionCookie, f.csrfToken, holding.ID, `{
+		"commodity_id":`+strconvFormatInt(f.commodityID)+`,
+		"source_kind":"statement",
+		"statement_date":"2026-03-31",
+		"statement_balance_value":"0",
+		"statement_balance_scale":2
+	}`, http.StatusCreated)
+	finishReconciliationForSession(t, handler, f.sessionCookie, f.csrfToken, session.ID, `{"change_reason":"cash statement"}`, http.StatusOK)
+
+	req := httptest.NewRequest("GET", "/api/v1/accounts/"+strconvFormatInt(holding.ID)+"/reconciliation", nil)
+	req.AddCookie(f.sessionCookie)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	require.Equal(t, 200, res.Code, res.Body.String())
+	var body accountReconciliationLookupResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Nil(t, body.Reconciliation, "a holding has no reconciliation age")
+	require.NotNil(t, body.DefaultCommodity)
+	assert.Equal(t, statementCommodityResponse{CommodityID: instrument.CommodityID, CommodityCode: "LKUP"}, *body.DefaultCommodity)
+	require.Len(t, body.StatementCommodities, 1)
+	assert.Equal(t, f.commodityID, body.StatementCommodities[0].CommodityID)
 }

@@ -3,6 +3,9 @@ import type { Home, HomeValuationInput } from '#lib/api/home.ts';
 import type { AttentionState } from '#lib/attention/model.ts';
 import { assetTypeText, formatReturn, formatWeight, returnDirection, returnReasonText } from '#lib/investments/returns-model.ts';
 import { m } from '#lib/paraglide/messages.js';
+import { reconcileHref } from '#lib/reconcile/reconcile-link.ts';
+import { reconciliationAgeView } from '#lib/reconcile/reconciliation-age.ts';
+import { accountLabelFromParts } from '#lib/accounts/account-labels.ts';
 import { valuationHref, valuationText } from './briefing.ts';
 import {
   commodityMap, day, failed, money, noData, number, range, reportQuery, sign,
@@ -22,7 +25,7 @@ export const exploreCategories: readonly { id: ExploreCategoryID; widgets: reado
   { id: 'everyday', widgets: ['cashflow'] },
   { id: 'wealth', widgets: ['holdings', 'returns', 'allocation', 'income'] },
   { id: 'planning', widgets: ['forecast'] },
-  { id: 'data', widgets: ['imports', 'prices', 'backups'] }
+  { id: 'data', widgets: ['imports', 'prices', 'reconciliation', 'backups'] }
 ];
 
 export function categoryTitle(id: ExploreCategoryID): string {
@@ -327,6 +330,39 @@ export function pricesWidget(home: Home, locale: string): WidgetView {
   return view('prices', title, open, { state: 'ready', fact: m.home_prices_current(), scope: m.home_prices_scope() });
 }
 
+/** The account list's reconciliation rule (#482), counted: accounts with
+ * something to reconcile, how many are within the book's window, and the
+ * oldest first. The window is the book setting, never a Home rule. */
+export function reconciliationWidget(home: Home, locale: string): WidgetView {
+  const title = m.home_reconciliation_title();
+  const open = { text: m.home_reconciliation_open(), href: '/app/ledger/reconcile' };
+  if (home.empty_book) return noData('reconciliation', title, open);
+  const widget = home.widgets.reconciliation;
+  const summary = widget.summary;
+  if (widget.status === 'failed' || !summary) return failed('reconciliation', title, open);
+  if (summary.account_count === 0) {
+    return view('reconciliation', title, open, { state: 'zero', fact: null, scope: m.home_reconciliation_zero() });
+  }
+  const behind = summary.out_of_date_count + summary.never_reconciled_count;
+  const hidden = summary.account_count - summary.accounts.length;
+  return view('reconciliation', title, open, {
+    state: 'ready',
+    fact: m.home_reconciliation_fact({
+      count: summary.account_count,
+      n: number(summary.account_count, locale),
+      reconciled: number(summary.reconciled_count, locale)
+    }),
+    warning: behind > 0,
+    scope: m.home_reconciliation_scope({ count: summary.out_of_date_after_days, n: number(summary.out_of_date_after_days, locale) }),
+    rows: summary.accounts.map(account => {
+      const age = reconciliationAgeView(account, locale);
+      const label = accountLabelFromParts({ id: account.account_id, name: account.name, code: account.code, starterKey: account.starter_key, currencyCode: account.currency_code });
+      return { key: String(account.account_id), label, wrap: true, href: reconcileHref(account.account_id, account.commodities[0]?.commodity_id) /* the weakest commodity, which the card flagged */, detail: age.text, over: age.attention, amount: '' };
+    }),
+    more: hidden > 0 ? m.home_reconciliation_more({ count: hidden, n: number(hidden, locale) }) : null
+  });
+}
+
 /** Backups protect an empty book too, so this card never shows *no data*. */
 export function backupsWidget(home: Home, locale: string): WidgetView {
   const title = m.home_backups_title();
@@ -361,6 +397,7 @@ const builders: Partial<Record<WidgetID, (home: Home, locale: string, attention:
   forecast: forecastWidget,
   imports: importsWidget,
   prices: pricesWidget,
+  reconciliation: reconciliationWidget,
   backups: backupsWidget
 };
 
@@ -378,7 +415,8 @@ export function exploreWidgets(home: Home, locale: string, attention: AttentionS
 export function exploreTitles(): { id: ExploreCategoryID; title: string; widgets: { id: WidgetID; title: string }[] }[] {
   const titles: Partial<Record<WidgetID, () => string>> = {
     cashflow: m.home_cashflow_label, holdings: m.home_holdings_title, returns: m.home_returns_title, allocation: m.home_allocation_title,
-    income: m.home_income_title, forecast: m.home_forecast_title, imports: m.home_imports_title, prices: m.home_prices_title, backups: m.home_backups_title
+    income: m.home_income_title, forecast: m.home_forecast_title, imports: m.home_imports_title, prices: m.home_prices_title,
+    reconciliation: m.home_reconciliation_title, backups: m.home_backups_title
   };
   return exploreCategories.map(category => ({
     id: category.id,

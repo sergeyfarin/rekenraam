@@ -8,6 +8,14 @@
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import { parseStatementBalance } from '#lib/reconcile/statement-balance.ts';
   import {
+    defaultStatementCommodity,
+    lookupStatementCommodities,
+    needsCommodityLookup,
+    statementCommodityChoice,
+    statementCommodityOptions
+  } from '#lib/reconcile/statement-commodity.ts';
+  import {
+    accountReconciliationQueryOptions,
     startReconciliation,
     type ReconciliationSessionResponse,
     type StartReconciliationRequest
@@ -24,8 +32,9 @@
     // An account named by the page URL (`?account=`), such as a holding's
     // register link. A holding is reconciled only when asked for this way.
     requestedAccountID?: number;
-    // The commodity a statement link names (`&commodity=`), used while the
-    // requested account is selected; otherwise the account's default.
+    // The commodity named by the URL (`&commodity=`): the currency Home's
+    // Reconciliation card flagged, or a register statement row's commodity.
+    // It applies to the requested account; otherwise the account's default.
     requestedCommodityID?: number;
     onStarted: (session: ReconciliationSessionResponse) => void;
     // Lets the page show the selected account's checkpoints beside the form.
@@ -80,12 +89,49 @@
   const selectedAccount = $derived(
     accountID !== undefined ? reconcilableAccounts.find((a) => a.id === accountID) : undefined
   );
-  const commodityID = $derived(
-    selectedAccount !== undefined && selectedAccount.id === requestedAccountID && requestedCommodityID !== undefined
-      ? requestedCommodityID
-      : selectedAccount?.default_commodity_id
+  // A statement covers one commodity. The account's reconciliation lookup,
+  // read through that account alone, names every commodity it has activity or
+  // a statement in (an active statement at any date, so a future-dated one a
+  // register link names can be opened and voided), so an account without a
+  // default currency, or with activity in another, can still be reconciled
+  // (#594 review). A holding's commodity is its instrument, so it reads the
+  // lookup only when a link names another commodity, to verify and offer it.
+  const linkedCommodityID = $derived(accountID !== undefined && accountID === requestedAccountID ? requestedCommodityID : undefined);
+  const lookupEnabled = $derived(
+    accountID !== undefined &&
+      needsCommodityLookup({
+        subledgerManaged: isSubledgerManagedAccountKind(selectedAccount?.account_kind),
+        requestedCommodityID: linkedCommodityID,
+        defaultID: selectedAccount?.default_commodity_id
+      })
   );
-  const currency = $derived(commodityID !== undefined ? currenciesByID.get(commodityID) : undefined);
+  const lookupQuery = createQuery(() => ({ ...accountReconciliationQueryOptions(accountID ?? 0), enabled: lookupEnabled }));
+  const lookupReady = $derived(!lookupEnabled || lookupQuery.data !== undefined);
+  const commodityOptions = $derived.by(() => {
+    const defaultID = selectedAccount?.default_commodity_id ?? undefined;
+    const lookup = lookupEnabled && lookupQuery.data !== undefined && lookupQuery.data.account_id === accountID ? lookupQuery.data : undefined;
+    const fallback = defaultStatementCommodity(defaultID, defaultID !== undefined ? currenciesByID.get(defaultID)?.code : undefined, lookup?.default_commodity);
+    return statementCommodityOptions(fallback, lookup ? lookupStatementCommodities(lookup) : []);
+  });
+  // The working copy's commodity is locked once the form settles on it (or
+  // the owner picks one), so a refetch can never move a typed balance to
+  // another currency; a locked commodity no longer offered asks for a pick.
+  let locked = $state<{ accountID: number; commodityID: number } | undefined>(undefined);
+  const lockedForAccount = $derived(locked !== undefined && locked.accountID === accountID ? locked.commodityID : undefined);
+  const choice = $derived(
+    statementCommodityChoice(
+      commodityOptions,
+      lockedForAccount,
+      linkedCommodityID,
+      selectedAccount?.default_commodity_id
+    )
+  );
+  $effect(() => {
+    if (accountID === undefined || !lookupReady || lockedForAccount !== undefined || choice.commodityID === undefined) return;
+    locked = { accountID, commodityID: choice.commodityID };
+  });
+  const commodityID = $derived(lookupReady ? choice.commodityID : undefined);
+  const commodityCode = $derived(commodityOptions.find((option) => option.id === commodityID)?.code ?? '');
 
   $effect(() => {
     onAccountChange?.(selectedAccount?.id, commodityID);
@@ -156,13 +202,45 @@
         </select>
       </div>
 
-      {#if accountID !== undefined && commodityID === undefined}
+      {#if lookupEnabled && lookupQuery.data === undefined && lookupQuery.isError}
+        <!-- A failed lookup is not an account without currencies: say so and offer a retry. -->
+        <div class="space-y-2">
+          <APIFormError error={lookupQuery.error} id="reconcile-commodity-error" />
+          <button type="button" class="min-h-11 rounded-(--radius-control) border border-border bg-control px-3 text-sm font-semibold transition-colors hover:bg-control-hover" onclick={() => lookupQuery.refetch()}>
+            {m.reconcile_session_retry()}
+          </button>
+        </div>
+      {:else if accountID !== undefined && lookupReady && commodityOptions.length === 0}
         <p class="text-sm text-warning">{m.reconcile_start_no_commodity()}</p>
       {/if}
 
-      {#if currency}
+      {#if choice.lost}
+        <p class="text-sm text-warning" role="alert">{m.reconcile_start_commodity_lost()}</p>
+      {/if}
+
+      {#if commodityOptions.length > 1 || choice.lost}
+        <div>
+          <label class={labelClass} for="reconcile-commodity">{m.reconcile_start_currency_label()}</label>
+          <select
+            id="reconcile-commodity"
+            class={inputClass}
+            value={commodityID ?? ''}
+            onchange={(event) => {
+              if (accountID !== undefined) locked = { accountID, commodityID: Number(event.currentTarget.value) };
+            }}
+            disabled={pending}
+          >
+            {#if commodityID === undefined}
+              <option value="" disabled>{m.reconcile_start_currency_placeholder()}</option>
+            {/if}
+            {#each commodityOptions as option (option.id)}
+              <option value={option.id}>{option.code}</option>
+            {/each}
+          </select>
+        </div>
+      {:else if commodityCode}
         <p class="text-xs text-muted">
-          {m.reconcile_start_currency_label()}: <span class="font-semibold text-foreground">{currency.code}</span>
+          {m.reconcile_start_currency_label()}: <span class="font-semibold text-foreground">{commodityCode}</span>
         </p>
       {/if}
 
@@ -198,7 +276,7 @@
 
       <button
         type="submit"
-        class="inline-flex items-center gap-2 rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+        class="inline-flex items-center gap-2 rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition-colors hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
         disabled={!canSubmit}
       >
         {pending ? m.reconcile_start_submitting() : m.reconcile_start_submit()}

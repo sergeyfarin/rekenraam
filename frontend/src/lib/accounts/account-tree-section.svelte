@@ -9,6 +9,8 @@
   import Lock from '@lucide/svelte/icons/lock';
   import Trash from '@lucide/svelte/icons/trash';
   import type { AccountResponse } from '#lib/api/accounts.ts';
+  import type { AccountReconciliation } from '#lib/api/reconciliation.ts';
+  import { reconciliationAgeView } from '#lib/reconcile/reconciliation-age.ts';
   import type { CurrencyResponse } from '#lib/api/currencies.ts';
   import type { InstitutionResponse } from '#lib/api/institutions.ts';
   import StatusBadge from '#lib/components/status-badge.svelte';
@@ -42,6 +44,8 @@
   let {
     accounts,
     values = new Map(),
+    reconciliations = new Map(),
+    foldedReconciliations = new Map(),
     commodities = [],
     institutions,
     currenciesByID,
@@ -60,6 +64,8 @@
   }: {
     accounts: AccountResponse[];
     values?: ReadonlyMap<number, LedgerAccount['value']>;
+    reconciliations?: ReadonlyMap<number, AccountReconciliation>;
+    foldedReconciliations?: ReadonlyMap<number, readonly { accountID: number; label: string; age: AccountReconciliation }[]>;
     commodities?: LedgerOverview['commodities'];
     institutions: InstitutionResponse[];
     currenciesByID: ReadonlyMap<number, CurrencyResponse>;
@@ -304,6 +310,8 @@
           {@const hasChildren = (visibleAccountChildCounts.get(account.id) ?? 0) > 0}
           {@const dependents = childDependentCounts.get(account.id) ?? noDependents}
           {@const accountCollapsed = collapsedNodeIDs.has(accountNodeID(account.id))}
+          {@const reconciliation = reconciliations.get(account.id)}
+          {@const folded = foldedReconciliations.get(account.id) ?? []}
           <!--
             Stretched-link pattern: the <a> for the register covers the whole row via
             ::after. Action buttons sit at relative z-[1] so clicks on them don't
@@ -358,10 +366,21 @@
               {/if}
             </div>
 
-            <div class="flex min-w-0 items-center justify-start">
+            <div class="flex min-w-0 flex-col items-start justify-center gap-1">
               <StatusBadge tone={account.status === 'closed' ? 'danger' : 'accent'}>
                 {accountStatusLabel(account.status)}
               </StatusBadge>
+              <!-- A brokerage with nothing of its own to reconcile shows only its folded accounts. -->
+              {#if reconciliation && !(reconciliation.state === 'nothing_to_reconcile' && folded.length > 0)}
+                {@const age = reconciliationAgeView(reconciliation, getLocale())}
+                <p class="max-w-full text-xs {age.attention ? 'font-semibold text-warning' : 'text-muted'}" data-testid="account-reconciliation-age">{age.text}</p>
+              {/if}
+              {#each folded as item (item.accountID)}
+                {@const age = reconciliationAgeView(item.age, getLocale())}
+                <p class="max-w-full text-xs wrap-anywhere {age.attention ? 'font-semibold text-warning' : 'text-muted'}" data-testid="account-folded-reconciliation-age">
+                  {m.reconciliation_age_folded({ account: item.label, state: age.text })}
+                </p>
+              {/each}
             </div>
 
             <!-- Action buttons are siblings at z-[1], above the stretched-link ::after overlay -->

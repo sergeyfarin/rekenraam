@@ -74,7 +74,7 @@
         {#each widget.rows as row (row.key)}
           <li class="border-b border-border py-1.5 last:border-b-0">
             <div class="flex items-baseline justify-between gap-3">
-              <span class="min-w-0 flex-1 truncate">
+              <span class="min-w-0 flex-1 {row.wrap ? 'wrap-anywhere' : 'truncate'}" data-testid="home-widget-row-text">
                 {#if row.href}<a href={row.href} class="underline-offset-4 hover:underline">{row.label}</a>{:else}{row.label}{/if}
                 {#if row.detail}<span class="{row.over ? 'text-warning' : 'text-muted'}"> · {row.detail}</span>{/if}
               </span>

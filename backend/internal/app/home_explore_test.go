@@ -152,6 +152,7 @@ func TestHomeExploreFailureStaysLocal(t *testing.T) {
 	assert.Error(t, home.Income.Err)
 	assert.NoError(t, home.Cashflow.Err)
 	assert.NoError(t, home.Holdings.Err)
+	assert.NoError(t, home.Reconciliation.Err)
 	requireHomeCents(t, 167000, home.Spending.Summary.Total, "My Home still answers")
 }
 

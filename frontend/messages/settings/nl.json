@@ -1769,5 +1769,13 @@
   "investments_activity_position_unavailable": "De eerder gekozen positie is op deze datum niet beschikbaar. Kies een andere of wijzig de datum.",
   "investments_activity_lots_unavailable": "Eerder ingevoerde aantallen bevatten lots die deze positie op deze datum niet heeft. Ze worden niet gebruikt: verwijder ze of zet de datum terug.",
   "investments_activity_lots_unavailable_remove": "Die aantallen verwijderen",
-  "accounts_filter_status_archived": "Gearchiveerd"
+  "accounts_filter_status_archived": "Gearchiveerd",
+  "settings_reconciliation_title": "Afstemming",
+  "settings_reconciliation_copy": "De afstemming van een rekening is verouderd wanneer het laatst afgestemde afschrift ouder is dan dit. De rekeninglijst en Home gebruiken allebei deze instelling.",
+  "settings_reconciliation_days_label": "Verouderd na (dagen)",
+  "settings_reconciliation_days_hint": "Hele dagen van 1 tot 3650. Standaard is 60.",
+  "settings_reconciliation_save": "Opslaan",
+  "settings_reconciliation_saving": "Opslaan…",
+  "settings_reconciliation_saved": "Afstemmingsinstelling opgeslagen.",
+  "settings_reconciliation_invalid": "Voer een heel aantal dagen in van 1 tot 3650."
 }

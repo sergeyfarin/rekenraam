@@ -1769,5 +1769,13 @@
   "investments_activity_position_unavailable": "The position chosen earlier is not available on this date. Choose another one, or change the date.",
   "investments_activity_lots_unavailable": "Quantities entered earlier include lots this position does not hold on this date. They are not used: remove them, or change the date back.",
   "investments_activity_lots_unavailable_remove": "Remove those quantities",
-  "accounts_filter_status_archived": "Archived"
+  "accounts_filter_status_archived": "Archived",
+  "settings_reconciliation_title": "Reconciliation",
+  "settings_reconciliation_copy": "An account's reconciliation is out of date when its latest reconciled statement is older than this. The account list and Home both use this setting.",
+  "settings_reconciliation_days_label": "Out of date after (days)",
+  "settings_reconciliation_days_hint": "Whole days from 1 to 3650. The default is 60.",
+  "settings_reconciliation_save": "Save",
+  "settings_reconciliation_saving": "Saving…",
+  "settings_reconciliation_saved": "Reconciliation setting saved.",
+  "settings_reconciliation_invalid": "Enter a whole number of days from 1 to 3650."
 }

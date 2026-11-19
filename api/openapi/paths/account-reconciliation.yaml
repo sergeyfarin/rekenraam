@@ -1,0 +1,59 @@
+get:
+  security:
+    - CookieSession: []
+  summary: Read one account's reconciliation age
+  description: >-
+    The reconciliation out-of-date judgement (#482) for one account, read
+    through that account's own postings and checkpoints rather than the whole
+    book. The Reconcile form uses its commodities to offer the statement
+    currency. reconciliation is null when the account exists but cannot be
+    reconciled (for example a holding). Session-only.
+  operationId: getAccountReconciliation
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/AccountID"
+  responses:
+    "200":
+      description: The account's reconciliation age and the book window.
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/AccountReconciliationLookupResponse"
+    "400":
+      description: Invalid account id
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Account not found
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

@@ -1769,5 +1769,13 @@
   "investments_activity_position_unavailable": "Выбранная ранее позиция недоступна на эту дату. Выберите другую или измените дату.",
   "investments_activity_lots_unavailable": "Среди введённых ранее количеств есть лоты, которых в этой позиции нет на эту дату. Они не учитываются: удалите их или верните прежнюю дату.",
   "investments_activity_lots_unavailable_remove": "Удалить эти количества",
-  "accounts_filter_status_archived": "В архиве"
+  "accounts_filter_status_archived": "В архиве",
+  "settings_reconciliation_title": "Сверка",
+  "settings_reconciliation_copy": "Сверка счёта считается устаревшей, если последняя сверенная выписка старше этого срока. Этот параметр используют и список счетов, и главная страница.",
+  "settings_reconciliation_days_label": "Устаревает через (дней)",
+  "settings_reconciliation_days_hint": "Целое число дней от 1 до 3650. По умолчанию 60.",
+  "settings_reconciliation_save": "Сохранить",
+  "settings_reconciliation_saving": "Сохранение…",
+  "settings_reconciliation_saved": "Параметр сверки сохранён.",
+  "settings_reconciliation_invalid": "Введите целое число дней от 1 до 3650."
 }

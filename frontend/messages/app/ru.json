@@ -2162,5 +2162,71 @@
   "ledger_account_children_block": "Счета внутри этого счёта блокируют некоторые действия: закрытие ждёт активные, архивирование — неархивные, удаление — все.",
   "ledger_archived_accounts": "Архивные счета",
   "ledger_archived_accounts_copy": "Архивные счета не показываются в дереве. Откройте счёт, чтобы восстановить или удалить его.",
-  "ledger_account_children": "Счета внутри этого счёта"
+  "ledger_account_children": "Счета внутри этого счёта",
+  "reconciliation_age_reconciled": "Сверено по {date}",
+  "reconciliation_age_out_of_date": "Сверка устарела: сверено по {date}",
+  "reconciliation_age_never": "Ни разу не сверялся",
+  "reconciliation_age_nothing": "Нечего сверять",
+  "home_reconciliation_title": "Сверка",
+  "home_reconciliation_open": "Открыть сверку",
+  "home_reconciliation_zero": "Пока ни на одном счёте нечего сверять",
+  "home_reconciliation_fact": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "input reconciled",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Сверено {reconciled} из {n} счёта",
+        "countPlural=few": "Сверено {reconciled} из {n} счетов",
+        "countPlural=many": "Сверено {reconciled} из {n} счетов",
+        "countPlural=*": "Сверено {reconciled} из {n} счёта"
+      }
+    }
+  ],
+  "home_reconciliation_scope": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "За последний {n} день",
+        "countPlural=few": "За последние {n} дня",
+        "countPlural=many": "За последние {n} дней",
+        "countPlural=*": "За последние {n} дня"
+      }
+    }
+  ],
+  "home_reconciliation_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Ещё {n} счёт",
+        "countPlural=few": "Ещё {n} счёта",
+        "countPlural=many": "Ещё {n} счетов",
+        "countPlural=*": "Ещё {n} счёта"
+      }
+    }
+  ],
+  "reconciliation_age_commodity": "{code}: {state}",
+  "reconciliation_age_folded": "{account}: {state}",
+  "reconcile_start_commodity_lost": "Валюта этой выписки больше не предлагается для этого счёта. Выберите валюту выписки перед началом.",
+  "reconcile_start_currency_placeholder": "Выберите валюту"
 }

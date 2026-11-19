@@ -186,10 +186,10 @@ Deliver incrementally, tracked in #441, in this order:
    its own issue with its correction and provenance contract (#487). Currency
    sub-accounts on demand for multi-currency providers (#486) follow once its
    parent-posting, migration, historical-reconciliation and report-total
-   questions are decided. Still open: the general reconciliation out-of-date rule with its
-   account-list state and Home widget (#482, configurable window, default 60
-   days). Pinned accounts on the Accounts widget arrive with #442
-   and entered values in the briefing with #454.
+   questions are decided. The reconciliation out-of-date rule with its
+   account-list state and Home widget (#482) was delivered 2026-11-18. Pinned
+   accounts on the Accounts widget arrive with #442 and entered values in the
+   briefing with #454.
 3. **Shell look (owner, 2026-11-01):** olive two-tint header rows
    with the current section as a joined tab (#489, delivered 2026-11-08) and
    a *Search Ctrl K* button opening the centred search (#490, delivered

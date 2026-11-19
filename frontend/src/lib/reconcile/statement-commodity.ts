@@ -1,0 +1,96 @@
+/**
+ * Which commodity a new reconciliation is for (#594 review). A statement
+ * covers one commodity, and an account can hold several: its default
+ * currency and every commodity the server's reconciliation judgement found
+ * activity or a statement in. The owner picks among them; Home's link names
+ * the one it flagged, so the form opens on it rather than on a default the
+ * account may not have.
+ */
+export type StatementCommodityOption = { id: number; code: string };
+
+export function statementCommodityOptions(
+  defaultCommodity: StatementCommodityOption | undefined,
+  judged: readonly { commodity_id: number; commodity_code: string }[]
+): StatementCommodityOption[] {
+  const options: StatementCommodityOption[] = defaultCommodity ? [defaultCommodity] : [];
+  for (const commodity of judged) {
+    if (!options.some(option => option.id === commodity.commodity_id)) options.push({ id: commodity.commodity_id, code: commodity.commodity_code });
+  }
+  return options;
+}
+
+/**
+ * The commodities an account's reconciliation lookup offers: the judged ones
+ * (weakest first), then those of active statements the judgement leaves out,
+ * such as one dated after today. A register link names such a statement's
+ * commodity, and Reconcile must open in it so it can be voided (#594 review).
+ */
+export function lookupStatementCommodities(lookup: {
+  reconciliation: { commodities: readonly { commodity_id: number; commodity_code: string }[] } | null;
+  statement_commodities: readonly { commodity_id: number; commodity_code: string }[];
+}): { commodity_id: number; commodity_code: string }[] {
+  return [...(lookup.reconciliation?.commodities ?? []), ...lookup.statement_commodities];
+}
+
+/**
+ * Whether the form reads the account's reconciliation lookup. Every
+ * reconcilable account does. A holding is reconciled in its instrument and
+ * has no age, so it reads the lookup only when a link names another
+ * commodity: a statement in it, such as a cash statement, must be verified
+ * and offered so it can be opened and voided (#594 review).
+ */
+export function needsCommodityLookup(input: {
+  subledgerManaged: boolean;
+  requestedCommodityID: number | undefined;
+  defaultID: number | null | undefined;
+}): boolean {
+  if (!input.subledgerManaged) return true;
+  return input.requestedCommodityID !== undefined && input.requestedCommodityID !== (input.defaultID ?? undefined);
+}
+
+/**
+ * The account's default commodity as an option: its currency code, or the
+ * code the lookup names when the currency list does not hold it (a
+ * holding's instrument).
+ */
+export function defaultStatementCommodity(
+  defaultID: number | null | undefined,
+  currencyCode: string | undefined,
+  lookupDefault: { commodity_id: number; commodity_code: string } | null | undefined
+): StatementCommodityOption | undefined {
+  if (defaultID === null || defaultID === undefined) return undefined;
+  const code = currencyCode || (lookupDefault?.commodity_id === defaultID ? lookupDefault.commodity_code : '');
+  return { id: defaultID, code };
+}
+
+/** The owner's choice when it is one of the options, else the request, else the default, else the first (weakest) judged commodity. */
+export function chooseStatementCommodity(
+  options: readonly StatementCommodityOption[],
+  chosen: number | undefined,
+  requested: number | undefined,
+  defaultID: number | null | undefined
+): number | undefined {
+  for (const candidate of [chosen, requested, defaultID ?? undefined]) {
+    if (candidate !== undefined && options.some(option => option.id === candidate)) return candidate;
+  }
+  return options[0]?.id;
+}
+
+/**
+ * The statement's commodity for a working copy. Once a commodity is locked
+ * (the first one the form settled on, or the owner's pick) a later lookup
+ * never switches it: a balance typed for USD must not be sent as EUR. If the
+ * locked commodity is no longer offered, there is none until the owner picks
+ * again (`lost`).
+ */
+export function statementCommodityChoice(
+  options: readonly StatementCommodityOption[],
+  locked: number | undefined,
+  requested: number | undefined,
+  defaultID: number | null | undefined
+): { commodityID: number | undefined; lost: boolean } {
+  if (locked !== undefined) {
+    return options.some(option => option.id === locked) ? { commodityID: locked, lost: false } : { commodityID: undefined, lost: true };
+  }
+  return { commodityID: chooseStatementCommodity(options, undefined, requested, defaultID), lost: false };
+}

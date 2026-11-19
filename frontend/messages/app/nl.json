@@ -2098,5 +2098,65 @@
   "ledger_account_children_block": "Rekeningen onder deze rekening houden sommige acties tegen: Sluiten wacht op actieve, Archiveren op niet-gearchiveerde en Verwijderen op alle.",
   "ledger_archived_accounts": "Gearchiveerde rekeningen",
   "ledger_archived_accounts_copy": "Gearchiveerde rekeningen staan niet in de boom. Open er een om hem te herstellen of te verwijderen.",
-  "ledger_account_children": "Rekeningen onder deze rekening"
+  "ledger_account_children": "Rekeningen onder deze rekening",
+  "reconciliation_age_reconciled": "Afgestemd tot {date}",
+  "reconciliation_age_out_of_date": "Verouderd: afgestemd tot {date}",
+  "reconciliation_age_never": "Nooit afgestemd",
+  "reconciliation_age_nothing": "Niets om af te stemmen",
+  "home_reconciliation_title": "Afstemming",
+  "home_reconciliation_open": "Afstemmen openen",
+  "home_reconciliation_zero": "Nog geen rekening met iets om af te stemmen",
+  "home_reconciliation_fact": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "input reconciled",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{reconciled} van {n} rekening afgestemd",
+        "countPlural=*": "{reconciled} van {n} rekeningen afgestemd"
+      }
+    }
+  ],
+  "home_reconciliation_scope": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "In de afgelopen dag",
+        "countPlural=*": "In de afgelopen {n} dagen"
+      }
+    }
+  ],
+  "home_reconciliation_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Nog {n} rekening",
+        "countPlural=*": "Nog {n} rekeningen"
+      }
+    }
+  ],
+  "reconciliation_age_commodity": "{code}: {state}",
+  "reconciliation_age_folded": "{account}: {state}",
+  "reconcile_start_commodity_lost": "De valuta van dit afschrift wordt niet meer aangeboden voor deze rekening. Kies de valuta van het afschrift voordat je begint.",
+  "reconcile_start_currency_placeholder": "Kies een valuta"
 }

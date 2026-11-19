@@ -12,13 +12,14 @@
   import { saveUserPreferences, userPreferencesQueryOptions } from '#lib/api/settings.ts';
   import { getAPIClientErrorMessage } from '#lib/api-error-messages.ts';
   import Panel from '#lib/components/panel.svelte';
+  import ReconciliationSettings from './reconciliation-settings.svelte';
   import StatusBadge from '#lib/components/status-badge.svelte';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { m } from '#lib/paraglide/messages.js';
 
-  // General is the facts page (#446): default currency, time zone, app version
-  // and the last complete backup. Links to the focused settings pages live in
-  // the side list and the settings menu, never as cards here.
+  // General is the facts page (#446): default currency, time zone, app version,
+  // the last complete backup and the reconciliation window (#482). Links to
+  // the focused settings pages live in the side list and the settings menu, never as cards here.
   const sessionQuery = createQuery(() => authSessionQueryOptions());
   const currentBookQuery = createQuery(() => currentBookQueryOptions());
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
@@ -189,7 +190,7 @@
       </label>
       <button
         type="submit"
-        class="rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+        class="rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition-colors hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
         disabled={preferencesPending || selectedTimeZone === ''}
       >
         {preferencesPending ? m.settings_preferences_saving() : m.settings_preferences_save()}
@@ -202,4 +203,5 @@
       <p role="alert" class="mt-3 text-sm font-semibold text-danger">{getAPIClientErrorMessage(preferencesError)}</p>
     {/if}
   </Panel>
+  <ReconciliationSettings />
 </section>

@@ -237,3 +237,65 @@ async function reconciliationLifecycleMutation(
     throw toNetworkError(error);
   }
 }
+
+// The reconciliation out-of-date window (#482): one book setting the account
+// list and Home both judge with.
+export type ReconciliationPolicyResponse = components['schemas']['ReconciliationPolicyResponse'];
+export type AccountReconciliation = components['schemas']['AccountReconciliation'];
+
+export const reconciliationPolicyQueryKey = [...reconciliationQueryKey, 'policy'] as const;
+
+export function reconciliationPolicyQueryOptions() {
+  return {
+    queryKey: reconciliationPolicyQueryKey,
+    queryFn: getReconciliationPolicy,
+    staleTime: 10_000
+  };
+}
+
+export async function getReconciliationPolicy(): Promise<ReconciliationPolicyResponse> {
+  try {
+    const { data, error, response } = await apiClient.GET('/api/v1/reconciliation/policy');
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function saveReconciliationPolicy(outOfDateAfterDays: number, csrfToken: string): Promise<ReconciliationPolicyResponse> {
+  try {
+    const { data, error, response } = await apiClient.PUT('/api/v1/reconciliation/policy', {
+      params: { header: { 'X-CSRF-Token': csrfToken } },
+      body: { out_of_date_after_days: outOfDateAfterDays }
+    });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export type AccountReconciliationLookupResponse = components['schemas']['AccountReconciliationLookupResponse'];
+
+/** One account's reconciliation judgement, read through that account alone (#594 review). */
+export function accountReconciliationQueryOptions(accountID: number) {
+  return {
+    queryKey: [...reconciliationQueryKey, 'account', accountID] as const,
+    queryFn: () => getAccountReconciliation(accountID),
+    staleTime: 10_000
+  };
+}
+
+export async function getAccountReconciliation(accountID: number): Promise<AccountReconciliationLookupResponse> {
+  try {
+    const { data, error, response } = await apiClient.GET('/api/v1/accounts/{account_id}/reconciliation', { params: { path: { account_id: accountID } } });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}

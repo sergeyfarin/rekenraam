@@ -277,3 +277,106 @@ PostingReconciliationStatusRequest:
     change_reason:
       type: string
   additionalProperties: false
+ReconciliationPolicyResponse:
+  type: object
+  required: [out_of_date_after_days, updated_at]
+  properties:
+    out_of_date_after_days:
+      type: integer
+      minimum: 1
+      maximum: 3650
+      description: A reconciliation whose statement date is more than this many days before owner-local today is out of date. Default 60.
+    updated_at:
+      type: [string, 'null']
+      format: date-time
+      description: Null while the book uses the default it never saved.
+ReconciliationPolicyRequest:
+  type: object
+  required: [out_of_date_after_days]
+  additionalProperties: false
+  properties:
+    out_of_date_after_days:
+      type: integer
+      minimum: 1
+      maximum: 3650
+AccountReconciliationState:
+  type: string
+  enum: [reconciled, out_of_date, never_reconciled, nothing_to_reconcile]
+  description: >-
+    A reconciliation age on owner-local today (#482), judged per commodity
+    because a checkpoint covers one. reconciled: the latest active checkpoint
+    dated on or before today is within the window (the boundary day counts as
+    within); a statement dated after today never counts. out_of_date: it is
+    older. never_reconciled: posted activity dated on or before today but no
+    such checkpoint. nothing_to_reconcile: neither, which is never called out
+    of date. An account takes its weakest commodity's state (never reconciled,
+    then out of date, then reconciled), so one reconciled currency never
+    vouches for another.
+AccountReconciliation:
+  type: object
+  required: [state, last_statement_date, commodities]
+  properties:
+    state:
+      $ref: "../../openapi.yaml#/components/schemas/AccountReconciliationState"
+    last_statement_date:
+      type: [string, 'null']
+      format: date
+      description: The oldest statement date among the commodities in this state (how far the weakest coverage reaches); null for never_reconciled and nothing_to_reconcile.
+    commodities:
+      type: array
+      description: Per-commodity judgements, weakest first. Empty for nothing_to_reconcile.
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/CommodityReconciliation"
+CommodityReconciliation:
+  type: object
+  required: [commodity_id, commodity_code, state, last_statement_date]
+  properties:
+    commodity_id: { type: integer, format: int64 }
+    commodity_code: { type: string }
+    state:
+      $ref: "../../openapi.yaml#/components/schemas/AccountReconciliationState"
+    last_statement_date:
+      type: [string, 'null']
+      format: date
+      description: Latest active checkpoint for this commodity dated on or before today; null when there is none.
+FoldedAccountReconciliation:
+  description: A folded account's judgement (a brokerage's cash or other child, which has no row of its own).
+  allOf:
+    - $ref: "../../openapi.yaml#/components/schemas/AccountReconciliation"
+    - type: object
+      required: [account_id]
+      properties:
+        account_id: { type: integer, format: int64 }
+AccountReconciliationLookupResponse:
+  type: object
+  required: [account_id, out_of_date_after_days, reconciliation, statement_commodities, default_commodity]
+  properties:
+    account_id: { type: integer, format: int64 }
+    out_of_date_after_days: { type: integer, minimum: 1 }
+    reconciliation:
+      oneOf:
+        - $ref: "../../openapi.yaml#/components/schemas/AccountReconciliation"
+        - type: 'null'
+    statement_commodities:
+      type: array
+      description: >-
+        Every commodity the account has an active statement in, whatever its
+        statement date. The judgement leaves out statements dated after today;
+        Reconcile still offers their commodity so they can be opened and
+        voided, and on a holding (which has no reconciliation age) a statement
+        in another commodity than its instrument.
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/StatementCommodity"
+    default_commodity:
+      description: >-
+        The account's default commodity with its code (a holding's is its
+        instrument, which is not a currency); null when the account has none.
+      oneOf:
+        - $ref: "../../openapi.yaml#/components/schemas/StatementCommodity"
+        - type: 'null'
+StatementCommodity:
+  type: object
+  required: [commodity_id, commodity_code]
+  properties:
+    commodity_id: { type: integer, format: int64 }
+    commodity_code: { type: string }

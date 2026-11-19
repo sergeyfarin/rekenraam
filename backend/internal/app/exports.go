@@ -106,7 +106,7 @@ var ExportExcludedData = []string{
 	"superseded, draft, and voided transaction versions",
 	"budget targets and on-budget account treatment",
 	"recurring templates and their occurrences (the transactions they posted are exported)",
-	"reconciliation checkpoints and sessions (each posting's reconciliation status and cleared date are exported)",
+	"reconciliation checkpoints, sessions and the out-of-date window (each posting's reconciliation status and cleared date are exported)",
 	"effective-dated history of accounts, categories, payees and instruments (current values are exported)",
 	"instrument identifiers and exchange details, and institution details beyond the name",
 	"cost-basis method profiles (each disposal decision records the method it used)",
