@@ -45,6 +45,17 @@ get:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
 patch:
   summary: Update an account by appending a new account version
+  description: >-
+    Full update: the request carries the whole account. A version dated before
+    the account's latest version is a correction of descriptive fields (name,
+    code, number hint, country, comment, metadata); its structural fields must
+    equal those of the version in effect on its date, and it keeps that
+    version's status and closed_on. Such a correction governs only until the
+    next version. The response is the account as it stands on the owner's
+    current day: the version in effect on that day, selected inside the
+    write. That is usually a later version than an earlier-dated correction,
+    but it is the correction itself when the correction is the version in
+    effect on that day. The versions endpoint lists every version.
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/AccountID"
     - in: header
@@ -108,19 +119,15 @@ patch:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
+      $ref: "../openapi.yaml#/components/responses/ReferenceVersionConflict"
       description: >-
-        Account cannot be changed: a system account, a category (managed
-        through the category API), a structural edit after postings exist, a
-        structural edit dated before the account's latest version, or a
-        version that would leave an existing posting outside the account's
-        open dates.
-      headers:
-        X-Request-ID:
-          $ref: "../openapi.yaml#/components/headers/XRequestID"
-      content:
-        application/json:
-          schema:
-            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+        REFERENCE_VERSION_BACKDATED for a structural edit dated before the
+        account's latest version; REFERENCE_VERSION_BEFORE_FIRST for an edit
+        dated on or after opened_on but before the account's first version (a
+        date before opened_on is 400 VALIDATION_FAILED); CONFLICT for a system
+        account, a category (managed through the category API), a structural
+        edit after postings exist, or a version that would leave an existing
+        posting outside the account's open dates.
 delete:
   summary: Delete an unused user-created account
   description: System accounts, accounts with postings, and accounts referenced by child accounts or other durable records cannot be hard deleted.

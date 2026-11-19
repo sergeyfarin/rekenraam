@@ -317,7 +317,7 @@ func (r *CategoryRepository) UpdateCategory(ctx context.Context, params UpdateCa
 	if err != nil {
 		return AccountRecord{}, err
 	}
-	latest, err := latestAccountVersionDateTx(ctx, tx, params.CategoryID)
+	latest, err := latestReferenceVersionDateTx(ctx, tx, accountVersionTable, params.CategoryID)
 	if err != nil {
 		return AccountRecord{}, err
 	}
@@ -463,7 +463,7 @@ func (r *CategoryRepository) ChangeCategoryStatus(ctx context.Context, params Ca
 	if err != nil {
 		return AccountRecord{}, err
 	}
-	latest, err := latestAccountVersionDateTx(ctx, tx, params.CategoryID)
+	latest, err := latestReferenceVersionDateTx(ctx, tx, accountVersionTable, params.CategoryID)
 	if err != nil {
 		return AccountRecord{}, err
 	}

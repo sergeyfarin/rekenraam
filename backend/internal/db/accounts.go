@@ -35,17 +35,6 @@ var (
 	ErrAccountParentCycle      = errors.New("account parent would create a cycle")
 )
 
-// AccountVersionBackdatedError refuses a lifecycle or structural version dated
-// before the account's latest version (#293). LatestEffectiveFrom is the
-// earliest date such a change may take effect.
-type AccountVersionBackdatedError struct {
-	LatestEffectiveFrom string
-}
-
-func (e AccountVersionBackdatedError) Error() string {
-	return fmt.Sprintf("lifecycle and structure changes cannot take effect before %s, when the account's latest version takes effect; an earlier date may change descriptive fields only", e.LatestEffectiveFrom)
-}
-
 // AccountPostingsOutsideDatesError reports an account version that would
 // govern a posting the account already has and refuse it — a close dated
 // before the posting, or a backdated archive (#292). EntryDate is the earliest
@@ -552,28 +541,30 @@ func (r *AccountRepository) UpdateAccount(ctx context.Context, params UpdateAcco
 		status = current.Status
 	}
 	next := params.Spec
-	latest, err := latestAccountVersionDateTx(ctx, tx, params.AccountID)
+	latest, err := latestReferenceVersionDateTx(ctx, tx, accountVersionTable, params.AccountID)
 	if err != nil {
 		return AccountRecord{}, err
 	}
-	if params.EffectiveFrom < latest {
+	backdated := params.EffectiveFrom < latest
+	if backdated {
 		// A version dated before the latest one governs only the days up to
 		// it, so it cannot be what the account is today (#293). Lifecycle and
 		// structure therefore take effect on or after the latest version; an
 		// earlier-dated version is a correction of descriptive fields and
 		// keeps the structure and lifecycle the account had on its date.
+		// The refusals are the shared reference-data ones (#552, #566).
 		if params.Status != "" {
-			return AccountRecord{}, AccountVersionBackdatedError{LatestEffectiveFrom: latest}
+			return AccountRecord{}, ReferenceVersionBackdatedError{LatestEffectiveFrom: latest}
 		}
 		asOf, err := accountVersionAsOfTx(ctx, tx, params.BookID, params.AccountID, params.EffectiveFrom)
 		if errors.Is(err, ErrNotFound) {
-			return AccountRecord{}, AccountVersionBackdatedError{LatestEffectiveFrom: latest}
+			return AccountRecord{}, referenceVersionBeforeFirst(ctx, tx, accountVersionTable, params.AccountID)
 		}
 		if err != nil {
 			return AccountRecord{}, err
 		}
 		if accountStructureDiffers(asOf, next) {
-			return AccountRecord{}, AccountVersionBackdatedError{LatestEffectiveFrom: latest}
+			return AccountRecord{}, ReferenceVersionBackdatedError{LatestEffectiveFrom: latest}
 		}
 		status = asOf.Status
 		next.ClosedOn = asOf.ClosedOn
@@ -643,6 +634,16 @@ func (r *AccountRepository) UpdateAccount(ctx context.Context, params UpdateAcco
 	}
 	if spec.ParentAccountID.Valid {
 		if err := requireNoDatedParentCycleTx(ctx, tx, params.BookID, params.AccountID, params.EffectiveFrom); err != nil {
+			return AccountRecord{}, err
+		}
+	}
+	// An earlier-dated correction governs only its past window; answer with
+	// the account as it stands on the caller's reference date (#566). Read
+	// inside the write, so a committed write is never followed by a failed
+	// read.
+	if backdated {
+		record, err = currentAccountByID(ctx, tx, params.BookID, params.AccountID)
+		if err != nil {
 			return AccountRecord{}, err
 		}
 	}
@@ -717,14 +718,6 @@ func requireArchiveConsistencyTx(ctx context.Context, tx *sql.Tx, bookID int64, 
 		}
 	}
 	return nil
-}
-
-func latestAccountVersionDateTx(ctx context.Context, tx *sql.Tx, accountID int64) (string, error) {
-	var latest sql.NullString
-	if err := tx.QueryRowContext(ctx, `SELECT MAX(effective_from) FROM account_versions WHERE account_id = ?`, accountID).Scan(&latest); err != nil {
-		return "", fmt.Errorf("read latest account version date: %w", err)
-	}
-	return latest.String, nil
 }
 
 func accountVersionAsOfTx(ctx context.Context, tx *sql.Tx, bookID int64, accountID int64, date string) (AccountRecord, error) {

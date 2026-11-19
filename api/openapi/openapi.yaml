@@ -624,7 +624,8 @@ components:
   responses:
     ReferenceVersionConflict:
       description: >-
-        A dated category, payee or institution write was refused (#552).
+        A dated account, category, payee or institution write was refused
+        (#552, #566).
         REFERENCE_DATED_CONFLICT — a rule involving another record fails on a
         date the new version governs; conflict_rule, conflict_date and
         conflict_name (or conflict_builtin_key) say which rule, the first

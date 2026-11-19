@@ -159,3 +159,20 @@ an unpinned read, so such a case catches nothing without a later version. Named 
 `TestCurrentReferenceReadsFollowOwnerDay`,
 `TestCurrentReferenceSiblingsAndComposedReadsUseOwnerDay`,
 `owner-current-reference.spec.ts`.
+
+## 83. A second clock reading after the owner day is pinned
+
+A write pinned the owner day for its reads with `referenceContext`, then
+resolved "today" again with `OwnerTodayAt(ctx, …, s.now())` for date
+validation and defaults (#566 review, PR #604). A request that crossed
+midnight between the two readings accepted, or defaulted to, a date its own
+reads treated as the future. An ordinary rename with no date then wrote and
+returned a version dated the 16th, while a read pinned to the 15th still
+returned the previous version, so the response disagreed with the day the
+request was pinned to. Validate and default on the pinned
+day (`pinnedOwnerDay(ctx)`), and keep `s.now()` only for instants such as
+`recorded_at`. A test arms a clock that crosses midnight right before the
+service call and asserts all three effects: a date of tomorrow is refused, an
+omitted date defaults to the pinned day, and the response equals the read on
+that day. Named check: `TestAccountWritesUseThePinnedOwnerDay`. #605 tracks
+the other services.

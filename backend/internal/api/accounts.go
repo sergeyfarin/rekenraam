@@ -427,6 +427,9 @@ func readAccountID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 }
 
 func writeAccountServiceError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, action string, err error) {
+	if writeReferenceVersionError(w, err) {
+		return
+	}
 	var validationError app.ValidationError
 	switch {
 	case errors.As(err, &validationError):
@@ -449,8 +452,6 @@ func writeAccountServiceError(w http.ResponseWriter, r *http.Request, logger *sl
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "account cannot be deleted while it has postings or references")
 	case errors.Is(err, app.ErrSystemAccountProtected):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "system account cannot be changed")
-	case errors.Is(err, app.ErrAccountVersionBackdated):
-		writeAPIError(w, http.StatusConflict, "CONFLICT", err.Error())
 	case errors.Is(err, app.ErrAccountHasDependents):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "account cannot be archived while child accounts are not archived")
 	case errors.Is(err, app.ErrCategoryAccountProtected):

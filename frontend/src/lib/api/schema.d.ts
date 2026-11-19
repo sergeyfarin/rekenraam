@@ -5537,7 +5537,10 @@ export interface paths {
         };
         options?: never;
         head?: never;
-        /** Update an account by appending a new account version */
+        /**
+         * Update an account by appending a new account version
+         * @description Full update: the request carries the whole account. A version dated before the account's latest version is a correction of descriptive fields (name, code, number hint, country, comment, metadata); its structural fields must equal those of the version in effect on its date, and it keeps that version's status and closed_on. Such a correction governs only until the next version. The response is the account as it stands on the owner's current day: the version in effect on that day, selected inside the write. That is usually a later version than an earlier-dated correction, but it is the correction itself when the correction is the version in effect on that day. The versions endpoint lists every version.
+         */
         patch: {
             parameters: {
                 query?: never;
@@ -5606,16 +5609,8 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Account cannot be changed: a system account, a category (managed through the category API), a structural edit after postings exist, a structural edit dated before the account's latest version, or a version that would leave an existing posting outside the account's open dates. */
-                409: {
-                    headers: {
-                        "X-Request-ID": components["headers"]["XRequestID"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
+                /** @description REFERENCE_VERSION_BACKDATED for a structural edit dated before the account's latest version; REFERENCE_VERSION_BEFORE_FIRST for an edit dated on or after opened_on but before the account's first version (a date before opened_on is 400 VALIDATION_FAILED); CONFLICT for a system account, a category (managed through the category API), a structural edit after postings exist, or a version that would leave an existing posting outside the account's open dates. */
+                409: components["responses"]["ReferenceVersionConflict"];
                 413: components["responses"]["JSONBodyTooLarge"];
             };
         };
@@ -5699,16 +5694,8 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Lifecycle transition is invalid, the account is a system account or a category (managed through the category API), the change is dated before the account's latest version, or the new version would leave an existing posting outside the account's open dates (for example a closed_on before the last posting); the message names the earliest such date. */
-                409: {
-                    headers: {
-                        "X-Request-ID": components["headers"]["XRequestID"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
+                /** @description REFERENCE_VERSION_BACKDATED when dated before the account's latest version; CONFLICT when the lifecycle transition is invalid, the account is a system account or a category (managed through the category API), or the new version would leave an existing posting outside the account's open dates (for example a closed_on before the last posting; the message names the earliest such date). */
+                409: components["responses"]["ReferenceVersionConflict"];
                 413: components["responses"]["JSONBodyTooLarge"];
             };
         };
@@ -5786,16 +5773,8 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Lifecycle transition is invalid, the account is a system account or a category (managed through the category API), the change is dated before the account's latest version, or the new version would leave an existing posting outside the account's open dates (for example a closed_on before the last posting); the message names the earliest such date. */
-                409: {
-                    headers: {
-                        "X-Request-ID": components["headers"]["XRequestID"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
+                /** @description REFERENCE_VERSION_BACKDATED when dated before the account's latest version; CONFLICT when the lifecycle transition is invalid, the account is a system account or a category (managed through the category API), or the new version would leave an existing posting outside the account's open dates (for example a closed_on before the last posting; the message names the earliest such date). */
+                409: components["responses"]["ReferenceVersionConflict"];
                 413: components["responses"]["JSONBodyTooLarge"];
             };
         };
@@ -5873,16 +5852,8 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Lifecycle transition is invalid, the account is a system account or a category (managed through the category API), the change is dated before the account's latest version, a child account is not archived yet, or the new version would leave an existing posting outside the account's open dates (for example a closed_on before the last posting); the message names the earliest such date. */
-                409: {
-                    headers: {
-                        "X-Request-ID": components["headers"]["XRequestID"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
+                /** @description REFERENCE_VERSION_BACKDATED when dated before the account's latest version; CONFLICT when the lifecycle transition is invalid, the account is a system account or a category (managed through the category API), a child account is not archived yet, or the new version would leave an existing posting outside the account's open dates (for example a closed_on before the last posting; the message names the earliest such date). */
+                409: components["responses"]["ReferenceVersionConflict"];
                 413: components["responses"]["JSONBodyTooLarge"];
             };
         };
@@ -5960,16 +5931,8 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Lifecycle transition is invalid, the account is a system account or a category (managed through the category API), the change is dated before the account's latest version, or the new version would leave an existing posting outside the account's open dates (for example a closed_on before the last posting); the message names the earliest such date. */
-                409: {
-                    headers: {
-                        "X-Request-ID": components["headers"]["XRequestID"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
+                /** @description REFERENCE_VERSION_BACKDATED when dated before the account's latest version; CONFLICT when the lifecycle transition is invalid, the account is a system account or a category (managed through the category API), or the new version would leave an existing posting outside the account's open dates (for example a closed_on before the last posting; the message names the earliest such date). */
+                409: components["responses"]["ReferenceVersionConflict"];
                 413: components["responses"]["JSONBodyTooLarge"];
             };
         };
@@ -36306,7 +36269,7 @@ export interface components {
         };
     };
     responses: {
-        /** @description A dated category, payee or institution write was refused (#552). REFERENCE_DATED_CONFLICT — a rule involving another record fails on a date the new version governs; conflict_rule, conflict_date and conflict_name (or conflict_builtin_key) say which rule, the first failing date and the other record. REFERENCE_VERSION_BACKDATED — a lifecycle or structural change dated before the latest version; conflict_date is that version's date. REFERENCE_VERSION_BEFORE_FIRST — dated before the record's first version; conflict_date is the first version's date. CONFLICT — a version was added while the edit was prepared; reload and retry. Which of these an operation can return is in its own description. No audit event or version is written. */
+        /** @description A dated account, category, payee or institution write was refused (#552, #566). REFERENCE_DATED_CONFLICT — a rule involving another record fails on a date the new version governs; conflict_rule, conflict_date and conflict_name (or conflict_builtin_key) say which rule, the first failing date and the other record. REFERENCE_VERSION_BACKDATED — a lifecycle or structural change dated before the latest version; conflict_date is that version's date. REFERENCE_VERSION_BEFORE_FIRST — dated before the record's first version; conflict_date is the first version's date. CONFLICT — a version was added while the edit was prepared; reload and retry. Which of these an operation can return is in its own description. No audit event or version is written. */
         ReferenceVersionConflict: {
             headers: {
                 "X-Request-ID": components["headers"]["XRequestID"];

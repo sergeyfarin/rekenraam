@@ -397,14 +397,42 @@ therefore enforces this contract inside its transaction:
   (the locked fields listed under Account Kinds: class, kind, parent,
   institution, default commodity, precision, posting behavior, opened date,
   cost-basis method) take effect on or after the latest version's
-  `effective_from`. An earlier date is refused with `409 CONFLICT`, naming that
-  date. A same-date version is allowed; it supersedes by `version_seq`.
+  `effective_from`. An earlier date is refused with
+  `409 REFERENCE_VERSION_BACKDATED`, with that date as `conflict_date` (#566,
+  the code shared with #552 below). A same-date version is allowed; it
+  supersedes by `version_seq`.
 - An earlier date is a historical correction of descriptive fields (name, code,
   number hint, country, comment, metadata). Its structural fields must equal
   those of the version in effect on its date, and it takes that version's status
   and `closed_on` rather than today's, so correcting a name in March does not
-  write a later close into March. The write's response is the version written,
-  with its own `effective_from`; the current state is still the latest version.
+  write a later close into March. A date on or after `opened_on` but before the
+  account's first version has no version to correct and is refused with
+  `409 REFERENCE_VERSION_BEFORE_FIRST`, with the first version's date as
+  `conflict_date`. A date before `opened_on` stays
+  `400 VALIDATION_FAILED`.
+- **The response is today's state** (#566), as for the kinds below. The write
+  re-reads the account inside its transaction, on the owner day the request
+  pinned, after inserting an earlier-dated correction. The response is the
+  version in effect on that day: usually a later one, so a past window's
+  status, name or `effective_from` is never reported as current, but the
+  correction itself when it is the version in effect on that day (for
+  example after the owner's time zone moved back a day, leaving the latest
+  version in the future). The version written is listed by
+  `/accounts/{id}/versions`. An ordinary edit dated on or after the latest
+  version, and every lifecycle command (which cannot be dated earlier),
+  writes today's state and returns it.
+- **One owner day per write** (#566 review). Account create, update,
+  lifecycle and system-account setup validate and default their dates on the
+  owner day pinned for the request's reads, never on a second clock reading.
+  A request that crosses midnight therefore cannot accept or default to a
+  date its own response treats as the future
+  (`TestAccountWritesUseThePinnedOwnerDay`). Named regressions: `TestAccountBackdatedRenameReturnsTodaysState`,
+  `TestAccountLifecycleCommandsReturnTodaysState`, and the `account` cases of
+  `TestReferenceBackdatedDescriptionPreservesHistoricalLifecycle` and
+  `TestReferenceCorrectionBeforeFirstVersionIsRefused`; over HTTP,
+  `TestBackdatedRenameKeepsTheStructureAndLifecycleOfItsDate`,
+  `TestBackdatedLifecycleAndStructureVersionsAreRefused` and
+  `TestAccountCorrectionBeforeFirstVersionReturnsCodedConflict`.
 - Parent rules hold on every date a version governs, not only today: the write
   re-checks the parent's class, system role, category status and archived
   status, and walks the ancestry as of the version's date and every later date
@@ -530,7 +558,7 @@ as it stands today, not the inserted version. An earlier correction governs
 only its past window, so returning it would report, for example, `active` for
 a category that is archived today. The PATCH descriptions in OpenAPI state
 this; institution versions are listed by `/institutions/{id}/versions`.
-Accounts still answer with the version written (#566).
+Accounts follow the same rule (#566, above).
 
 Versions written by earlier builds are not detected or repaired. Before
 v0.1.0 only development databases hold them. Restoring a category whose parent
