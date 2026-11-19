@@ -19,6 +19,19 @@ export function statementCommodityOptions(
   return options;
 }
 
+/**
+ * The commodities an account's reconciliation lookup offers: the judged ones
+ * (weakest first), then those of active statements the judgement leaves out,
+ * such as one dated after today. A register link names such a statement's
+ * commodity, and Reconcile must open in it so it can be voided (#594 review).
+ */
+export function lookupStatementCommodities(lookup: {
+  reconciliation: { commodities: readonly { commodity_id: number; commodity_code: string }[] } | null;
+  statement_commodities: readonly { commodity_id: number; commodity_code: string }[];
+}): { commodity_id: number; commodity_code: string }[] {
+  return [...(lookup.reconciliation?.commodities ?? []), ...lookup.statement_commodities];
+}
+
 /** The owner's choice when it is one of the options, else the request, else the default, else the first (weakest) judged commodity. */
 export function chooseStatementCommodity(
   options: readonly StatementCommodityOption[],

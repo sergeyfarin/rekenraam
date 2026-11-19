@@ -154,3 +154,38 @@ test('a statement row opens Reconcile in its own currency, and a void there clea
   release();
   await expect(page.getByText('No transactions', { exact: true })).toBeVisible();
 });
+
+/**
+ * #594 review. A statement dated after today is left out of the
+ * reconciliation age, but its register row still links to Reconcile in its
+ * own currency, where it can be seen and voided.
+ */
+test('a future-dated statement in another currency opens Reconcile in that currency', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const suffix = Date.now();
+  const chf = await ensureCurrency(page, csrfToken, 'CHF', 'Swiss franc');
+  expect(chf).not.toBe(currencyID);
+  const account = await createCashAccount(page, csrfToken, `Future franc ${suffix}`, currencyID, daysFromTodayISO(-60));
+  const statementDate = daysFromTodayISO(10);
+  const session = await apiJSON<{ id: number }>(page, 'POST', `/api/v1/accounts/${account.id}/reconciliations/start`, csrfToken, {
+    commodity_id: chf, source_kind: 'statement', statement_date: statementDate,
+    statement_balance_value: '0', statement_balance_scale: 2
+  });
+  await apiJSON(page, 'POST', `/api/v1/reconciliations/${session.id}/finish`, csrfToken, { change_reason: 'statement verified' });
+
+  await page.goto(`/app/ledger/accounts/${account.id}/register`);
+  const row = page.locator('[data-register-statement]');
+  await expect(row).toHaveCount(1);
+  await row.getByRole('link', { name: 'Open in Reconcile' }).click();
+  await expect(page).toHaveURL(new RegExp(`/app/ledger/reconcile\\?account=${account.id}&commodity=${chf}$`));
+
+  await expect(page.getByLabel('Currency')).toHaveValue(String(chf));
+  const voidButton = page.getByRole('button', { name: `Void the statement of ${statementDate}` });
+  await expect(voidButton).toBeVisible();
+  await voidButton.click();
+  const dialog = page.getByRole('alertdialog', { name: 'Void this statement?' });
+  await dialog.getByLabel('Reason for voiding').fill(`Future statement ${suffix}`);
+  await dialog.getByRole('button', { name: 'Void statement' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(voidButton).toBeHidden();
+});

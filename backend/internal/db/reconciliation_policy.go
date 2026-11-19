@@ -239,6 +239,42 @@ func (r *TransactionRepository) ReconciliationAccountFacts(ctx context.Context, 
 	return facts, nil
 }
 
+// StatementCommodity is a commodity an account has an active statement in.
+type StatementCommodity struct {
+	CommodityID   int64
+	CommodityCode string
+}
+
+// AccountStatementCommodities lists every commodity the account has an active
+// checkpoint in, whatever its statement date. The age judgement ignores a
+// statement dated after today, but Reconcile must still open in its commodity
+// so the statement can be seen and voided (#594 review).
+func (r *TransactionRepository) AccountStatementCommodities(ctx context.Context, bookID int64, accountID int64) ([]StatementCommodity, error) {
+	rows, err := r.database.QueryContext(ctx, `
+		SELECT DISTINCT rc.commodity_id, c.code
+		FROM reconciliation_checkpoints rc
+		JOIN commodities c ON c.id = rc.commodity_id
+		WHERE rc.book_id = ? AND rc.account_id = ? AND rc.status = 'active'
+		ORDER BY rc.commodity_id
+	`, bookID, accountID)
+	if err != nil {
+		return nil, fmt.Errorf("read statement commodities: %w", err)
+	}
+	defer rows.Close()
+	commodities := []StatementCommodity{}
+	for rows.Next() {
+		var commodity StatementCommodity
+		if err := rows.Scan(&commodity.CommodityID, &commodity.CommodityCode); err != nil {
+			return nil, fmt.Errorf("scan statement commodity: %w", err)
+		}
+		commodities = append(commodities, commodity)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate statement commodities: %w", err)
+	}
+	return commodities, nil
+}
+
 // reconcilableAccountsFrom is the FROM and WHERE of the accounts that can be
 // reconciled on the context's reference date, one rule for both reads above.
 // Its parameters are the book id and an account id twice (0 for every account).

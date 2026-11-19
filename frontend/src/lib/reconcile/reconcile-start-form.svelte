@@ -7,7 +7,7 @@
   import { accountsQueryOptions, type AccountResponse } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import { parseStatementBalance } from '#lib/reconcile/statement-balance.ts';
-  import { statementCommodityChoice, statementCommodityOptions } from '#lib/reconcile/statement-commodity.ts';
+  import { lookupStatementCommodities, statementCommodityChoice, statementCommodityOptions } from '#lib/reconcile/statement-commodity.ts';
   import {
     accountReconciliationQueryOptions,
     startReconciliation,
@@ -85,8 +85,10 @@
   );
   // A statement covers one commodity. The account's reconciliation lookup,
   // read through that account alone, names every commodity it has activity or
-  // a statement in, so an account without a default currency, or with
-  // activity in another, can still be reconciled (#594 review). A holding's
+  // a statement in (an active statement at any date, so a future-dated one a
+  // register link names can be opened and voided), so an account without a
+  // default currency, or with activity in another, can still be reconciled
+  // (#594 review). A holding's
   // commodity is its instrument, so it needs no lookup.
   const lookupEnabled = $derived(accountID !== undefined && !isSubledgerManagedAccountKind(selectedAccount?.account_kind));
   const lookupQuery = createQuery(() => ({ ...accountReconciliationQueryOptions(accountID ?? 0), enabled: lookupEnabled }));
@@ -94,7 +96,8 @@
   const commodityOptions = $derived.by(() => {
     const defaultID = selectedAccount?.default_commodity_id ?? undefined;
     const defaultCurrency = defaultID !== undefined ? currenciesByID.get(defaultID) : undefined;
-    const judged = lookupEnabled && lookupQuery.data?.account_id === accountID ? (lookupQuery.data?.reconciliation?.commodities ?? []) : [];
+    const lookup = lookupQuery.data;
+    const judged = lookupEnabled && lookup !== undefined && lookup.account_id === accountID ? lookupStatementCommodities(lookup) : [];
     return statementCommodityOptions(defaultID !== undefined ? { id: defaultID, code: defaultCurrency?.code ?? '' } : undefined, judged);
   });
   // The working copy's commodity is locked once the form settles on it (or

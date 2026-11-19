@@ -125,6 +125,29 @@ func TestAccountReconciliationLookupHTTP(t *testing.T) {
 	require.Len(t, body.Reconciliation.Commodities, 1)
 	assert.Equal(t, currencyID, body.Reconciliation.Commodities[0].CommodityID)
 
+	assert.Equal(t, []statementCommodityResponse{}, body.StatementCommodities)
+
+	// A finished statement dated after today, in another currency than the
+	// account's default: the age judgement leaves it out, but Reconcile must
+	// still open in its currency so it can be voided (#594 review).
+	franc := createCurrencyForSession(t, handler, cookie, csrf, `{"code":"CHF","name":"Swiss franc"}`)
+	future := startReconciliationForSession(t, handler, cookie, csrf, account.ID, `{
+		"commodity_id":`+strconvFormatInt(franc.ID)+`,
+		"source_kind":"statement",
+		"statement_date":"2099-01-31",
+		"statement_balance_value":"0",
+		"statement_balance_scale":2
+	}`, http.StatusCreated)
+	finishReconciliationForSession(t, handler, cookie, csrf, future.ID, `{"change_reason":"future statement"}`, http.StatusOK)
+	res = get("/api/v1/accounts/" + strconvFormatInt(account.ID) + "/reconciliation")
+	require.Equal(t, 200, res.Code, res.Body.String())
+	body = accountReconciliationLookupResponse{}
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	require.NotNil(t, body.Reconciliation)
+	require.Len(t, body.Reconciliation.Commodities, 1, "a future statement is not judged")
+	assert.Equal(t, currencyID, body.Reconciliation.Commodities[0].CommodityID)
+	assert.Equal(t, []statementCommodityResponse{{CommodityID: franc.ID, CommodityCode: "CHF"}}, body.StatementCommodities)
+
 	res = get("/api/v1/accounts/" + strconvFormatInt(income.ID) + "/reconciliation")
 	require.Equal(t, 200, res.Code, res.Body.String())
 	assert.Contains(t, res.Body.String(), `"reconciliation":null`, "a category cannot be reconciled")

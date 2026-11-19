@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chooseStatementCommodity, statementCommodityChoice, statementCommodityOptions } from './statement-commodity.ts';
+import { chooseStatementCommodity, lookupStatementCommodities, statementCommodityChoice, statementCommodityOptions } from './statement-commodity.ts';
 
 const usd = { id: 1, code: 'USD' };
 const judged = [{ commodity_id: 2, commodity_code: 'EUR' }, { commodity_id: 1, commodity_code: 'USD' }];
@@ -44,5 +44,22 @@ describe('statementCommodityChoice', () => {
 
   it('settles the first choice from the request or default before anything is locked', () => {
     expect(statementCommodityChoice(both, undefined, 2, null)).toEqual({ commodityID: 2, lost: false });
+  });
+});
+
+describe('lookupStatementCommodities', () => {
+  it('offers a future statement\'s currency the judgement leaves out, so a register link opens in it (#594 review)', () => {
+    const lookup = {
+      reconciliation: { commodities: [{ commodity_id: 1, commodity_code: 'USD' }] },
+      statement_commodities: [{ commodity_id: 3, commodity_code: 'CHF' }]
+    };
+    const options = statementCommodityOptions(usd, lookupStatementCommodities(lookup));
+    expect(options).toEqual([usd, { id: 3, code: 'CHF' }]);
+    expect(statementCommodityChoice(options, undefined, 3, 1)).toEqual({ commodityID: 3, lost: false });
+  });
+
+  it('offers statement currencies of an account that cannot be judged', () => {
+    expect(lookupStatementCommodities({ reconciliation: null, statement_commodities: [{ commodity_id: 3, commodity_code: 'CHF' }] }))
+      .toEqual([{ commodity_id: 3, commodity_code: 'CHF' }]);
   });
 });

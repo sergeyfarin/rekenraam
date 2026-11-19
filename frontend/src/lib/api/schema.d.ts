@@ -32546,6 +32546,12 @@ export interface components {
             account_id: number;
             out_of_date_after_days: number;
             reconciliation: components["schemas"]["AccountReconciliation"] | null;
+            /** @description Every commodity the account has an active statement in, whatever its statement date. The judgement leaves out statements dated after today; Reconcile still offers their commodity so they can be opened and voided. */
+            statement_commodities: {
+                /** Format: int64 */
+                commodity_id: number;
+                commodity_code: string;
+            }[];
         };
         ReconciliationCheckpointResponse: {
             /** Format: int64 */

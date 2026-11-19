@@ -106,6 +106,15 @@ type accountReconciliationLookupResponse struct {
 	AccountID          int64                          `json:"account_id"`
 	OutOfDateAfterDays int                            `json:"out_of_date_after_days"`
 	Reconciliation     *accountReconciliationResponse `json:"reconciliation"`
+	// StatementCommodities are the commodities of the account's active
+	// statements at any date, so a statement dated after today, which the
+	// judgement leaves out, still opens in its commodity (#594 review).
+	StatementCommodities []statementCommodityResponse `json:"statement_commodities"`
+}
+
+type statementCommodityResponse struct {
+	CommodityID   int64  `json:"commodity_id"`
+	CommodityCode string `json:"commodity_code"`
 }
 
 // readAccountReconciliation is one account's judgement, read through that
@@ -129,6 +138,15 @@ func readAccountReconciliation(logger *slog.Logger, authService *app.AuthService
 			}
 			return
 		}
-		writeJSON(w, http.StatusOK, accountReconciliationLookupResponse{AccountID: accountID, OutOfDateAfterDays: window, Reconciliation: toAccountReconciliationResponse(age)})
+		statements, err := transactionService.AccountStatementCommodities(r.Context(), accountID)
+		if err != nil {
+			writeTransactionServiceError(w, r, logger, "read account statement commodities", err)
+			return
+		}
+		statementCommodities := make([]statementCommodityResponse, 0, len(statements))
+		for _, commodity := range statements {
+			statementCommodities = append(statementCommodities, statementCommodityResponse{CommodityID: commodity.CommodityID, CommodityCode: commodity.CommodityCode})
+		}
+		writeJSON(w, http.StatusOK, accountReconciliationLookupResponse{AccountID: accountID, OutOfDateAfterDays: window, Reconciliation: toAccountReconciliationResponse(age), StatementCommodities: statementCommodities})
 	}
 }

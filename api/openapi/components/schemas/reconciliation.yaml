@@ -349,7 +349,7 @@ FoldedAccountReconciliation:
         account_id: { type: integer, format: int64 }
 AccountReconciliationLookupResponse:
   type: object
-  required: [account_id, out_of_date_after_days, reconciliation]
+  required: [account_id, out_of_date_after_days, reconciliation, statement_commodities]
   properties:
     account_id: { type: integer, format: int64 }
     out_of_date_after_days: { type: integer, minimum: 1 }
@@ -357,3 +357,15 @@ AccountReconciliationLookupResponse:
       oneOf:
         - $ref: "../../openapi.yaml#/components/schemas/AccountReconciliation"
         - type: 'null'
+    statement_commodities:
+      type: array
+      description: >-
+        Every commodity the account has an active statement in, whatever its
+        statement date. The judgement leaves out statements dated after today;
+        Reconcile still offers their commodity so they can be opened and voided.
+      items:
+        type: object
+        required: [commodity_id, commodity_code]
+        properties:
+          commodity_id: { type: integer, format: int64 }
+          commodity_code: { type: string }

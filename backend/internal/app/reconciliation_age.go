@@ -181,6 +181,14 @@ func (s *TransactionService) AccountReconciliationAge(ctx context.Context, owner
 	return &ages.Accounts[0], policy.OutOfDateAfterDays, nil
 }
 
+// AccountStatementCommodities lists the commodities the account has an
+// active statement in, at any date, for the Reconcile form: a statement dated
+// after today is outside the age judgement but can still be opened and
+// voided in its own commodity (#594 review).
+func (s *TransactionService) AccountStatementCommodities(ctx context.Context, accountID int64) ([]db.StatementCommodity, error) {
+	return s.repository.AccountStatementCommodities(ctx, BookID, accountID)
+}
+
 func reconciliationAgeRank(state string) int {
 	switch state {
 	case ReconciliationAgeNeverReconciled:
