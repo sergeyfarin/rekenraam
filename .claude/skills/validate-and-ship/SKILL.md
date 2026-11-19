@@ -103,6 +103,7 @@ item 31"); they are not an order and are never reused. To read one entry:
 - 59 — Mutation journals bypassing display enrichment
 - 61 — JSON decoder limits drifting from operations and EOF checks
 - 66 — A fresh connection per call hiding connection-lifetime state
+- 82 — A reference read before the owner's day is pinned
 
 **Auth, sessions and secrets** — `bug-classes/auth-security.md`
 

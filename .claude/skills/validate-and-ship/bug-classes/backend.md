@@ -129,3 +129,18 @@ Lifetime tests need writes that change the state: a transaction without payee
 or description leaves the FTS5 index unchanged. Keep
 `TestSQLiteIntegrityOnAReusedReaderAfterSearchWrites` (with its canary) and
 `TestRepeatedSelfCheckRunsPassAfterNewEntries` green.
+
+## 82. A reference read before the owner's day is pinned
+
+Current account, category, institution, commodity, payee and instrument
+versions are selected on the owner's local day (#385), but only when the
+context carries it; without one the SQL falls back to `date('now')`, SQLite's
+UTC day. The register's account-class lookup (#598) ran before
+`enrichRegisterPostings` pinned the day, so just after midnight in Amsterdam
+a card created today was invisible and the register returned 500. The
+statement rows' commodity lookup (#595) had the same gap. A service method
+that makes reference reads pins the day once at its top with
+`s.settings.referenceContext(ctx, s.now())` and passes that context to every
+read; a helper pinning it for itself does not cover reads made before it.
+Named check: `TestAccountRegisterReadsTheCardCreatedJustAfterOwnerMidnight`
+(fixed instant on each side of UTC midnight via `fixedReferenceDateInstance`).
