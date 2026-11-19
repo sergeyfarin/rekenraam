@@ -16,7 +16,9 @@ import (
 // Independent retry items preserve failed dates without wedging later history.
 func (s *PricingService) runFXCoverage(ctx context.Context, ownerUserID int64, payload fxCoverageWorkPayload) (PricingRefreshRun, []db.BackgroundWorkSuccessor, error) {
 	startedAt := s.now().UTC()
-	ctx, referenceErr := s.settings.referenceContext(ctx, startedAt)
+	// One zone read gives the owner day that decides which dates are due and
+	// the zone whose midnight schedules deferred wakeups (#605 review).
+	ctx, location, referenceErr := s.settings.referenceContextInZone(ctx, startedAt)
 	if referenceErr != nil {
 		return PricingRefreshRun{}, nil, referenceErr
 	}
@@ -63,11 +65,10 @@ func (s *PricingService) runFXCoverage(ctx context.Context, ownerUserID int64, p
 		return fail(err)
 	}
 	baseCurrencyID := defaultCurrency.ID
-	location, err := s.bookLocation(ctx)
+	today, err := pinnedOwnerDay(ctx)
 	if err != nil {
 		return fail(err)
 	}
-	today := startedAt.In(location).Format(time.DateOnly)
 	through := today
 	if payload.ThroughDate != "" && payload.ThroughDate < through {
 		through = payload.ThroughDate
@@ -239,18 +240,6 @@ func futureFXCoverageSuccessors(demand []db.PricingCurrencyDemandRecord, baseCur
 		successors = append(successors, db.BackgroundWorkSuccessor{PayloadJSON: string(encoded), AvailableAt: wake.UTC().Format(time.RFC3339)})
 	}
 	return successors, nil
-}
-
-func (s *PricingService) bookLocation(ctx context.Context) (*time.Location, error) {
-	name, err := s.repository.BookOwnerTimeZone(ctx, BookID)
-	if err != nil {
-		return nil, err
-	}
-	location, err := time.LoadLocation(name)
-	if err != nil {
-		return nil, fmt.Errorf("load book time zone: %w", err)
-	}
-	return location, nil
 }
 
 func nextDate(value string) string {

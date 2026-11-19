@@ -328,3 +328,24 @@ func TestFXFutureDemandSurvivesAnotherCurrencyChunkLimit(t *testing.T) {
 	assert.True(t, deferred)
 	assert.True(t, continuation)
 }
+
+// #605 review. The coverage worker decides which dates are due on the owner day
+// it pinned, not on its start instant resolved again in a zone that has since
+// changed. The run pinned Monday the 15th (UTC); the zone is now Amsterdam,
+// where it is already the 16th. Demand from the 16th waits for a deferred
+// wakeup. Weekdays, so the weekend policy cannot hide an early fetch.
+func TestFXCoverageEligibilityUsesTheDayTheWorkerPinned(t *testing.T) {
+	t.Parallel()
+	f := newFutureFXFixture(t, "Europe/Amsterdam", time.Date(2026, 6, 15, 22, 30, 0, 0, time.UTC))
+	f.post(t, "2026-06-16", "posted", "10000", 2)
+	run, successors, err := f.pricing.runFXCoverage(db.WithReferenceDate(context.Background(), "2026-06-15"), 1, fxCoverageWorkPayload{Reason: "manual"})
+	require.NoError(t, err)
+	assert.Zero(t, run.ItemsTotal, "the 16th is in the future on the pinned 15th")
+	assert.Zero(t, f.calls.Load())
+	require.Len(t, successors, 1)
+	var payload fxCoverageWorkPayload
+	require.NoError(t, json.Unmarshal([]byte(successors[0].PayloadJSON), &payload))
+	assert.Equal(t, "deferred", payload.Reason)
+	assert.Equal(t, "2026-06-16", payload.StartDate)
+	assert.Equal(t, "2026-06-15T22:00:00Z", successors[0].AvailableAt, "the wakeup is the owner's midnight in the zone read with the day")
+}
