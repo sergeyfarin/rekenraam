@@ -58,10 +58,13 @@ func reconcileCash(t *testing.T, f *investmentsTestFixture, statementDate string
 	for _, candidate := range session.Candidates {
 		postingIDs = append(postingIDs, candidate.PostingID)
 	}
-	_, err = f.transactionService.UpdateReconciliationSelection(ctx, ReconciliationSelectionInput{
-		OriginType: "browser_api", OwnerUserID: f.ownerUserID, SessionID: session.ID, PostingVersionIDs: postingIDs,
-	})
-	require.NoError(t, err)
+	// A statement that verifies no new postings has nothing to select (#595).
+	if len(postingIDs) > 0 {
+		_, err = f.transactionService.UpdateReconciliationSelection(ctx, ReconciliationSelectionInput{
+			OriginType: "browser_api", OwnerUserID: f.ownerUserID, SessionID: session.ID, PostingVersionIDs: postingIDs,
+		})
+		require.NoError(t, err)
+	}
 	_, err = f.transactionService.FinishReconciliation(ctx, FinishReconciliationInput{
 		OriginType: "browser_api", OwnerUserID: f.ownerUserID, SessionID: session.ID, ChangeReason: "statement verified",
 	})

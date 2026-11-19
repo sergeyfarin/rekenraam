@@ -1,9 +1,11 @@
-<script lang="ts" generics="R extends Record<string, any>">
+<script lang="ts" generics="R extends Record<string, any>, M extends { key: string; beforeIndex: number }">
+  import type { Snippet } from 'svelte';
   import type { Attachment } from 'svelte/attachments';
   import { createTable, FlexRender, renderSnippet } from '@tanstack/svelte-table';
   import type { DisplayColumnDef } from '@tanstack/svelte-table';
   import StatePanel from '#lib/components/state-panel.svelte';
   import { m } from '#lib/paraglide/messages.js';
+  import { markersByRowIndex } from './register-statements.ts';
   import {
     transactionTableFeatures,
     type Column,
@@ -22,7 +24,9 @@
     onRetry,
     onRowClick,
     emptyTitle = m.transactions_empty_title(),
-    emptyCopy = m.transactions_empty_copy()
+    emptyCopy = m.transactions_empty_copy(),
+    markers = [],
+    marker
   }: {
     rows: R[];
     columns: Column<R>[];
@@ -42,7 +46,17 @@
     /** Empty-state copy for a list with a narrower meaning than "transactions". */
     emptyTitle?: string;
     emptyCopy?: string;
+    /**
+     * Full-width rows that are not data rows, placed before the row at
+     * `beforeIndex` (or after the last row when it equals the row count):
+     * the register's statement rows (#595). They take no part in row
+     * selection, keyboard row navigation or row clicks.
+     */
+    markers?: M[];
+    marker?: Snippet<[M]>;
   } = $props();
+
+  const markerGroups = $derived(markersByRowIndex(markers, rows.length));
 
   const columnDefs = $derived(
     columns.map(
@@ -126,6 +140,18 @@
   }
 </script>
 
+{#snippet markerRows(index: number)}
+  {#if marker}
+    {#each markerGroups.get(index) ?? [] as item (item.key)}
+      <tr class="border-b border-border/50 bg-background" data-table-marker>
+        <td class="px-3 py-2" colspan={columns.length}>
+          {@render marker(item)}
+        </td>
+      </tr>
+    {/each}
+  {/if}
+{/snippet}
+
 {#snippet headerRow(skeleton: boolean)}
   <thead>
     {#each table.getHeaderGroups() as group (group.id)}
@@ -179,7 +205,7 @@
         {/if}
       </StatePanel>
     </div>
-  {:else if rows.length === 0}
+  {:else if rows.length === 0 && markers.length === 0}
     <div class="p-4">
       <StatePanel title={emptyTitle} copy={emptyCopy} />
     </div>
@@ -190,6 +216,7 @@
         <tbody>
           {#each table.getRowModel().rows as row, i (row.id)}
             {@const isClickable = !!onRowClick}
+            {@render markerRows(i)}
             <!--
               No role="button" here (R3a). A <tr> is already a row, and rows may
               carry aria-selected while buttons may not — that was one violation.
@@ -214,6 +241,7 @@
               {/each}
             </tr>
           {/each}
+          {@render markerRows(rows.length)}
         </tbody>
       </table>
     </div>

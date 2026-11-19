@@ -26,8 +26,9 @@
     // An account named by the page URL (`?account=`), such as a holding's
     // register link. A holding is reconciled only when asked for this way.
     requestedAccountID?: number;
-    // The commodity named by the URL (`?commodity=`), such as the currency
-    // Home's Reconciliation card flagged. It applies to the requested account.
+    // The commodity named by the URL (`&commodity=`): the currency Home's
+    // Reconciliation card flagged, or a register statement row's commodity.
+    // It applies to the requested account; otherwise the account's default.
     requestedCommodityID?: number;
     onStarted: (session: ReconciliationSessionResponse) => void;
     // Lets the page show the selected account's checkpoints beside the form.

@@ -1252,6 +1252,8 @@ components:
       $ref: "./components/schemas/transactions.yaml#/RegisterCorrectionAmount"
     AccountRegisterResponse:
       $ref: "./components/schemas/transactions.yaml#/AccountRegisterResponse"
+    AccountRegisterStatementResponse:
+      $ref: "./components/schemas/transactions.yaml#/AccountRegisterStatementResponse"
     PostingRequest:
       $ref: "./components/schemas/transactions.yaml#/PostingRequest"
     JournalEntryRequest:

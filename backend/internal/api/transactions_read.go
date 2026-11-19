@@ -81,6 +81,7 @@ func accountRegister(logger *slog.Logger, authService *app.AuthService, transact
 
 		writeJSON(w, http.StatusOK, accountRegisterResponse{
 			Entries:    toAccountRegisterEntryResponses(result.Entries),
+			Statements: toAccountRegisterStatementResponses(result.Statements),
 			NextCursor: nullableCursor(result.NextCursor),
 		})
 	}

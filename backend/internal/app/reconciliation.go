@@ -188,31 +188,40 @@ func (s *TransactionService) StartReconciliation(ctx context.Context, input Star
 		OriginType:            input.OriginType,
 		OccurredAt:            now,
 		ChangeReason:          changeReason,
+		PlanInitialSelection:  initialReconciliationSelection,
 	})
 	if err != nil {
 		return ReconciliationSession{}, mapTransactionDBError(err)
 	}
-	// A candidate still marked reconciled was verified by a checkpoint that
-	// has since been invalidated or voided (#240). It starts selected like a
-	// cleared posting and is re-verified against this statement.
-	clearedPostingIDs := make([]int64, 0)
-	for _, candidate := range record.Candidates {
+	return toReconciliationSession(record), nil
+}
+
+// initialReconciliationSelection is the selection a new session starts with:
+// every cleared candidate, and every candidate still marked reconciled — one
+// a checkpoint verified before it was invalidated or voided (#240), which is
+// re-verified against this statement. The difference is computed with that
+// selection applied, so a statement its cleared postings balance never fails
+// on an intermediate unselected difference (#596 review).
+func initialReconciliationSelection(session db.ReconciliationSessionRecord) (db.InitialReconciliationSelection, error) {
+	selected := make([]db.ReconciliationPostingRecord, 0)
+	postingIDs := make([]int64, 0)
+	for _, candidate := range session.Candidates {
 		if candidate.ReconciliationStatus == "cleared" || candidate.ReconciliationStatus == "reconciled" {
-			clearedPostingIDs = append(clearedPostingIDs, candidate.PostingID)
+			selected = append(selected, candidate)
+			postingIDs = append(postingIDs, candidate.PostingID)
 		}
 	}
-	if len(clearedPostingIDs) > 0 {
-		return s.replaceReconciliationSelection(ctx, ReconciliationSelectionInput{
-			OwnerUserID:       input.OwnerUserID,
-			AuthSessionID:     input.AuthSessionID,
-			RequestID:         input.RequestID,
-			OriginType:        input.OriginType,
-			SessionID:         record.ID,
-			PostingVersionIDs: clearedPostingIDs,
-			ChangeReason:      "selected cleared postings",
-		}, "reconciliation.start_selection", "selected cleared postings")
+	selectedBalance, difference, err := reconciliationTotals(session, selected)
+	if err != nil {
+		return db.InitialReconciliationSelection{}, err
 	}
-	return toReconciliationSession(record), nil
+	return db.InitialReconciliationSelection{
+		PostingVersionIDs:    postingIDs,
+		SelectedBalanceValue: selectedBalance.QuantityValue,
+		SelectedBalanceScale: selectedBalance.QuantityScale,
+		DifferenceValue:      difference.QuantityValue,
+		DifferenceScale:      difference.QuantityScale,
+	}, nil
 }
 
 func (s *TransactionService) ReconciliationSession(ctx context.Context, sessionID int64) (ReconciliationSession, error) {
@@ -462,7 +471,7 @@ func reconciliationTotals(session db.ReconciliationSessionRecord, selected []db.
 	}
 	selectedValue, err := selectedAmount.Coefficient()
 	if err != nil {
-		return BalanceQuantity{}, BalanceQuantity{}, err
+		return BalanceQuantity{}, BalanceQuantity{}, LedgerOverflowError{CommodityID: session.CommodityID}
 	}
 
 	expected := exact.NewScaledInt()
@@ -474,7 +483,7 @@ func reconciliationTotals(session db.ReconciliationSessionRecord, selected []db.
 	difference.SubScaled(expected)
 	differenceValue, err := difference.Coefficient()
 	if err != nil {
-		return BalanceQuantity{}, BalanceQuantity{}, err
+		return BalanceQuantity{}, BalanceQuantity{}, LedgerOverflowError{CommodityID: session.CommodityID}
 	}
 	return BalanceQuantity{
 		CommodityID:         session.CommodityID,
