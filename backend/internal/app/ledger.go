@@ -852,8 +852,8 @@ func calendarBucketEnd(date time.Time, bucket string) time.Time {
 // statement rows. Sums stay exact throughout; only a kept posting whose own
 // running balance is out of range makes the page LEDGER_OVERFLOW, so a page
 // of statement rows, or of postings after an out-of-range stretch, still
-// reads.
-func accountRegisterRunningBalances(postings []db.LedgerPostingRecord, page []db.AccountRegisterEntryRecord) (map[int64]BalanceQuantity, error) {
+// reads. NormalQuantityValue is in the register account's class sign (#598).
+func accountRegisterRunningBalances(postings []db.LedgerPostingRecord, page []db.AccountRegisterEntryRecord, accountClass string) (map[int64]BalanceQuantity, error) {
 	byPostingID := map[int64]BalanceQuantity{}
 	if len(page) == 0 {
 		return byPostingID, nil
@@ -877,7 +877,7 @@ func accountRegisterRunningBalances(postings []db.LedgerPostingRecord, page []db
 			CommodityID:         posting.CommodityID,
 			QuantityValue:       value,
 			QuantityScale:       amount.Scale(),
-			NormalQuantityValue: value,
+			NormalQuantityValue: normalBalanceValue(value, accountClass),
 		}
 	}
 
@@ -1009,18 +1009,25 @@ func balanceMapToQuantities(balances map[int64]*exact.ScaledInt, normalClass str
 		if err != nil {
 			return nil, LedgerOverflowError{CommodityID: commodityID}
 		}
-		normalValue := value
-		if normalClass == "liability" || normalClass == "equity" || normalClass == "income" {
-			normalValue = normalValue.Negated()
-		}
 		quantities = append(quantities, BalanceQuantity{
 			CommodityID:         commodityID,
 			QuantityValue:       value,
 			QuantityScale:       amount.Scale(),
-			NormalQuantityValue: normalValue,
+			NormalQuantityValue: normalBalanceValue(value, normalClass),
 		})
 	}
 	return quantities, nil
+}
+
+// normalBalanceValue is a debit-positive balance in its account class's
+// normal sign: liability, equity and income balances are negated, so a card
+// owing 500 reads 500. Every BalanceQuantity stated for an account goes
+// through it, so the Ledger screens and the register agree (#598).
+func normalBalanceValue(value exact.Coefficient, accountClass string) exact.Coefficient {
+	if accountClass == "liability" || accountClass == "equity" || accountClass == "income" {
+		return value.Negated()
+	}
+	return value
 }
 
 func toAccountBalance(account db.LedgerAccountRecord, direct map[int64]*exact.ScaledInt, subtree map[int64]*exact.ScaledInt) (AccountBalance, error) {

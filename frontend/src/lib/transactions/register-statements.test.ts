@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   markersByRowIndex,
+  registerBalanceView,
   registerStatementMarkers,
   type AccountRegisterStatementResponse
 } from './register-statements.ts';
@@ -64,5 +65,24 @@ describe('markersByRowIndex', () => {
     const grouped = markersByRowIndex([{ beforeIndex: 0 }, { beforeIndex: 0 }, { beforeIndex: 7 }], 3);
     expect(grouped.get(0)).toHaveLength(2);
     expect(grouped.get(3)).toHaveLength(1);
+  });
+});
+
+describe('registerBalanceView', () => {
+  it('shows a card owing 500 as 500, not as a negative balance (#598)', () => {
+    // Debit-positive −500.00 on a liability; the server's class-normalized value is 500.00.
+    const view = registerBalanceView({ commodity_id: 1, quantity_value: '-50000', quantity_scale: 2, normal_quantity_value: '50000' }, 'en');
+    expect(view).toEqual({ text: '500.00', negative: false });
+  });
+
+  it('marks a card in credit as negative', () => {
+    const view = registerBalanceView({ commodity_id: 1, quantity_value: '2500', quantity_scale: 2, normal_quantity_value: '-2500' }, 'en');
+    expect(view.negative).toBe(true);
+    expect(view.text).toContain('25.00');
+  });
+
+  it('leaves an asset balance as it is', () => {
+    const view = registerBalanceView({ commodity_id: 1, quantity_value: '123456', quantity_scale: 2, normal_quantity_value: '123456' }, 'en');
+    expect(view).toEqual({ text: '1,234.56', negative: false });
   });
 });

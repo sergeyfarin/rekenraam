@@ -122,8 +122,12 @@ func (s *TransactionService) Register(ctx context.Context, accountID int64, inpu
 	}
 	page := mergeRegisterPage(read.Postings, read.Statements, params.Limit)
 	records := page.Postings
+	accountClass, err := s.registerAccountClass(ctx, accountID, len(records) > 0 || len(page.Statements) > 0)
+	if err != nil {
+		return AccountRegisterResult{}, err
+	}
 
-	runningBalances, err := accountRegisterRunningBalances(read.RunningPostings, records)
+	runningBalances, err := accountRegisterRunningBalances(read.RunningPostings, records, accountClass)
 	if err != nil {
 		return AccountRegisterResult{}, err
 	}
@@ -135,7 +139,7 @@ func (s *TransactionService) Register(ctx context.Context, accountID int64, inpu
 	if err := s.attachRegisterCorrectionChains(ctx, accountID, entries); err != nil {
 		return AccountRegisterResult{}, err
 	}
-	statements, err := s.registerStatements(ctx, page.Statements)
+	statements, err := s.registerStatements(ctx, page.Statements, accountClass)
 	if err != nil {
 		return AccountRegisterResult{}, err
 	}
@@ -145,6 +149,24 @@ func (s *TransactionService) Register(ctx context.Context, accountID int64, inpu
 		Statements: statements,
 		NextCursor: page.NextCursor,
 	}, nil
+}
+
+// registerAccountClass reads the register account's class, which sets the
+// sign its balances are shown in (#598). A page with no rows states no
+// balance, so it reads nothing.
+func (s *TransactionService) registerAccountClass(ctx context.Context, accountID int64, hasRows bool) (string, error) {
+	if !hasRows {
+		return "", nil
+	}
+	accounts, err := s.accountRepository.AccountsByIDs(ctx, BookID, []int64{accountID})
+	if err != nil {
+		return "", fmt.Errorf("register: account lookup: %w", err)
+	}
+	account, ok := accounts[accountID]
+	if !ok {
+		return "", fmt.Errorf("register: account %d not found", accountID)
+	}
+	return account.AccountClass, nil
 }
 
 func (s *TransactionService) Transaction(ctx context.Context, transactionID int64) (Transaction, error) {

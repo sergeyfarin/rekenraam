@@ -1,6 +1,8 @@
 import type { components } from '#lib/api/schema.js';
+import { formatQuantity } from '#lib/money/format.ts';
 
 type AccountRegisterResponse = components['schemas']['AccountRegisterResponse'];
+type BalanceQuantity = components['schemas']['BalanceQuantity'];
 export type AccountRegisterStatementResponse = components['schemas']['AccountRegisterStatementResponse'];
 
 /**
@@ -45,4 +47,18 @@ export function markersByRowIndex<M extends { beforeIndex: number }>(markers: re
     else grouped.set(index, [marker]);
   }
   return grouped;
+}
+
+/**
+ * A register balance (a running balance or a statement row's balance) as the
+ * account reads it. The server class-normalizes `normal_quantity_value` like
+ * every other balance read, so a card owing 500 reads 500 and only a balance
+ * against the account's normal side is negative (#598). Both rows go through
+ * here so they never show different conventions side by side.
+ */
+export function registerBalanceView(balance: BalanceQuantity, locale: string): { text: string; negative: boolean } {
+  return {
+    text: formatQuantity(balance.normal_quantity_value, balance.quantity_scale, locale),
+    negative: balance.normal_quantity_value.startsWith('-')
+  };
 }
