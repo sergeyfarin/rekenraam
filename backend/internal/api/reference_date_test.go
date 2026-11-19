@@ -54,9 +54,13 @@ func realUTCDay(days int) string {
 
 func TestOwnerCurrentReferenceHTTPCreateListAndFutureExclusion(t *testing.T) {
 	t.Parallel()
+	// Both sides are relative to SQLite's real UTC day (realUTCDayInstant):
+	// east, the owner's day is a week past it, so today's version is future to
+	// an unpinned read; west, the owner's day is the one before it, so the
+	// version appended for the owner's tomorrow is SQLite's today.
 	for _, tc := range []struct{ name, instant, zone, today string }{
-		{"east just after local midnight", "2027-01-01T23:01:00Z", "Europe/Amsterdam", "2027-01-02"},
-		{"west while UTC is tomorrow", "2027-01-02T03:00:00Z", "America/Los_Angeles", "2027-01-01"},
+		{"east just after local midnight", realUTCDayInstant(7, "23:01:00"), "Europe/Amsterdam", realUTCDay(8)},
+		{"west while UTC is tomorrow", realUTCDayInstant(0, "03:00:00"), "America/Los_Angeles", realUTCDay(-1)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
