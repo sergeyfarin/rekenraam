@@ -10,8 +10,6 @@ reconciliation, investment, and household-context extensions. It translates the
 active requirements, the archived FastAPI implementation, and patterns from
 mature finance applications into the current Go/SvelteKit/SQLite shape.
 
-[ADR 0022](../adrs/0022-current-reference-data-and-descriptive-audit.md) supersedes the effective-date and version-history requirements below for converted descriptive fields, payees and institutions. The dated-edit and API descriptions document the shipped baseline during rollout. Dated financial structure and lifecycle continue to apply.
-
 ## Goals
 
 - Give every institution and account a permanent internal integer id.

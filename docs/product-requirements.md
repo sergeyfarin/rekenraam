@@ -26,8 +26,6 @@ Primary product goal:
 - Same-origin deployment: one Go app serving API and frontend.
 - Archive ideas must be translated to the current stack before adoption.
 
-Ordinary reference-data edits take effect on save. Live views use current display names. Dated financial facts and saved investment outputs retain their historical meaning. [ADR 0022](adrs/0022-current-reference-data-and-descriptive-audit.md) defines the field and investigation-only audit policies.
-
 ## Working Decisions
 
 - Theme infrastructure starts as a token-based system with light and dark themes only.
@@ -498,7 +496,7 @@ Goal: add power-user workflows after the core ledger is stable.
   account, and ledger model.
 - Security identity and provider matching for listed instruments, including
   symbol, exchange/MIC, identifiers, issuer, quote/trading commodity, provider
-  metadata, and effective-dated terms where accounting or matching depends on them. Display names follow [ADR 0022](adrs/0022-current-reference-data-and-descriptive-audit.md).
+  metadata, and effective-dated version history.
 - Lots and cost-basis foundations from the first investment slice. FIFO is the
   first implemented default, but durable policy values include FIFO, LIFO,
   average cost, and specific lot. A committed disposal preserves the resolved

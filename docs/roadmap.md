@@ -68,9 +68,9 @@ below continue alongside it and do not block it.
    actual owner deployment/household evidence
    [#336](https://github.com/sergeyfarin/rekenraam/issues/336) and owner
    image-advisory disposition
-   [#337](https://github.com/sergeyfarin/rekenraam/issues/337). Signing
-   [#333](https://github.com/sergeyfarin/rekenraam/issues/333) (signing decision
-   accepted; candidate validation remains) retains separate acceptance. The
+   [#337](https://github.com/sergeyfarin/rekenraam/issues/337). The signed candidate workflow has passed.
+   [#333](https://github.com/sergeyfarin/rekenraam/issues/333) retains the
+   migration-checksum freeze at the release cut. The
    upstream driver prerequisite
    [#356](https://github.com/sergeyfarin/rekenraam/issues/356) closed on
    2026-11-11 with the owner's acceptance below and is no longer a release
@@ -138,16 +138,6 @@ below continue alongside it and do not block it.
    Recheck [#112](https://github.com/sergeyfarin/rekenraam/issues/112)'s upstream
    TypeScript/OpenAPI-generator compatibility when considering the upgrade;
    its old blocker text is not fresh compatibility evidence.
-
-4. **Simplify reference data ([#611](https://github.com/sergeyfarin/rekenraam/issues/611)).**
-   Deliver [ADR 0022](adrs/0022-current-reference-data-and-descriptive-audit.md)
-   as maintenance alongside the UI overhaul. Pilot current institution
-   records end to end, then payees and transaction search. Follow with
-   account and category labels, category regrouping as its own slice, and
-   instrument display after verifying identifier consumers. Remove obsolete
-   editors and assertions as each kind moves. Preserve the independent
-   financial/date fixes in #603 and #606–#610. The household dry run and
-   migration freeze (#572/#576) keep their own schedule.
 
 ### Current product initiative — UI overhaul
 
@@ -248,6 +238,16 @@ R7a's broader entry helpers and configurable shortcut presets remain separate.
 
 These are valuable, but they are not allowed to displace the current plan:
 
+- **Reference history, after v0.1 household testing (owner, 2026-11-20).**
+  Finish the UI overhaul and prepare the testing candidate on the existing
+  schema and dated-edit contracts. Record examples encountered during the
+  household dry run (#336). After testing, the owner will decide whether to keep the model,
+  change individual reads or edits, or change storage where evidence warrants
+  it. #568 and #569 wait for that decision. #602 can address the unchanged
+  archived link under the existing contract. The UI, other correctness fixes,
+  candidate and public tag each proceed on their own criteria.
+  [Review questions and issue dispositions](reviews/reference-history-after-v0.1-testing.md) ·
+  [Tracker #611](https://github.com/sergeyfarin/rekenraam/issues/611).
 - R6: XLSX and OFX/QFX adapters, import matching, per-split mapping, batch
   rollback, and richer import history. `docs/plans/import-plan.md` retains the detailed
   data, lifecycle, and acceptance design.

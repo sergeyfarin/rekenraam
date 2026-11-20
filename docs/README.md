@@ -62,6 +62,9 @@ commands and synthetic screenshot capture; deployment instructions are in
 the adoption work tracked by #335; the interactive demo and migration
 walkthrough remain separate.
 
+The [post-test reference-history review](reviews/reference-history-after-v0.1-testing.md)
+collects the household scenarios and deferred decisions for #611.
+
 The [Home and navigation design](design/home-and-navigation.md) records the
 owner-approved Home page and light application shell (2026-10-27), with its
 [mockup source](design/home-mockup/README.md); the
@@ -110,10 +113,6 @@ counterexamples and 38 focused race controls. The
 [final disposition](reviews/product-complexity-disposition-2026-10-28.md)
 completes #390's bounded first pass, records rejected/deferred refactoring
 opportunities and the two separately delivered browser fixes #433/#434.
-
-[ADR 0022](adrs/0022-current-reference-data-and-descriptive-audit.md) records
-the current reference-data policy, the investigation-only audit boundary
-and the dated financial facts each slice must preserve (#611).
 
 [ADR 0021](adrs/0021-entered-asset-values.md) records the owner decision
 (2026-10-29) that house, vehicle and pension values are dated values beside the
