@@ -265,12 +265,16 @@ When a feature introduces a durable new rule, update one of those documents in t
   assignment selection. Refresh scheduling does not choose the lookup date.
 - Effective current account/category, institution, commodity, payee and
   instrument reads use the owner-local day too (#385). Application services
-  pin `db.WithReferenceDate` on the operation context before repository
-  transactions; composed reads and mutation guards inherit it. Forecast pins
-  its application-resolved day inside its existing read snapshot. Do not add
-  runtime queries against SQLite's UTC `current_*_versions` views. Explicit
-  historical predicates keep their supplied date; schema guards use the
-  inserted source version's effective date.
+  call `referenceContext` before repository transactions so composed reads
+  and mutation guards share the same day. With settings wired, it uses
+  `db.WithOwnerToday` to pin both current reference selection and the live
+  valuation ceiling (#609).
+  Use `db.WithReferenceDate` for a reference-only selection, such as an
+  explicit historical lookup. It leaves the live valuation ceiling alone.
+  Forecast pins its application-resolved day inside its existing read snapshot.
+  Do not add runtime queries against SQLite's UTC `current_*_versions` views.
+  Explicit historical predicates keep their supplied date. Schema guards use
+  the inserted source version's effective date.
 - Share the date through the app shell; missing/invalid authenticated date
   data is an error, never a browser-clock fallback. Session focus/minute refresh
   and preference saves update the shared date for newly opened forms.

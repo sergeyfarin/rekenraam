@@ -202,9 +202,12 @@ inputs the other accepts: a selection test whose fallback provider answers
 with a future date passes on the cutoff alone. A zone-change test changes the
 saved zone after the code under test read it (the worker test uses a trigger
 on its run row); a pre-pinned context with the new zone already saved cannot
-tell one zone read from two. Live observation boundaries share the owner-today
-pin and keep the supplied recording instant. A historical reference-data
-override leaves the live valuation ceiling alone (#609,
+tell one zone read from two. With settings wired, `referenceContext` uses
+`db.WithOwnerToday` to pin current reference selection and the live
+valuation ceiling together.
+`db.WithReferenceDate` changes reference selection alone. Call
+`pinnedOwnerDay` with the operation context before applying such an override.
+Live observation boundaries keep the supplied recording instant (#609,
 `TestRateTableUsesThePinnedOwnerDay`). Blank pricing workspace diagnostics use
 the same ceiling, and an explicit diagnostic date retains its meaning
 (`TestPricingWorkspaceUsesThePinnedOwnerDay`). #608 (transaction response
