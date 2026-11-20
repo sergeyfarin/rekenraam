@@ -117,14 +117,13 @@ Persistence) and `docs/product-requirements.md`. When in doubt, read those.
 
 ## Audit model
 
-- Hybrid: append-only version tables record **what** changed;
+- Hybrid: append-only version tables record dated financial changes;
   `audit_events` records **who/when/how/why** — one row per user operation
   (not per column), created in the same DB transaction and referenced from
   every version row that operation produced.
 - `audit_events.operation` is a stable dotted code (`account.create`,
   `transaction.correct`); non-empty, but not a DB enum.
-- Do not remove version tables in favor of a leaner audit log. This was tried
-  (branch `experiment-remove-versions`) and abandoned; versions are the model.
+- Preserve financial versions. For current-only reference fields, follow ADR 0022: write the subject kind/ID and changed field names in event metadata, with values only for the selected changes. Omit note, website and icon contents. Descriptive audit is for database investigations only.
 
 ## Accounts and structure
 
