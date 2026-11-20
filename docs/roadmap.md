@@ -238,16 +238,6 @@ R7a's broader entry helpers and configurable shortcut presets remain separate.
 
 These are valuable, but they are not allowed to displace the current plan:
 
-- **Reference history, after v0.1 household testing (owner, 2026-11-20).**
-  Finish the UI overhaul and prepare the testing candidate on the existing
-  schema and dated-edit contracts. Record examples encountered during the
-  household dry run (#336). After testing, the owner will decide whether to keep the model,
-  change individual reads or edits, or change storage where evidence warrants
-  it. #568 and #569 wait for that decision. #602 can address the unchanged
-  archived link under the existing contract. The UI, other correctness fixes,
-  candidate and public tag each proceed on their own criteria.
-  [Review questions and issue dispositions](reviews/reference-history-after-v0.1-testing.md) ·
-  [Tracker #611](https://github.com/sergeyfarin/rekenraam/issues/611).
 - R6: XLSX and OFX/QFX adapters, import matching, per-split mapping, batch
   rollback, and richer import history. `docs/plans/import-plan.md` retains the detailed
   data, lifecycle, and acceptance design.
@@ -314,6 +304,18 @@ These are valuable, but they are not allowed to displace the current plan:
   [explicitly deferred without issues](reviews/maintainability-audit-2026-10-24.md#explicitly-deferred-inventory-original-ranks-713).
   Revisit only on the recorded trigger and refreshed evidence; open a bounded
   issue then if justified.
+
+### Reference history after household testing
+
+Finish the UI overhaul and prepare the v0.1 testing candidate on the shipped
+schema and dated-edit contracts (owner decision, 2026-11-20). Record examples
+encountered during the household dry run (#336). After testing, resume on
+[#611](https://github.com/sergeyfarin/rekenraam/issues/611) with the candidate
+revision, any changed behavior, and what the household actually needed.
+#568 and #569 await that decision. The unchanged-link fix in #602, the UI
+and the existing release gates can proceed independently. Keeping the model,
+changing a particular reader or editor, and a targeted storage change remain
+open outcomes. [Research, alternatives and June experiment](reviews/reference-history-after-v0.1-testing.md)
 
 ### Adapter evidence gates
 
