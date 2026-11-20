@@ -23,6 +23,7 @@ const apiPrefix = '/api/v0';
 const accounts = new Map();
 const dividendFetches = new Map();
 const dividendDates = new Map();
+const splitDates = new Map();
 
 function send(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json' });
@@ -75,6 +76,16 @@ const server = createServer(async (req, res) => {
       return send(res, 204);
     }
 
+    const splitControl = url.pathname.match(/^\/__control\/splits\/(E2ESPLIT[A-Z0-9]+)$/);
+    if (splitControl && req.method === 'PUT') {
+      const { execution_date: date } = await readJSON(req);
+      if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return send(res, 400, { error: 'invalid split fixture date' });
+      }
+      splitDates.set(splitControl[1], date);
+      return send(res, 204);
+    }
+
     const control = url.pathname.match(/^\/__control\/accounts\/([^/]+)$/);
     if (control && req.method === 'PUT') {
       const body = await readJSON(req);
@@ -86,8 +97,7 @@ const server = createServer(async (req, res) => {
 
     // Twelve Data GET /dividends (#111): a registered E2EDIV symbol pays
     // 0.50 per share on its explicit ex-date. E2EDIVREV is revised to
-    // 0.55 from its second fetch on (#254). Every other market-data path
-    // stays 404.
+    // 0.55 from its second fetch on (#254).
     if (req.method === 'GET' && url.pathname === '/market-data/dividends') {
       const symbol = url.searchParams.get('symbol') ?? '';
       if (!dividendDates.has(symbol) || url.searchParams.get('adjust') !== 'false') return send(res, 404, { error: 'not found' });
@@ -99,6 +109,22 @@ const server = createServer(async (req, res) => {
         meta: { symbol, currency: 'USD', mic_code: url.searchParams.get('mic_code') ?? '', exchange_timezone: 'America/New_York' },
         dividends: [{ ex_date: exDate, amount }]
       });
+    }
+
+    const massiveTicker = url.pathname.match(/^\/market-data\/v3\/reference\/tickers\/(E2ESPLIT[A-Z0-9]+)$/);
+    if (req.method === 'GET' && (massiveTicker || url.pathname === '/market-data/stocks/v1/splits')) {
+      if (req.headers.authorization !== 'Bearer e2e-massive') return send(res, 401, { error: 'unauthorized' });
+      const ticker = massiveTicker?.[1] ?? url.searchParams.get('ticker');
+      const date = splitDates.get(ticker);
+      if (!date) return send(res, 404, { error: 'unknown split fixture' });
+      if (massiveTicker) {
+        return send(res, 200, { status: 'OK', results: {
+          ticker, primary_exchange: 'XNAS', market: 'stocks', locale: 'us', share_class_figi: `FIGI-${ticker}`
+        } });
+      }
+      const results = date < url.searchParams.get('execution_date.gte') || date > url.searchParams.get('execution_date.lte')
+        ? [] : [{ id: `${ticker}-split`, ticker, adjustment_type: 'forward_split', execution_date: date, split_from: 1, split_to: 4 }];
+      return send(res, 200, { status: 'OK', results });
     }
 
     if (req.method !== 'GET' || !url.pathname.startsWith(apiPrefix)) return send(res, 404, { error: 'not found' });

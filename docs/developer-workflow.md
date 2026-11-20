@@ -1422,6 +1422,20 @@ runner-image rollouts and cold workload variants from complete cache misses.
 - Do not port archive implementation details directly.
 - If an archive idea is adopted, rewrite it in current-stack terms and add it to active docs.
 
+## Massive split source configuration (#615)
+
+Set `MASSIVE_API_KEY` in the backend environment or Docker Compose deployment
+secrets. Use your own Massive Stocks key and applicable data rights. In
+Investments → Instruments, enter the exact **Massive ticker** and the listing
+MIC (for example, `NFLX` and `XNAS`). Clearing the Massive ticker opts the
+instrument out of future checks. Under Investments → Suggestions, select
+**Check Massive splits**. The worker checks up to the last 365 calendar days
+through the US market date and exposes failed jobs and retry in pricing failed
+work. Review the split date, ratio, and holding before accepting. Where the
+ledger needs extra review, use the native split form and link the matching
+posted transaction from Suggestions. Provider observations and revisions are
+part of the installation's private evidence and backups.
+
 ## Quote provider configuration (#117)
 
 `COINGECKO_DEMO_API_KEY` enables the CoinGecko Demo quote adapter;

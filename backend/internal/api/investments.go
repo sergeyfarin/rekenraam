@@ -712,11 +712,18 @@ type investmentEventSuggestionResponse struct {
 	ProposedTransaction    json.RawMessage                      `json:"proposed_transaction"`
 	GeneratedTransactionID *int64                               `json:"generated_transaction_id,omitempty"`
 	LinkedTransactionID    *int64                               `json:"linked_transaction_id,omitempty"`
+	SplitLinkCandidates    []splitEventLinkCandidateResponse    `json:"split_link_candidates,omitempty"`
 	LinkCandidates         []investmentEventLinkCandidateResult `json:"link_candidates"`
 	Revisions              []investmentEventRevisionResult      `json:"revisions"`
 	FailureReason          string                               `json:"failure_reason,omitempty"`
 	CreatedAt              string                               `json:"created_at"`
 	UpdatedAt              string                               `json:"updated_at"`
+}
+
+type splitEventLinkCandidateResponse struct {
+	TransactionID      int64  `json:"transaction_id"`
+	HoldingAccountID   int64  `json:"holding_account_id"`
+	HoldingAccountName string `json:"holding_account_name"`
 }
 
 type investmentEventRevisionResult struct {
@@ -1908,22 +1915,34 @@ func (request *eventSuggestionCompletionRequest) toApp() *app.SuggestionCompleti
 		Memo: request.Memo, ReconciliationOverride: request.checkpointOverride()}
 }
 
-// queueDividendEventFetch accepts durable work; it never calls a provider
+// queueInvestmentEventFetch accepts durable work; it never calls a provider
 // within the request.
-func queueDividendEventFetch(logger *slog.Logger, auth *app.AuthService, pricing *app.PricingService, options HandlerOptions) http.HandlerFunc {
+func queueInvestmentEventFetch(logger *slog.Logger, auth *app.AuthService, pricing *app.PricingService, options HandlerOptions) http.HandlerFunc {
 	return requireAuthenticatedMutation(logger, auth, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
 		}
-		var body struct{}
+		var body struct {
+			EventFamily string `json:"event_family"`
+		}
 		if err := decodeJSONBody(r, &body); err != nil {
 			writeDecodeError(w, err)
 			return
 		}
-		count, err := pricing.QueueDividendEventFetch(r.Context(), owner.ID)
+		var count int
+		var err error
+		switch body.EventFamily {
+		case "", "dividend":
+			count, err = pricing.QueueDividendEventFetch(r.Context(), owner.ID)
+		case "split":
+			count, err = pricing.QueueSplitEventFetch(r.Context(), owner.ID)
+		default:
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "unsupported provider event family")
+			return
+		}
 		if err != nil {
-			writePricingServiceError(w, r, logger, "queue dividend event fetch", err)
+			writePricingServiceError(w, r, logger, "queue provider event fetch", err)
 			return
 		}
 		writeJSON(w, http.StatusAccepted, dividendEventFetchAccepted{QueuedCount: count})
@@ -2456,6 +2475,11 @@ func toInvestmentEventSuggestionResponse(suggestion app.InvestmentEventSuggestio
 			CashCode: candidate.CashCode, GrossValue: candidate.GrossValue, GrossScale: candidate.GrossScale,
 			HoldingAccountID: candidate.HoldingAccountID, HoldingAccountName: candidate.HoldingAccountName})
 	}
+	splits := make([]splitEventLinkCandidateResponse, 0, len(suggestion.SplitLinkCandidates))
+	for _, candidate := range suggestion.SplitLinkCandidates {
+		splits = append(splits, splitEventLinkCandidateResponse{TransactionID: candidate.TransactionID,
+			HoldingAccountID: candidate.HoldingAccountID, HoldingAccountName: candidate.HoldingAccountName})
+	}
 	revisions := make([]investmentEventRevisionResult, 0, len(suggestion.Revisions))
 	for _, revision := range suggestion.Revisions {
 		revisions = append(revisions, investmentEventRevisionResult{Evidence: json.RawMessage(revision.EvidenceJSON), ObservedAt: revision.ObservedAt})
@@ -2468,7 +2492,7 @@ func toInvestmentEventSuggestionResponse(suggestion app.InvestmentEventSuggestio
 		EventFamily: suggestion.EventFamily, EventDate: suggestion.EventDate, EventStatus: suggestion.EventStatus, SourceCode: suggestion.SourceCode,
 		Evidence: json.RawMessage(evidence), InstrumentID: suggestion.InstrumentID, ConfidenceBPS: suggestion.ConfidenceBPS, Status: suggestion.Status,
 		ProposedTransaction: json.RawMessage(suggestion.ProposedTransactionJSON), GeneratedTransactionID: suggestion.GeneratedTransactionID,
-		LinkedTransactionID: suggestion.LinkedTransactionID, LinkCandidates: candidates, Revisions: revisions, FailureReason: suggestion.FailureReason,
+		LinkedTransactionID: suggestion.LinkedTransactionID, LinkCandidates: candidates, SplitLinkCandidates: splits, Revisions: revisions, FailureReason: suggestion.FailureReason,
 		CreatedAt: suggestion.CreatedAt, UpdatedAt: suggestion.UpdatedAt}
 }
 

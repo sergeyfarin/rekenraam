@@ -159,6 +159,7 @@ InvestmentInstrumentRequest:
         coingecko_id: { type: string, maxLength: 128 }
         yahoo_symbol: { type: string, maxLength: 128 }
         twelve_data_symbol: { type: string, maxLength: 128 }
+        massive_symbol: { type: string, maxLength: 32, description: Explicit Massive US ticker for split suggestions. Empty clears it. }
     identifiers:
       type: object
       additionalProperties: true
@@ -3853,6 +3854,16 @@ InvestmentEventSuggestionResponse:
       type: array
       items:
         $ref: "../../openapi.yaml#/components/schemas/InvestmentEventLinkCandidate"
+    split_link_candidates:
+      type: array
+      description: Posted splits matching the suggestion's verified instrument, date, holding and ratio.
+      items:
+        type: object
+        required: [transaction_id, holding_account_id, holding_account_name]
+        properties:
+          transaction_id: { type: integer, format: int64 }
+          holding_account_id: { type: integer, format: int64 }
+          holding_account_name: { type: string }
     revisions:
       type: array
       description: >-

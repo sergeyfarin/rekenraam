@@ -106,6 +106,8 @@
   "quotes_coingecko_id": "CoinGecko-munt-ID (bijvoorbeeld bitcoin)",
   "quotes_yahoo_symbol": "Yahoo-symbool (onofficieel, bijvoorbeeld ASML.AS)",
   "quotes_twelve_symbol": "Twelve Data-symbool (bijvoorbeeld ASML)",
+  "quotes_massive_symbol": "Massive-ticker",
+  "quotes_massive_symbol_help": "Optioneel. Vul een Amerikaanse ticker en de MIC van de beurs in om splitsingen op te vragen.",
   "quotes_mic": "Marktidentificatie (MIC, bijvoorbeeld XAMS)",
   "quotes_identity_help": "Voer exacte provideridentificaties in. Sla wijzigingen op voordat u koersen inschakelt. Valuta en markt moeten overeenkomen met het antwoord van de provider.",
   "quotes_save": "Instrument opslaan",

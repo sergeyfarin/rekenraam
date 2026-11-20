@@ -1,5 +1,5 @@
 post:
-  summary: Link a provider dividend suggestion to an owner-recorded payment (posts nothing)
+  summary: Link a provider suggestion to an owner-recorded investment transaction
   description: >-
     For a dividend suggestion the transaction must be an effective posted cash dividend of the suggestion's
     instrument dated from the ex-date up to 90 days after it. For a payment-in-lieu suggestion (#258) it must be
@@ -7,6 +7,7 @@ post:
     holding_account_ids, with the event's ex-date; a cash dividend is never linked to it, nor a payment in lieu
     to a dividend suggestion. Either way it must not already be admitted by another provider event. The link
     and the event status commit atomically; later fetches of the same event stay duplicates.
+    A Massive split can link a posted split of the same holding, instrument, date and ratio. Linking creates no posting.
   requestBody:
     required: true
     content:

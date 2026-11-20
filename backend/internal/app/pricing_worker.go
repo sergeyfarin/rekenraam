@@ -64,6 +64,7 @@ func (s *PricingService) StartBackgroundWorker(ctx context.Context, logger *slog
 			runQuotes := func() {
 				s.runDueQuoteRefresh(ctx, logger, workerID)
 				s.runDueDividendEvents(ctx, logger, workerID)
+				s.runDueSplitEvents(ctx, logger, workerID)
 			}
 			runQuotes()
 			ticker := time.NewTicker(time.Minute)
@@ -208,23 +209,15 @@ var ErrPricingBackgroundWorkActive = errors.New("equivalent pricing background w
 // These are the items that used to retry forever (T-39) and now need a manual
 // re-enqueue once the underlying cause is fixed.
 func (s *PricingService) FailedBackgroundWork(ctx context.Context) ([]PricingBackgroundWorkItem, error) {
-	records, err := s.repository.ListBackgroundWorkByStatus(ctx, BookID, fxCoverageWorkKind, "failed", 50)
-	if err != nil {
-		return nil, fmt.Errorf("list failed pricing background work: %w", err)
-	}
-	quotes, err := s.repository.ListBackgroundWorkByStatus(ctx, BookID, quoteRefreshWorkKind, "failed", 50)
-	if err != nil {
-		return nil, err
-	}
-	records = append(records, quotes...)
-	dividends, err := s.repository.ListBackgroundWorkByStatus(ctx, BookID, dividendEventWorkKind, "failed", 50)
-	if err != nil {
-		return nil, err
-	}
-	records = append(records, dividends...)
-	items := make([]PricingBackgroundWorkItem, 0, len(records))
-	for _, record := range records {
-		items = append(items, toPricingBackgroundWorkItem(record))
+	items := []PricingBackgroundWorkItem{}
+	for _, kind := range []string{fxCoverageWorkKind, quoteRefreshWorkKind, dividendEventWorkKind, splitEventWorkKind} {
+		records, err := s.repository.ListBackgroundWorkByStatus(ctx, BookID, kind, "failed", 50)
+		if err != nil {
+			return nil, fmt.Errorf("list failed pricing background work: %w", err)
+		}
+		for _, record := range records {
+			items = append(items, toPricingBackgroundWorkItem(record))
+		}
 	}
 	return items, nil
 }
@@ -242,7 +235,7 @@ func (s *PricingService) RetryBackgroundWork(ctx context.Context, workID int64) 
 	if err != nil {
 		return PricingBackgroundWorkItem{}, fmt.Errorf("read pricing background work: %w", err)
 	}
-	if item.BookID != BookID || (item.Kind != fxCoverageWorkKind && item.Kind != quoteRefreshWorkKind && item.Kind != dividendEventWorkKind) {
+	if item.BookID != BookID || (item.Kind != fxCoverageWorkKind && item.Kind != quoteRefreshWorkKind && item.Kind != dividendEventWorkKind && item.Kind != splitEventWorkKind) {
 		return PricingBackgroundWorkItem{}, ErrPricingBackgroundWorkNotFound
 	}
 	now := s.now().UTC().Format(time.RFC3339)

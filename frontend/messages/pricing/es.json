@@ -106,6 +106,8 @@
   "quotes_coingecko_id": "ID de moneda CoinGecko (por ejemplo, bitcoin)",
   "quotes_yahoo_symbol": "Símbolo Yahoo (no oficial, por ejemplo, ASML.AS)",
   "quotes_twelve_symbol": "Símbolo Twelve Data (por ejemplo, ASML)",
+  "quotes_massive_symbol": "Símbolo en Massive",
+  "quotes_massive_symbol_help": "Opcional. Indica un símbolo de EE. UU. y el MIC de su mercado para consultar desdoblamientos.",
   "quotes_mic": "Identificador de mercado (MIC, por ejemplo, XAMS)",
   "quotes_identity_help": "Introduzca identificadores exactos del proveedor. Guarde los cambios antes de activar cotizaciones. La divisa y el mercado deben coincidir con la respuesta.",
   "quotes_save": "Guardar instrumento",

@@ -29,6 +29,7 @@
   let name = $state(''); let code = $state(''); let symbol = $state('');
   let kind = $state<InstrumentType>('crypto'); let scale = $state(24); let quote = $state(0);
   let mic = $state(''); let coingecko = $state(''); let yahoo = $state(''); let twelve = $state('');
+  let massive = $state('');
   let sourceID = $state(0); let holdingName = $state(''); let openedOn = $state('');
   let queuedCount = $state<number | null>(null);
   let pending = $state(false); let error = $state<unknown>(); let success = $state(false);
@@ -40,6 +41,7 @@
     kind = (instrument?.instrument_type as InstrumentType) ?? 'crypto'; scale = instrument?.quantity_scale ?? 24;
     quote = instrument?.quote_commodity_id ?? 0; mic = instrument?.mic ?? '';
     coingecko = String(instrument?.identifiers.coingecko_id ?? ''); yahoo = String(instrument?.identifiers.yahoo_symbol ?? ''); twelve = String(instrument?.identifiers.twelve_data_symbol ?? '');
+    massive = String(instrument?.identifiers.massive_symbol ?? '');
     sourceID = 0; holdingName = instrument?.display_name ?? ''; openedOn = ownerToday();
   }
   async function save() {
@@ -48,7 +50,7 @@
       selected = await saveInstrument(selected?.id ?? null, {
         commodity_code: code, display_name: name, symbol, instrument_type: kind, quantity_scale: scale,
         price_scale: selected?.price_scale ?? 12, quote_commodity_id: quote || undefined, mic,
-        quote_identifiers: { coingecko_id: coingecko.trim(), yahoo_symbol: yahoo.trim(), twelve_data_symbol: twelve.trim() },
+        quote_identifiers: { coingecko_id: coingecko.trim(), yahoo_symbol: yahoo.trim(), twelve_data_symbol: twelve.trim(), massive_symbol: massive.trim().toUpperCase() },
         exchange_code: selected?.exchange_code, issuer: selected?.issuer, country_code: selected?.country_code,
         trading_commodity_id: selected?.trading_commodity_id,
         ...(selected?.id ? { effective_from: ownerToday() } : {})
@@ -110,6 +112,13 @@
         <label class="grid gap-1 text-sm">{m.quotes_coingecko_id()}<input maxlength="128" bind:value={coingecko} class="min-h-11 rounded-(--radius-control) border border-border bg-control px-3" /></label>
         <label class="grid gap-1 text-sm">{m.quotes_yahoo_symbol()}<input maxlength="128" bind:value={yahoo} class="min-h-11 rounded-(--radius-control) border border-border bg-control px-3" /></label>
         <label class="grid gap-1 text-sm">{m.quotes_twelve_symbol()}<input maxlength="128" bind:value={twelve} class="min-h-11 rounded-(--radius-control) border border-border bg-control px-3" /></label>
+        {#if kind !== 'crypto'}
+          <label class="grid gap-1 text-sm">
+            {m.quotes_massive_symbol()}
+            <input maxlength="32" bind:value={massive} class="min-h-11 rounded-(--radius-control) border border-border bg-control px-3" />
+            <span class="text-xs text-muted">{m.quotes_massive_symbol_help()}</span>
+          </label>
+        {/if}
         <label class="grid gap-1 text-sm">{m.quotes_mic()}<input maxlength="16" bind:value={mic} class="min-h-11 rounded-(--radius-control) border border-border bg-control px-3" /></label>
       </div>
       <p class="text-sm text-muted">{m.quotes_identity_help()}</p>

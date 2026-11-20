@@ -106,6 +106,8 @@
   "quotes_coingecko_id": "CoinGecko-Coin-ID (zum Beispiel bitcoin)",
   "quotes_yahoo_symbol": "Yahoo-Symbol (inoffiziell, zum Beispiel ASML.AS)",
   "quotes_twelve_symbol": "Twelve-Data-Symbol (zum Beispiel ASML)",
+  "quotes_massive_symbol": "Massive-Ticker",
+  "quotes_massive_symbol_help": "Optional. US-Ticker und MIC des Handelsplatzes eingeben, um Aktiensplits abzurufen.",
   "quotes_mic": "Marktkennung (MIC, zum Beispiel XAMS)",
   "quotes_identity_help": "Geben Sie genaue Anbieterkennungen ein. Speichern Sie Änderungen, bevor Sie Kurse aktivieren. Währung und Markt müssen zur Anbieterantwort passen.",
   "quotes_save": "Instrument speichern",
