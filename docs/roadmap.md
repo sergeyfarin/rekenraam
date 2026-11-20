@@ -53,15 +53,6 @@ below is execution order, not a chain of hard dependencies.
 
 ### Current focus
 
-**Reference-data simplification (#611, owner decision 2026-11-20).** Deliver
-[ADR 0022](adrs/0022-current-reference-data-and-descriptive-audit.md) incrementally
-alongside the existing focus. Pilot current institution records end to end,
-then payees and transaction search. Follow with account and category labels,
-category regrouping as its own slice, and instrument display after verifying
-identifier consumers. Remove obsolete editors and assertions as each kind
-moves. Preserve the independent financial/date fixes in #603 and #606–#610.
-The household dry run and migration freeze (#572/#576) keep their own schedule.
-
 The [UI overhaul](#current-product-initiative--ui-overhaul) is the current
 product initiative (owner decision 2026-10-29); its shell #436 closed on
 2026-11-09. The items
@@ -147,6 +138,16 @@ below continue alongside it and do not block it.
    Recheck [#112](https://github.com/sergeyfarin/rekenraam/issues/112)'s upstream
    TypeScript/OpenAPI-generator compatibility when considering the upgrade;
    its old blocker text is not fresh compatibility evidence.
+
+4. **Simplify reference data ([#611](https://github.com/sergeyfarin/rekenraam/issues/611)).**
+   Deliver [ADR 0022](adrs/0022-current-reference-data-and-descriptive-audit.md)
+   as maintenance alongside the UI overhaul. Pilot current institution
+   records end to end, then payees and transaction search. Follow with
+   account and category labels, category regrouping as its own slice, and
+   instrument display after verifying identifier consumers. Remove obsolete
+   editors and assertions as each kind moves. Preserve the independent
+   financial/date fixes in #603 and #606–#610. The household dry run and
+   migration freeze (#572/#576) keep their own schedule.
 
 ### Current product initiative — UI overhaul
 

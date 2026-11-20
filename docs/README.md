@@ -111,6 +111,10 @@ counterexamples and 38 focused race controls. The
 completes #390's bounded first pass, records rejected/deferred refactoring
 opportunities and the two separately delivered browser fixes #433/#434.
 
+[ADR 0022](adrs/0022-current-reference-data-and-descriptive-audit.md) records
+the current reference-data policy, the investigation-only audit boundary
+and the dated financial facts each slice must preserve (#611).
+
 [ADR 0021](adrs/0021-entered-asset-values.md) records the owner decision
 (2026-10-29) that house, vehicle and pension values are dated values beside the
 ledger rather than adjustment postings, with estimate and assessed (WOZ) bases,
