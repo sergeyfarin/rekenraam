@@ -68,9 +68,9 @@ below continue alongside it and do not block it.
    actual owner deployment/household evidence
    [#336](https://github.com/sergeyfarin/rekenraam/issues/336) and owner
    image-advisory disposition
-   [#337](https://github.com/sergeyfarin/rekenraam/issues/337). Signing
-   [#333](https://github.com/sergeyfarin/rekenraam/issues/333) (signing decision
-   accepted; candidate validation remains) retains separate acceptance. The
+   [#337](https://github.com/sergeyfarin/rekenraam/issues/337). The signed candidate workflow has passed.
+   [#333](https://github.com/sergeyfarin/rekenraam/issues/333) retains the
+   migration-checksum freeze at the release cut. The
    upstream driver prerequisite
    [#356](https://github.com/sergeyfarin/rekenraam/issues/356) closed on
    2026-11-11 with the owner's acceptance below and is no longer a release
@@ -304,6 +304,18 @@ These are valuable, but they are not allowed to displace the current plan:
   [explicitly deferred without issues](reviews/maintainability-audit-2026-10-24.md#explicitly-deferred-inventory-original-ranks-713).
   Revisit only on the recorded trigger and refreshed evidence; open a bounded
   issue then if justified.
+
+### Reference history after household testing
+
+Finish the UI overhaul and prepare the v0.1 testing candidate on the shipped
+schema and dated-edit contracts (owner decision, 2026-11-20). Record examples
+encountered during the household dry run (#336). After testing, resume on
+[#611](https://github.com/sergeyfarin/rekenraam/issues/611) with the candidate
+revision, any changed behavior, and what the household actually needed.
+#568 and #569 await that decision. The unchanged-link fix in #602, the UI
+and the existing release gates can proceed independently. Keeping the model,
+changing a particular reader or editor, and a targeted storage change remain
+open outcomes. [Research, alternatives and June experiment](reviews/reference-history-after-v0.1-testing.md)
 
 ### Adapter evidence gates
 
