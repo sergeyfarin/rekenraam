@@ -92,9 +92,6 @@ test('an instrument view lists its activity and pre-fills the instrument and its
 
 const contextLocales: Array<[string, string, string]> = [
   ['en', 'New transaction', 'Back to investments'],
-  ['de', 'Neue Transaktion', 'Zurück zur Geldanlage'],
-  ['es', 'Nueva transacción', 'Volver a inversiones'],
-  ['fr', 'Nouvelle transaction', 'Retour aux investissements'],
   ['nl', 'Nieuwe transactie', 'Terug naar beleggingen'],
   ['ru', 'Новая транзакция', 'Назад к инвестициям']
 ];

@@ -116,9 +116,6 @@ test.describe.serial('imported cash payments', () => {
   const locales = [
     ['en', 'Gains', 'Unclassified imported dividend cash'],
     ['nl', 'Winsten', 'Niet-geclassificeerde geïmporteerde dividendontvangsten'],
-    ['de', 'Gewinne', 'Nicht klassifizierte importierte Dividendenzahlungen'],
-    ['fr', 'Plus-values', 'Encaissements de dividendes importés non classés'],
-    ['es', 'Ganancias', 'Efectivo de dividendos importados sin clasificar'],
     ['ru', 'Прибыль', 'Неклассифицированные импортированные дивидендные поступления']
   ] as const;
   for (const [locale, tab, label] of locales) {

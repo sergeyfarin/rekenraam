@@ -5,6 +5,7 @@ import { createCashAccount, ensureCurrency, readyForLedger } from './support/led
 import { daysFromTodayISO, todayISO } from './support/dates';
 import { expectNoAccessibilityViolations, focusIsInside } from './support/a11y';
 import { openInvestmentActivity } from './support/investment-entry';
+import { allLocales } from './support/locales';
 
 // #508: New transaction keeps one shared context (main date, memo, holding,
 // instrument, settlement choice) and a working copy per activity for as long
@@ -312,7 +313,7 @@ const catalog = (locale: string) => ({
   ...JSON.parse(readFileSync(new URL(`../../frontend/messages/settings/${locale}.json`, import.meta.url), 'utf8'))
 }) as Record<string, string>;
 
-for (const locale of ['en', 'nl', 'ru', 'de', 'es', 'fr']) {
+for (const locale of allLocales) {
   test(`journey 17: discard confirmation in ${locale}`, async ({ page }) => {
     const s = await setup(page);
     const messages = catalog(locale);

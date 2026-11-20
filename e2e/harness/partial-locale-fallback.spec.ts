@@ -7,11 +7,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
 
-// #493: Spanish, French and German are partial locales, so a message they lack
-// must render in English on a real screen. Every catalog is complete today, so
-// this builds an isolated copy of the frontend with one Spanish message removed,
-// serves it without a backend, and checks the screen that shows it. The copy is
-// discarded afterwards; the repository's catalogs are never touched.
+// English fallback remains a runtime safeguard. Build an isolated copy of the
+// frontend with Spanish enabled and one Spanish message removed, then serve it
+// without a backend to exercise fallback on a real screen.
 const frontend = fileURLToPath(new URL('../../frontend/', import.meta.url));
 const removed = { domain: 'settings', key: 'install_gate_retry' };
 
@@ -26,6 +24,11 @@ test.beforeAll(async () => {
   const skip = new Set(['node_modules', 'build', '.svelte-kit', 'paraglide']);
   cpSync(frontend, copy, { recursive: true, filter: (source) => !skip.has(path.basename(source)) });
   symlinkSync(path.join(frontend, 'node_modules'), path.join(copy, 'node_modules'), 'dir');
+
+  const settingsPath = path.join(copy, 'project.inlang', 'settings.json');
+  const settings = JSON.parse(readFileSync(settingsPath, 'utf8')) as { locales: string[] };
+  if (!settings.locales.includes('es')) settings.locales.push('es');
+  writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
 
   const catalogPath = path.join(copy, 'messages', removed.domain, 'es.json');
   const catalog = JSON.parse(readFileSync(catalogPath, 'utf8')) as Record<string, unknown>;

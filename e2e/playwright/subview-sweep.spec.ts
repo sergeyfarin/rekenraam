@@ -27,7 +27,7 @@ const test = base.extend<object, { subviewBook: Fixture }>({
 // opens what a route only shows after an action — modal dialogs, the record
 // and correction forms, the side panels, the import review sub-views and the
 // editors — and, for each, runs axe in the light and dark themes at desktop
-// and 390 px and in de and ru, checks that neither the page nor the sub-view
+// and 390 px and in nl and ru, checks that neither the page nor the sub-view
 // scrolls sideways and that the sub-view fits the viewport, then closes it and
 // checks it is gone. Dialog focus behaviour is #327's (`dialog-focus.spec.ts`).
 //
@@ -38,18 +38,14 @@ const test = base.extend<object, { subviewBook: Fixture }>({
 // previews (impact/preview paths) or the sub-view declares the write it needs
 // to reach its state (an upload, or a write the server refuses for review).
 
-type Locale = 'en' | 'de' | 'ru';
+type Locale = 'en' | 'nl' | 'ru';
 
 /** Every catalog of a locale, merged; `t` answers an exact accessible-name pattern. */
 function catalog(locale: Locale) {
   const root = path.join(repoRoot, 'frontend/messages');
-  // German is a partial locale (#493): a message it lacks renders in English, so
-  // read English first and lay the locale's own messages over it, as the app does.
   const merged: Record<string, string> = {};
-  for (const name of locale === 'en' ? ['en'] : ['en', locale]) {
-    for (const domain of readdirSync(root)) {
-      Object.assign(merged, JSON.parse(readFileSync(path.join(root, domain, `${name}.json`), 'utf8')));
-    }
+  for (const domain of readdirSync(root)) {
+    Object.assign(merged, JSON.parse(readFileSync(path.join(root, domain, `${locale}.json`), 'utf8')));
   }
   // `prefix`: a control whose wrapping label also names its current value.
   return (key: string, prefix = false): RegExp => {
@@ -800,8 +796,8 @@ const configurations = [
   { name: 'light 390', theme: 'light', locale: 'en', viewport: { width: 390, height: 844 } },
   { name: 'dark desktop', theme: 'dark', locale: 'en', viewport: { width: 1280, height: 900 } },
   { name: 'dark 390', theme: 'dark', locale: 'en', viewport: { width: 390, height: 844 } },
-  { name: 'de desktop', theme: 'light', locale: 'de', viewport: { width: 1280, height: 900 } },
-  { name: 'de 390', theme: 'light', locale: 'de', viewport: { width: 390, height: 844 } },
+  { name: 'nl desktop', theme: 'light', locale: 'nl', viewport: { width: 1280, height: 900 } },
+  { name: 'nl 390', theme: 'light', locale: 'nl', viewport: { width: 390, height: 844 } },
   { name: 'ru desktop', theme: 'light', locale: 'ru', viewport: { width: 1280, height: 900 } },
   { name: 'ru 390', theme: 'light', locale: 'ru', viewport: { width: 390, height: 844 } }
 ] as const;

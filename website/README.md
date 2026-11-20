@@ -1,6 +1,6 @@
 # Rekenraam project website
 
-The Paper & pine project site, with complete static pages in the app's six
+The Paper & pine project site, with complete static pages in the app's shipped
 languages. Product/design decisions are in
 [the website contract](../docs/design/public-website.md); current capabilities
 are in [the feature ledger](../docs/implemented.md).
@@ -13,11 +13,12 @@ pnpm website:dev           # build, serve on 127.0.0.1:1889, watch copy/CSS/asse
 pnpm website:check         # locale parity, rendered pages, links and base paths
 pnpm website:build         # website/build/, independent of the app build
 pnpm website:preview       # serve the existing build on 127.0.0.1:1889
-pnpm website:check-browser # six locales, mobile/desktop, axe, themes, no-JS links
+pnpm website:check-browser # shipped locales, mobile/desktop, axe, themes, no-JS links
 ```
 
-Restart the dev command after changing `build.mjs`; catalog and asset edits
-rebuild automatically. Change the loopback preview port with `WEBSITE_PORT`.
+Restart the dev command after changing `build.mjs` or the app's locale
+configuration. Catalog and asset edits rebuild automatically. Change the
+loopback preview port with `WEBSITE_PORT`.
 Browser checks use the fixed test port 1889 and require the existing E2E
 dependencies and Playwright Chromium. Stop a running preview before the checks.
 
