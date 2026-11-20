@@ -212,12 +212,7 @@ func ledgerAccountsAsOf(ctx context.Context, source queryer, bookID int64, asOf 
 			av.status,
 			av.code,
 			av.name,
-			CASE WHEN json_valid(av.metadata_json) THEN
-				CASE json_type(av.metadata_json, '$.starter_key') WHEN 'text' THEN json_extract(av.metadata_json, '$.starter_key') END
-			END,
-			CASE WHEN json_valid(av.metadata_json) THEN
-				CASE json_type(av.metadata_json, '$.currency_code') WHEN 'text' THEN json_extract(av.metadata_json, '$.currency_code') END
-			END,
+			`+accountStarterLabelColumnsSQL("av")+`,
 			av.account_class,
 			av.account_kind,
 			av.parent_account_id,

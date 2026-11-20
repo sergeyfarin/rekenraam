@@ -207,13 +207,15 @@ type postingResponse struct {
 	TagIDs               []int64           `json:"tag_ids"`
 
 	// Enriched display metadata — populated on every response path.
-	AccountName       *string `json:"account_name"`
-	AccountCode       *string `json:"account_code"`
-	AccountSystemRole *string `json:"account_system_role"`
-	AccountBuiltinKey *string `json:"account_builtin_key"`
-	AccountClass      string  `json:"account_class"`
-	CommodityCode     string  `json:"commodity_code"`
-	CommoditySymbol   *string `json:"commodity_symbol"`
+	AccountName         *string `json:"account_name"`
+	AccountCode         *string `json:"account_code"`
+	AccountSystemRole   *string `json:"account_system_role"`
+	AccountBuiltinKey   *string `json:"account_builtin_key"`
+	AccountStarterKey   *string `json:"account_starter_key"`
+	AccountCurrencyCode *string `json:"account_currency_code"`
+	AccountClass        string  `json:"account_class"`
+	CommodityCode       string  `json:"commodity_code"`
+	CommoditySymbol     *string `json:"commodity_symbol"`
 }
 
 type transactionsResponse struct {
@@ -492,6 +494,8 @@ func toTransactionResponse(transaction app.Transaction) transactionResponse {
 				AccountCode:          posting.AccountCode,
 				AccountSystemRole:    posting.AccountSystemRole,
 				AccountBuiltinKey:    posting.AccountBuiltinKey,
+				AccountStarterKey:    posting.AccountStarterKey,
+				AccountCurrencyCode:  posting.AccountCurrencyCode,
 				AccountClass:         posting.AccountClass,
 				CommodityCode:        posting.CommodityCode,
 				CommoditySymbol:      posting.CommoditySymbol,
@@ -609,6 +613,8 @@ func toAccountRegisterEntryResponses(entries []app.AccountRegisterEntry) []accou
 				AccountCode:          entry.Posting.AccountCode,
 				AccountSystemRole:    entry.Posting.AccountSystemRole,
 				AccountBuiltinKey:    entry.Posting.AccountBuiltinKey,
+				AccountStarterKey:    entry.Posting.AccountStarterKey,
+				AccountCurrencyCode:  entry.Posting.AccountCurrencyCode,
 				AccountClass:         entry.Posting.AccountClass,
 				CommodityCode:        entry.Posting.CommodityCode,
 				CommoditySymbol:      entry.Posting.CommoditySymbol,

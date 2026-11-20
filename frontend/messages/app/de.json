@@ -585,7 +585,6 @@
   "forecast_recorded_only": "Nur gebucht",
   "forecast_with_recurring": "Mit Wiederholungen",
   "forecast_unknown_account": "Unbekanntes Konto",
-  "forecast_account_number": "Konto {id}",
   "forecast_event_title": "Bewegungen am {date}",
   "forecast_event_count": "{shown} von {total} Ereignissen angezeigt",
   "forecast_event_close": "Details schließen",

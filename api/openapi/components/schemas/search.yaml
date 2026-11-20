@@ -1,6 +1,6 @@
 SearchCatalogItem:
   type: object
-  required: [kind, id, name, code, builtin_key, status, account_kind]
+  required: [kind, id, name, code, builtin_key, starter_key, currency_code, status, account_kind]
   properties:
     kind:
       type: string
@@ -16,6 +16,12 @@ SearchCatalogItem:
     builtin_key:
       type: string
       description: Resolve seeded category labels in the active frontend locale.
+    starter_key:
+      type: [string, 'null']
+      description: The starter account key from an account's metadata; labels an unnamed starter account. Null for categories and instruments.
+    currency_code:
+      type: [string, 'null']
+      description: The currency code from the starter account's metadata.
     status:
       type: string
       enum: [active, closed, archived]

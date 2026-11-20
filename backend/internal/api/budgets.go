@@ -35,12 +35,14 @@ type budgetCategoryResponse struct {
 	Amounts        []budgetCategoryAmountResponse `json:"amounts"`
 }
 type budgetAccountResponse struct {
-	ID           int64  `json:"id"`
-	Code         string `json:"code,omitempty"`
-	Name         string `json:"name,omitempty"`
-	AccountClass string `json:"account_class"`
-	AccountKind  string `json:"account_kind"`
-	Treatment    string `json:"treatment"`
+	ID           int64   `json:"id"`
+	Code         string  `json:"code,omitempty"`
+	Name         string  `json:"name,omitempty"`
+	StarterKey   *string `json:"starter_key"`
+	CurrencyCode *string `json:"currency_code"`
+	AccountClass string  `json:"account_class"`
+	AccountKind  string  `json:"account_kind"`
+	Treatment    string  `json:"treatment"`
 }
 type budgetCommodityResponse struct {
 	ID     int64  `json:"id"`
@@ -77,7 +79,8 @@ func toBudgetMonth(v app.BudgetMonth) budgetMonthResponse {
 		r.Totals = append(r.Totals, budgetTypeTotalResponse{CategoryType: x.CategoryType, Amount: toBudgetCategoryAmount(x.Amount)})
 	}
 	for _, x := range v.Accounts {
-		r.Accounts = append(r.Accounts, budgetAccountResponse{x.ID, x.Code, x.Name, x.AccountClass, x.AccountKind, x.Treatment})
+		r.Accounts = append(r.Accounts, budgetAccountResponse{ID: x.ID, Code: x.Code, Name: x.Name, StarterKey: optionalString(x.StarterKey), CurrencyCode: optionalString(x.CurrencyCode),
+			AccountClass: x.AccountClass, AccountKind: x.AccountKind, Treatment: x.Treatment})
 	}
 	for _, x := range v.Commodities {
 		r.Commodities = append(r.Commodities, budgetCommodityResponse{x.ID, x.Code, x.Symbol, x.Scale})

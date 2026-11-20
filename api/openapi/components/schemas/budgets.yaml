@@ -35,11 +35,13 @@ BudgetTypeTotal:
     amount: { $ref: "../../openapi.yaml#/components/schemas/BudgetCategoryAmount" }
 BudgetAccount:
   type: object
-  required: [id, account_class, account_kind, treatment]
+  required: [id, starter_key, currency_code, account_class, account_kind, treatment]
   properties:
     id: { type: integer, format: int64 }
     code: { type: string }
     name: { type: string }
+    starter_key: { type: [string, 'null'], description: The starter account key from the account's metadata; labels an unnamed starter account. }
+    currency_code: { type: [string, 'null'], description: The currency code from the starter account's metadata. }
     account_class: { type: string, enum: [asset, liability] }
     account_kind: { type: string }
     treatment: { type: string, enum: [on_budget, off_budget, excluded] }

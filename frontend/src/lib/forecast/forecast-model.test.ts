@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { m } from '#lib/paraglide/messages.js';
 import {
   defaultForecastFilters,
+  forecastAccountLabel,
   forecastChartPoints,
   forecastHasMovements,
   forecastLearnedSeriesFor,
@@ -176,5 +178,20 @@ describe('learned spending filters', () => {
 
     expect(forecastLearnedSeriesFor(learned, undefined, 1)).toBe(native);
     expect(forecastLearnedSeriesFor(learned, undefined, 1, true)).toBe(converted);
+  });
+});
+
+describe('forecast account labels', () => {
+  const account = { id: 9, parent_account_id: null, name: null, code: 'cash:USD', starter_key: 'cash', currency_code: 'USD', builtin_label_key: null,
+    account_class: 'asset' as const, account_kind: 'cash', status: 'active' as const, allows_postings: true, default_commodity_id: 1 };
+
+  it('labels the unnamed starter cash account as Ledger does (#597 sweep)', () => {
+    expect(forecastAccountLabel(account)).toBe(m.accounts_starter_cash_name({ currency: 'USD' }));
+  });
+
+  it('keeps a name, then the code, then the account number', () => {
+    expect(forecastAccountLabel({ ...account, name: 'Checking' })).toBe('Checking');
+    expect(forecastAccountLabel({ ...account, starter_key: null })).toBe('cash:USD');
+    expect(forecastAccountLabel({ ...account, starter_key: null, code: null })).toBe(m.accounts_unnamed_account({ id: 9 }));
   });
 });

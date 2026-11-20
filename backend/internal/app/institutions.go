@@ -614,6 +614,15 @@ func toInstitutions(records []db.InstitutionRecord) []Institution {
 	return institutions
 }
 
+// nullStringPointer is nil for NULL and for the empty string.
+func nullStringPointer(value sql.NullString) *string {
+	if !value.Valid || value.String == "" {
+		return nil
+	}
+	result := value.String
+	return &result
+}
+
 func nullableString(value sql.NullString) string {
 	if !value.Valid {
 		return ""

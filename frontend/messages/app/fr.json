@@ -585,7 +585,6 @@
   "forecast_recorded_only": "Écritures comptabilisées",
   "forecast_with_recurring": "Avec les récurrences",
   "forecast_unknown_account": "Compte inconnu",
-  "forecast_account_number": "Compte {id}",
   "forecast_event_title": "Mouvements du {date}",
   "forecast_event_count": "{shown} événements affichés sur {total}",
   "forecast_event_close": "Fermer les détails",

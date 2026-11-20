@@ -1,6 +1,7 @@
 import type { components } from '#lib/api/schema.js';
 import { m } from '#lib/paraglide/messages.js';
 import { builtinCategoryLabel } from '#lib/categories/category-labels.ts';
+import { accountLabelFromParts } from '#lib/accounts/account-labels.ts';
 import { formatQuantity } from '#lib/money/format.ts';
 
 export type PostingResponse = components['schemas']['PostingResponse'];
@@ -10,8 +11,9 @@ export type StatusBadgeTone = 'neutral' | 'accent' | 'danger' | 'positive' | 'wa
 
 /**
  * Resolve a posting's account display label using the priority chain:
- * account_system_role (localised) → account_builtin_key (localised) →
- * account_name → account_code → fallback.
+ * account_system_role (localised) → account_builtin_key (localised) → the
+ * shared account label (name, then a starter account's localized label such
+ * as "Cash USD", then code, then "Account N").
  *
  * Never returns null/undefined — always a non-empty string.
  */
@@ -22,13 +24,8 @@ export function resolveAccountLabel(posting: PostingResponse): string {
   if (posting.account_builtin_key) {
     return builtinCategoryLabel(posting.account_builtin_key);
   }
-  if (posting.account_name) {
-    return posting.account_name;
-  }
-  if (posting.account_code) {
-    return posting.account_code;
-  }
-  return `#${posting.account_id}`;
+  return accountLabelFromParts({ id: posting.account_id, name: posting.account_name, code: posting.account_code,
+    starterKey: posting.account_starter_key, currencyCode: posting.account_currency_code });
 }
 
 export function systemRoleLabel(role: string): string {

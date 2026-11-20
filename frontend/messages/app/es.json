@@ -585,7 +585,6 @@
   "forecast_recorded_only": "Solo contabilizado",
   "forecast_with_recurring": "Con periódicas",
   "forecast_unknown_account": "Cuenta desconocida",
-  "forecast_account_number": "Cuenta {id}",
   "forecast_event_title": "Movimientos del {date}",
   "forecast_event_count": "Se muestran {shown} de {total} eventos",
   "forecast_event_close": "Cerrar detalles",

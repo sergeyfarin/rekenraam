@@ -587,7 +587,6 @@
   "forecast_recorded_only": "Только проведённые",
   "forecast_with_recurring": "С регулярными транзакциями",
   "forecast_unknown_account": "Неизвестный счёт",
-  "forecast_account_number": "Счёт {id}",
   "forecast_event_title": "Движения за {date}",
   "forecast_event_count": "Показано событий: {shown} из {total}",
   "forecast_event_close": "Закрыть детали",

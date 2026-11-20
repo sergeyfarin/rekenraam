@@ -104,9 +104,13 @@ type Posting struct {
 	AccountCode       *string
 	AccountSystemRole *string
 	AccountBuiltinKey *string // non-nil for built-in/starter category accounts
-	AccountClass      string  // asset | liability | income | expense | equity
-	CommodityCode     string  // "USD", "EUR", "AAPL"
-	CommoditySymbol   *string // "$", "€"; nil when no symbol is set
+	// AccountStarterKey and AccountCurrencyCode label an unnamed starter
+	// account (metadata starter_key, currency_code); nil otherwise.
+	AccountStarterKey   *string
+	AccountCurrencyCode *string
+	AccountClass        string  // asset | liability | income | expense | equity
+	CommodityCode       string  // "USD", "EUR", "AAPL"
+	CommoditySymbol     *string // "$", "€"; nil when no symbol is set
 }
 
 type AccountRegisterEntry struct {

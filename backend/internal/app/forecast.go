@@ -61,6 +61,8 @@ type ForecastAccount struct {
 	ID                 int64
 	Name               string
 	Code               string
+	StarterKey         string
+	CurrencyCode       string
 	BuiltinLabelKey    string
 	AccountClass       string
 	AccountKind        string

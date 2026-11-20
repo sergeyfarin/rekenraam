@@ -2,6 +2,7 @@
   import { replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+  import { accountLabelFromParts } from '#lib/accounts/account-labels.ts';
   import { authSessionQueryOptions } from '#lib/api/auth.ts';
   import { budgetMonthQueryOptions, budgetQueryKey, setBudgetTarget, setBudgetTreatment, type BudgetTreatment } from '#lib/api/budgets.ts';
   import APIFormError from '#lib/components/api-form-error.svelte';
@@ -132,7 +133,7 @@
       <h2 class="text-lg font-semibold">{m.budgets_accounts()}</h2><p class="mt-1 text-sm text-muted">{m.budgets_accounts_help()}</p>
       <div class="mt-4 grid gap-3 md:grid-cols-2">
         {#each query.data.accounts as account (account.id)}
-          <label class="rounded-(--radius-control) border border-border p-3 text-sm"><span class="font-semibold">{account.name || account.code}</span>
+          <label class="rounded-(--radius-control) border border-border p-3 text-sm"><span class="font-semibold">{accountLabelFromParts({ id: account.id, name: account.name, code: account.code, starterKey: account.starter_key, currencyCode: account.currency_code })}</span>
             <select class="mt-2 w-full rounded-(--radius-control) border border-border bg-surface px-3 py-2" value={account.treatment} disabled={savingID===-account.id} onchange={(event)=>void treatmentChanged(account.id,(event.currentTarget as HTMLSelectElement).value as BudgetTreatment)}>
               <option value="on_budget">{m.budgets_on_budget()}</option><option value="off_budget">{m.budgets_off_budget()}</option><option value="excluded">{m.budgets_excluded()}</option>
             </select>

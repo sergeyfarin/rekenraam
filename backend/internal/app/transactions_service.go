@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -335,33 +336,11 @@ func (s *TransactionService) enrichPostings(ctx context.Context, transactions []
 				if !ok {
 					return fmt.Errorf("enrich postings: account %d not found", p.AccountID)
 				}
-				if acct.Name.Valid {
-					name := acct.Name.String
-					p.AccountName = &name
-				}
-				if acct.Code.Valid {
-					code := acct.Code.String
-					p.AccountCode = &code
-				}
-				if acct.SystemRole.Valid {
-					role := acct.SystemRole.String
-					p.AccountSystemRole = &role
-				}
-				if acct.BuiltinKey.Valid {
-					key := acct.BuiltinKey.String
-					p.AccountBuiltinKey = &key
-				}
-				p.AccountClass = acct.AccountClass
-
 				comm, ok := commodityMap[p.CommodityID]
 				if !ok {
 					return fmt.Errorf("enrich postings: commodity %d not found", p.CommodityID)
 				}
-				p.CommodityCode = comm.Code
-				if comm.DisplaySymbol != "" {
-					sym := comm.DisplaySymbol
-					p.CommoditySymbol = &sym
-				}
+				enrichPostingDisplay(p, acct, comm)
 			}
 		}
 	}
@@ -408,36 +387,43 @@ func (s *TransactionService) enrichRegisterPostings(ctx context.Context, entries
 		if !ok {
 			return fmt.Errorf("enrich register postings: account %d not found", p.AccountID)
 		}
-		if acct.Name.Valid {
-			name := acct.Name.String
-			p.AccountName = &name
-		}
-		if acct.Code.Valid {
-			code := acct.Code.String
-			p.AccountCode = &code
-		}
-		if acct.SystemRole.Valid {
-			role := acct.SystemRole.String
-			p.AccountSystemRole = &role
-		}
-		if acct.BuiltinKey.Valid {
-			key := acct.BuiltinKey.String
-			p.AccountBuiltinKey = &key
-		}
-		p.AccountClass = acct.AccountClass
-
 		comm, ok := commodityMap[p.CommodityID]
 		if !ok {
 			return fmt.Errorf("enrich register postings: commodity %d not found", p.CommodityID)
 		}
-		p.CommodityCode = comm.Code
-		if comm.DisplaySymbol != "" {
-			sym := comm.DisplaySymbol
-			p.CommoditySymbol = &sym
-		}
+		enrichPostingDisplay(p, acct, comm)
 	}
 
 	return nil
+}
+
+// enrichPostingDisplay copies the account and commodity display fields onto
+// one posting: the one copy both enrichPostings and enrichRegisterPostings
+// use. The account parts are what the frontend's shared account label reads,
+// including the starter parts of an unnamed starter account (#597 sweep).
+func enrichPostingDisplay(p *Posting, acct db.PostingAccountSummary, comm db.PostingCommoditySummary) {
+	p.AccountName = nullStringRef(acct.Name)
+	p.AccountCode = nullStringRef(acct.Code)
+	p.AccountSystemRole = nullStringRef(acct.SystemRole)
+	p.AccountBuiltinKey = nullStringRef(acct.BuiltinKey)
+	p.AccountStarterKey = nullStringPointer(acct.StarterKey)
+	p.AccountCurrencyCode = nullStringPointer(acct.CurrencyCode)
+	p.AccountClass = acct.AccountClass
+
+	p.CommodityCode = comm.Code
+	if comm.DisplaySymbol != "" {
+		sym := comm.DisplaySymbol
+		p.CommoditySymbol = &sym
+	}
+}
+
+// nullStringRef keeps a non-NULL value, the empty string included.
+func nullStringRef(value sql.NullString) *string {
+	if !value.Valid {
+		return nil
+	}
+	result := value.String
+	return &result
 }
 
 func toTransactions(records []db.TransactionRecord) []Transaction {

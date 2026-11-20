@@ -21,6 +21,9 @@ type BudgetCategoryRecord struct {
 type BudgetAccountRecord struct {
 	ID                                               int64
 	Code, Name, AccountClass, AccountKind, Treatment string
+	// StarterKey and CurrencyCode are empty unless the account is a starter
+	// account; the frontend labels it with them (#597 sweep).
+	StarterKey, CurrencyCode string
 }
 
 type BudgetCommodityRecord struct {
@@ -70,6 +73,7 @@ func (r *BudgetRepository) Snapshot(ctx context.Context, bookID int64, start, en
 
 	rows, err = r.database.QueryContext(ctx, `
 		SELECT a.id, COALESCE(av.code,''), COALESCE(av.name,''), av.account_class, av.account_kind,
+		COALESCE(`+accountMetadataTextSQL("av", "starter_key")+`,''), COALESCE(`+accountMetadataTextSQL("av", "currency_code")+`,''),
 		COALESCE((SELECT btv.treatment FROM account_budget_treatment_versions btv
 		 WHERE btv.account_id=a.id AND btv.effective_from<=?
 		 ORDER BY btv.effective_from DESC, btv.version_seq DESC LIMIT 1),
@@ -84,7 +88,7 @@ func (r *BudgetRepository) Snapshot(ctx context.Context, bookID int64, start, en
 	}
 	for rows.Next() {
 		var v BudgetAccountRecord
-		if err := rows.Scan(&v.ID, &v.Code, &v.Name, &v.AccountClass, &v.AccountKind, &v.Treatment); err != nil {
+		if err := rows.Scan(&v.ID, &v.Code, &v.Name, &v.AccountClass, &v.AccountKind, &v.StarterKey, &v.CurrencyCode, &v.Treatment); err != nil {
 			rows.Close()
 			return out, err
 		}

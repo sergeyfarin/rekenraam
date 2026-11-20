@@ -477,7 +477,7 @@ func (b *forecastBuild) finish(input forecastNormalizedInput, computedAt string)
 }
 
 func forecastAccount(account db.ForecastAccountVersionRecord) ForecastAccount {
-	return ForecastAccount{ID: account.AccountID, Name: account.Name.String, Code: account.Code.String, AccountClass: account.AccountClass, AccountKind: account.AccountKind, Status: account.Status, ParentAccountID: pointerFromNull(account.ParentAccountID), DefaultCommodityID: pointerFromNull(account.DefaultCommodityID), AllowsPostings: account.AllowsPostings}
+	return ForecastAccount{ID: account.AccountID, Name: account.Name.String, Code: account.Code.String, StarterKey: account.StarterKey.String, CurrencyCode: account.CurrencyCode.String, AccountClass: account.AccountClass, AccountKind: account.AccountKind, Status: account.Status, ParentAccountID: pointerFromNull(account.ParentAccountID), DefaultCommodityID: pointerFromNull(account.DefaultCommodityID), AllowsPostings: account.AllowsPostings}
 }
 
 func normalizeForecastDiagnostics(input []ForecastDiagnostic) []ForecastDiagnostic {

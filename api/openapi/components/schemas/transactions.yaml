@@ -90,6 +90,12 @@ PostingResponse:
     account_builtin_key:
       type: [string, 'null']
       description: "Non-null for built-in/starter category accounts. Localise via Paraglide on the client."
+    account_starter_key:
+      type: [string, 'null']
+      description: "The starter account key from the account's metadata; labels an unnamed starter account. Null otherwise."
+    account_currency_code:
+      type: [string, 'null']
+      description: "The currency code from the starter account's metadata. Null otherwise."
     account_class:
       $ref: "../../openapi.yaml#/components/schemas/AccountClass"
       description: "Account class (asset | liability | income | expense | equity). Always present."

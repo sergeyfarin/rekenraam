@@ -28638,6 +28638,10 @@ export interface components {
             id: number;
             code?: string;
             name?: string;
+            /** @description The starter account key from the account's metadata; labels an unnamed starter account. */
+            starter_key: string | null;
+            /** @description The currency code from the starter account's metadata. */
+            currency_code: string | null;
             /** @enum {string} */
             account_class: "asset" | "liability";
             account_kind: string;
@@ -28699,6 +28703,10 @@ export interface components {
             parent_account_id: number | null;
             name: string | null;
             code: string | null;
+            /** @description The starter account key from the account's metadata; labels an unnamed starter account. */
+            starter_key: string | null;
+            /** @description The currency code from the starter account's metadata. */
+            currency_code: string | null;
             builtin_label_key: string | null;
             /** @enum {string} */
             account_class: "asset" | "liability";
@@ -29650,6 +29658,10 @@ export interface components {
             code: string;
             /** @description Resolve seeded category labels in the active frontend locale. */
             builtin_key: string;
+            /** @description The starter account key from an account's metadata; labels an unnamed starter account. Null for categories and instruments. */
+            starter_key: string | null;
+            /** @description The currency code from the starter account's metadata. */
+            currency_code: string | null;
             /** @enum {string} */
             status: "active" | "closed" | "archived";
             account_kind: string;
@@ -31293,6 +31305,10 @@ export interface components {
             account_system_role?: string | null;
             /** @description Non-null for built-in/starter category accounts. Localise via Paraglide on the client. */
             account_builtin_key?: string | null;
+            /** @description The starter account key from the account's metadata; labels an unnamed starter account. Null otherwise. */
+            account_starter_key?: string | null;
+            /** @description The currency code from the starter account's metadata. Null otherwise. */
+            account_currency_code?: string | null;
             /** @description Account class (asset | liability | income | expense | equity). Always present. */
             account_class: components["schemas"]["AccountClass"];
             /** Format: int64 */
@@ -35966,6 +35982,10 @@ export interface components {
             id: number;
             name: string;
             code: string;
+            /** @description The starter account key from the account's metadata; labels an unnamed starter account. */
+            starter_key: string | null;
+            /** @description The currency code from the starter account's metadata. */
+            currency_code: string | null;
             kind: string;
             status: string;
             included: boolean;
