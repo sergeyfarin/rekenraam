@@ -49,20 +49,12 @@ func (s *PricingService) Workspace(ctx context.Context, asOf string) (PricingWor
 	}
 
 	result := PricingWorkspace{Coverage: []PricingCoverage{}}
-	if asOf == "" {
-		zone, err := s.repository.BookOwnerTimeZone(ctx, BookID)
+	if asOf != "" {
+		date, err := cleanRequiredDate(asOf, "as of date")
 		if err != nil {
 			return result, err
 		}
-		location, err := time.LoadLocation(zone)
-		if err != nil {
-			return result, err
-		}
-		asOf = s.now().In(location).Format(time.DateOnly)
-	}
-	asOf, err := cleanRequiredDate(asOf, "as of date")
-	if err != nil {
-		return result, err
+		asOf = date
 	}
 	policy, err := s.GetPolicy(ctx)
 	if err != nil {
@@ -80,8 +72,12 @@ func (s *PricingService) Workspace(ctx context.Context, asOf string) (PricingWor
 	if err != nil {
 		return result, err
 	}
-	// An explicitly selected future management date is a diagnostic, not current value.
-	boundary.AsOf = asOf
+	if asOf == "" {
+		asOf = boundary.AsOf
+	} else {
+		// Diagnostics allow an explicit date beyond the current owner day.
+		boundary.AsOf = asOf
+	}
 	balances := map[int64]map[int64]*exact.ScaledInt{}
 	snapshot, err := s.repository.PriceManagementSnapshot(ctx, BookID, asOf, baseID, func(account db.LedgerAccountRecord, posting db.LedgerPostingRecord) {
 		if countsNetWorthAccount(account) {
