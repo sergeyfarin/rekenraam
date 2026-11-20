@@ -16,10 +16,10 @@ complicates editor baselines, name reuse and updates with archived associations
 (#568, #569, #602). The owner-day problems in Home and pricing (#606, #610)
 also affect dated facts and need their own fixes.
 
-The June 8 experiment (`d01680e8`) replaced version tables with a
-centralized audit trail. That removed transaction versions and their
-posting-version references in reconciliation. This decision keeps those
-financial versions and references authoritative. Moving current
+An earlier audit experiment on June 8 replaced version tables with a
+centralized audit trail. It removed transaction versions and the links from
+reconciliation records to posting versions. This decision keeps financial
+versions and those reconciliation links authoritative. Moving current
 descriptions to their identity rows removes date selection from ordinary
 edits. Direct database investigation can use the event metadata. An in-app
 history view would add a read contract for data that serves investigations.
