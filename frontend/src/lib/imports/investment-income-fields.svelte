@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { accountDisplayName } from '#lib/accounts/account-labels.ts';
   import { untrack } from 'svelte';
   import type { ImportResolution, NormalizedRow } from '#lib/api/imports.ts';
   import type { CurrencyResponse } from '#lib/api/currencies.ts';
@@ -64,7 +65,7 @@
         const id = Number(e.currentTarget.value);
         onchange({ account_id: id || undefined, commodity_id: cash.find(a => a.id === id)?.default_commodity_id ?? undefined });
       }} class="min-h-11 min-w-0 w-full rounded-(--radius-control) border border-border bg-control px-3 py-2">
-        <option value="">{m.import_csv_column_none()}</option>{#each cash as account (account.id)}<option value={account.id}>{account.name}</option>{/each}
+        <option value="">{m.import_csv_column_none()}</option>{#each cash as account (account.id)}<option value={account.id}>{accountDisplayName(account)}</option>{/each}
       </select>
     </label>
     <label class="flex min-w-0 flex-col gap-1 text-sm text-foreground">{m.import_preview_currency_label()}
@@ -75,7 +76,7 @@
     {#if kind !== 'withholding'}
       <label class="flex min-w-0 flex-col gap-1 text-sm text-foreground">{m.investments_form_income_account()}
         <select value={resolution.category_id || ''} onchange={(e) => onchange({ category_id: Number(e.currentTarget.value) || undefined })} class="min-h-11 min-w-0 w-full rounded-(--radius-control) border border-border bg-control px-3 py-2">
-          <option value="">{m.import_csv_column_none()}</option>{#each income as account (account.id)}<option value={account.id}>{account.name}</option>{/each}
+          <option value="">{m.import_csv_column_none()}</option>{#each income as account (account.id)}<option value={account.id}>{accountDisplayName(account)}</option>{/each}
         </select>
       </label>
       <label class="flex min-w-0 flex-col gap-1 text-sm text-foreground">{m.investments_form_dividend_amount()}
@@ -87,7 +88,7 @@
     {/if}
     <label class="flex min-w-0 flex-col gap-1 text-sm text-foreground">{m.import_investment_tax_account()}
       <select value={resolution.withholding_account_id || ''} onchange={(e) => onchange({ withholding_account_id: Number(e.currentTarget.value) || undefined })} class="min-h-11 min-w-0 w-full rounded-(--radius-control) border border-border bg-control px-3 py-2">
-        <option value="">{m.import_csv_column_none()}</option>{#each taxes as account (account.id)}<option value={account.id}>{account.name}</option>{/each}
+        <option value="">{m.import_csv_column_none()}</option>{#each taxes as account (account.id)}<option value={account.id}>{accountDisplayName(account)}</option>{/each}
       </select>
     </label>
   </div>

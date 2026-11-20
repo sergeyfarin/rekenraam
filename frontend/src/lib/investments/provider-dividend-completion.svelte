@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { accountDisplayName } from '#lib/accounts/account-labels.ts';
   import { untrack } from 'svelte';
   import { commitReview, type CommitReviewState } from '#lib/investments/commit-review.ts';
   import { createQuery } from '@tanstack/svelte-query';
@@ -172,7 +173,7 @@
       <label for="{idPrefix}-cash" class="mb-1 block text-sm font-medium text-foreground">{m.investments_form_cash_account()}</label>
       <select id="{idPrefix}-cash" bind:value={cashAccountID} required class={fieldClass}>
         <option value="">{m.investments_form_select_account()}</option>
-        {#each cashAccounts as account (account.id)}<option value={String(account.id)}>{account.name}</option>{/each}
+        {#each cashAccounts as account (account.id)}<option value={String(account.id)}>{accountDisplayName(account)}</option>{/each}
       </select>
     </div>
     <div>
@@ -194,7 +195,7 @@
       </label>
       <select id="{idPrefix}-income" bind:value={incomeAccountID} class={fieldClass}>
         <option value="">{m.investments_form_select_account()}</option>
-        {#each incomeAccounts as account (account.id)}<option value={String(account.id)}>{account.name}</option>{/each}
+        {#each incomeAccounts as account (account.id)}<option value={String(account.id)}>{accountDisplayName(account)}</option>{/each}
       </select>
     </div>
   </div>
@@ -213,7 +214,7 @@
         <label for="{idPrefix}-withholding-account" class="mb-1 block text-sm font-medium text-foreground">{m.investments_form_withholding_account()}</label>
         <select id="{idPrefix}-withholding-account" bind:value={withholdingAccountID} class={fieldClass}>
           <option value="">{m.investments_form_select_account()}</option>
-          {#each withholdingAccounts as account (account.id)}<option value={String(account.id)}>{account.name}</option>{/each}
+          {#each withholdingAccounts as account (account.id)}<option value={String(account.id)}>{accountDisplayName(account)}</option>{/each}
         </select>
       </div>
     </div>

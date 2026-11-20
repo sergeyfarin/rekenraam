@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { accountDisplayName } from '#lib/accounts/account-labels.ts';
   import UnavailableAllocations from '#lib/investments/unavailable-allocations.svelte';
   import { unavailableAllocations, withoutAllocations } from '#lib/investments/lot-allocations.ts';
   import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
@@ -277,7 +278,7 @@
           {@const instrument = (instrumentsQuery.data?.instruments ?? []).find((item) => item.commodity_id === position.commodity_id)}
           {@const currency = (currenciesQuery.data?.currencies ?? []).find((item) => item.id === position.cost_commodity_id)}
           <option value={`${position.account_id}:${position.commodity_id}:${position.cost_commodity_id}`}>
-            {account?.name} · {instrument?.display_name ?? instrument?.commodity_code ?? `#${position.commodity_id}`} · {currency?.code ?? `#${position.cost_commodity_id}`}
+            {account ? accountDisplayName(account) : `#${position.account_id}`} · {instrument?.display_name ?? instrument?.commodity_code ?? `#${position.commodity_id}`} · {currency?.code ?? `#${position.cost_commodity_id}`}
           </option>
         {/each}
       </select>
@@ -290,7 +291,7 @@
         <select id="internal-transfer-destination" bind:value={destinationAccountID} required onchange={discardPreview}
           class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
           <option value="">{m.investments_form_select_account()}</option>
-          {#each destinationAccounts as account (account.id)}<option value={String(account.id)}>{account.name}</option>{/each}
+          {#each destinationAccounts as account (account.id)}<option value={String(account.id)}>{accountDisplayName(account)}</option>{/each}
         </select>
       </div>
       {#if pooled}

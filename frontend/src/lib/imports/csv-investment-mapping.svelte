@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { accountDisplayName } from '#lib/accounts/account-labels.ts';
   import type { CSVInvestmentMapping } from './csv-profile.ts';
   import type { AccountResponse } from '#lib/api/accounts.ts';
   import { m } from '#lib/paraglide/messages.js';
@@ -71,7 +72,7 @@
         <label class="flex flex-col gap-1 text-sm text-foreground">{entry.label}
           <select value={value[entry.field]} onchange={(e) => { value = { ...value!, [entry.field]: Number(e.currentTarget.value) || undefined }; }} class="min-h-11 rounded-(--radius-control) border border-border bg-control px-3 py-2">
             <option value="">{m.import_csv_column_none()}</option>
-            {#each entry.choices as account}<option value={account.id}>{account.name}</option>{/each}
+            {#each entry.choices as account}<option value={account.id}>{accountDisplayName(account)}</option>{/each}
           </select>
         </label>
       {/each}

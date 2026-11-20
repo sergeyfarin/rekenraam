@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { accountLabelByID } from '#lib/accounts/account-labels.ts';
   import { autofocus } from '#lib/components/autofocus.ts';
   import BasisProvenanceSummary from '#lib/investments/basis-provenance-summary.svelte';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
@@ -191,7 +192,7 @@
     return instrument?.display_name ?? instrument?.commodity_code ?? `#${commodityID}`;
   }
   function exchangeAccountName(accountID: number): string {
-    return (exchangeAccountsQuery.data?.accounts ?? []).find((account) => account.id === accountID)?.name ?? `#${accountID}`;
+    return accountLabelByID(exchangeAccountsQuery.data?.accounts, accountID) ?? `#${accountID}`;
   }
 
   const sourceLinkedEffectiveBuy = $derived(

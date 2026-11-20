@@ -1,11 +1,12 @@
 <script lang="ts">
+  import { accountLabelByID } from '#lib/accounts/account-labels.ts';
   import { page } from '$app/state';
   import { createQuery } from '@tanstack/svelte-query';
   import ArrowLeft from '@lucide/svelte/icons/arrow-left';
   import { m } from '#lib/paraglide/messages.js';
   import Panel from '#lib/components/panel.svelte';
   import { authSessionQueryOptions } from '#lib/api/auth.ts';
-  import { accountsQueryOptions, type AccountResponse } from '#lib/api/accounts.ts';
+  import { accountsQueryOptions } from '#lib/api/accounts.ts';
   import type { ReconciliationSessionResponse } from '#lib/api/reconciliation.ts';
   import ReconcileStartForm from '#lib/reconcile/reconcile-start-form.svelte';
   import ReconcileSession from '#lib/reconcile/reconcile-session.svelte';
@@ -48,10 +49,7 @@
   );
 
   function accountLabel(accountID: number): string {
-    const account = (accountsQuery.data?.accounts ?? []).find(
-      (a: AccountResponse) => a.id === accountID
-    );
-    return account?.name ?? account?.code ?? String(accountID);
+    return accountLabelByID(accountsQuery.data?.accounts, accountID) ?? String(accountID);
   }
 
   function handleStarted(session: ReconciliationSessionResponse) {

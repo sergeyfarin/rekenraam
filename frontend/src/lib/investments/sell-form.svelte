@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { accountDisplayName, accountLabelByID } from '#lib/accounts/account-labels.ts';
   import EntryAccountStatus from '#lib/investments/entry-account-status.svelte';
   import { useSettlementCandidates } from '#lib/investments/settlement-candidates.svelte.ts';
   import { isSettlementAccount } from '#lib/investments/settlement-accounts.ts';
@@ -554,10 +555,10 @@
     >
       <option value="">{m.investments_form_select_account()}</option>
       {#if holdingAccountID && !holdingAccounts.some((account) => String(account.id) === holdingAccountID)}
-        <option value={holdingAccountID} disabled>{(accountsQuery.data?.accounts ?? []).find((account) => String(account.id) === holdingAccountID)?.name ?? holdingAccountID}</option>
+        <option value={holdingAccountID} disabled>{accountLabelByID(accountsQuery.data?.accounts, holdingAccountID) ?? holdingAccountID}</option>
       {/if}
       {#each holdingAccounts as acc (acc.id)}
-        <option value={String(acc.id)}>{acc.name}</option>
+        <option value={String(acc.id)}>{accountDisplayName(acc)}</option>
       {/each}
     </select>
     {#if accountsQuery.data && holdingAccountID && !holdingAccounts.some((account) => String(account.id) === holdingAccountID)}
@@ -605,10 +606,10 @@
     >
       <option value="">{m.investments_form_select_account()}</option>
       {#if cashAccountID && !cashAccounts.some((account) => String(account.id) === cashAccountID)}
-        <option value={cashAccountID} disabled>{(cashAccountsQuery.data?.accounts ?? []).find((account) => String(account.id) === cashAccountID)?.name ?? cashAccountID}</option>
+        <option value={cashAccountID} disabled>{accountLabelByID(cashAccountsQuery.data?.accounts, cashAccountID) ?? cashAccountID}</option>
       {/if}
       {#each cashAccounts as acc (acc.id)}
-        <option value={String(acc.id)}>{acc.name}</option>
+        <option value={String(acc.id)}>{accountDisplayName(acc)}</option>
       {/each}
     </select>
     <p class="mt-1 text-xs text-muted">{cashAccountID ? m.investments_activity_settlement_hint() : m.investments_activity_settlement_choice()}</p>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { accountDisplayName } from '#lib/accounts/account-labels.ts';
   import { isSubledgerManagedAccountKind } from '#lib/accounts/subledger-accounts.ts';
   import { createQuery } from '@tanstack/svelte-query';
   import { m } from '#lib/paraglide/messages.js';
@@ -155,7 +156,7 @@
       >
         <option value="">{m.transactions_filter_account_all()}</option>
         {#each visibleAccounts as account (account.id)}
-          <option value={account.id}>{account.name ?? account.code ?? String(account.id)}</option>
+          <option value={account.id}>{accountDisplayName(account)}</option>
         {/each}
       </select>
     </label>

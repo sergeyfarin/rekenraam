@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { accountDisplayName, accountLabelByID } from '#lib/accounts/account-labels.ts';
   import UnavailableAllocations from '#lib/investments/unavailable-allocations.svelte';
   import { unavailableAllocations, withoutAllocations } from '#lib/investments/lot-allocations.ts';
   import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
@@ -296,7 +297,7 @@
     <div>
       {#if initial}
         <p class="mb-1 text-sm font-medium text-foreground">{m.investments_capital_return_position()}</p>
-        <p class="text-sm text-foreground">{accounts.find((a) => a.id === initial.holding_account_id)?.name}
+        <p class="text-sm text-foreground">{accountLabelByID(accounts, initial.holding_account_id) ?? `#${initial.holding_account_id}`}
           · {(instrumentsQuery.data?.instruments ?? []).find((i) => i.commodity_id === initial.commodity_id)?.display_name}</p>
       {:else}
       <label for="capital-return-position" class="mb-1 block text-sm font-medium text-foreground">{m.investments_capital_return_position()}</label>
@@ -308,7 +309,7 @@
           {@const account = accounts.find((candidate: AccountResponse) => candidate.id === item.account_id)}
           {@const instrument = (instrumentsQuery.data?.instruments ?? []).find((candidate) => candidate.commodity_id === item.commodity_id)}
           <option value={`${item.account_id}:${item.commodity_id}:${item.cost_commodity_id}`}>
-            {account?.name} · {instrument?.display_name ?? instrument?.commodity_code ?? `#${item.commodity_id}`} · {currenciesByID.get(item.cost_commodity_id)?.code ?? `#${item.cost_commodity_id}`}
+            {account ? accountDisplayName(account) : `#${item.account_id}`} · {instrument?.display_name ?? instrument?.commodity_code ?? `#${item.commodity_id}`} · {currenciesByID.get(item.cost_commodity_id)?.code ?? `#${item.cost_commodity_id}`}
           </option>
         {/each}
       </select>
@@ -322,9 +323,9 @@
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         <option value="">{m.investments_form_select_account()}</option>
       {#if cashAccountID && !cashAccounts.some((account) => String(account.id) === cashAccountID)}
-        <option value={cashAccountID} disabled>{(cashAccountsQuery.data?.accounts ?? []).find((account) => String(account.id) === cashAccountID)?.name ?? cashAccountID}</option>
+        <option value={cashAccountID} disabled>{accountLabelByID(cashAccountsQuery.data?.accounts, cashAccountID) ?? cashAccountID}</option>
       {/if}
-        {#each cashAccounts as account (account.id)}<option value={String(account.id)}>{account.name}</option>{/each}
+        {#each cashAccounts as account (account.id)}<option value={String(account.id)}>{accountDisplayName(account)}</option>{/each}
       </select>
     <EntryAccountStatus pending={cashAccountsQuery.isFetching} error={cashAccountsQuery.error}
       onRetry={() => cashAccountsQuery.refetch()} />

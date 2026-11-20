@@ -6,7 +6,7 @@
   import { accountQueryOptions, accountsQueryKey, accountsQueryOptions, getAccount } from '#lib/api/accounts.ts';
   import { ledgerAccountQueryOptions } from '#lib/api/ledger.ts';
   import { findBrokerageAncestor, isHoldingAccount } from '#lib/accounts/brokerage.ts';
-  import { isCategoryAccount } from '#lib/accounts/account-labels.ts';
+  import { accountDisplayName, isCategoryAccount } from '#lib/accounts/account-labels.ts';
   import BrokerageSummary from '#lib/accounts/brokerage-summary.svelte';
   import AccountLifecycleActions from '#lib/accounts/account-lifecycle-actions.svelte';
   import AccountRegister from '#lib/transactions/account-register.svelte';
@@ -56,10 +56,10 @@
   const pageBreadcrumbs = $derived.by(() => {
     const base = breadcrumbs(routeFor(page.url.pathname));
     const brokerage = brokerageQuery.data;
-    return brokerage ? [...base, { label: brokerage.name || brokerage.code || String(brokerage.id), href: `/app/ledger/accounts/${brokerage.id}/register` }] : base;
+    return brokerage ? [...base, { label: accountDisplayName(brokerage), href: `/app/ledger/accounts/${brokerage.id}/register` }] : base;
   });
   // The h1 names the account once it has loaded; until then, the page.
-  const accountName = $derived(account?.name || account?.code || m.accounts_title());
+  const accountName = $derived(account ? accountDisplayName(account) : m.accounts_title());
   const instrumentsQuery = createQuery(() => ({
     ...investmentInstrumentsQueryOptions(),
     enabled: !!account && accountEntryKind(account) === 'investments'

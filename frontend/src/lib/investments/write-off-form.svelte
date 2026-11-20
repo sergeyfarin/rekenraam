@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { accountLabelByID } from '#lib/accounts/account-labels.ts';
   import UnavailableAllocations from '#lib/investments/unavailable-allocations.svelte';
   import { unavailableAllocations, withoutAllocations } from '#lib/investments/lot-allocations.ts';
   import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
@@ -243,7 +244,7 @@
         {#if holdingKey && !holdings.some((item) => `${item.account_id}:${item.commodity_id}:${item.cost_commodity_id}` === holdingKey)}<option value={holdingKey} disabled>{m.investments_activity_position_unavailable_option()}</option>{/if}
             {#each holdings as item (`${item.account_id}:${item.commodity_id}:${item.cost_commodity_id}`)}
               <option value={`${item.account_id}:${item.commodity_id}:${item.cost_commodity_id}`}>
-                {accounts.find(account => account.id === item.account_id)?.name} · {instruments.find(inst => inst.commodity_id === item.commodity_id)?.display_name ?? `#${item.commodity_id}`} · {currenciesByID.get(item.cost_commodity_id)?.code}
+                {accountLabelByID(accounts, item.account_id) ?? `#${item.account_id}`} · {instruments.find(inst => inst.commodity_id === item.commodity_id)?.display_name ?? `#${item.commodity_id}`} · {currenciesByID.get(item.cost_commodity_id)?.code}
               </option>
             {/each}
           </select>

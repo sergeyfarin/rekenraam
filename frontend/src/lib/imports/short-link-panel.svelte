@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { accountLabelByID } from '#lib/accounts/account-labels.ts';
   import { createQuery } from '@tanstack/svelte-query';
   import { parseISO } from 'date-fns';
   import APIFormError from '#lib/components/api-form-error.svelte';
@@ -48,7 +49,7 @@
   }
 
   function accountName(id: number): string {
-    return accounts.find((account) => account.id === id)?.name ?? `#${id}`;
+    return accountLabelByID(accounts, id) ?? `#${id}`;
   }
 
   const fieldLabels: Record<string, () => string> = {

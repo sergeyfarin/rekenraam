@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { accountDisplayName, accountLabelByID } from '#lib/accounts/account-labels.ts';
   import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
   import EntryAccountStatus from '#lib/investments/entry-account-status.svelte';
   import { useSettlementCandidates } from '#lib/investments/settlement-candidates.svelte.ts';
@@ -518,10 +519,10 @@
       >
         <option value="">{m.investments_form_select_account()}</option>
       {#if holdingAccountID && !holdingAccounts.some((account) => String(account.id) === holdingAccountID)}
-        <option value={holdingAccountID} disabled>{(accountsQuery.data?.accounts ?? []).find((account) => String(account.id) === holdingAccountID)?.name ?? holdingAccountID}</option>
+        <option value={holdingAccountID} disabled>{accountLabelByID(accountsQuery.data?.accounts, holdingAccountID) ?? holdingAccountID}</option>
       {/if}
         {#each holdingAccounts as acc (acc.id)}
-          <option value={String(acc.id)}>{acc.name}</option>
+          <option value={String(acc.id)}>{accountDisplayName(acc)}</option>
         {/each}
       </select>
     {#if accountsQuery.data && holdingAccountID && !holdingAccounts.some((account) => String(account.id) === holdingAccountID)}
@@ -555,10 +556,10 @@
     >
       <option value="">{m.investments_form_select_account()}</option>
       {#if cashAccountID && !cashAccounts.some((account) => String(account.id) === cashAccountID)}
-        <option value={cashAccountID} disabled>{(accountsQuery.data?.accounts ?? []).find((account) => String(account.id) === cashAccountID)?.name ?? cashAccountID}</option>
+        <option value={cashAccountID} disabled>{accountLabelByID(accountsQuery.data?.accounts, cashAccountID) ?? cashAccountID}</option>
       {/if}
       {#each cashAccounts as acc (acc.id)}
-        <option value={String(acc.id)}>{acc.name}</option>
+        <option value={String(acc.id)}>{accountDisplayName(acc)}</option>
       {/each}
     </select>
     <p class="mt-1 text-xs text-muted">{cashAccountID ? m.investments_activity_settlement_hint() : m.investments_activity_settlement_choice()}</p>
@@ -620,7 +621,7 @@
       >
         <option value="">{m.investments_form_select_account()}</option>
         {#each incomeAccounts as acc (acc.id)}
-          <option value={String(acc.id)}>{acc.name}</option>
+          <option value={String(acc.id)}>{accountDisplayName(acc)}</option>
         {/each}
       </select>
     </div>
@@ -631,7 +632,7 @@
       <select id="div-withholding-account" bind:value={withholdingAccountID} required
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         <option value="">{m.investments_form_select_account()}</option>
-        {#each withholdingAccounts as account (account.id)}<option value={String(account.id)}>{account.name}</option>{/each}
+        {#each withholdingAccounts as account (account.id)}<option value={String(account.id)}>{accountDisplayName(account)}</option>{/each}
       </select>
     </div>
   {/if}
@@ -673,7 +674,7 @@
           >
             <option value="">{m.investments_form_select_account()}</option>
             {#each withholdingAccounts as acc (acc.id)}
-              <option value={String(acc.id)}>{acc.name}</option>
+              <option value={String(acc.id)}>{accountDisplayName(acc)}</option>
             {/each}
           </select>
         </div>

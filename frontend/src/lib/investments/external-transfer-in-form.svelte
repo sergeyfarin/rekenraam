@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { accountDisplayName, accountLabelByID } from '#lib/accounts/account-labels.ts';
   import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
   import { useOwnerToday } from '#lib/dates/owner-date-context.ts';
   import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
@@ -204,9 +205,9 @@
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         <option value="">{m.investments_form_select_account()}</option>
       {#if holdingAccountID && !holdingAccounts.some((account) => String(account.id) === holdingAccountID)}
-        <option value={holdingAccountID} disabled>{(accountsQuery.data?.accounts ?? []).find((account) => String(account.id) === holdingAccountID)?.name ?? holdingAccountID}</option>
+        <option value={holdingAccountID} disabled>{accountLabelByID(accountsQuery.data?.accounts, holdingAccountID) ?? holdingAccountID}</option>
       {/if}
-        {#each holdingAccounts as account (account.id)}<option value={String(account.id)}>{account.name}</option>{/each}
+        {#each holdingAccounts as account (account.id)}<option value={String(account.id)}>{accountDisplayName(account)}</option>{/each}
       </select>
     {#if accountsQuery.data && holdingAccountID && !holdingAccounts.some((account) => String(account.id) === holdingAccountID)}
       <p role="alert" class="mt-1 text-sm text-danger">{m.investments_activity_holding_invalid()}</p>
