@@ -746,8 +746,8 @@ history list show before/after targets, save time and affected scope, without
 introducing effective-dated targets. Native backup retains every revision;
 portable ledger exports explicitly omit these settings in their manifest.
 Existing returns calculations and saved-run documents retain their bytes and
-meaning. English/Dutch/Russian copy is maintained, with explicit English fallback
-for partial Spanish/French/German catalogs. The [contract](plans/investment-target-allocation-plan.md)
+meaning. The interface ships in English, Dutch and Russian. The
+[contract](plans/investment-target-allocation-plan.md)
 owns examples and policy. Geographic exposure #514 and ETF look-through #513 are
 independent; advisory rebalancing remains #412. Revision-history pagination
 is tracked in #517.

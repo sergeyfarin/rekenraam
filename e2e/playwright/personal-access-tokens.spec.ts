@@ -2,14 +2,9 @@ import { expect, test } from './support/fixtures';
 import { ensureBrowserSession } from './support/session';
 import { apiJSON } from './support/api';
 import { expectNoAccessibilityViolations, expectFocusTrapped } from './support/a11y';
+import { allLocales } from './support/locales';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import en from '../../frontend/messages/settings/en.json' with { type: 'json' };
-import es from '../../frontend/messages/settings/es.json' with { type: 'json' };
-import fr from '../../frontend/messages/settings/fr.json' with { type: 'json' };
-import nl from '../../frontend/messages/settings/nl.json' with { type: 'json' };
-import de from '../../frontend/messages/settings/de.json' with { type: 'json' };
-import ru from '../../frontend/messages/settings/ru.json' with { type: 'json' };
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -154,11 +149,13 @@ test('[acceptance] a delayed creation response cannot restore a token after docu
   await expect(row.getByText('Revoked', { exact: true })).toBeVisible();
 });
 
-for (const [locale, messages] of Object.entries({ en, es, fr, nl, de, ru })) {
+for (const locale of allLocales) {
   test(`[acceptance] read-only token permissions render in ${locale} on a phone`, async ({ page }) => {
+    const messages = JSON.parse(readFileSync(new URL(`../../frontend/messages/settings/${locale}.json`, import.meta.url), 'utf8')) as Record<string, string>;
     await ensureBrowserSession(page);
     await page.evaluate((locale) => localStorage.setItem('PARAGLIDE_LOCALE', locale), locale);
     await page.goto('/app/settings/security');
+    await expect(page.locator('html')).toHaveAttribute('lang', locale);
     await expect(page.getByRole('heading', { name: messages.security_tokens_title, exact: true })).toBeVisible();
     await expect(page.getByLabel(messages.security_tokens_ledger, { exact: true })).toBeChecked();
     await expect(page.getByLabel(messages.security_tokens_reports, { exact: true })).not.toBeChecked();
