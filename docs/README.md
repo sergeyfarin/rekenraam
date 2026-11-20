@@ -62,6 +62,10 @@ commands and synthetic screenshot capture; deployment instructions are in
 the adoption work tracked by #335; the interactive demo and migration
 walkthrough remain separate.
 
+The [post-test reference-history review](reviews/reference-history-after-v0.1-testing.md)
+records the June experiment, the competing proposals, peer workflows and the
+household observations that will inform the decision on #611.
+
 The [Home and navigation design](design/home-and-navigation.md) records the
 owner-approved Home page and light application shell (2026-10-27), with its
 [mockup source](design/home-mockup/README.md); the
