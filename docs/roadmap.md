@@ -360,11 +360,6 @@ Accepted gate issues carry the
 - Record an explicit list of investment limits and resolve the retained
   image-advisory disposition (#337). The driver prerequisite (#356) closed on
   2026-11-11.
-- Complete or hide the partial locales (`es`, `fr`, `de`): no message may
-  fall back to English in a shipped locale, and native review (#102) covers
-  the batch. #493 delivered the maintained/partial split and closed on
-  2026-11-01; the catch-up or hiding itself is
-  [#579](https://github.com/sergeyfarin/rekenraam/issues/579).
 - Freeze installed-release migrations as append-only at the tag. The
   [baseline and reset contract](implemented.md) records the schema consolidation;
   later schema changes follow the release lifecycle in `docs/conventions.md`.

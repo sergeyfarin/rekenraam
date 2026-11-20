@@ -61,9 +61,6 @@ async function expectAccessibleAt390(page: Page) {
 const locales = [
   ['en', 'Gains', 'excludes return-of-capital excess'],
   ['nl', 'Winsten', 'sluit het overschot bij kapitaalteruggave uit'],
-  ['de', 'Gewinne', 'schließt Überschüsse aus Kapitalrückzahlungen aus'],
-  ['fr', 'Plus-values', 'exclut les excédents de remboursement de capital'],
-  ['es', 'Ganancias', 'Excluye el exceso de devolución de capital'],
   ['ru', 'Прибыль', 'не включает превышение возврата капитала']
 ] as const;
 

@@ -102,10 +102,7 @@ test('journeys 2 and 9: brokerage and holding contexts share entry and name thei
 for (const [locale, activity, prefix, group, next] of [
   ['en', 'Activity', 'buy', 'Trades', 'Continue'],
   ['nl', 'Activiteit', 'kop', 'Handel', 'Doorgaan'],
-  ['ru', 'Операция', 'покуп', 'Сделки', 'Продолжить'],
-  ['de', 'Activity', 'buy', 'Trades', 'Continue'],
-  ['es', 'Activity', 'buy', 'Trades', 'Continue'],
-  ['fr', 'Activity', 'buy', 'Trades', 'Continue']
+  ['ru', 'Операция', 'покуп', 'Сделки', 'Продолжить']
 ]) {
   test(`journey 17: native grouped selector supports localized keyboard entry in ${locale}`, async ({ page }) => {
     await readyForLedger(page);
@@ -113,7 +110,7 @@ for (const [locale, activity, prefix, group, next] of [
     await page.evaluate(value => localStorage.setItem('PARAGLIDE_LOCALE', value), locale);
     await page.goto('/app/investments');
     // Portfolio keeps the shared New transaction name in the selected locale.
-    await page.locator('#main-content button').filter({ hasText: /New transaction|Nieuwe transactie|Новая транзакция|Neue Transaktion|Nueva transacción|Nouvelle transaction/ }).click();
+    await page.locator('#main-content button').filter({ hasText: /New transaction|Nieuwe transactie|Новая транзакция/ }).click();
     // The portfolio action explicitly selects Investment.
     const selector = page.getByRole('combobox', { name: activity, exact: true });
     await expect(selector.locator('optgroup')).toHaveCount(4);
