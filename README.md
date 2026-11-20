@@ -75,8 +75,8 @@ records how other tools were found to handle them.
   exports for analysis or migration; nightly verified backups and command-line
   restore for recovering the installation.
 - **Access:** local sign-in with optional two-factor authentication and
-  read-only API tokens for your scripts. The interface supports English and
-  draft Dutch, German, French, Spanish and Russian translations.
+  read-only API tokens for your scripts. The interface ships in English,
+  Dutch and Russian.
 
 The [feature ledger](docs/implemented.md) records what ships and the remaining
 gaps in each area.
@@ -104,9 +104,10 @@ gaps in each area.
   rebalance a portfolio.
 - **No attachments.** Statement PDF and receipt storage are outside the current
   scope.
-- **Translations need native review.** The five non-English catalogs are
-  glossary-based drafts; financial terminology has not yet been signed off by
-  native reviewers.
+- **Translations need native review.** Dutch and Russian are complete
+  glossary-based drafts awaiting native terminology review. The Spanish,
+  French and German catalogs are still incomplete and are kept in the source
+  for future releases.
 
 ## AI use and review
 
@@ -203,7 +204,7 @@ pnpm build                     # writes dist/rekenraam
 ```
 
 The separate public website is in [`website/`](website/README.md). It has no
-backend or npm dependencies and builds complete pages in the app's six languages:
+backend or npm dependencies and builds complete pages in the app's shipped languages:
 
 ```sh
 pnpm website:dev              # http://127.0.0.1:1889

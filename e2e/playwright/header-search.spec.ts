@@ -5,6 +5,7 @@ import { expectFocusTrapped, expectNoAccessibilityViolations } from './support/a
 import { apiJSON } from './support/api';
 import { todayISO } from './support/dates';
 import { createCashAccount, readyForLedger } from './support/ledger';
+import { allLocales } from './support/locales';
 
 // #490: outside Home the header shows a rounded Search Ctrl K button, never a
 // field. It opens the shared search centred over the page (full screen on
@@ -175,13 +176,9 @@ test('the shortcut hint says ⌘ K on Apple platforms', async ({ page }) => {
 test('the button label and Ctrl key are localized in every locale', async ({ page }) => {
   await readyForLedger(page);
   await page.setViewportSize({ width: 1280, height: 900 });
-  const messages = (locale: string) => ({
-    ...JSON.parse(readFileSync(path.join(repoRoot, 'frontend/messages/app/en.json'), 'utf8')),
-    ...JSON.parse(readFileSync(path.join(repoRoot, 'frontend/messages/app', `${locale}.json`), 'utf8'))
-  }) as Record<string, string>;
   await page.goto('/app/ledger');
-  for (const locale of ['en', 'nl', 'ru', 'es', 'fr', 'de']) {
-    const text = messages(locale);
+  for (const locale of allLocales) {
+    const text = JSON.parse(readFileSync(path.join(repoRoot, 'frontend/messages/app', `${locale}.json`), 'utf8')) as Record<string, string>;
     await page.evaluate(value => localStorage.setItem('PARAGLIDE_LOCALE', value), locale);
     await page.reload();
     const button = page.locator('.shell-bar').getByRole('button', { name: `${text.search_label} ${text.keyboard_key_ctrl} K`, exact: true });

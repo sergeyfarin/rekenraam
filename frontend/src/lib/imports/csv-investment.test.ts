@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { locales } from '#lib/paraglide/runtime.js';
 import { canonicalCSVInvestmentAmount, editableCSVInvestmentAmount } from './csv-investment';
 
 describe('CSV investment review amounts', () => {
-  it.each(['en', 'de', 'es', 'fr', 'nl', 'ru'] as const)('round-trips exact source precision in %s', (locale) => {
+  it.each(locales)('round-trips exact source precision in %s', (locale) => {
     const source = '90071992547409.93';
     expect(canonicalCSVInvestmentAmount(editableCSVInvestmentAmount(source, locale), locale)).toBe(source);
     expect(canonicalCSVInvestmentAmount(editableCSVInvestmentAmount('0.00000001', locale), locale)).toBe('0.00000001');

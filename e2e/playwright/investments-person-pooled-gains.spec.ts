@@ -51,9 +51,6 @@ const note = 'Owner context <s104 / ACB / PMP>'; // plain text, never a rule sel
 const locales = [
   ['en', 'Gains', 'Person-pooled average cost', 'Jurisdiction note (optional)'],
   ['nl', 'Winsten', 'Gemiddelde kostprijs per persoon', 'Jurisdictienotitie (optioneel)'],
-  ['de', 'Gewinne', 'Personenbezogene Durchschnittskosten', 'Jurisdiktionsnotiz (optional)'],
-  ['fr', 'Plus-values', 'Coût moyen mutualisé par personne', 'Note de juridiction (facultative)'],
-  ['es', 'Ganancias', 'Coste medio agrupado por persona', 'Nota de jurisdicción (opcional)'],
   ['ru', 'Прибыль', 'Средняя стоимость по всем счетам владельца', 'Примечание о юрисдикции (необязательно)']
 ] as const;
 

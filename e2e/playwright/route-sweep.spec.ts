@@ -212,8 +212,8 @@ test.describe('route sweep (#278)', () => {
     expect(masked).toBeGreaterThan(20); // Populated financial reads, never an empty-page pass.
   });
 
-  // Longer German, French and Russian copy is what breaks a phone layout, and
-  // the declared page language is what a screen reader reads it in.
+  // Longer translations can break a phone layout, and the declared page
+  // language is what a screen reader reads it in.
   test('every route fits the phone and declares its language in every locale', async ({ page, routeBook: ids }) => {
     test.setTimeout(600_000);
     await ensureBrowserSession(page);
@@ -221,7 +221,7 @@ test.describe('route sweep (#278)', () => {
     await page.setViewportSize(viewports.phone);
     const failures: string[] = [];
 
-    for (const locale of allLocales.filter(locale => locale !== 'en')) {
+    for (const locale of allLocales) {
       await page.evaluate((name) => window.localStorage.setItem('PARAGLIDE_LOCALE', name), locale);
       for (const route of routes) {
         await test.step(`route: ${route.name} / ${locale}`, async () => {
@@ -241,8 +241,6 @@ test.describe('route sweep (#278)', () => {
         });
       }
     }
-    await page.evaluate(() => window.localStorage.setItem('PARAGLIDE_LOCALE', 'en'));
-
     expect(failures, failures.join('\n')).toEqual([]);
   });
 
