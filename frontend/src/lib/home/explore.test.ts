@@ -117,6 +117,13 @@ describe('cashflow', () => {
 });
 
 describe('holdings', () => {
+  it('uses the brokerage code when the brokerage has no name', () => {
+    const summary = widgets().holdings.summary!;
+    const holding = { ...summary.holdings[0], brokerage_name: '', brokerage_code: 'BRK' };
+    const view = holdingsWidget(home({ holdings: { status: 'ok', summary: { ...summary, holdings: [holding] } } }), 'en');
+    expect(view.rows[0].detail).toBe('BRK');
+  });
+
   it('lists the largest positions with their instrument and brokerage', () => {
     const view = holdingsWidget(home(), 'en');
     expect(view.state).toBe('ready');

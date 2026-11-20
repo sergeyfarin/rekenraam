@@ -1,4 +1,5 @@
 import { parseISO } from 'date-fns';
+import { accountLabelFromParts } from '#lib/accounts/account-labels.ts';
 import type { Home, HomeCommodity, HomeWidgets } from '#lib/api/home.ts';
 import { builtinCategoryLabel } from '#lib/categories/category-labels.ts';
 import { formatHomeMoney, hiddenAmount, joinCommodityAmount } from '#lib/money/format.ts';
@@ -243,7 +244,10 @@ export function accountsWidget(home: Home, locale: string): WidgetView {
     const shown = native ?? account.value;
     return {
       key: String(account.account_id),
-      label: account.name.trim() || account.code.trim() || m.accounts_unnamed_account({ id: account.account_id }),
+      label: accountLabelFromParts({
+        id: account.account_id, name: account.name, code: account.code,
+        starterKey: account.starter_key, currencyCode: account.currency_code
+      }),
       href: `/app/ledger/accounts/${account.account_id}/register`,
       amount: shown ? money(shown, commodities, locale) : account.balances.length === 0 ? money({ commodity_id: home.reporting_currency?.commodity_id ?? 0, quantity_value: '0', quantity_scale: 0 }, commodities, locale) : m.home_accounts_no_value()
     };

@@ -311,11 +311,13 @@ HomeAccountsSummary:
       items: { $ref: '../../openapi.yaml#/components/schemas/HomeAccountRow' }
 HomeAccountRow:
   type: object
-  required: [account_id, code, name, account_class, account_kind, balances, value]
+  required: [account_id, code, name, starter_key, currency_code, account_class, account_kind, balances, value]
   properties:
     account_id: { type: integer, format: int64 }
     code: { type: string }
     name: { type: string }
+    starter_key: { type: [string, 'null'], description: The starter account key used for its localized label. }
+    currency_code: { type: [string, 'null'], description: The currency code from the starter account's metadata. }
     account_class: { type: string, enum: [asset, liability] }
     account_kind: { type: string }
     balances:
@@ -428,11 +430,14 @@ HomeHoldingsSummary:
       items: { $ref: '../../openapi.yaml#/components/schemas/HomeValuationInput' }
 HomeHoldingRow:
   type: object
-  required: [account_id, brokerage_id, brokerage_name, balances, value]
+  required: [account_id, brokerage_id, brokerage_name, brokerage_code, brokerage_starter_key, brokerage_currency_code, balances, value]
   properties:
     account_id: { type: integer, format: int64 }
     brokerage_id: { type: [integer, 'null'], format: int64 }
     brokerage_name: { type: string }
+    brokerage_code: { type: string, description: The brokerage account code or an empty string if unavailable. }
+    brokerage_starter_key: { type: [string, 'null'], description: The starter key from the brokerage account's metadata. }
+    brokerage_currency_code: { type: [string, 'null'], description: The currency code from the brokerage account's metadata. }
     balances: { type: array, items: { $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity' } }
     value:
       description: The position in the default currency today; null when its price or rate is missing.

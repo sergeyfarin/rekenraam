@@ -168,10 +168,8 @@ export function accountDisplayName(account: AccountResponse): string {
 }
 
 /**
- * The account label from its parts, for reads that carry the starter fields
- * rather than a whole AccountResponse (Home's Reconciliation card, #594
- * review): an unnamed starter account reads as the localized "Cash USD",
- * never its raw `cash:USD` code.
+ * The shared label for full accounts and summary rows. The starter fields
+ * give unnamed accounts a localized label such as "Cash USD".
  */
 export function accountLabelFromParts(parts: {
   id: number;
