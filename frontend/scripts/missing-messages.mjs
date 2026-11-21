@@ -1,7 +1,6 @@
 // Lists the messages each partial locale still lacks (#493) and writes them to
-// src/lib/i18n/missing.json, which the language picker reads for its counts and
-// catalogs:check compares against a fresh run. Partial locales render a missing
-// message in English, so this list is the catch-up work, not an error.
+// src/lib/i18n/missing.json, which catalogs:check compares against a fresh run.
+// Partial locales stay out of release builds until their catalogs are complete.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 

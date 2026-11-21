@@ -109,8 +109,8 @@ test.describe('period statement', () => {
   // One test per locale (#251), each in its own book with one dividend so the
   // statement has a row to translate.
   const locales = [
-    ['nl', 'Winsten', 'Periodeoverzicht'], ['de', 'Gewinne', 'Periodenübersicht'], ['fr', 'Plus-values', 'Relevé de période'],
-    ['es', 'Ganancias', 'Estado del período'], ['ru', 'Прибыль', 'Отчёт за период']
+    ['nl', 'Winsten', 'Periodeoverzicht'],
+    ['ru', 'Прибыль', 'Отчёт за период']
   ] as const;
   for (const [locale, tab, title] of locales) {
     test(`the period statement is translated in ${locale}`, async ({ page }) => {

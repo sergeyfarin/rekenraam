@@ -112,14 +112,14 @@ description: SvelteKit frontend rules for Rekenraam - static adapter constraints
   `frontend/messages/<domain>/<locale>.json`; keep message IDs flat, prefixed
   by domain/screen (`import_preview_dedupe_duplicate`).
 - Add every new key to the maintained locales (`en`, `nl`, `ru`) with the same
-  placeholder names. `es`, `fr` and `de` are partial (#493): a new or changed
-  key may be left out there and falls back to English. After editing
+  placeholder names. `es`, `fr` and `de` are partial and excluded from release
+  builds (#579). New or changed keys may be left out of those catalogs. After editing
   catalogs run `pnpm --dir frontend run catalogs:missing`;
   `pnpm --dir frontend run catalogs:check` rejects a stale
   `src/lib/i18n/missing.json` and gates dev/check/build and CI. Native
   terminology review remains separate (#102). If English wording changes
   meaning and you do not update es/fr/de in the same change, delete those keys
-  there: stale text is worse than English, and only absent keys are listed.
+  from the partial catalogs so they appear in the missing list.
 - Never concatenate translated fragments into sentences; use message parameters.
 - A count-dependent message is one plural variant with a `countPlural=*`
   catch-all, called as `m.key({ count, n })` (`n` locale-formatted); never pick

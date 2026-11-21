@@ -184,8 +184,7 @@ concern about unexplained differing totals across pages.
   browser code. Reads never write financial or application settings.
 - Use translated text, semantic theme tokens, labelled controls, visible signs
   and words, keyboard focus management, mobile layout, and loading, no-target,
-  error, unavailable and success states. Support the maintained en/nl/ru
-  catalogs and explicit fallback for partial es/fr/de catalogs.
+  error, unavailable and success states. Support every shipped locale.
 - Existing returns calculations, request fingerprints, saved output bytes,
   immutable-run integrity checks and reopening behavior remain unchanged.
   The live comparison is a separate read model and is not included in saved

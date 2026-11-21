@@ -82,8 +82,7 @@ test.describe.serial('saved gains reports', () => {
   // One test per locale (#251).
   const locales = [
     ['en', 'Gains', 'Saved gains reports'], ['nl', 'Winsten', 'Opgeslagen winstoverzichten'],
-    ['de', 'Gewinne', 'Gespeicherte Gewinnberichte'], ['fr', 'Plus-values', 'Relevés de plus-values enregistrés'],
-    ['es', 'Ganancias', 'Informes de ganancias guardados'], ['ru', 'Прибыль', 'Сохранённые отчёты о прибыли']
+    ['ru', 'Прибыль', 'Сохранённые отчёты о прибыли']
   ] as const;
   for (const [locale, tab, title] of locales) {
     test(`a saved gains report reopens unchanged at 390px in ${locale}`, async ({ page }) => {

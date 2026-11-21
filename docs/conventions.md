@@ -265,12 +265,16 @@ When a feature introduces a durable new rule, update one of those documents in t
   assignment selection. Refresh scheduling does not choose the lookup date.
 - Effective current account/category, institution, commodity, payee and
   instrument reads use the owner-local day too (#385). Application services
-  pin `db.WithReferenceDate` on the operation context before repository
-  transactions; composed reads and mutation guards inherit it. Forecast pins
-  its application-resolved day inside its existing read snapshot. Do not add
-  runtime queries against SQLite's UTC `current_*_versions` views. Explicit
-  historical predicates keep their supplied date; schema guards use the
-  inserted source version's effective date.
+  call `referenceContext` before repository transactions so composed reads
+  and mutation guards share the same day. With settings wired, it uses
+  `db.WithOwnerToday` to pin both current reference selection and the live
+  valuation ceiling (#609).
+  Use `db.WithReferenceDate` for a reference-only selection, such as an
+  explicit historical lookup. It leaves the live valuation ceiling alone.
+  Forecast pins its application-resolved day inside its existing read snapshot.
+  Do not add runtime queries against SQLite's UTC `current_*_versions` views.
+  Explicit historical predicates keep their supplied date. Schema guards use
+  the inserted source version's effective date.
 - Share the date through the app shell; missing/invalid authenticated date
   data is an error, never a browser-clock fallback. Session focus/minute refresh
   and preference saves update the shared date for newly opened forms.
@@ -630,10 +634,10 @@ has actual installations, its migration files are immutable.
 - Backend translation (export file headers, server-generated content) is deferred to Phase 3. When needed, use `nicksnyder/go-i18n` with JSON message files.
 - All user-facing copy goes through a translation boundary.
 - English is the initial implementation language.
-- Message catalogs live in `frontend/messages/{app,settings,budgets,pricing}/{locale}.json`. All
-  directories feed the single `m` namespace, so a key must be unique across
-  them; which file a key sits in is a grouping decision, not a namespace.
-- Shipping locales are `en, es, fr, nl, de, ru`. Locale resolution is
+- Message catalogs live in `frontend/messages/<domain>/<locale>.json`.
+  Configured domains share the `m` namespace, so each key must be unique
+  across domains.
+- Shipping locales are `en, nl, ru`, as listed in `frontend/project.inlang/settings.json`. Locale resolution is
   `localStorage → browser preference → English`, configured identically in
   `vite.config.ts` and the `paraglide:compile` script — change both together or
   a build silently ships English only.
@@ -647,33 +651,29 @@ has actual installations, its migration files are immutable.
   blank. Configured shipping catalogs must match the base locale in keys and
   placeholders, contain nonempty text, and have unique IDs across domains.
   `catalogs:check` enforces this before frontend dev/check/build and in CI.
-- **Maintained and partial locales (owner decision 2026-11-01, #493).** While
-  screens change quickly, `en`, `nl` and `ru` are *maintained*: every new or
-  changed message lands in all three in the same change. `es`, `fr` and `de`
-  are *partial*: a new or changed message may be missing there and falls back
-  to English, but an existing key keeps matching placeholders and plural shape.
-  A generated list tracks what partial locales lack; they are caught up in one
-  batch when a slice settles, and must be complete (or hidden) before the
-  v0.1.0 tag. The translation boundary, locale-aware formatting and per-message
-  fallback are never relaxed. The split lives in
-  `frontend/src/lib/i18n/locale-status.json`; `pnpm --dir frontend run
-  catalogs:missing` writes `frontend/src/lib/i18n/missing.json` (per-locale counts
-  and keys), which `catalogs:check` rejects when stale and the language
-  settings page reads for its *Partial* note. A partial locale's existing keys
-  still need matching placeholders, plural inputs and nonempty text.
+- **Maintained and partial locales (#493, #579).** Every new or changed message
+  lands in the maintained catalogs in the same change. `es`, `fr` and `de`
+  are partial. Their catalogs stay in source, and release builds exclude them
+  from locale detection, language pickers and website output. The split lives
+  in `frontend/src/lib/i18n/locale-status.json`. To ship a partial locale,
+  complete its catalog, move it to `maintained`, enable it in Inlang settings
+  and regenerate the missing list. Existing partial translations still need
+  matching placeholders, plural inputs and nonempty text.
+  `pnpm --dir frontend run catalogs:missing` writes
+  `frontend/src/lib/i18n/missing.json` with the missing keys and counts.
+  `catalogs:check` rejects a stale list and verifies that Inlang compiles only
+  maintained locales.
   - **Reworded English:** when an English message changes meaning and the
     partial translations are not updated in the same change, delete that key
-    from `es`, `fr` and `de`. The stale text then gives way to English and
-    appears in the missing list. The list sees absent keys only, never
-    outdated ones. Maintained locales are always updated together.
+    from the partial catalogs so it appears in the missing list. The list
+    tracks absent keys.
   - **Maintained means catalog parity, not native approval:** native review
     stays with #102.
   - **Browser coverage is a separate decision from upkeep.**
     - Translation journeys run in `en` and `ru`.
-    - The route sweep covers every locale at phone width.
-    - The subview sweep opens every dialog and sub-view in `de` and `ru`, at
-      desktop and phone. German, a partial locale, is read layered over
-      English.
+    - The route sweep covers every shipped locale at phone width.
+    - The subview sweep opens every dialog and sub-view in `en`, `nl` and `ru`,
+      at desktop and phone widths.
     - Russian alone does not stand in for every language's layout, so a new
       dialog belongs in the subview sweep.
 - A message whose wording depends on a count is one Paraglide plural variant

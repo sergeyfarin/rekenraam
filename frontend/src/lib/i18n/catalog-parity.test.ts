@@ -6,9 +6,10 @@ const project = JSON.parse(readFileSync(new URL('../../../project.inlang/setting
 const patterns: string[] = project['plugin.inlang.messageFormat'].pathPattern;
 const locales: string[] = project.locales;
 const baseLocale: string = project.baseLocale;
-// #493: maintained locales carry every key; partial ones may lack new keys,
-// which render in English and are listed in missing.json beside this file.
+// Maintained locales carry every key. Hidden partial catalogs still validate
+// existing translations, and missing.json tracks the work needed to ship them.
 const status: { maintained: string[]; partial: string[] } = JSON.parse(readFileSync(new URL('./locale-status.json', import.meta.url), 'utf8'));
+const catalogLocales = [...locales, ...status.partial];
 
 // A message is a string, or one plural variant (`declarations`, `selectors`,
 // `match`) whose cases the locale chooses for its own plural rules.
@@ -34,7 +35,7 @@ const texts = (message: Message) => typeof message === 'string' ? [message] : me
 for (const pattern of patterns) {
   const base = catalog(pattern, baseLocale);
   describe(pattern, () => {
-    for (const locale of locales) {
+    for (const locale of catalogLocales) {
       const translated = catalog(pattern, locale);
       const partial = status.partial.includes(locale);
       test(partial ? `${locale} (partial) has only base-locale message keys` : `${locale} has exactly the base-locale message keys`, () => {
@@ -61,7 +62,7 @@ for (const pattern of patterns) {
   });
 }
 
-for (const locale of locales) {
+for (const locale of catalogLocales) {
   test(`${locale} has no colliding keys in the shared message namespace`, () => {
     const owners = new Map<string, string>();
     for (const pattern of patterns) {
@@ -73,8 +74,8 @@ for (const locale of locales) {
   });
 }
 
-test('every configured locale is either maintained or partial, and English is maintained', () => {
-  expect([...status.maintained, ...status.partial].sort()).toEqual([...locales].sort());
+test('the app compiles only maintained locales, including English', () => {
+  expect([...locales].sort()).toEqual([...status.maintained].sort());
   expect(status.maintained).toContain(baseLocale);
   expect(status.partial.filter(locale => status.maintained.includes(locale))).toEqual([]);
 });
