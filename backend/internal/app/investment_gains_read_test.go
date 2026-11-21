@@ -9,8 +9,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"rekenraam/backend/internal/db"
 	"rekenraam/backend/internal/exact"
+	"rekenraam/backend/internal/testdb"
 )
 
 func TestGainsSnapshotsUseTheOwnerDayForCapitalReturnLabels(t *testing.T) {
@@ -23,16 +25,22 @@ func TestGainsSnapshotsUseTheOwnerDayForCapitalReturnLabels(t *testing.T) {
 	_, err := f.investmentService.CapitalReturn(ctx, capitalReturnInput(f.investmentsTestFixture, "2026-06-01", 1000))
 	require.NoError(t, err)
 
-	captured := time.Date(2026, 10, 15, 23, 30, 0, 0, time.UTC)
+	// Keep the rename ahead of SQLite's real UTC date so an unpinned read
+	// cannot see it, even if UTC midnight passes during the test.
+	today := testdb.RealUTCToday()
+	cutoff := testdb.UTCDayInstant(today, 7, "23:30:00")
+	captured, err := time.Parse(time.RFC3339, cutoff)
+	require.NoError(t, err)
+	utcDay, ownerDay := testdb.UTCDay(today, 7), testdb.UTCDay(today, 8)
 	f.accountService.SetNowForTest(func() time.Time { return captured })
 	f.investmentService.SetNowForTest(func() time.Time { return captured })
 	const newName = "Renamed holding"
-	updateAccountVersion(t, f, f.holdingAccountID, newName, nextPinnedTestDay)
+	updateAccountVersion(t, f, f.holdingAccountID, newName, ownerDay)
 
 	check := func(t *testing.T, wantDate string, profile GainsProfile, returns []CapitalReturnRead) {
 		t.Helper()
 		assert.Equal(t, wantDate, profile.ValuationAsOf)
-		assert.Equal(t, captured.Format(time.RFC3339Nano), profile.KnowledgeCutoff)
+		assert.Equal(t, cutoff, profile.KnowledgeCutoff)
 		require.Len(t, returns, 1)
 		assert.Equal(t, newName, returns[0].HoldingName)
 	}
@@ -40,32 +48,45 @@ func TestGainsSnapshotsUseTheOwnerDayForCapitalReturnLabels(t *testing.T) {
 	t.Run("live gains", func(t *testing.T) {
 		read, err := f.investmentService.ReadGains(ctx, GainsReadInput{})
 		require.NoError(t, err)
-		check(t, nextPinnedTestDay, read.Profile, read.CapitalReturns)
+		check(t, ownerDay, read.Profile, read.CapitalReturns)
 	})
 	t.Run("live statement", func(t *testing.T) {
-		read, err := f.investmentService.ReadGainsStatement(ctx, "2026-06-01", pinnedTestDay, nil)
+		read, err := f.investmentService.ReadGainsStatement(ctx, "2026-06-01", utcDay, nil)
 		require.NoError(t, err)
-		check(t, pinnedTestDay, read.Statement.Profile, read.Statement.CapitalReturns)
+		check(t, utcDay, read.Statement.Profile, read.Statement.CapitalReturns)
 	})
-	t.Run("saved statement", func(t *testing.T) {
-		type document struct {
-			Profile        GainsProfile        `json:"profile"`
-			CapitalReturns []CapitalReturnRead `json:"capital_returns"`
-		}
-		run, err := f.investmentService.CreateGainsRun(ctx, GainsRunInput{
-			OwnerUserID: f.ownerUserID,
-			Request:     GainsRunRequest{ReportType: "statement", From: "2026-06-01", To: pinnedTestDay},
-		}, func(p GainsRunProjection) (json.RawMessage, error) {
-			require.NotNil(t, p.Statement)
-			return json.Marshal(document{Profile: p.Profile, CapitalReturns: p.Statement.CapitalReturns})
+	savedCases := []struct {
+		request  GainsRunRequest
+		wantDate string
+	}{
+		{request: GainsRunRequest{ReportType: "gains"}, wantDate: ownerDay},
+		{request: GainsRunRequest{ReportType: "statement", From: "2026-06-01", To: utcDay}, wantDate: utcDay},
+	}
+	for _, tc := range savedCases {
+		t.Run("saved "+tc.request.ReportType, func(t *testing.T) {
+			type document struct {
+				Profile        GainsProfile        `json:"profile"`
+				CapitalReturns []CapitalReturnRead `json:"capital_returns"`
+			}
+			run, err := f.investmentService.CreateGainsRun(ctx, GainsRunInput{
+				OwnerUserID: f.ownerUserID,
+				Request:     tc.request,
+			}, func(p GainsRunProjection) (json.RawMessage, error) {
+				returns := p.CapitalReturns
+				if tc.request.ReportType == "statement" {
+					require.NotNil(t, p.Statement)
+					returns = p.Statement.CapitalReturns
+				}
+				return json.Marshal(document{Profile: p.Profile, CapitalReturns: returns})
+			})
+			require.NoError(t, err)
+			saved, err := f.investmentService.GainsRun(ctx, run.ID)
+			require.NoError(t, err)
+			var output document
+			require.NoError(t, json.Unmarshal(saved.OutputJSON, &output))
+			check(t, tc.wantDate, output.Profile, output.CapitalReturns)
 		})
-		require.NoError(t, err)
-		saved, err := f.investmentService.GainsRun(ctx, run.ID)
-		require.NoError(t, err)
-		var output document
-		require.NoError(t, json.Unmarshal(saved.OutputJSON, &output))
-		check(t, pinnedTestDay, output.Profile, output.CapitalReturns)
-	})
+	}
 }
 
 func TestLiveGainsCorrectionBetweenOperationalAndFXKeepsSameCurrencyGain(t *testing.T) {
