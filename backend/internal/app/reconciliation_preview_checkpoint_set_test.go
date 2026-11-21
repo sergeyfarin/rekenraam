@@ -30,7 +30,7 @@ func TestCreatePreviewReportsEveryCheckpointCommitInvalidates(t *testing.T) {
 		requireCheckpointImpactIDs(t, impact, first, second)
 		for _, ref := range impact.AffectedCheckpoints {
 			require.Equal(t, "2026-03-15", ref.EntryDate)
-			require.NotEmpty(t, ref.AccountLabel)
+			require.Equal(t, ref.AccountID, ref.Account.ID, "the ref carries its account's label parts")
 			require.NotEmpty(t, ref.CommodityCode)
 		}
 		require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))

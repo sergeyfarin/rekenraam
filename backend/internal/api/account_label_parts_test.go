@@ -17,7 +17,8 @@ import (
 // sweep, bug class 13). The unnamed starter cash account (code cash:USD,
 // metadata starter_key "cash", currency_code "USD") reads as the localized
 // "Cash USD" only when its read carries those parts; without them the
-// screens fell back to the raw code. A named account carries nulls.
+// screens fell back to the raw code. A named account carries nulls. A
+// reconciliation checkpoint carries the same parts.
 func TestAccountLabelPartsReachEveryAccountRead(t *testing.T) {
 	t.Parallel()
 	// The test handler pins the forecast and budget clocks to 2026-09-07;
@@ -121,6 +122,42 @@ func TestAccountLabelPartsReachEveryAccountRead(t *testing.T) {
 	require.NoError(t, json.Unmarshal(created.Body.Bytes(), &transaction))
 	stored := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, fmt.Sprintf("/api/v1/transactions/%d", transaction.ID), nil, http.StatusOK)
 	assertStarterLabelParts(t, "transaction read", postings(stored.Body.Bytes()), "account_id", "account_starter_key", "account_currency_code", starterID, f.cashAccount.ID)
+
+	// A reconciliation confirmation names the checkpoint's account. It sent a
+	// server-composed account_label, cash:USD for the starter account, which
+	// every confirmation showed verbatim.
+	var createdTransaction transactionResponse
+	require.NoError(t, json.Unmarshal(created.Body.Bytes(), &createdTransaction))
+	var starterPosting postingResponse
+	for _, candidate := range createdTransaction.JournalEntries[0].Postings {
+		if candidate.AccountID == starterID {
+			starterPosting = candidate
+		}
+	}
+	require.NotZero(t, starterPosting.ID)
+	reconcilePostingForSession(t, handler, f.sessionCookie, f.csrfToken, starterID, f.commodityID, starterPosting, owner.OwnerToday)
+	today, err := time.Parse(time.DateOnly, owner.OwnerToday)
+	require.NoError(t, err)
+	backdated := today.AddDate(0, 0, -1).Format(time.DateOnly)
+	impact := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/transactions/reconciliation-impact", map[string]any{
+		"status": "posted", "transaction_date": backdated,
+		"journal_entries": []map[string]any{{"entry_date": backdated, "postings": []map[string]any{
+			{"account_id": f.cashAccount.ID, "commodity_id": f.commodityID, "quantity_value": "-100", "quantity_scale": 2},
+			{"account_id": starterID, "commodity_id": f.commodityID, "quantity_value": "100", "quantity_scale": 2},
+		}}},
+	}, http.StatusOK)
+	checkpoints := rowsAt("affected_checkpoints")(impact.Body.Bytes())
+	require.Len(t, checkpoints, 1, "the backdated move falls inside the starter account's checkpoint")
+	checkpoint := checkpoints[0]
+	assert.Equal(t, float64(starterID), checkpoint["account_id"])
+	assert.NotContains(t, checkpoint, "account_label", "no server-composed label")
+	assert.Equal(t, "cash", checkpoint["account_starter_key"])
+	assert.Equal(t, "USD", checkpoint["account_currency_code"])
+	assert.Equal(t, "cash:USD", checkpoint["account_code"])
+	for _, key := range []string{"account_name", "account_system_role", "account_builtin_key"} {
+		assert.Contains(t, checkpoint, key)
+		assert.Nil(t, checkpoint[key], "checkpoint %s for the unnamed starter account", key)
+	}
 }
 
 func assertStarterLabelParts(t *testing.T, read string, rows []map[string]any, idKey, starterKey, currencyKey string, starterID, namedID int64) {

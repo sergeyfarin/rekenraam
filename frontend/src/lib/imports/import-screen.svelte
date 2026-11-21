@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolveAccountLabel } from '#lib/transactions/transaction-labels.ts';
   import { accountDisplayName, accountLabelByID } from '#lib/accounts/account-labels.ts';
   import { maskFinancialText } from '#lib/money/format.ts';
   import { onDestroy, untrack } from 'svelte';
@@ -2249,7 +2250,7 @@
                           <ul class="space-y-2 text-sm text-foreground">
                             {#each sourceCorrectionImpact.affected_checkpoints as checkpoint (checkpoint.checkpoint_id)}
                               <li>{m.transactions_reconciliation_checkpoint_label({
-                                account: checkpoint.account_label,
+                                account: resolveAccountLabel(checkpoint),
                                 commodity: checkpoint.commodity_code,
                                 date: formatDate(checkpoint.statement_date)
                               })}</li>
@@ -2340,7 +2341,7 @@
                   {#each reviewedCheckpoints as checkpoint (checkpoint.checkpoint_id)}
                     <li class="px-3 py-2 text-foreground">
                       {m.transactions_reconciliation_checkpoint_label({
-                        account: checkpoint.account_label,
+                        account: resolveAccountLabel(checkpoint),
                         commodity: checkpoint.commodity_code,
                         date: checkpoint.statement_date
                       })}

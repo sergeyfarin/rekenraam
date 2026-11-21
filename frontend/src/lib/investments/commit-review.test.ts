@@ -7,7 +7,8 @@ import type { ReviewGuards } from './preview-review';
 type Subject = { n: number };
 
 const checkpoint = (id: number) => ({
-  checkpoint_id: id, account_id: 1, account_label: 'Checking', commodity_id: 2, commodity_code: 'EUR',
+  checkpoint_id: id, account_id: 1, account_name: 'Checking', account_code: null, account_system_role: null,
+  account_builtin_key: null, account_starter_key: null, account_currency_code: null, commodity_id: 2, commodity_code: 'EUR',
   statement_date: '2026-01-31', statement_account_sequence: 1, entry_date: '2026-01-31'
 });
 

@@ -272,7 +272,7 @@
       {#each reconciliationModal.impacts as cp (cp.checkpoint_id)}
         <li class="py-2 text-foreground">
           {m.transactions_reconciliation_checkpoint_label({
-            account: cp.account_label,
+            account: resolveAccountLabel(cp),
             commodity: cp.commodity_code,
             date: cp.statement_date
           })}

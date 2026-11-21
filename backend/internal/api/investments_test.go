@@ -1416,7 +1416,7 @@ func TestInvestmentReconciliationImpact_NamesTheCheckpointsTheWriteInvalidates(t
 	require.Equal(t, checkpointID, preview.AffectedCheckpoints[0].CheckpointID)
 	require.Equal(t, holding.ID, preview.AffectedCheckpoints[0].AccountID)
 	require.Equal(t, "2026-02-01", preview.AffectedCheckpoints[0].StatementDate)
-	require.NotEmpty(t, preview.AffectedCheckpoints[0].AccountLabel, "the warning names the account, not just its id")
+	require.NotNil(t, preview.AffectedCheckpoints[0].AccountName, "the warning names the account, not just its id")
 
 	// Nothing was written: the trade is still refused without the override.
 	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/write-off",
@@ -1507,7 +1507,7 @@ func TestDividend_ReconciliationOverrideProceedsAndInvalidates(t *testing.T) {
 	require.Len(t, preview.AffectedCheckpoints, 1)
 	require.Equal(t, checkpointID, preview.AffectedCheckpoints[0].CheckpointID)
 	require.Equal(t, f.cashAccount.ID, preview.AffectedCheckpoints[0].AccountID)
-	require.NotEmpty(t, preview.AffectedCheckpoints[0].AccountLabel, "the warning names the account, not just its id")
+	require.NotNil(t, preview.AffectedCheckpoints[0].AccountName, "the warning names the account, not just its id")
 
 	// Without the override the dividend is refused, and refused as a conflict
 	// rather than surfacing as an internal error.

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolveAccountLabel } from '#lib/transactions/transaction-labels.ts';
   import TriangleExclamationPoint from '@lucide/svelte/icons/triangle-exclamation-point';
   import { m } from '#lib/paraglide/messages.js';
   import type { ReconciliationImpactResponse } from '#lib/api/investments.ts';
@@ -55,7 +56,7 @@
       {#each impacts as checkpoint (checkpoint.checkpoint_id)}
         <li class="py-2 text-foreground">
           {m.transactions_reconciliation_checkpoint_label({
-            account: checkpoint.account_label,
+            account: resolveAccountLabel(checkpoint),
             commodity: checkpoint.commodity_code,
             date: checkpoint.statement_date
           })}

@@ -16,7 +16,8 @@ import { describe, expect, it } from 'vitest';
  *
  * Flagged, per line: a `.name` read on an account-like value (`a`, `acc`,
  * `brokerage`, anything ending in `account`/`Account`, or an `accounts…find()`
- * result); a server-sent `…account_name`; and any `name || … code` /
+ * result); a server-sent `…account_name`, or a server-composed `…account_label`
+ * (a reconciliation checkpoint sent `cash:USD`); and any `name || … code` /
  * `name ?? … code` fallback. A line that hands the parts to the owner (the
  * call starts on it or on the line before) passes. Everything else needs an
  * entry below with its reason.
@@ -27,7 +28,9 @@ const owner = 'lib/accounts/account-labels.ts';
 
 const accountNameRead = /(?<![\w$])(?:a|acc|brokerage|\w*[aA]ccount)\??\.name\b/;
 const foundAccountNameRead = /\baccounts\b[^\n]*\.find\([^\n]*\)\??\.name\b/;
-const serverAccountName = /\.\w*account_name\b/;
+// A server-sent name or composed label; a message call such as
+// `m.import_preview_account_label()` is copy, not a label.
+const serverAccountLabel = /\.\w*account_(?:name|label)\b(?!\s*\()/;
 const nameOrCode = /\bname\b(?:\??\.trim\(\))?\s*(?:\|\||\?\?)\s*[^\n{};,]*\.code\b/;
 const ownerCall = /\b(?:accountDisplayName|accountLabelByID|accountLabelFromParts)\(/;
 
@@ -70,7 +73,7 @@ function sourceFiles(dir: string): string[] {
 function handBuiltLabels(text: string): { line: number; text: string }[] {
   const lines = text.split('\n');
   return lines.flatMap((line, index) => {
-    const matches = [accountNameRead, foundAccountNameRead, serverAccountName, nameOrCode].some((pattern) => pattern.test(line));
+    const matches = [accountNameRead, foundAccountNameRead, serverAccountLabel, nameOrCode].some((pattern) => pattern.test(line));
     const handedToOwner = ownerCall.test(line) || (index > 0 && ownerCall.test(lines[index - 1]));
     return matches && !handedToOwner ? [{ line: index + 1, text: line.trim() }] : [];
   });
@@ -106,7 +109,9 @@ describe('account labels have one owner', () => {
       'return account.name?.trim() || account.code?.trim() || m.forecast_account_number({ id: account.id });',
       'label: posting.account_system_role ? systemRoleLabel(posting.account_system_role) : (posting.account_name ?? String(posting.account_id)),',
       '{#if account?.name}{sourceAccount?.name}{/if}',
-      '<a href={href}>{row.account.name}</a>'
+      '<a href={href}>{row.account.name}</a>',
+      'account: checkpoint.account_label,',
+      '{m.transactions_reconciliation_checkpoint_label({account:cp.account_label,commodity:cp.commodity_code})}'
     ]) {
       expect(handBuiltLabels(line), line).toHaveLength(1);
     }
@@ -119,7 +124,9 @@ describe('account labels have one owner', () => {
       "label: accountLabelFromParts({\n        id: account.account_id, name: account.name, code: account.code,",
       '<option value={source.id}>{source.name}</option>',
       '{institution.name}',
-      "{sources.find(s => s.id === assignment.source_id)?.name ?? ''}"
+      "{sources.find(s => s.id === assignment.source_id)?.name ?? ''}",
+      '{m.import_preview_account_label()}',
+      'account: resolveAccountLabel(checkpoint),'
     ]) {
       expect(handBuiltLabels(text), text).toEqual([]);
     }

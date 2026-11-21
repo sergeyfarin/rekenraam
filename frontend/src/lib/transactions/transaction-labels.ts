@@ -8,8 +8,12 @@ export type TransactionStatus = components['schemas']['TransactionStatus'];
 export type AccountClass = components['schemas']['AccountClass'];
 export type StatusBadgeTone = 'neutral' | 'accent' | 'danger' | 'positive' | 'warning';
 
+/** The account label parts a posting or a reconciliation checkpoint carries. */
+export type AccountLabelParts = Pick<PostingResponse, 'account_id' | 'account_name' | 'account_code' | 'account_system_role'
+  | 'account_builtin_key' | 'account_starter_key' | 'account_currency_code'>;
+
 /**
- * Resolve the display label of a posting's account: a system
+ * Resolve the display label of a posting's or a checkpoint's account: a system
  * account by its localized role, anything else through the shared account
  * label, which keeps the owner's name first (a renamed starter category keeps
  * its name, though its built-in key survives the rename), then the built-in
@@ -18,7 +22,7 @@ export type StatusBadgeTone = 'neutral' | 'accent' | 'danger' | 'positive' | 'wa
  *
  * Never returns null/undefined — always a non-empty string.
  */
-export function resolveAccountLabel(account: PostingResponse): string {
+export function resolveAccountLabel(account: AccountLabelParts): string {
   if (account.account_system_role) {
     return systemRoleLabel(account.account_system_role);
   }

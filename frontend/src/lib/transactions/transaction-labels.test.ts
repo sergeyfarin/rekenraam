@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { builtinCategoryLabel } from '#lib/categories/category-labels.ts';
+import type { components } from '#lib/api/schema.js';
 import { m } from '#lib/paraglide/messages.js';
 import { resolveAccountLabel, systemRoleLabel, type PostingResponse } from './transaction-labels.ts';
 
@@ -9,6 +10,8 @@ const posting = {
   account_name: '', account_code: 'cash:USD', account_system_role: null, account_builtin_key: null,
   account_starter_key: 'cash', account_currency_code: 'USD'
 } as PostingResponse;
+
+type ReconciliationCheckpointImpact = components['schemas']['ReconciliationCheckpointImpact'];
 
 describe('resolveAccountLabel', () => {
   it('labels a posting on the unnamed starter cash account as Ledger does (#597 sweep)', () => {
@@ -29,6 +32,14 @@ describe('resolveAccountLabel', () => {
     expect(resolveAccountLabel(groceries)).toBe('Food shopping');
   });
 
+  it('labels a reconciliation checkpoint on the unnamed starter cash account as Ledger does', () => {
+    const checkpoint: ReconciliationCheckpointImpact = {
+      checkpoint_id: 3, account_id: 9, account_name: null, account_code: 'cash:USD', account_system_role: null,
+      account_builtin_key: null, account_starter_key: 'cash', account_currency_code: 'USD', commodity_id: 1,
+      commodity_code: 'USD', statement_date: '2026-11-20', statement_account_sequence: 1, entry_date: '2026-11-19'
+    };
+    expect(resolveAccountLabel(checkpoint)).toBe(m.accounts_starter_cash_name({ currency: 'USD' }));
+  });
 
   it('falls back to the code, then the account number', () => {
     expect(resolveAccountLabel({ ...posting, account_starter_key: null, account_currency_code: null })).toBe('cash:USD');

@@ -31303,7 +31303,7 @@ export interface components {
             account_code?: string | null;
             /** @description Non-null for system accounts (e.g. transfer_clearing). Use as the display label for system postings. */
             account_system_role?: string | null;
-            /** @description Non-null for built-in/starter category accounts. Localise via Paraglide on the client. */
+            /** @description Non-null for built-in/starter category accounts. Localise on the client when the account has no name of its own (account_name wins). */
             account_builtin_key?: string | null;
             /** @description The starter account key from the account's metadata; labels an unnamed starter account. Null otherwise. */
             account_starter_key?: string | null;
@@ -31747,8 +31747,18 @@ export interface components {
             checkpoint_id: number;
             /** Format: int64 */
             account_id: number;
-            /** @description Display label for the account (system_role, builtin_key, name, or code — first non-empty in that order). Localise system_role and builtin_key values client-side via Paraglide. */
-            account_label: string;
+            /** @description The account's own name. The account's label parts, as on PostingResponse; the client composes the label (an unnamed starter cash account reads "Cash USD", never its code). */
+            account_name: string | null;
+            /** @description Account code. Null when not set. */
+            account_code: string | null;
+            /** @description Non-null for system accounts. Localise on the client. */
+            account_system_role: string | null;
+            /** @description Non-null for built-in/starter category accounts. Localise on the client when the account has no name of its own. */
+            account_builtin_key: string | null;
+            /** @description The starter account key from the account's metadata; labels an unnamed starter account. Null otherwise. */
+            account_starter_key: string | null;
+            /** @description The currency code from the starter account's metadata. Null otherwise. */
+            account_currency_code: string | null;
             /** Format: int64 */
             commodity_id: number;
             /** @description ISO commodity code (e.g. "USD", "EUR", "AAPL"). */
