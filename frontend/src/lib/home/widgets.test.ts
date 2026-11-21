@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { amountPrivacy } from '#lib/money/privacy.svelte.ts';
+import { m } from '#lib/paraglide/messages.js';
+import { getLocale, locales, overwriteGetLocale } from '#lib/paraglide/runtime.js';
 import { accountsWidget, budgetsWidget, homeWidgets, netWorthTrendWidget, recurringWidget, spendingWidget, trendHeights } from './widgets.ts';
 import { amount, EUR, home, q, TEST, USD, widgets } from './home-fixture.ts';
 
@@ -102,6 +104,19 @@ describe('budgets', () => {
 });
 
 describe('accounts', () => {
+  it.each(locales)('labels unnamed starter cash in %s', locale => {
+    const summary = widgets().accounts.summary!;
+    const starter = { ...summary.accounts[1], name: '', code: 'cash:USD', starter_key: 'cash', currency_code: 'USD' };
+    const originalLocale = getLocale;
+    overwriteGetLocale(() => locale);
+    try {
+      const view = accountsWidget(home({ accounts: { status: 'ok', summary: { ...summary, accounts: [starter] } } }), locale);
+      expect(view.rows[0].label).toBe(m.accounts_starter_cash_name({ currency: 'USD' }, { locale }));
+    } finally {
+      overwriteGetLocale(originalLocale);
+    }
+  });
+
   it('shows a currency balance in its own currency and anything else by value', () => {
     const view = accountsWidget(home(), 'en');
     expect(view.fact).toBe('5 open accounts');

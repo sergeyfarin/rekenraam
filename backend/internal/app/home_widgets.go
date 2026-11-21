@@ -153,6 +153,8 @@ type HomeAccountRow struct {
 	AccountID    int64
 	Code         string
 	Name         string
+	StarterKey   string
+	CurrencyCode string
 	AccountClass string
 	AccountKind  string
 	// Balances are the account's exact balances including its subtree.
@@ -447,6 +449,7 @@ func accountsSummary(briefing HomeBriefing, rates *RateTable) *HomeAccountsSumma
 			continue
 		}
 		row := HomeAccountRow{AccountID: account.AccountID, Code: account.Code, Name: account.Name,
+			StarterKey: account.StarterKey, CurrencyCode: account.CurrencyCode,
 			AccountClass: account.AccountClass, AccountKind: account.AccountKind, Balances: account.SubtreeBalances}
 		if rates != nil {
 			row.Value = homeConverted(rates, row.Balances, asOf)

@@ -38,6 +38,8 @@ type AccountBalance struct {
 	Status          string
 	Code            string
 	Name            string
+	StarterKey      string
+	CurrencyCode    string
 	AccountClass    string
 	AccountKind     string
 	ParentAccountID *int64
@@ -1047,6 +1049,8 @@ func toAccountBalance(account db.LedgerAccountRecord, direct map[int64]*exact.Sc
 		Status:          account.Status,
 		Code:            nullableString(account.Code),
 		Name:            nullableString(account.Name),
+		StarterKey:      nullableString(account.StarterKey),
+		CurrencyCode:    nullableString(account.CurrencyCode),
 		AccountClass:    account.AccountClass,
 		AccountKind:     account.AccountKind,
 		ParentAccountID: nullableSQLInt64Ptr(account.ParentAccountID),

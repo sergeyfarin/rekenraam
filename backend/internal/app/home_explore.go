@@ -70,12 +70,15 @@ type HomeHoldingsSummary struct {
 
 type HomeHoldingRow struct {
 	AccountID int64
-	// BrokerageID and BrokerageName are the account the holding sits under;
-	// zero and empty for a holding at top level.
-	BrokerageID   int64
-	BrokerageName string
-	Balances      []BalanceQuantity
-	Value         *BalanceQuantity
+	// Brokerage fields describe the parent account and are empty for a
+	// holding at top level.
+	BrokerageID           int64
+	BrokerageName         string
+	BrokerageCode         string
+	BrokerageStarterKey   string
+	BrokerageCurrencyCode string
+	Balances              []BalanceQuantity
+	Value                 *BalanceQuantity
 }
 
 // HomeReturnsSummary is the latest saved returns run's time-weighted return,
@@ -222,9 +225,10 @@ func (s *HomeService) holdingsSummary(ctx context.Context, briefing HomeBriefing
 	if rates != nil {
 		rates = rates.withFreshCoverage()
 	}
-	names := map[int64]string{}
-	for _, account := range briefing.Accounts {
-		names[account.AccountID] = account.Name
+	accountsByID := make(map[int64]*AccountBalance, len(briefing.Accounts))
+	for i := range briefing.Accounts {
+		account := &briefing.Accounts[i]
+		accountsByID[account.AccountID] = account
 	}
 	summary := &HomeHoldingsSummary{AsOf: briefing.AsOf, Holdings: []HomeHoldingRow{}, Missing: []HomeValuationInput{}, Stale: []HomeValuationInput{}}
 	rows := []HomeHoldingRow{}
@@ -234,7 +238,13 @@ func (s *HomeService) holdingsSummary(ctx context.Context, briefing HomeBriefing
 		}
 		row := HomeHoldingRow{AccountID: account.AccountID, Balances: account.SubtreeBalances}
 		if account.ParentAccountID != nil {
-			row.BrokerageID, row.BrokerageName = *account.ParentAccountID, names[*account.ParentAccountID]
+			row.BrokerageID = *account.ParentAccountID
+			if brokerage := accountsByID[row.BrokerageID]; brokerage != nil {
+				row.BrokerageName = brokerage.Name
+				row.BrokerageCode = brokerage.Code
+				row.BrokerageStarterKey = brokerage.StarterKey
+				row.BrokerageCurrencyCode = brokerage.CurrencyCode
+			}
 		}
 		if rates != nil {
 			row.Value = homeConverted(rates, row.Balances, briefing.AsOf)

@@ -67,6 +67,87 @@ func TestHomeReadAuthenticationShapeAndPurity(t *testing.T) {
 	}
 }
 
+func TestHomeWidgetAccountLabels(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	var starterID int64
+	for _, account := range listAccountsForSession(t, handler, f.sessionCookie, "").Accounts {
+		if account.Code == "cash:USD" {
+			starterID = account.ID
+			break
+		}
+	}
+	require.NotZero(t, starterID, "setup created a starter USD cash account")
+	brokerage := createAccountForSession(t, handler, f.sessionCookie, f.csrfToken,
+		`{"name":"Brokerage","code":"BRK","account_class":"asset","account_kind":"brokerage","allows_postings":false,"opened_on":"2026-01-01","effective_from":"2026-01-01"}`)
+	instrument := createInstrumentForSession(t, handler, f, "HOMELABEL")
+	for _, parentID := range []int64{brokerage.ID, starterID} {
+		created := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/holding-accounts",
+			holdingAccountRequest{InstrumentID: instrument.ID, Name: "Holding", ParentAccountID: &parentID, OpenedOn: "2026-01-01", EffectiveFrom: "2026-01-01"}, http.StatusCreated)
+		var holding accountResponse
+		require.NoError(t, json.Unmarshal(created.Body.Bytes(), &holding))
+		doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy",
+			tradeRequestBody(f, holding.ID, instrument.CommodityID, "2", 4000), http.StatusCreated)
+	}
+
+	res := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, "/api/v1/home", nil, http.StatusOK)
+	var home struct {
+		Widgets struct {
+			Accounts struct {
+				Summary struct {
+					Accounts []map[string]any
+				}
+			}
+			Holdings struct {
+				Summary struct {
+					Holdings []map[string]any
+				}
+			}
+		}
+	}
+	require.NoError(t, json.Unmarshal(res.Body.Bytes(), &home))
+	accounts := make(map[string]map[string]any)
+	for _, row := range home.Widgets.Accounts.Summary.Accounts {
+		accounts[row["code"].(string)] = row
+	}
+	starter := accounts["cash:USD"]
+	require.NotNil(t, starter)
+	assert.Equal(t, "", starter["name"])
+	assert.Equal(t, "cash", starter["starter_key"])
+	assert.Equal(t, "USD", starter["currency_code"])
+
+	holdings := home.Widgets.Holdings.Summary.Holdings
+	require.Len(t, holdings, 2)
+	holdingsByBrokerage := make(map[string]map[string]any)
+	for _, row := range holdings {
+		holdingsByBrokerage[row["brokerage_code"].(string)] = row
+	}
+	starterHolding := holdingsByBrokerage["cash:USD"]
+	require.NotNil(t, starterHolding)
+	assert.EqualValues(t, starterID, starterHolding["brokerage_id"])
+	assert.Equal(t, "", starterHolding["brokerage_name"])
+	assert.Equal(t, "cash", starterHolding["brokerage_starter_key"])
+	assert.Equal(t, "USD", starterHolding["brokerage_currency_code"])
+
+	brokerageHolding := holdingsByBrokerage["BRK"]
+	require.NotNil(t, brokerageHolding)
+	assert.EqualValues(t, brokerage.ID, brokerageHolding["brokerage_id"])
+	require.NotNil(t, accounts["BRK"])
+	for _, row := range []struct {
+		data   map[string]any
+		fields []string
+	}{
+		{accounts["BRK"], []string{"starter_key", "currency_code"}},
+		{brokerageHolding, []string{"brokerage_starter_key", "brokerage_currency_code"}},
+	} {
+		for _, field := range row.fields {
+			assert.Contains(t, row.data, field)
+			assert.Nil(t, row.data[field], field)
+		}
+	}
+}
+
 // Returns and Allocation show the latest saved run as it was frozen; Home
 // calculates no return of its own (#479).
 func TestHomeReturnsWidgetsReadTheLatestSavedRun(t *testing.T) {

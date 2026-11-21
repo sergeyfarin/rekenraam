@@ -108,11 +108,14 @@ type homeHoldingsSummaryResponse struct {
 }
 
 type homeHoldingRowResponse struct {
-	AccountID     int64                     `json:"account_id"`
-	BrokerageID   *int64                    `json:"brokerage_id"`
-	BrokerageName string                    `json:"brokerage_name"`
-	Balances      []balanceQuantityResponse `json:"balances"`
-	Value         *balanceQuantityResponse  `json:"value"`
+	AccountID             int64                     `json:"account_id"`
+	BrokerageID           *int64                    `json:"brokerage_id"`
+	BrokerageName         string                    `json:"brokerage_name"`
+	BrokerageCode         string                    `json:"brokerage_code"`
+	BrokerageStarterKey   *string                   `json:"brokerage_starter_key"`
+	BrokerageCurrencyCode *string                   `json:"brokerage_currency_code"`
+	Balances              []balanceQuantityResponse `json:"balances"`
+	Value                 *balanceQuantityResponse  `json:"value"`
 }
 
 type homeReturnsSummaryResponse struct {
@@ -209,6 +212,8 @@ type homeAccountRowResponse struct {
 	AccountID    int64                     `json:"account_id"`
 	Code         string                    `json:"code"`
 	Name         string                    `json:"name"`
+	StarterKey   *string                   `json:"starter_key"`
+	CurrencyCode *string                   `json:"currency_code"`
 	AccountClass string                    `json:"account_class"`
 	AccountKind  string                    `json:"account_kind"`
 	Balances     []balanceQuantityResponse `json:"balances"`
@@ -344,7 +349,8 @@ func toHomeBudgetSummary(summary app.HomeBudgetSummary) homeBudgetSummaryRespons
 func toHomeAccountsSummary(summary app.HomeAccountsSummary) homeAccountsSummaryResponse {
 	response := homeAccountsSummaryResponse{AsOf: summary.AsOf, OpenCount: summary.OpenCount, Accounts: []homeAccountRowResponse{}}
 	for _, row := range summary.Accounts {
-		response.Accounts = append(response.Accounts, homeAccountRowResponse{AccountID: row.AccountID, Code: row.Code, Name: row.Name, AccountClass: row.AccountClass,
+		response.Accounts = append(response.Accounts, homeAccountRowResponse{AccountID: row.AccountID, Code: row.Code, Name: row.Name,
+			StarterKey: optionalHomeString(row.StarterKey), CurrencyCode: optionalHomeString(row.CurrencyCode), AccountClass: row.AccountClass,
 			AccountKind: row.AccountKind, Balances: toBalanceQuantityResponses(row.Balances), Value: toBalanceQuantityPointer(row.Value)})
 	}
 	return response
@@ -378,7 +384,9 @@ func toHomeHoldingsSummary(summary app.HomeHoldingsSummary) homeHoldingsSummaryR
 	response := homeHoldingsSummaryResponse{AsOf: summary.AsOf, PositionCount: summary.PositionCount, UnpricedCount: summary.UnpricedCount, Holdings: []homeHoldingRowResponse{},
 		Missing: toHomeValuationInputs(summary.Missing), Stale: toHomeValuationInputs(summary.Stale)}
 	for _, row := range summary.Holdings {
-		item := homeHoldingRowResponse{AccountID: row.AccountID, BrokerageName: row.BrokerageName, Balances: toBalanceQuantityResponses(row.Balances), Value: toBalanceQuantityPointer(row.Value)}
+		item := homeHoldingRowResponse{AccountID: row.AccountID, BrokerageName: row.BrokerageName, BrokerageCode: row.BrokerageCode,
+			BrokerageStarterKey: optionalHomeString(row.BrokerageStarterKey), BrokerageCurrencyCode: optionalHomeString(row.BrokerageCurrencyCode),
+			Balances: toBalanceQuantityResponses(row.Balances), Value: toBalanceQuantityPointer(row.Value)}
 		if row.BrokerageID != 0 {
 			id := row.BrokerageID
 			item.BrokerageID = &id
