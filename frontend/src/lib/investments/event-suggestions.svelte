@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+  import { accountLabelFromParts } from '#lib/accounts/account-labels.ts';
   import Panel from '#lib/components/panel.svelte';
   import StatePanel from '#lib/components/state-panel.svelte';
   import {
@@ -291,9 +292,12 @@
                 </div>
 
                 {#if s.event_family === 'split'}
+                  {@const { holding_account_id: holdingID, holding_account_name: holdingName } = s.proposed_transaction}
                   {@render splitEvidence(s)}
-                  {#if typeof s.proposed_transaction.holding_account_name === 'string' && s.proposed_transaction.holding_account_name}
-                    <p class="text-sm text-muted">{s.proposed_transaction.holding_account_name}</p>
+                  {#if typeof holdingID === 'number'}
+                    <p class="text-sm text-muted">
+                      {accountLabelFromParts({ id: holdingID, name: typeof holdingName === 'string' ? holdingName : null })}
+                    </p>
                   {/if}
                   {#if s.proposed_transaction.review_reason || s.revisions.length > 0}
                     <p role="note" class="text-sm text-muted">
@@ -306,7 +310,7 @@
                     <ul class="space-y-2">
                       {#each s.split_link_candidates as candidate (candidate.transaction_id)}
                         <li class="flex flex-wrap items-center justify-between gap-2 text-sm">
-                          <span>{candidate.holding_account_name || `#${candidate.holding_account_id}`}</span>
+                          <span>{accountLabelFromParts({ id: candidate.holding_account_id, name: candidate.holding_account_name })}</span>
                           <button type="button" disabled={busy.has(s.id)}
                             onclick={() => act(s, () => linkEventSuggestion(s.id, candidate.transaction_id, csrfToken),
                               m.investments_suggestion_split_link_error(), false)}
@@ -353,7 +357,7 @@
                           <span class="min-w-0 tabular-nums text-foreground">
                             {#if candidate.holding_account_id !== undefined}
                               {m.investments_suggestion_link_candidate_holding({ date: candidate.transaction_date, amount: candidateAmount, currency: candidate.cash_code,
-                                holding: candidate.holding_account_name || `#${candidate.holding_account_id}` })}
+                                holding: accountLabelFromParts({ id: candidate.holding_account_id, name: candidate.holding_account_name }) })}
                             {:else}
                               {m.investments_suggestion_link_candidate({ date: candidate.transaction_date, amount: candidateAmount, currency: candidate.cash_code })}
                             {/if}

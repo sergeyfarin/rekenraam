@@ -16,6 +16,7 @@ test('[acceptance] a Massive split is reviewed and posted once on a phone', asyn
   const splitDate = daysFromTodayISO(-10, reference);
   const symbol = `E2ESPLIT${randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase()}`;
   const name = `Split issuer ${symbol}`;
+  const holdingName = `Holding ${symbol}`;
   const stubURL = process.env.E2E_TRADING212_STUB_URL ?? `http://127.0.0.1:${process.env.TRADING212_STUB_PORT ?? '16890'}`;
   const registered = await fetch(`${stubURL}/__control/splits/${symbol}`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ execution_date: splitDate })
@@ -28,7 +29,7 @@ test('[acceptance] a Massive split is reviewed and posted once on a phone', asyn
     quote_commodity_id: currencyID, trading_commodity_id: currencyID, quantity_scale: 0, price_scale: 2, effective_from: openedOn
   });
   const holding = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/holding-accounts', csrfToken, {
-    instrument_id: instrument.id, name: `Holding ${symbol}`, opened_on: openedOn, effective_from: openedOn
+    instrument_id: instrument.id, name: holdingName, opened_on: openedOn, effective_from: openedOn
   });
   await apiJSON(page, 'POST', '/api/v1/investments/buy', csrfToken, {
     transaction_date: daysFromTodayISO(-30, reference), commodity_id: instrument.commodity_id, holding_account_id: holding.id,
@@ -48,6 +49,7 @@ test('[acceptance] a Massive split is reviewed and posted once on a phone', asyn
   await expect(page.getByRole('status').filter({ hasText: 'Split check queued for 1 listing.' })).toBeVisible();
   const card = page.getByTestId('event-suggestion').filter({ hasText: name });
   await expect(card).toContainText('4 new for 1 old', { timeout: 30_000 });
+  await expect(card.getByText(holdingName, { exact: true })).toBeVisible();
   await expect(card.locator('time')).toHaveAttribute('datetime', splitDate);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await expectNoAccessibilityViolations(page, 'Massive split suggestion on a phone');
@@ -85,6 +87,7 @@ test('split cards offer manual review or a link without showing Accept', async (
   await expect(cards).toHaveCount(3);
   await expect(cards.nth(0)).toContainText('1 new for 20 old');
   await expect(cards.nth(0)).toContainText('Massive could not verify the listing on the split date');
+  await expect(cards.nth(1).getByText('Broker holding', { exact: true })).toBeVisible();
   await expect(cards.nth(1).getByRole('button', { name: 'Link recorded split' })).toBeVisible();
   await expect(cards.getByRole('button', { name: 'Accept', exact: true })).toHaveCount(0);
   await expect(page.getByTestId('split-suggestion-revisions')).toHaveCount(2);
