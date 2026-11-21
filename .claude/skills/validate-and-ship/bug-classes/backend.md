@@ -224,3 +224,7 @@ instances. Guard:
 calls `OwnerTodayAt`, and requires every other `OwnerTodayAt` caller to be
 listed with why it has no pinned day to share. It scans one function at a
 time, so a helper reached from a pinned caller still needs review.
+A composed read pins before calling any child that could resolve the day
+independently. Home pins once per composition attempt, so the briefing and
+reconciliation agree across midnight and a retry after a book change can
+take the new day (#606, `TestHomeWidgetsShareThePinnedOwnerDay`).

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -460,6 +461,47 @@ func homeBudgetActual(t *testing.T, home Home, commodityID int64) BudgetAmount {
 	require.NotNil(t, home.Budgets.Summary.Total)
 	require.Equal(t, commodityID, home.Budgets.Summary.CommodityID)
 	return home.Budgets.Summary.Total.Actual
+}
+
+func TestHomeWidgetsShareThePinnedOwnerDay(t *testing.T) {
+	t.Parallel()
+	f := newHomeWidgetFixture(t)
+	f.transactionService.SetSettings(NewSettingsService(db.NewSettingsRepository(f.database)))
+	tomorrow := "2026-10-16"
+	f.transactionService.SetNowForTest(func() time.Time {
+		return time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
+	})
+	accountID := seedTestAccountOpenedOn(t, f.database, tomorrow)
+	f.move(t, tomorrow, accountID, f.eurCommodityID, 10000)
+
+	isTomorrowAccount := func(account AccountBalance) bool { return account.AccountID == accountID }
+	crossOwnerMidnight(f.transactionService.SetNowForTest)
+	home := f.read(t)
+	require.True(t, home.Consistent)
+	assert.Equal(t, pinnedTestDay, home.Briefing.AsOf)
+	assert.False(t, slices.ContainsFunc(home.Briefing.Accounts, isTomorrowAccount))
+	require.NotNil(t, home.Reconciliation.Summary)
+	assert.Empty(t, home.Reconciliation.Summary.Accounts, "tomorrow's posting is not yet in scope")
+
+	// A write during the first attempt causes a retry after midnight.
+	crossOwnerMidnight(f.transactionService.SetNowForTest)
+	attempts := 0
+	f.home.afterRead = func(summary string) {
+		if summary == "briefing" {
+			attempts++
+			if attempts == 1 {
+				f.move(t, tomorrow, accountID, f.eurCommodityID, 100)
+			}
+		}
+	}
+	home = f.read(t)
+	require.True(t, home.Consistent)
+	assert.Equal(t, 2, attempts)
+	assert.Equal(t, tomorrow, home.Briefing.AsOf)
+	assert.True(t, slices.ContainsFunc(home.Briefing.Accounts, isTomorrowAccount))
+	require.NotNil(t, home.Reconciliation.Summary)
+	require.Len(t, home.Reconciliation.Summary.Accounts, 1)
+	assert.Equal(t, accountID, home.Reconciliation.Summary.Accounts[0].AccountID)
 }
 
 // Spending and budgets are separate reads. An expense committed between them
