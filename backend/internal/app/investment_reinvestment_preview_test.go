@@ -75,7 +75,7 @@ func TestReinvestmentPreviewReplaysAndRollsBackReconciledHolding(t *testing.T) {
 		require.Len(t, impact.AffectedCheckpoints, 1)
 		require.Equal(t, checkpoints[0].ID, impact.AffectedCheckpoints[0].CheckpointID)
 		require.Equal(t, "2026-01-01", impact.AffectedCheckpoints[0].EntryDate)
-		require.NotEmpty(t, impact.AffectedCheckpoints[0].AccountLabel)
+		require.Equal(t, impact.AffectedCheckpoints[0].AccountID, impact.AffectedCheckpoints[0].Account.ID, "the ref carries its account's label parts")
 		require.NotEmpty(t, impact.AffectedCheckpoints[0].CommodityCode)
 		require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
 	}

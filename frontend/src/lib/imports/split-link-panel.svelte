@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { accountLabelByID } from '#lib/accounts/account-labels.ts';
   import { createQuery } from '@tanstack/svelte-query';
   import { parseISO } from 'date-fns';
   import APIFormError from '#lib/components/api-form-error.svelte';
@@ -70,7 +71,7 @@
             {m.import_preview_split_link_option({
               date: dateFormatter.format(parseISO(candidate.effective_on)),
               ratio: `${candidate.ratio_numerator}:${candidate.ratio_denominator}`,
-              account: accounts.find((account) => account.id === candidate.holding_account_id)?.name ?? `#${candidate.holding_account_id}`
+              account: accountLabelByID(accounts, candidate.holding_account_id) ?? `#${candidate.holding_account_id}`
             })}
             {#if candidate.linked}<span class="block text-xs text-muted">{m.import_preview_split_link_already()}</span>{/if}
           </span>

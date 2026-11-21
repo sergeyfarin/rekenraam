@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolveAccountLabel } from '#lib/transactions/transaction-labels.ts';
   import { replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import { createQuery, createInfiniteQuery, useQueryClient } from '@tanstack/svelte-query';
@@ -255,7 +256,7 @@
     {#if review.kind === 'post'}
       <p class="mt-2 text-sm">{m.recurring_post_help()}</p>
       <ul class="my-3 space-y-2 text-sm">{#each review.items as item (item.id)}<li>{item.template_name} · {displayDate(item.occurrence_date,locale)}{#each item.amounts as a}<p>{a.commodity_code}: {m.recurring_debit_credit({debit:amount(a.debit_value,a.quantity_scale),credit:amount(a.credit_value,a.quantity_scale)})}</p>{/each}</li>{/each}</ul>
-      {#each review.impacts as impact}{#if impact.affected_checkpoints.length}<section class="my-3 rounded-(--radius-control) border border-warning p-3"><h3 class="font-semibold">{m.transactions_reconciliation_warning_title()}</h3><p class="text-sm">{m.transactions_reconciliation_warning_copy()}</p><ul class="mt-2 space-y-1 text-sm">{#each impact.affected_checkpoints as cp}<li>{m.transactions_reconciliation_checkpoint_label({account:cp.account_label,commodity:cp.commodity_code,date:displayDate(cp.statement_date,locale)})}</li>{/each}</ul></section>{/if}{/each}
+      {#each review.impacts as impact}{#if impact.affected_checkpoints.length}<section class="my-3 rounded-(--radius-control) border border-warning p-3"><h3 class="font-semibold">{m.transactions_reconciliation_warning_title()}</h3><p class="text-sm">{m.transactions_reconciliation_warning_copy()}</p><ul class="mt-2 space-y-1 text-sm">{#each impact.affected_checkpoints as cp}<li>{m.transactions_reconciliation_checkpoint_label({account:resolveAccountLabel(cp),commodity:cp.commodity_code,date:displayDate(cp.statement_date,locale)})}</li>{/each}</ul></section>{/if}{/each}
     {:else if review.kind === 'skip'}<p class="my-2 text-sm">{displayDate(review.date,locale)}</p><label class="block text-sm">{m.recurring_reason()}<input class="mt-1 min-h-10 w-full rounded-(--radius-control) border border-border bg-control px-3" bind:value={reason} required maxlength="500" /></label>
     {:else}<p class="my-3 text-sm">{review.kind==='discard'?m.recurring_discard_help():m.recurring_archive_help()}</p>{/if}
     {#if impactChanged}<p role="alert" class="my-3 text-sm text-danger">{m.recurring_impact_changed()}</p>{/if}

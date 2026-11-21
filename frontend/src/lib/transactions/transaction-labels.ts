@@ -1,6 +1,6 @@
 import type { components } from '#lib/api/schema.js';
 import { m } from '#lib/paraglide/messages.js';
-import { builtinCategoryLabel } from '#lib/categories/category-labels.ts';
+import { accountLabelFromParts } from '#lib/accounts/account-labels.ts';
 import { formatQuantity } from '#lib/money/format.ts';
 
 export type PostingResponse = components['schemas']['PostingResponse'];
@@ -8,27 +8,26 @@ export type TransactionStatus = components['schemas']['TransactionStatus'];
 export type AccountClass = components['schemas']['AccountClass'];
 export type StatusBadgeTone = 'neutral' | 'accent' | 'danger' | 'positive' | 'warning';
 
+/** The account label parts a posting or a reconciliation checkpoint carries. */
+export type AccountLabelParts = Pick<PostingResponse, 'account_id' | 'account_name' | 'account_code' | 'account_system_role'
+  | 'account_builtin_key' | 'account_starter_key' | 'account_currency_code'>;
+
 /**
- * Resolve a posting's account display label using the priority chain:
- * account_system_role (localised) → account_builtin_key (localised) →
- * account_name → account_code → fallback.
+ * Resolve the display label of a posting's or a checkpoint's account: a system
+ * account by its localized role, anything else through the shared account
+ * label, which keeps the owner's name first (a renamed starter category keeps
+ * its name, though its built-in key survives the rename), then the built-in
+ * category label, then a starter account's localized label such as "Cash
+ * USD", then the code, then "Account N".
  *
  * Never returns null/undefined — always a non-empty string.
  */
-export function resolveAccountLabel(posting: PostingResponse): string {
-  if (posting.account_system_role) {
-    return systemRoleLabel(posting.account_system_role);
+export function resolveAccountLabel(account: AccountLabelParts): string {
+  if (account.account_system_role) {
+    return systemRoleLabel(account.account_system_role);
   }
-  if (posting.account_builtin_key) {
-    return builtinCategoryLabel(posting.account_builtin_key);
-  }
-  if (posting.account_name) {
-    return posting.account_name;
-  }
-  if (posting.account_code) {
-    return posting.account_code;
-  }
-  return `#${posting.account_id}`;
+  return accountLabelFromParts({ id: account.account_id, name: account.account_name, code: account.account_code,
+    builtinKey: account.account_builtin_key, starterKey: account.account_starter_key, currencyCode: account.account_currency_code });
 }
 
 export function systemRoleLabel(role: string): string {

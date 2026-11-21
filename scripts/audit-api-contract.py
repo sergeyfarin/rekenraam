@@ -81,6 +81,7 @@ TESTS = [
  'TestCashInLieuAPICorrectReverseAndPreviewValidParentReversal',
  'TestHomeReadAuthenticationShapeAndPurity',
  'TestHomeWidgetAccountLabels',
+ 'TestAccountLabelPartsReachEveryAccountRead',
  'TestHomeReturnsWidgetsReadTheLatestSavedRun',
  'TestLedgerOverviewHTTPComposesAccountMetadataAndBalances',
  'TestReconciliationPolicyHTTPSavesTheWindowTheAccountListReads',

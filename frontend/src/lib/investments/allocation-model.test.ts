@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AllocationPoint } from '#lib/api/allocation.ts';
-import { allocationAreas, allocationIDs, calendarFraction, parseTargetUnits, savedCalendarDay } from './allocation-model.ts';
+import { m } from '#lib/paraglide/messages.js';
+import { allocationAccountLabel, allocationAreas, allocationIDs, calendarFraction, parseTargetUnits, savedCalendarDay } from './allocation-model.ts';
 
 describe('exact target entry', () => {
   it('preserves four decimal percentage places in each maintained locale', () => {
@@ -42,5 +43,21 @@ describe('allocation chart geometry', () => {
   it('places saved-change timestamps in the explicit owner zone', () => {
     expect(savedCalendarDay('2026-11-05T23:30:00Z', 'Europe/Amsterdam')).toBe('2026-11-06');
     expect(savedCalendarDay('2026-11-05T23:30:00Z', 'America/New_York')).toBe('2026-11-05');
+  });
+});
+
+describe('allocation account labels', () => {
+  const accounts = [
+    { id: 9, name: '', code: 'cash:USD', starter_key: 'cash', currency_code: 'USD', kind: 'cash', status: 'active', included: true },
+    { id: 4, name: 'Broker cash', code: 'BRK', starter_key: null, currency_code: null, kind: 'brokerage_cash', status: 'active', included: true }
+  ];
+
+  it('labels the unnamed starter cash account as Ledger does (#597 sweep)', () => {
+    expect(allocationAccountLabel(accounts, 9)).toBe(m.accounts_starter_cash_name({ currency: 'USD' }));
+    expect(allocationAccountLabel(accounts, 4)).toBe('Broker cash');
+  });
+
+  it('marks an account the read no longer lists as unavailable', () => {
+    expect(allocationAccountLabel(accounts, 5)).toBe(`${m.accounts_unnamed_account({ id: 5 })} · ${m.allocation_unavailable()}`);
   });
 });

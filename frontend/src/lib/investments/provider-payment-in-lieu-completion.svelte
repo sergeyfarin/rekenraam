@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { accountDisplayName, accountLabelByID } from '#lib/accounts/account-labels.ts';
   import { untrack } from 'svelte';
   import { commitReview, type CommitReviewState } from '#lib/investments/commit-review.ts';
   import { createQuery } from '@tanstack/svelte-query';
@@ -55,7 +56,7 @@
   let reconciliation = $state.raw<CommitReviewState<EventSuggestionCompletion> | null>(null);
 
   const accounts = $derived(accountsQuery.data?.accounts ?? []);
-  const accountName = (id: number) => accounts.find((account: AccountResponse) => account.id === id)?.name ?? `#${id}`;
+  const accountName = (id: number) => accountLabelByID(accounts, id) ?? `#${id}`;
   const cashAccounts = $derived(accounts.filter((a: AccountResponse) =>
     ['asset', 'liability'].includes(a.account_class) && a.status === 'active' && a.allows_postings && !a.system_role &&
     !isSubledgerManagedAccountKind(a.account_kind)));
@@ -179,7 +180,7 @@
       <label for="{idPrefix}-cash" class="mb-1 block text-sm font-medium text-foreground">{m.investments_form_cash_account()}</label>
       <select id="{idPrefix}-cash" bind:value={cashAccountID} required class={fieldClass}>
         <option value="">{m.investments_form_select_account()}</option>
-        {#each cashAccounts as account (account.id)}<option value={String(account.id)}>{account.name}</option>{/each}
+        {#each cashAccounts as account (account.id)}<option value={String(account.id)}>{accountDisplayName(account)}</option>{/each}
       </select>
     </div>
     <div>
@@ -198,7 +199,7 @@
       <label for="{idPrefix}-expense" class="mb-1 block text-sm font-medium text-foreground">{m.investments_payment_in_lieu_expense_account()}</label>
       <select id="{idPrefix}-expense" bind:value={expenseAccountID} required class={fieldClass}>
         <option value="">{m.investments_form_select_account()}</option>
-        {#each expenseAccounts as account (account.id)}<option value={String(account.id)}>{account.name}</option>{/each}
+        {#each expenseAccounts as account (account.id)}<option value={String(account.id)}>{accountDisplayName(account)}</option>{/each}
       </select>
     </div>
   </div>
@@ -217,7 +218,7 @@
         <label for="{idPrefix}-recovery-account" class="mb-1 block text-sm font-medium text-foreground">{m.investments_payment_in_lieu_recovery_account()}</label>
         <select id="{idPrefix}-recovery-account" bind:value={recoveryAccountID} class={fieldClass}>
           <option value="">{m.investments_form_select_account()}</option>
-          {#each recoveryAccounts as account (account.id)}<option value={String(account.id)}>{account.name}</option>{/each}
+          {#each recoveryAccounts as account (account.id)}<option value={String(account.id)}>{accountDisplayName(account)}</option>{/each}
         </select>
       </div>
     </div>

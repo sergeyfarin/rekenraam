@@ -212,7 +212,7 @@ test('changed reconciliation impact stops posting and asks for a new review',asy
  await expect(dialog.getByRole('heading',{name:'Review before posting'})).toBeVisible();
  // A checkpoint appears after the confirmation was prepared. The UI must
  // refuse the old approval before issuing any mutation.
- await page.route(`**/api/v1/transactions/${id}/post/reconciliation-impact`,route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({affected_checkpoints:[{checkpoint_id:999,account_id:account.id,account_label:account.name,commodity_id:currencyID,commodity_code:'USD',statement_date:'2026-08-31'}]})}));
+ await page.route(`**/api/v1/transactions/${id}/post/reconciliation-impact`,route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({affected_checkpoints:[{checkpoint_id:999,account_id:account.id,account_name:account.name,account_code:null,account_system_role:null,account_builtin_key:null,account_starter_key:null,account_currency_code:null,commodity_id:currencyID,commodity_code:'USD',statement_date:'2026-08-31'}]})}));
  await dialog.getByRole('button',{name:'Confirm',exact:true}).click();
  await expect(dialog.getByRole('alert')).toContainText('Reconciliation impacts changed');
  await expect(dialog.getByRole('button',{name:'Confirm',exact:true})).toBeDisabled();

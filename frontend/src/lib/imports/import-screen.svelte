@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { resolveAccountLabel } from '#lib/transactions/transaction-labels.ts';
+  import { accountDisplayName, accountLabelByID } from '#lib/accounts/account-labels.ts';
   import { maskFinancialText } from '#lib/money/format.ts';
   import { onDestroy, untrack } from 'svelte';
   import { beforeNavigate, goto } from '$app/navigation';
@@ -1562,7 +1564,7 @@
                     >
                       <option value="" disabled>{m.import_connections_cash_account_placeholder()}</option>
                       {#each postableAccounts as account (account.id)}
-                        <option value={account.id}>{account.name}</option>
+                        <option value={account.id}>{accountDisplayName(account)}</option>
                       {/each}
                     </select>
                   </td>
@@ -1694,7 +1696,7 @@
               >
                 <option value="">{m.import_connections_add_cash_account_none()}</option>
                 {#each postableAccounts as account (account.id)}
-                  <option value={account.id}>{account.name}</option>
+                  <option value={account.id}>{accountDisplayName(account)}</option>
                 {/each}
               </select>
               <p class="text-xs text-muted">{m.import_connections_add_cash_account_help()}</p>
@@ -1784,8 +1786,8 @@
             {#if cryptoInstrumentsQuery.isError}<APIFormError error={cryptoInstrumentsQuery.error} />{/if}
             {#if accountsQuery.isError}<APIFormError error={accountsQuery.error} />{/if}
             <div class="mb-4 grid gap-3 sm:grid-cols-2">
-              <label class="grid gap-1 text-sm">{m.investments_form_holding_account()}<select bind:value={cryptoHoldingId} class="min-h-11 rounded-(--radius-control) border border-border bg-control px-3"><option value={0}>{m.pricing_choose()}</option>{#each accounts.filter(a => a.account_kind === 'security_holding' && a.status === 'active' && cryptoCommodityIDs.has(a.default_commodity_id ?? 0)) as account}<option value={account.id}>{account.name}</option>{/each}</select></label>
-              <label class="grid gap-1 text-sm">{m.investments_form_cash_account()}<select bind:value={cryptoCashId} class="min-h-11 rounded-(--radius-control) border border-border bg-control px-3"><option value={0}>{m.pricing_choose()}</option>{#each accounts.filter(a => a.account_class === 'asset' && a.status === 'active' && a.account_kind !== 'security_holding' && a.account_kind !== 'fund_holding') as account}<option value={account.id}>{account.name}</option>{/each}</select></label>
+              <label class="grid gap-1 text-sm">{m.investments_form_holding_account()}<select bind:value={cryptoHoldingId} class="min-h-11 rounded-(--radius-control) border border-border bg-control px-3"><option value={0}>{m.pricing_choose()}</option>{#each accounts.filter(a => a.account_kind === 'security_holding' && a.status === 'active' && cryptoCommodityIDs.has(a.default_commodity_id ?? 0)) as account}<option value={account.id}>{accountDisplayName(account)}</option>{/each}</select></label>
+              <label class="grid gap-1 text-sm">{m.investments_form_cash_account()}<select bind:value={cryptoCashId} class="min-h-11 rounded-(--radius-control) border border-border bg-control px-3"><option value={0}>{m.pricing_choose()}</option>{#each accounts.filter(a => a.account_class === 'asset' && a.status === 'active' && a.account_kind !== 'security_holding' && a.account_kind !== 'fund_holding') as account}<option value={account.id}>{accountDisplayName(account)}</option>{/each}</select></label>
             </div>
             <pre class="mb-4 overflow-x-auto rounded-(--radius-control) border border-border p-3 text-xs">date,side,quantity,amount,external_ref,memo</pre>
           {/if}
@@ -1941,7 +1943,7 @@
           >
             <option value={undefined}>{m.import_preview_account_placeholder()}</option>
             {#each accounts.filter(account => !isSubledgerManagedAccountKind(account.account_kind)) as account}
-              <option value={account.id}>{account.name ?? account.code}</option>
+              <option value={account.id}>{accountDisplayName(account)}</option>
             {/each}
           </select>
         </div>
@@ -1989,7 +1991,7 @@
           >
             <option value={undefined}>{m.import_preview_transfer_account_placeholder()}</option>
             {#each accounts.filter(account => !isSubledgerManagedAccountKind(account.account_kind)) as account}
-              <option value={account.id}>{account.name ?? account.code}</option>
+              <option value={account.id}>{accountDisplayName(account)}</option>
             {/each}
           </select>
         </div>
@@ -2132,11 +2134,11 @@
                     >
                       <option value="">—</option>
                       {#each accounts.filter(account => !isSubledgerManagedAccountKind(account.account_kind)) as account}
-                        <option value={account.id}>{account.name ?? account.code}</option>
+                        <option value={account.id}>{accountDisplayName(account)}</option>
                       {/each}
                     </select>
                   {:else}
-                    <span class="text-xs text-muted">{cryptoSummary || norm.investment ? accounts.find(a => a.id === res.account_id)?.name : '—'}</span>
+                    <span class="text-xs text-muted">{cryptoSummary || norm.investment ? accountLabelByID(accounts, res.account_id) : '—'}</span>
                   {/if}
                 </td>
                 <td class="px-4 py-2.5">
@@ -2173,7 +2175,7 @@
                       >
                         <option value="">{norm.transfer_hint} →?</option>
                         {#each accounts.filter(account => !isSubledgerManagedAccountKind(account.account_kind)) as account}
-                          <option value={account.id}>{account.name ?? account.code}</option>
+                          <option value={account.id}>{accountDisplayName(account)}</option>
                         {/each}
                       </select>
                     {:else}
@@ -2248,7 +2250,7 @@
                           <ul class="space-y-2 text-sm text-foreground">
                             {#each sourceCorrectionImpact.affected_checkpoints as checkpoint (checkpoint.checkpoint_id)}
                               <li>{m.transactions_reconciliation_checkpoint_label({
-                                account: checkpoint.account_label,
+                                account: resolveAccountLabel(checkpoint),
                                 commodity: checkpoint.commodity_code,
                                 date: formatDate(checkpoint.statement_date)
                               })}</li>
@@ -2339,7 +2341,7 @@
                   {#each reviewedCheckpoints as checkpoint (checkpoint.checkpoint_id)}
                     <li class="px-3 py-2 text-foreground">
                       {m.transactions_reconciliation_checkpoint_label({
-                        account: checkpoint.account_label,
+                        account: resolveAccountLabel(checkpoint),
                         commodity: checkpoint.commodity_code,
                         date: checkpoint.statement_date
                       })}

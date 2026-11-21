@@ -13,7 +13,7 @@
   import { formatQuantity } from '#lib/money/format.ts';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { m } from '#lib/paraglide/messages.js';
-  import { allocationIDs, parseTargetUnits } from './allocation-model.ts';
+  import { allocationAccountLabel, allocationIDs, parseTargetUnits } from './allocation-model.ts';
   import { formatWeight, returnReasonText } from './returns-model.ts';
   import AllocationChart from './allocation-chart.svelte';
 
@@ -58,8 +58,7 @@
   const choices = $derived(editSnapshot ? [{ id: 0, name: m.allocation_cash() }, ...editSnapshot.commodities.filter(c => c.targetable).map(c => ({ id: c.id, name: c.name || c.code }))].filter(c => !targetDraft.some(t => t.commodityID === c.id)) : []);
 
   function accountName(id: number, source = data): string {
-    const account = source?.accounts.find(a => a.id === id);
-    return account?.name || account?.code || `${m.accounts_unnamed_account({ id })}${account ? '' : ` · ${m.allocation_unavailable()}`}`;
+    return allocationAccountLabel(source?.accounts, id);
   }
   function instrumentName(id: number): string {
     if (id === 0) return m.allocation_cash();

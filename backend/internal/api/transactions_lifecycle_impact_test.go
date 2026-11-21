@@ -67,7 +67,9 @@ func TestLifecycleReconciliationImpactNamesEveryCheckpointTheWriteInvalidates(t 
 		require.NoError(t, json.NewDecoder(res.Body).Decode(&impact))
 		ids := []int64{}
 		for _, checkpoint := range impact.AffectedCheckpoints {
-			assert.Equal(t, "Lifecycle Impact Checking", checkpoint.AccountLabel)
+			if assert.NotNil(t, checkpoint.AccountName) {
+				assert.Equal(t, "Lifecycle Impact Checking", *checkpoint.AccountName)
+			}
 			ids = append(ids, checkpoint.CheckpointID)
 		}
 		return ids

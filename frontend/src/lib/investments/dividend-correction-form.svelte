@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { accountDisplayName } from '#lib/accounts/account-labels.ts';
   import { autofocus } from '#lib/components/autofocus.ts';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import { untrack } from 'svelte';
@@ -247,7 +248,7 @@
       <label for="dividend-correction-holding" class="mb-1 block text-sm font-medium text-foreground">{m.investments_form_holding_account()}</label>
       <select id="dividend-correction-holding" bind:value={holdingAccountID} required
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
-        {#each holdingAccounts as account (account.id)}<option value={String(account.id)}>{account.name}</option>{/each}
+        {#each holdingAccounts as account (account.id)}<option value={String(account.id)}>{accountDisplayName(account)}</option>{/each}
       </select>
     </div>
     <div>
@@ -279,7 +280,7 @@
       <select id="dividend-correction-cash-account" bind:value={cashAccountID} required
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         {#each cashAccounts as account (account.id)}
-          <option value={String(account.id)}>{account.name}</option>
+          <option value={String(account.id)}>{accountDisplayName(account)}</option>
         {/each}
       </select>
     </div>
@@ -336,7 +337,7 @@
       <select id="dividend-correction-income" bind:value={incomeAccountID} required
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         {#each incomeAccounts as account (account.id)}
-          <option value={String(account.id)}>{account.name}</option>
+          <option value={String(account.id)}>{accountDisplayName(account)}</option>
         {/each}
       </select>
     </div>
@@ -346,7 +347,7 @@
       <label for="dividend-correction-tax-account" class="mb-1 block text-sm font-medium text-foreground">{m.investments_form_withholding_account()}</label>
       <select id="dividend-correction-tax-account" bind:value={withholdingAccountID} required
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
-        {#each withholdingAccounts as account (account.id)}<option value={String(account.id)}>{account.name}</option>{/each}
+        {#each withholdingAccounts as account (account.id)}<option value={String(account.id)}>{accountDisplayName(account)}</option>{/each}
       </select>
     </div>
   {/if}
@@ -373,7 +374,7 @@
             class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
             <option value="">{m.investments_form_select_account()}</option>
             {#each withholdingAccounts as account (account.id)}
-              <option value={String(account.id)}>{account.name}</option>
+              <option value={String(account.id)}>{accountDisplayName(account)}</option>
             {/each}
           </select>
         </div>

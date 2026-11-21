@@ -89,6 +89,8 @@ type ForecastAccountVersionRecord struct {
 	ClosedOn              sql.NullString
 	Name                  sql.NullString
 	Code                  sql.NullString
+	StarterKey            sql.NullString
+	CurrencyCode          sql.NullString
 	AccountClass          string
 	AccountKind           string
 	ParentAccountID       sql.NullInt64
@@ -410,8 +412,8 @@ func (r *ForecastSnapshotReader) ownerTimeZone(ctx context.Context, ownerUserID 
 func (r *ForecastSnapshotReader) accountVersions(ctx context.Context, bookID int64, limit int) ([]ForecastAccountVersionRecord, error) {
 	rows, err := r.transaction.QueryContext(ctx, `
 		SELECT a.id, a.book_id, a.system_role, av.id, av.version_seq, av.effective_from,
-			av.status, av.opened_on, av.closed_on, av.name, av.code, av.account_class, av.account_kind,
-			av.parent_account_id, av.default_commodity_id, av.quantity_scale_override, av.allows_postings
+			av.status, av.opened_on, av.closed_on, av.name, av.code, `+accountStarterLabelColumnsSQL("av")+`,
+			av.account_class, av.account_kind, av.parent_account_id, av.default_commodity_id, av.quantity_scale_override, av.allows_postings
 		FROM accounts a JOIN account_versions av ON av.account_id = a.id
 		WHERE a.book_id = ?
 		ORDER BY a.id, av.effective_from, av.version_seq
@@ -424,7 +426,7 @@ func (r *ForecastSnapshotReader) accountVersions(ctx context.Context, bookID int
 	for rows.Next() {
 		var record ForecastAccountVersionRecord
 		var allows int
-		if err := rows.Scan(&record.AccountID, &record.BookID, &record.SystemRole, &record.VersionID, &record.VersionSeq, &record.EffectiveFrom, &record.Status, &record.OpenedOn, &record.ClosedOn, &record.Name, &record.Code, &record.AccountClass, &record.AccountKind, &record.ParentAccountID, &record.DefaultCommodityID, &record.QuantityScaleOverride, &allows); err != nil {
+		if err := rows.Scan(&record.AccountID, &record.BookID, &record.SystemRole, &record.VersionID, &record.VersionSeq, &record.EffectiveFrom, &record.Status, &record.OpenedOn, &record.ClosedOn, &record.Name, &record.Code, &record.StarterKey, &record.CurrencyCode, &record.AccountClass, &record.AccountKind, &record.ParentAccountID, &record.DefaultCommodityID, &record.QuantityScaleOverride, &allows); err != nil {
 			return nil, fmt.Errorf("scan forecast account version: %w", err)
 		}
 		record.AllowsPostings = allows == 1

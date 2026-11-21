@@ -95,6 +95,8 @@ AllocationAccount:
   - id
   - name
   - code
+  - starter_key
+  - currency_code
   - kind
   - status
   - included
@@ -107,6 +109,16 @@ AllocationAccount:
       type: string
     code:
       type: string
+    starter_key:
+      type:
+      - string
+      - 'null'
+      description: The starter account key from the account's metadata; labels an unnamed starter account.
+    currency_code:
+      type:
+      - string
+      - 'null'
+      description: The currency code from the starter account's metadata.
     kind:
       type: string
     status:

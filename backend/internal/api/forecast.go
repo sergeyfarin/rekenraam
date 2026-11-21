@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -35,6 +36,8 @@ type forecastAccountResponse struct {
 	ParentAccountID    *int64  `json:"parent_account_id"`
 	Name               *string `json:"name"`
 	Code               *string `json:"code"`
+	StarterKey         *string `json:"starter_key"`
+	CurrencyCode       *string `json:"currency_code"`
 	BuiltinLabelKey    *string `json:"builtin_label_key"`
 	AccountClass       string  `json:"account_class"`
 	AccountKind        string  `json:"account_kind"`
@@ -598,7 +601,7 @@ func toForecastValuationResponse(input app.ForecastValuation) *forecastValuation
 func toForecastAccounts(input []app.ForecastAccount) []forecastAccountResponse {
 	result := make([]forecastAccountResponse, 0, len(input))
 	for _, account := range input {
-		result = append(result, forecastAccountResponse{ID: account.ID, ParentAccountID: account.ParentAccountID, Name: optionalString(account.Name), Code: optionalString(account.Code), BuiltinLabelKey: optionalString(account.BuiltinLabelKey), AccountClass: account.AccountClass, AccountKind: account.AccountKind, Status: account.Status, AllowsPostings: account.AllowsPostings, DefaultCommodityID: account.DefaultCommodityID})
+		result = append(result, forecastAccountResponse{ID: account.ID, ParentAccountID: account.ParentAccountID, Name: optionalString(account.Name), Code: optionalString(account.Code), StarterKey: optionalString(account.StarterKey), CurrencyCode: optionalString(account.CurrencyCode), BuiltinLabelKey: optionalString(account.BuiltinLabelKey), AccountClass: account.AccountClass, AccountKind: account.AccountKind, Status: account.Status, AllowsPostings: account.AllowsPostings, DefaultCommodityID: account.DefaultCommodityID})
 	}
 	return result
 }
@@ -645,6 +648,14 @@ func optionalInt64(value int64) *int64 {
 		return nil
 	}
 	return &value
+}
+
+// optionalNullString is nil for NULL and for the empty string.
+func optionalNullString(value sql.NullString) *string {
+	if !value.Valid {
+		return nil
+	}
+	return optionalString(value.String)
 }
 
 func optionalString(value string) *string {

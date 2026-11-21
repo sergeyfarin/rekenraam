@@ -4,7 +4,7 @@
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { m } from '#lib/paraglide/messages.js';
   import Panel from '#lib/components/panel.svelte';
-  import { institutionCountryLabel } from './account-labels.ts';
+  import { accountDisplayName, institutionCountryLabel } from './account-labels.ts';
   let { institutions, accounts, onEdit, onArchive, onRestore, pending }: {
     institutions: InstitutionResponse[]; accounts: LedgerAccount[];
     onEdit: (institution: InstitutionResponse) => void;
@@ -37,7 +37,7 @@
       <ul class="mt-3 divide-y divide-border">
         {#each members as row (row.account.id)}
           <li class="py-2 text-sm">
-            <a class="inline-flex min-h-11 items-center wrap-anywhere font-semibold underline" href={`/app/ledger/accounts/${row.account.id}/register`}>{row.account.name || row.account.code}</a>
+            <a class="inline-flex min-h-11 items-center wrap-anywhere font-semibold underline" href={`/app/ledger/accounts/${row.account.id}/register`}>{accountDisplayName(row.account)}</a>
             {#each row.sources as source}<p class="wrap-anywhere text-muted">{sourceLabel[source.kind]({ name: source.name })}</p>{/each}
             {#if row.sources.length === 0}<p class="text-muted">{m.ledger_source_none()}</p>{/if}
           </li>

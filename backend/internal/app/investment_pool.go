@@ -33,7 +33,8 @@ func resolveInvestmentPool(ctx context.Context, snapshot *sql.DB, accounts []db.
 	}
 	for _, a := range accounts {
 		if !a.SystemRole.Valid && (a.AccountClass == "asset" || a.AccountClass == "liability") {
-			out.Accounts = append(out.Accounts, AllocationAccount{ID: a.ID, Name: a.Name.String, Code: a.Code.String, Kind: a.AccountKind, Status: a.Status, Included: out.Members[a.ID]})
+			out.Accounts = append(out.Accounts, AllocationAccount{ID: a.ID, Name: a.Name.String, Code: a.Code.String,
+				StarterKey: nullStringPointer(a.StarterKey), CurrencyCode: nullStringPointer(a.CurrencyCode), Kind: a.AccountKind, Status: a.Status, Included: out.Members[a.ID]})
 		}
 	}
 	return out, nil

@@ -15,14 +15,21 @@ type reconciliationImpactResponse struct {
 }
 
 type checkpointImpactResponse struct {
-	CheckpointID             int64  `json:"checkpoint_id"`
-	AccountID                int64  `json:"account_id"`
-	AccountLabel             string `json:"account_label"`
-	CommodityID              int64  `json:"commodity_id"`
-	CommodityCode            string `json:"commodity_code"`
-	StatementDate            string `json:"statement_date"`
-	StatementAccountSequence int64  `json:"statement_account_sequence"`
-	EntryDate                string `json:"entry_date"`
+	CheckpointID int64 `json:"checkpoint_id"`
+	AccountID    int64 `json:"account_id"`
+	// The account's label parts; the frontend composes the label
+	// (account-labels.ts), as it does for postings.
+	AccountName              *string `json:"account_name"`
+	AccountCode              *string `json:"account_code"`
+	AccountSystemRole        *string `json:"account_system_role"`
+	AccountBuiltinKey        *string `json:"account_builtin_key"`
+	AccountStarterKey        *string `json:"account_starter_key"`
+	AccountCurrencyCode      *string `json:"account_currency_code"`
+	CommodityID              int64   `json:"commodity_id"`
+	CommodityCode            string  `json:"commodity_code"`
+	StatementDate            string  `json:"statement_date"`
+	StatementAccountSequence int64   `json:"statement_account_sequence"`
+	EntryDate                string  `json:"entry_date"`
 }
 
 // writeReconciliationImpact writes a preview's checkpoint impact and, for an
@@ -45,7 +52,12 @@ func toReconciliationImpactResponse(impact app.ReconciliationImpact) reconciliat
 		out = append(out, checkpointImpactResponse{
 			CheckpointID:             ref.CheckpointID,
 			AccountID:                ref.AccountID,
-			AccountLabel:             ref.AccountLabel,
+			AccountName:              optionalNullString(ref.Account.Name),
+			AccountCode:              optionalNullString(ref.Account.Code),
+			AccountSystemRole:        optionalNullString(ref.Account.SystemRole),
+			AccountBuiltinKey:        optionalNullString(ref.Account.BuiltinKey),
+			AccountStarterKey:        optionalNullString(ref.Account.StarterKey),
+			AccountCurrencyCode:      optionalNullString(ref.Account.CurrencyCode),
 			CommodityID:              ref.CommodityID,
 			CommodityCode:            ref.CommodityCode,
 			StatementDate:            ref.StatementDate,

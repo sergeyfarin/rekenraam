@@ -567,7 +567,6 @@
   "forecast_recorded_only": "Alleen geboekt",
   "forecast_with_recurring": "Met periodieke boekingen",
   "forecast_unknown_account": "Onbekende rekening",
-  "forecast_account_number": "Rekening {id}",
   "forecast_event_title": "Mutaties op {date}",
   "forecast_event_count": "{shown} van {total} gebeurtenissen getoond",
   "forecast_event_close": "Details sluiten",

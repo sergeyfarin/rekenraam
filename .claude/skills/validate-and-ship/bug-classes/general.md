@@ -45,7 +45,19 @@ restated rule. A healthy known-basis book asserts through
 `requireKnownBasisSelfCheckPasses` (or `requireInvestmentSelfCheckPasses`,
 which adds the investment oracles); never hand-list the checks that must pass.
 Unknown-basis books use `requireHealthyUnresolvedBook`, and damage tests name
-the check they expect to fail.
+the check they expect to fail. Labels repeat it: #594 and #597 fixed Home's
+account labels, and a sweep then found 96 more screens building `name ||
+code` or a bare `{account.name}`, so the unnamed starter cash account read
+`cash:USD` or a blank picker option instead of "Cash USD". The sweep's review
+found two more: reconciliation checkpoints sent a server-composed
+`account_label` (`cash:USD` again), and a posting label put the built-in key
+before the name, so a renamed starter category read "Groceries". Every account
+label goes through `account-labels.ts`, name first, and a read that names
+accounts without a full account record carries the label parts, never a
+composed label (`accountStarterLabelColumnsSQL`;
+`TestAccountLabelPartsReachEveryAccountRead`). The guard
+`account-label-owner.test.ts` fails on a new hand-built label or a read of a
+server-sent `…account_label`.
 
 ## 14. Consolidation that silently widens what is accepted
 

@@ -26,12 +26,15 @@ type SaveAllocationInput struct {
 }
 
 type AllocationAccount struct {
-	ID       int64  `json:"id"`
-	Name     string `json:"name"`
-	Code     string `json:"code"`
-	Kind     string `json:"kind"`
-	Status   string `json:"status"`
-	Included bool   `json:"included"`
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+	Code string `json:"code"`
+	// StarterKey and CurrencyCode label an unnamed starter account (#597 sweep).
+	StarterKey   *string `json:"starter_key"`
+	CurrencyCode *string `json:"currency_code"`
+	Kind         string  `json:"kind"`
+	Status       string  `json:"status"`
+	Included     bool    `json:"included"`
 }
 type AllocationMoney struct {
 	Value       string `json:"value"`
