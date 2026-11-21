@@ -167,6 +167,13 @@ derives an Amsterdam midnight boundary from the real UTC day. It checks the
 current holding label, valuation date and UTC cutoff in live and saved gains
 and statements.
 
+Home's category-label and currency-descriptor lookups ran with an unpinned
+context even though the briefing pinned its own day (#606). Both lookups now
+use the day pinned by the composition attempt.
+`TestHomeEnrichmentUsesThePinnedOwnerDay` checks that Home uses the built-in
+category key and currency display symbol effective just after owner-local
+midnight in Amsterdam.
+
 ## 83. A second clock reading after the owner day is pinned
 
 A write pinned the owner day for its reads with `referenceContext`, then

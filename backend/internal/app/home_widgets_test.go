@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"rekenraam/backend/internal/db"
 	"rekenraam/backend/internal/exact"
+	"rekenraam/backend/internal/testdb"
 )
 
 // homeWidgetFixture extends the Home fixture (2026-10-15, EUR default) with
@@ -461,6 +462,35 @@ func homeBudgetActual(t *testing.T, home Home, commodityID int64) BudgetAmount {
 	require.NotNil(t, home.Budgets.Summary.Total)
 	require.Equal(t, commodityID, home.Budgets.Summary.CommodityID)
 	return home.Budgets.Summary.Total.Actual
+}
+
+func TestHomeEnrichmentUsesThePinnedOwnerDay(t *testing.T) {
+	t.Parallel()
+	f := newHomeWidgetFixture(t)
+	today := testdb.RealUTCToday()
+	instant, err := time.Parse(time.RFC3339, testdb.UTCDayInstant(today, 7, "23:01:00"))
+	require.NoError(t, err)
+	ownerDay := testdb.UTCDay(today, 8)
+	settings := NewSettingsService(db.NewSettingsRepository(f.database))
+	_, err = settings.SavePreferences(context.Background(), SaveUserPreferencesInput{UserID: f.ownerUserID, TimeZone: "Europe/Amsterdam"})
+	require.NoError(t, err)
+	f.transactionService.SetSettings(settings)
+	f.transactionService.SetNowForTest(func() time.Time { return instant })
+
+	cloneReferenceVersion(t, f.database, "commodity_versions", "commodity_id", f.eurCommodityID, ownerDay, "display_symbol", "OWNER")
+	cloneReferenceVersion(t, f.database, "account_versions", "account_id", f.groceries, ownerDay, "metadata_json", `{"category":{"builtin_key":"groceries"}}`)
+	f.spend(t, ownerDay, f.cashAccountID, f.groceries, f.eurCommodityID, 500)
+
+	home := f.read(t)
+	require.Equal(t, ownerDay, home.Briefing.AsOf)
+	require.NotNil(t, home.Briefing.ReportingCurrency)
+	require.Equal(t, "OWNER", home.Briefing.ReportingCurrency.DisplaySymbol)
+	assert.Contains(t, home.Commodities, *home.Briefing.ReportingCurrency)
+
+	require.NotNil(t, home.Spending.Summary)
+	require.Len(t, home.Spending.Summary.Categories, 1)
+	assert.Equal(t, f.groceries, home.Spending.Summary.Categories[0].CategoryID)
+	assert.Equal(t, "groceries", home.Spending.Summary.Categories[0].BuiltinKey)
 }
 
 func TestHomeWidgetsShareThePinnedOwnerDay(t *testing.T) {
