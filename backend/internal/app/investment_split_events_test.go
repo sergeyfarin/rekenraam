@@ -178,3 +178,27 @@ func TestMassiveMissingKeyFailsDurableWork(t *testing.T) {
 	assert.Equal(t, splitEventWorkKind, failed[0].Kind)
 	assert.Contains(t, failed[0].LastError, "missing operator secret")
 }
+
+func TestMassiveSplitFetchKeepsTheMarketDateAcrossMidnight(t *testing.T) {
+	t.Parallel()
+	f := newMassiveEventFixture(t, "synthetic-key")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/stocks/v1/splits", r.URL.Path)
+		assert.Equal(t, "2025-10-16", r.URL.Query().Get("execution_date.gte"))
+		assert.Equal(t, "2026-10-16", r.URL.Query().Get("execution_date.lte"))
+		fmt.Fprint(w, `{"status":"OK","results":[]}`)
+	}))
+	t.Cleanup(server.Close)
+	f.pricing.providerRegistry = marketdata.NewRegistry(marketdata.NewMassiveProvider(server.Client(), server.URL, "synthetic-key"))
+	beforeMidnight := time.Date(2026, 10, 17, 3, 59, 59, 0, time.UTC)
+	now := beforeMidnight
+	f.pricing.SetNowForTest(func() time.Time {
+		current := now
+		now = beforeMidnight.Add(2 * time.Second)
+		return current
+	})
+	require.NoError(t, f.pricing.fetchSplitEvents(context.Background(), db.BackgroundWorkItemRecord{
+		PayloadVersion: 1,
+		PayloadJSON:    fmt.Sprintf(`{"instrument_id":%d}`, f.instrument.ID),
+	}))
+}

@@ -76,7 +76,8 @@ func (s *PricingService) fetchSplitEvents(ctx context.Context, item db.Backgroun
 	if item.PayloadVersion != 1 || json.Unmarshal([]byte(item.PayloadJSON), &payload) != nil || payload.InstrumentID <= 0 {
 		return &marketdata.QuoteError{Status: 400, Terminal: true}
 	}
-	ctx, err := s.settings.referenceContext(ctx, s.now())
+	now := s.now()
+	ctx, err := s.settings.referenceContext(ctx, now)
 	if err != nil {
 		return err
 	}
@@ -93,10 +94,15 @@ func (s *PricingService) fetchSplitEvents(ctx context.Context, item db.Backgroun
 	if err != nil {
 		return err
 	}
-	today := s.now().In(exchangeZone)
-	through := min(today.Format(time.DateOnly), db.ReferenceDate(ctx))
+	marketDate := now.In(exchangeZone).Format(time.DateOnly)
+	through := min(marketDate, db.ReferenceDate(ctx))
+	end, err := time.Parse(time.DateOnly, through)
+	if err != nil {
+		return err
+	}
 	target := targets[0]
-	observations, err := provider.FetchSplits(ctx, target.Symbol, target.MIC, today.AddDate(0, 0, -splitEventLookbackDays).Format(time.DateOnly), through)
+	start := end.AddDate(0, 0, -splitEventLookbackDays).Format(time.DateOnly)
+	observations, err := provider.FetchSplits(ctx, target.Symbol, target.MIC, start, through)
 	if err != nil {
 		return err
 	}
