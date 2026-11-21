@@ -232,8 +232,12 @@ func (s *HomeService) read(summary string) {
 	}
 }
 
-// compose reads the briefing and every summary once.
+// compose reads the briefing and every summary on the same owner day.
 func (s *HomeService) compose(ctx context.Context, ownerUserID int64) (Home, error) {
+	ctx, err := s.transactions.settings.referenceContext(ctx, s.transactions.now())
+	if err != nil {
+		return Home{}, err
+	}
 	briefing, err := s.transactions.HomeBriefing(ctx, ownerUserID)
 	if err != nil {
 		return Home{}, err

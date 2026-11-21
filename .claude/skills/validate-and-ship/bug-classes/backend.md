@@ -167,6 +167,13 @@ derives an Amsterdam midnight boundary from the real UTC day. It checks the
 current holding label, valuation date and UTC cutoff in live and saved gains
 and statements.
 
+Home's category-label and currency-descriptor lookups ran with an unpinned
+context even though the briefing pinned its own day (#606). Both lookups now
+use the day pinned by the composition attempt.
+`TestHomeEnrichmentUsesThePinnedOwnerDay` checks that Home uses the built-in
+category key and currency display symbol effective just after owner-local
+midnight in Amsterdam.
+
 ## 83. A second clock reading after the owner day is pinned
 
 A write pinned the owner day for its reads with `referenceContext`, then
@@ -224,3 +231,7 @@ instances. Guard:
 calls `OwnerTodayAt`, and requires every other `OwnerTodayAt` caller to be
 listed with why it has no pinned day to share. It scans one function at a
 time, so a helper reached from a pinned caller still needs review.
+A composed read pins before calling any child that could resolve the day
+independently. Home pins once per composition attempt, so the briefing and
+reconciliation agree across midnight and a retry after a book change can
+take the new day (#606, `TestHomeWidgetsShareThePinnedOwnerDay`).
