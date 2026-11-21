@@ -46,7 +46,7 @@ func (s *InvestmentService) gainsReadStage(stage string) {
 // image. Replay writes roll back there, and no report-run or audit is saved.
 func (s *InvestmentService) ReadGains(ctx context.Context, input GainsReadInput) (GainsRead, error) {
 	var result GainsRead
-	err := s.withGainsReader(ctx, func(reader *InvestmentService, currencies *CurrencyService) error {
+	err := s.withGainsReader(ctx, func(ctx context.Context, reader *InvestmentService, currencies *CurrencyService) error {
 		var err error
 		result.Currencies, err = currencies.ListCurrencies(ctx)
 		if err != nil {
@@ -92,7 +92,7 @@ func (s *InvestmentService) ReadGains(ctx context.Context, input GainsReadInput)
 // optional reporting conversion together, under today's effective history.
 func (s *InvestmentService) ReadGainsStatement(ctx context.Context, from, to string, fx *GainsFXInput) (GainsStatementRead, error) {
 	var result GainsStatementRead
-	err := s.withGainsReader(ctx, func(reader *InvestmentService, currencies *CurrencyService) error {
+	err := s.withGainsReader(ctx, func(ctx context.Context, reader *InvestmentService, currencies *CurrencyService) error {
 		var err error
 		result.Statement, err = reader.GainsStatement(ctx, from, to)
 		if err != nil {
@@ -118,13 +118,17 @@ func (s *InvestmentService) ReadGainsStatement(ctx context.Context, from, to str
 	return result, nil
 }
 
-func (s *InvestmentService) withGainsReader(ctx context.Context, read func(*InvestmentService, *CurrencyService) error) error {
+func (s *InvestmentService) withGainsReader(ctx context.Context, read func(context.Context, *InvestmentService, *CurrencyService) error) error {
 	snapshot, cleanup, err := s.repository.LiveGainsSnapshot(ctx)
 	if err != nil {
 		return fmt.Errorf("capture live gains input: %w", err)
 	}
 	defer cleanup()
 	captured := s.now().UTC()
+	ctx, err = NewSettingsService(db.NewSettingsRepository(snapshot)).referenceContext(ctx, captured)
+	if err != nil {
+		return fmt.Errorf("resolve live gains reference day: %w", err)
+	}
 	// Every dependency, including reporting-currency metadata and rates, must
 	// belong to the image. Do not shallow-copy services with live repositories.
 	transactions := &TransactionService{pricingRepository: db.NewPricingRepository(snapshot)}
@@ -132,5 +136,5 @@ func (s *InvestmentService) withGainsReader(ctx context.Context, read func(*Inve
 	reader.now = func() time.Time { return captured }
 	reader.consistentGainsRead = true
 	reader.gainsReadStageForTest = s.gainsReadStageForTest
-	return read(reader, NewCurrencyService(db.NewCommodityRepository(snapshot), nil))
+	return read(ctx, reader, NewCurrencyService(db.NewCommodityRepository(snapshot), nil))
 }

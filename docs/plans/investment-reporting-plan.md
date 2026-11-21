@@ -212,6 +212,12 @@ correction or withdrawal interleaves. [#237](https://github.com/sergeyfarin/reke
 owns that repair. Saved operational runs already use a consistent isolated
 snapshot and retain their reproducibility guarantee.
 
+Live gains, live statements and newly saved runs resolve the owner-local
+reference day from the snapshot's saved time zone and capture instant when
+the caller has no pin (#617). Current reference labels use that day even
+when a report requests an earlier valuation. The same UTC capture instant
+bounds observation knowledge.
+
 ### Period statement (#231)
 
 A period `from..to` reports, per currency and under the same profile:

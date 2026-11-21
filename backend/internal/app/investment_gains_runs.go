@@ -65,32 +65,36 @@ func (s *InvestmentService) CreateGainsRun(ctx context.Context, input GainsRunIn
 	}
 	defer cleanup()
 	captured := s.now().UTC()
+	referenceCtx, err := NewSettingsService(db.NewSettingsRepository(snapshot)).referenceContext(ctx, captured)
+	if err != nil {
+		return db.GainsRunRecord{}, fmt.Errorf("resolve saved gains reference day: %w", err)
+	}
 	reader := NewInvestmentService(db.NewInvestmentRepository(snapshot), nil, nil, nil)
 	reader.consistentGainsRead = true
 	reader.now = func() time.Time { return captured }
 	projection := GainsRunProjection{}
-	projection.Currencies, err = NewCurrencyService(db.NewCommodityRepository(snapshot), nil).ListCurrencies(ctx)
+	projection.Currencies, err = NewCurrencyService(db.NewCommodityRepository(snapshot), nil).ListCurrencies(referenceCtx)
 	if err != nil {
 		return db.GainsRunRecord{}, err
 	}
 	if request.ReportType == "statement" {
-		statement, err := reader.GainsStatement(ctx, request.From, request.To)
+		statement, err := reader.GainsStatement(referenceCtx, request.From, request.To)
 		if err != nil {
 			return db.GainsRunRecord{}, err
 		}
 		projection.Statement, projection.Profile = &statement, statement.Profile
 	} else {
-		projection.Profile, projection.Unrealized, err = reader.UnrealizedGainsProjection(ctx, request.ValuationAsOf)
+		projection.Profile, projection.Unrealized, err = reader.UnrealizedGainsProjection(referenceCtx, request.ValuationAsOf)
 		if err != nil {
 			return db.GainsRunRecord{}, err
 		}
 		request.ValuationAsOf = projection.Profile.ValuationAsOf
 		period := GainsReportParams{From: request.From, To: request.To}
-		projection.Realized, err = reader.ListRealizedGains(ctx, period)
+		projection.Realized, err = reader.ListRealizedGains(referenceCtx, period)
 		if err != nil {
 			return db.GainsRunRecord{}, err
 		}
-		projection.CapitalReturns, err = reader.ListCapitalReturns(ctx, period)
+		projection.CapitalReturns, err = reader.ListCapitalReturns(referenceCtx, period)
 		if err != nil {
 			return db.GainsRunRecord{}, err
 		}
