@@ -251,6 +251,7 @@
   "reconcile_start_date_label": "Einddatum van het afschrift",
   "reconcile_start_balance_label": "Eindsaldo van het afschrift",
   "reconcile_start_balance_help": "Het eindsaldo zoals het op het afschrift staat, met een minteken als het negatief is.",
+  "reconcile_start_liability_balance_help": "Voer een positief bedrag in als je geld verschuldigd bent, of een negatief bedrag als je een tegoed hebt.",
   "reconcile_start_submit": "Beginnen met afstemmen",
   "reconcile_start_submitting": "Starten…",
   "reconcile_start_invalid_balance": "Vul een geldig bedrag in, bijvoorbeeld 1234,56.",

@@ -140,7 +140,7 @@
 
   const canSubmit = $derived(
     !!csrfToken &&
-      accountID !== undefined &&
+      selectedAccount !== undefined &&
       commodityID !== undefined &&
       statementDate.trim() !== '' &&
       balanceStr.trim() !== '' &&
@@ -152,9 +152,9 @@
     invalidBalance = false;
     formError = undefined;
 
-    if (!csrfToken || accountID === undefined || commodityID === undefined) return;
+    if (!csrfToken || !selectedAccount || commodityID === undefined) return;
 
-    const parsed = parseStatementBalance(balanceStr);
+    const parsed = parseStatementBalance(balanceStr, selectedAccount.account_class);
     if (!parsed) {
       invalidBalance = true;
       return;
@@ -169,7 +169,7 @@
 
     pending = true;
     try {
-      const session = await startReconciliation(accountID, req, csrfToken);
+      const session = await startReconciliation(selectedAccount.id, req, csrfToken);
       onStarted(session);
     } catch (error) {
       formError = error;
@@ -264,10 +264,15 @@
           inputmode="decimal"
           placeholder={formatEditableAmount('0', 2)}
           class={inputClass}
+          aria-describedby="reconcile-balance-help"
           bind:value={balanceStr}
           disabled={pending}
         />
-        <p class="mt-1.5 text-xs text-muted">{m.reconcile_start_balance_help()}</p>
+        <p id="reconcile-balance-help" class="mt-1.5 text-xs text-muted">
+          {selectedAccount?.account_class === 'liability'
+            ? m.reconcile_start_liability_balance_help()
+            : m.reconcile_start_balance_help()}
+        </p>
         {#if invalidBalance}
           <p class="mt-1.5 text-xs text-danger">{m.reconcile_start_invalid_balance()}</p>
         {/if}

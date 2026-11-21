@@ -251,6 +251,7 @@
   "reconcile_start_date_label": "Fecha de cierre del extracto",
   "reconcile_start_balance_label": "Saldo final del extracto",
   "reconcile_start_balance_help": "El saldo de cierre que muestra el extracto, con signo menos si es negativo.",
+  "reconcile_start_liability_balance_help": "Introduce un importe positivo si debes dinero o uno negativo si tienes saldo a favor.",
   "reconcile_start_submit": "Empezar a conciliar",
   "reconcile_start_submitting": "Iniciando…",
   "reconcile_start_invalid_balance": "Introduce un importe válido, por ejemplo 1234,56.",

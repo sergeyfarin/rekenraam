@@ -485,17 +485,8 @@ func reconciliationTotals(session db.ReconciliationSessionRecord, selected []db.
 	if err != nil {
 		return BalanceQuantity{}, BalanceQuantity{}, LedgerOverflowError{CommodityID: session.CommodityID}
 	}
-	return BalanceQuantity{
-		CommodityID:         session.CommodityID,
-		QuantityValue:       selectedValue,
-		QuantityScale:       selectedAmount.Scale(),
-		NormalQuantityValue: selectedValue,
-	}, BalanceQuantity{
-		CommodityID:         session.CommodityID,
-		QuantityValue:       differenceValue,
-		QuantityScale:       difference.Scale(),
-		NormalQuantityValue: differenceValue,
-	}, nil
+	return reconciliationQuantity(session.CommodityID, selectedValue, selectedAmount.Scale(), session.AccountClass),
+		reconciliationQuantity(session.CommodityID, differenceValue, difference.Scale(), session.AccountClass), nil
 }
 
 func cleanPositiveInt64IDs(values []int64, field string) ([]int64, error) {
@@ -525,11 +516,11 @@ func toReconciliationSession(record db.ReconciliationSessionRecord) Reconciliati
 		Status:               record.Status,
 		SourceKind:           record.SourceKind,
 		StatementDate:        record.StatementDate,
-		StatementBalance:     reconciliationQuantity(record.CommodityID, record.StatementBalanceValue, record.StatementBalanceScale),
+		StatementBalance:     reconciliationQuantity(record.CommodityID, record.StatementBalanceValue, record.StatementBalanceScale, record.AccountClass),
 		StartingCheckpointID: nullableInt64FromSQL(record.StartingCheckpointID),
-		StartingBalance:      reconciliationQuantity(record.CommodityID, record.StartingBalanceValue, record.StartingBalanceScale),
-		SelectedBalance:      reconciliationQuantity(record.CommodityID, record.SelectedBalanceValue, record.SelectedBalanceScale),
-		Difference:           reconciliationQuantity(record.CommodityID, record.DifferenceValue, record.DifferenceScale),
+		StartingBalance:      reconciliationQuantity(record.CommodityID, record.StartingBalanceValue, record.StartingBalanceScale, record.AccountClass),
+		SelectedBalance:      reconciliationQuantity(record.CommodityID, record.SelectedBalanceValue, record.SelectedBalanceScale, record.AccountClass),
+		Difference:           reconciliationQuantity(record.CommodityID, record.DifferenceValue, record.DifferenceScale, record.AccountClass),
 		MetadataJSON:         record.MetadataJSON,
 		CreatedAt:            record.CreatedAt,
 		UpdatedAt:            record.UpdatedAt,
@@ -551,7 +542,7 @@ func toReconciliationCheckpoint(record db.ReconciliationCheckpointRecord) Reconc
 		PreviousCheckpointID: nullableInt64FromSQL(record.PreviousCheckpointID),
 		Status:               record.Status,
 		StatementDate:        record.StatementDate,
-		StatementBalance:     reconciliationQuantity(record.CommodityID, record.StatementBalanceValue, record.StatementBalanceScale),
+		StatementBalance:     reconciliationQuantity(record.CommodityID, record.StatementBalanceValue, record.StatementBalanceScale, record.AccountClass),
 		CreatedAt:            record.CreatedAt,
 		InvalidatedAt:        nullableString(record.InvalidatedAt),
 		InvalidationReason:   record.InvalidationReason,
@@ -582,11 +573,11 @@ func toReconciliationPostings(records []db.ReconciliationPostingRecord) []Reconc
 	return postings
 }
 
-func reconciliationQuantity(commodityID int64, value exact.Coefficient, scale int) BalanceQuantity {
+func reconciliationQuantity(commodityID int64, value exact.Coefficient, scale int, accountClass string) BalanceQuantity {
 	return BalanceQuantity{
 		CommodityID:         commodityID,
 		QuantityValue:       value,
 		QuantityScale:       scale,
-		NormalQuantityValue: value,
+		NormalQuantityValue: normalBalanceValue(value, accountClass),
 	}
 }

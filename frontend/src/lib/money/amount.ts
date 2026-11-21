@@ -139,6 +139,13 @@ export function negateCoefficient(value: string): string {
 	return isNeg ? abs : `-${abs}`;
 }
 
+/** Convert between debit-positive and the account's normal sign. */
+export function accountNormalCoefficient(value: string, accountClass: string): string {
+	return accountClass === 'liability' || accountClass === 'income' || accountClass === 'equity'
+		? negateCoefficient(value)
+		: value;
+}
+
 /** Sign of an exact integer coefficient without converting through Number. */
 export function coefficientSign(value: string): -1 | 0 | 1 {
 	const coefficient = BigInt(value);
@@ -163,15 +170,8 @@ export function inflowPositiveAmount(posting: {
 	quantity_scale: number;
 	account_class: string;
 }): string {
-	const raw = formatEditableAmount(posting.quantity_value, posting.quantity_scale);
-	if (
-		posting.account_class === 'liability' ||
-		posting.account_class === 'income' ||
-		posting.account_class === 'equity'
-	) {
-		return negateCoefficient(raw);
-	}
-	return raw;
+	const value = accountNormalCoefficient(posting.quantity_value, posting.account_class);
+	return formatEditableAmount(value, posting.quantity_scale);
 }
 
 /** Restate a coefficient at a larger scale. `to` must be >= `from`. */

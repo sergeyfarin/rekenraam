@@ -60,7 +60,7 @@
 
   function balanceOf(checkpoint: ReconciliationCheckpointResponse): string {
     return formatQuantity(
-      checkpoint.statement_balance.quantity_value,
+      checkpoint.statement_balance.normal_quantity_value,
       checkpoint.statement_balance.quantity_scale,
       locale
     );

@@ -7,6 +7,7 @@
   import StatePanel from '#lib/components/state-panel.svelte';
   import StatusBadge from '#lib/components/status-badge.svelte';
   import APIFormError from '#lib/components/api-form-error.svelte';
+  import { accountNormalCoefficient } from '#lib/money/amount.ts';
   import { formatQuantity } from '#lib/money/format.ts';
   import { invalidateReconciliationReads } from '#lib/reconcile/invalidate.ts';
   import {
@@ -21,6 +22,7 @@
   let {
     reconciliationID,
     accountLabel,
+    accountClass,
     csrfToken,
     initialSession,
     onFinished,
@@ -28,6 +30,7 @@
   }: {
     reconciliationID: number;
     accountLabel: string;
+    accountClass: string;
     csrfToken: string | undefined;
     initialSession: ReconciliationSessionResponse;
     onFinished: (session: ReconciliationSessionResponse) => void;
@@ -185,7 +188,7 @@
                       {/if}
                     </td>
                     <td class="px-3 py-3 text-right tabular-nums text-foreground">
-                      {formatQuantity(posting.quantity_value, posting.quantity_scale, locale)}
+                      {formatQuantity(accountNormalCoefficient(posting.quantity_value, accountClass), posting.quantity_scale, locale)}
                     </td>
                   </tr>
                 {/each}
@@ -204,19 +207,19 @@
             <div class="flex items-center justify-between">
               <span class="text-sm text-muted">{m.reconcile_summary_statement_balance()}</span>
               <span class="tabular-nums text-foreground">
-                {formatQuantity(session.statement_balance.quantity_value, session.statement_balance.quantity_scale, locale)}
+                {formatQuantity(session.statement_balance.normal_quantity_value, session.statement_balance.quantity_scale, locale)}
               </span>
             </div>
             <div class="flex items-center justify-between">
               <span class="text-sm text-muted">{m.reconcile_summary_starting_balance()}</span>
               <span class="tabular-nums text-foreground">
-                {formatQuantity(session.starting_balance.quantity_value, session.starting_balance.quantity_scale, locale)}
+                {formatQuantity(session.starting_balance.normal_quantity_value, session.starting_balance.quantity_scale, locale)}
               </span>
             </div>
             <div class="flex items-center justify-between">
               <span class="text-sm text-muted">{m.reconcile_summary_cleared_balance()}</span>
               <span class="tabular-nums text-foreground">
-                {formatQuantity(session.selected_balance.quantity_value, session.selected_balance.quantity_scale, locale)}
+                {formatQuantity(session.selected_balance.normal_quantity_value, session.selected_balance.quantity_scale, locale)}
               </span>
             </div>
 
@@ -224,7 +227,7 @@
               <div class="flex items-center justify-between">
                 <span class="text-sm font-semibold text-foreground">{m.reconcile_summary_difference()}</span>
                 <span class="tabular-nums font-semibold text-foreground">
-                  {formatQuantity(session.difference.quantity_value, session.difference.quantity_scale, locale)}
+                  {formatQuantity(session.difference.normal_quantity_value, session.difference.quantity_scale, locale)}
                 </span>
               </div>
               <div class="mt-2">

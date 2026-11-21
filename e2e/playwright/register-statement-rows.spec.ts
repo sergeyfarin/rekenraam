@@ -1,7 +1,7 @@
 import { expect, test } from './support/fixtures';
 import { apiJSON } from './support/api';
 import { expectNoAccessibilityViolations } from './support/a11y';
-import { createCashAccount, ensureCurrency, readyForLedger } from './support/ledger';
+import { createCashAccount, createLiabilityAccount, ensureCurrency, readyForLedger } from './support/ledger';
 import { daysFromTodayISO } from './support/dates';
 
 /**
@@ -14,6 +14,50 @@ import { daysFromTodayISO } from './support/dates';
 
 type Posting = { id: number; account_id: number };
 type Transaction = { journal_entries: Array<{ postings: Posting[] }> };
+
+test('a card statement reconciles with the printed amount owed', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const suffix = Date.now();
+  const description = `Cash advance ${suffix}`;
+  const date = daysFromTodayISO(0);
+  const card = await createLiabilityAccount(page, csrfToken, `Statement card ${suffix}`, currencyID);
+  const cash = await createCashAccount(page, csrfToken, `Advance destination ${suffix}`, currencyID);
+  await apiJSON(page, 'POST', '/api/v1/transactions', csrfToken, {
+    transaction_date: date, description,
+    journal_entries: [{ postings: [
+      { account_id: card.id, commodity_id: currencyID, quantity_value: '-500', quantity_scale: 0 },
+      { account_id: cash.id, commodity_id: currencyID, quantity_value: '500', quantity_scale: 0 }
+    ] }]
+  });
+
+  await page.goto(`/app/ledger/reconcile?account=${card.id}`);
+  await expect(page.getByLabel('Account', { exact: true })).toHaveValue(String(card.id));
+  await page.getByLabel('Statement closing date').fill(date);
+  await page.getByLabel('Statement ending balance').fill('500');
+  await page.getByRole('button', { name: 'Start reconciling' }).click();
+
+  const summaryValue = (label: string) => page.getByText(label, { exact: true }).locator('..').locator('span').last();
+  await expect(summaryValue('Statement balance')).toHaveText('500');
+  await expect(summaryValue('Difference')).toHaveText('500');
+  const charge = page.getByRole('row').filter({ hasText: description });
+  await expect(charge.getByRole('cell', { name: '500', exact: true })).toBeVisible();
+  await charge.getByRole('checkbox').check();
+  await expect(summaryValue('Cleared balance')).toHaveText('500');
+  await expect(summaryValue('Difference')).toHaveText('0');
+  await expect(page.getByText('Balanced', { exact: true })).toBeVisible();
+
+  await page.getByLabel('Reason', { exact: true }).fill('card statement verified');
+  await page.getByRole('button', { name: 'Finish reconciliation' }).click();
+  await expect(page.getByText('Reconciliation complete')).toBeVisible();
+  const checkpoint = page.getByRole('row').filter({ hasText: date });
+  await expect(checkpoint.getByRole('cell', { name: '500', exact: true })).toBeVisible();
+
+  await page.goto(`/app/ledger/accounts/${card.id}/register`);
+  const statement = page.locator('[data-register-statement]');
+  await expect(statement.getByText(/^Balance [^\d−-]*500$/)).toBeVisible();
+  await statement.getByRole('link', { name: 'Open in Reconcile' }).click();
+  await expect(checkpoint.getByRole('cell', { name: '500', exact: true })).toBeVisible();
+});
 
 test('a dormant account shows each reconciled statement in its register', async ({ page }) => {
   const { csrfToken, currencyID } = await readyForLedger(page);

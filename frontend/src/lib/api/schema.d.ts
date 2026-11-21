@@ -32601,6 +32601,7 @@ export interface components {
             source_kind?: components["schemas"]["ReconciliationSourceKind"];
             /** Format: date */
             statement_date: string;
+            /** @description Debit-positive statement balance coefficient. For a liability, an amount owed is negative. */
             statement_balance_value: string;
             statement_balance_scale: number;
             metadata?: {

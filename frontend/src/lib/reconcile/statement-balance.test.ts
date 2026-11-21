@@ -2,6 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { parseStatementBalance } from './statement-balance';
 
 describe('parseStatementBalance', () => {
+  it.each([
+    ['500', { value: '-500', scale: 0 }],
+    ['-42.10', { value: '4210', scale: 2 }],
+    ['-0.00', { value: '0', scale: 2 }],
+    ['90071992547409.93', { value: '-9007199254740993', scale: 2 }],
+    ['abc', null]
+  ])('converts a liability statement balance of %s to debit-positive', (input, expected) => {
+    expect(parseStatementBalance(input, 'liability')).toEqual(expected);
+  });
+
   it('parses a plain integer (scale 0)', () => {
     expect(parseStatementBalance('1234')).toEqual({ value: '1234', scale: 0 });
   });
