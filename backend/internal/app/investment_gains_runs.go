@@ -65,6 +65,10 @@ func (s *InvestmentService) CreateGainsRun(ctx context.Context, input GainsRunIn
 	}
 	defer cleanup()
 	captured := s.now().UTC()
+	ctx, err = NewSettingsService(db.NewSettingsRepository(snapshot)).referenceContext(ctx, captured)
+	if err != nil {
+		return db.GainsRunRecord{}, fmt.Errorf("resolve saved gains reference day: %w", err)
+	}
 	reader := NewInvestmentService(db.NewInvestmentRepository(snapshot), nil, nil, nil)
 	reader.consistentGainsRead = true
 	reader.now = func() time.Time { return captured }

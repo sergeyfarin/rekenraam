@@ -160,6 +160,13 @@ an unpinned read, so such a case catches nothing without a later version. Named 
 `TestCurrentReferenceSiblingsAndComposedReadsUseOwnerDay`,
 `owner-current-reference.spec.ts`.
 
+Gains snapshots also need the pin before their first reference read (#617).
+Resolve it from the snapshot's saved zone at the captured instant and give
+every reader the resulting context. `TestGainsSnapshotsUseTheOwnerDayForCapitalReturnLabels`
+derives an Amsterdam midnight boundary from the real UTC day. It checks the
+current holding label, valuation date and UTC cutoff in live and saved gains
+and statements.
+
 ## 83. A second clock reading after the owner day is pinned
 
 A write pinned the owner day for its reads with `referenceContext`, then

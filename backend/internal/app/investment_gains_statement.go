@@ -93,11 +93,6 @@ const (
 // closing unrealized gain at to (R18 slice 2, #231). Both valuations replay
 // positions under operational_v1; nothing is written and nothing converted.
 func (s *InvestmentService) GainsStatement(ctx context.Context, from, to string) (GainsStatement, error) {
-	ctx, referenceErr := s.settings.referenceContext(ctx, s.now())
-	if referenceErr != nil {
-		return GainsStatement{}, referenceErr
-	}
-
 	if !s.consistentGainsRead {
 		result, err := s.ReadGainsStatement(ctx, from, to, nil)
 		return result.Statement, err

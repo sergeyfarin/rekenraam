@@ -209,8 +209,14 @@ The [completion audit](../reviews/r18-completion-audit-2026-10-15.md) found a
 separate live-read consistency defect: shared observation cutoffs do not keep
 the separate operational, comparison and FX reads on one input state when a
 correction or withdrawal interleaves. [#237](https://github.com/sergeyfarin/rekenraam/issues/237)
-owns that repair. Saved operational runs already use a consistent isolated
-snapshot and retain their reproducibility guarantee.
+fixed this by composing each live gains or statement response from one
+isolated snapshot, using the same SQLite backup path as saved runs.
+
+Live gains, live statements and newly saved runs resolve the owner-local
+reference day from the snapshot's saved time zone and capture instant when
+the caller has no pin (#617). Current reference labels use that day even
+when a report requests an earlier valuation. The same UTC capture instant
+bounds observation knowledge.
 
 ### Period statement (#231)
 
