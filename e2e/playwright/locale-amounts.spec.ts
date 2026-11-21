@@ -11,9 +11,7 @@ for (const locale of allLocales) {
     await page.setViewportSize({ width: 390, height: 844 });
     const { csrfToken, currencyID } = await readyForLedger(page);
     const account = await createCashAccount(page, csrfToken, `Locale ${locale} ${Date.now()}`, currencyID);
-    // A partial locale (#493) may lack a message; the app shows English then, so the spec reads it the same way.
-    const catalog = (name: string) => JSON.parse(readFileSync(new URL(`../../frontend/messages/settings/${name}.json`, import.meta.url), 'utf8'));
-    const messages = { ...catalog('en'), ...catalog(locale) };
+    const messages = JSON.parse(readFileSync(new URL(`../../frontend/messages/settings/${locale}.json`, import.meta.url), 'utf8'));
     const description = `Exact locale ${locale} ${Date.now()}`;
 
     await page.goto('/app/settings/preferences');

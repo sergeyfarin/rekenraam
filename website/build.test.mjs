@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { build, readCatalogs, siteConfig } from './build.mjs';
 
-const locales = ['en', 'es', 'fr', 'nl', 'de', 'ru'];
+const locales = ['en', 'nl', 'ru'];
 const fontHosts = ['fonts.googleapis.com', 'fonts.gstatic.com'];
 
 test('screenshot manifest hashes describe the shipped images', async () => {
@@ -33,7 +33,7 @@ function linkedHosts(text, origin = 'https://rekenraam.com') {
     .map(match => new URL(match[0], origin).hostname));
 }
 
-test('all app locales have complete website catalogs and fully rendered pages', async t => {
+test('the website publishes and advertises only shipped app locales', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'rekenraam-site-test-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const result = await build({ outputDirectory: join(directory, 'site') });
@@ -48,7 +48,10 @@ test('all app locales have complete website catalogs and fully rendered pages', 
       assert.ok(html.includes(escaped), `${locale}: missing prerendered ${key}`);
     }
     assert.equal((html.match(/hreflang="x-default"/g) ?? []).length, 1);
-    assert.equal((html.match(/rel="alternate" hreflang=/g) ?? []).length, locales.length + 1);
+    assert.deepEqual(
+      [...html.matchAll(/rel="alternate" hreflang="([^"]+)"/g)].map(match => match[1]),
+      [...locales, 'x-default']
+    );
     assert.equal((html.match(/<h1 /g) ?? []).length, 1);
     // Resolve every internal page, stylesheet, script and screenshot to its published file.
     for (const match of html.matchAll(/(?:href|src)="(\/(?!\/)[^"#]*)(?:#[^"]*)?"/g)) {
@@ -64,15 +67,18 @@ test('all app locales have complete website catalogs and fully rendered pages', 
   // Compare parsed <loc> entries exactly rather than substring-matching the XML.
   const sitemap = await readFile(join(result.outputDirectory, 'sitemap.xml'), 'utf8');
   const sitemapLocs = [...sitemap.matchAll(/<loc>([^<]*)<\/loc>/g)].map(match => new URL(match[1]));
-  assert.ok(sitemapLocs.some(url => url.origin === 'https://rekenraam.com' && url.pathname === '/ru/'));
+  assert.deepEqual(sitemapLocs.map(url => url.href), ['https://rekenraam.com/', 'https://rekenraam.com/nl/', 'https://rekenraam.com/ru/']);
+  for (const locale of ['es', 'fr', 'de']) {
+    await assert.rejects(access(join(result.outputDirectory, locale, 'index.html')), { code: 'ENOENT' });
+  }
 });
 
 test('a project Pages base path keeps language links and assets under that path', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'rekenraam-site-base-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   await build({ outputDirectory: directory, basePath: '/rekenraam', origin: 'https://sergeyfarin.github.io' });
-  const html = await readFile(join(directory, 'de/index.html'), 'utf8');
-  assert.ok(html.includes('href="https://sergeyfarin.github.io/rekenraam/de/"'));
+  const html = await readFile(join(directory, 'nl/index.html'), 'utf8');
+  assert.ok(html.includes('href="https://sergeyfarin.github.io/rekenraam/nl/"'));
   for (const match of html.matchAll(/(?:href|src)="(\/[^"]*)"/g)) {
     assert.ok(match[1].startsWith('/rekenraam/'), `Unprefixed link: ${match[1]}`);
   }
@@ -99,7 +105,7 @@ test('catalog drift, empty translations and placeholders fail before replacing a
   }
   await writeFile(file, JSON.stringify(catalog));
   await rm(file);
-  await assert.rejects(readCatalogs(catalogDirectory), /match the app locales/);
+  await assert.rejects(readCatalogs(catalogDirectory), /match the maintained and partial app catalogs/);
 });
 
 test('translated text is escaped rather than interpreted as markup', async t => {

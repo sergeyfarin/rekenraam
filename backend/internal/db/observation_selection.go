@@ -13,7 +13,14 @@ type ObservationBoundary struct {
 	RecordedAt string
 }
 
+// CurrentObservationBoundary uses the operation's owner day when it has one
+// and takes the recording cutoff from now in either case.
 func (r *PricingRepository) CurrentObservationBoundary(ctx context.Context, bookID int64, now time.Time) (ObservationBoundary, error) {
+	boundary := ObservationBoundary{AsOf: pinnedOwnerToday(ctx), RecordedAt: now.UTC().Format(time.RFC3339Nano)}
+	if boundary.AsOf != "" {
+		return boundary, nil
+	}
+
 	zone, err := r.BookOwnerTimeZone(ctx, bookID)
 	if err != nil {
 		return ObservationBoundary{}, err
@@ -22,7 +29,8 @@ func (r *PricingRepository) CurrentObservationBoundary(ctx context.Context, book
 	if err != nil {
 		return ObservationBoundary{}, fmt.Errorf("load valuation owner zone: %w", err)
 	}
-	return ObservationBoundary{AsOf: now.In(location).Format(time.DateOnly), RecordedAt: now.UTC().Format(time.RFC3339Nano)}, nil
+	boundary.AsOf = now.In(location).Format(time.DateOnly)
+	return boundary, nil
 }
 
 func (r *PricingRepository) observationBoundary(ctx context.Context, bookID int64, boundaries []ObservationBoundary) (ObservationBoundary, error) {

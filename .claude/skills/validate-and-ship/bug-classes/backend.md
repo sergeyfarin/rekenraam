@@ -190,10 +190,9 @@ whose ledger overview caller now pins first), or `referenceContext` then
 `TestUndatedFXSourceSelectionUsesTheDayTheRunPinned`,
 `TestUndatedFXCutoffUsesTheDayTheRunPinned`,
 `TestFXRefreshDemandEligibilityUsesTheDayTheRunPinned` and
-`TestFXCoverageUsesTheZoneTheWorkerReadAtEntry`. Passing the pinned
-instant is not enough: anything that resolves a day from an instant reads the
-owner's zone again (`OwnerTodayAt`, `CurrentObservationBoundary`, a direct
-`BookOwnerTimeZone` read), so a zone change mid-run moves the day. The FX
+`TestFXCoverageUsesTheZoneTheWorkerReadAtEntry`. Resolving the day again
+from a captured instant can reread the owner's zone (`OwnerTodayAt` or a
+direct `BookOwnerTimeZone` read), so a zone change mid-run moves the day. The FX
 refresh did this for source selection, demand eligibility and its
 future-date cutoff, and the FX coverage worker for due dates and wakeups
 (#605 review). A caller that also needs the zone, for example to schedule a
@@ -203,9 +202,17 @@ inputs the other accepts: a selection test whose fallback provider answers
 with a future date passes on the cutoff alone. A zone-change test changes the
 saved zone after the code under test read it (the worker test uses a trigger
 on its run row); a pre-pinned context with the new zone already saved cannot
-tell one zone read from two. #608 (transaction response
-enrichment), #609 (valuation cutoff) and #610 (other services' own zone
-reads) track the remaining instances. Guard:
+tell one zone read from two. With settings wired, `referenceContext` uses
+`db.WithOwnerToday` to pin current reference selection and the live
+valuation ceiling together.
+`db.WithReferenceDate` changes reference selection alone. Call
+`pinnedOwnerDay` with the operation context before applying such an override.
+Live observation boundaries keep the supplied recording instant (#609,
+`TestRateTableUsesThePinnedOwnerDay`). Blank pricing workspace diagnostics use
+the same ceiling, and an explicit diagnostic date retains its meaning
+(`TestPricingWorkspaceUsesThePinnedOwnerDay`). #608 (transaction response
+enrichment) and #610 (other services' own zone reads) track the remaining
+instances. Guard:
 `TestOwnerTodayCallersHaveNoPinnedDay` fails when a function both pins and
 calls `OwnerTodayAt`, and requires every other `OwnerTodayAt` caller to be
 listed with why it has no pinned day to share. It scans one function at a

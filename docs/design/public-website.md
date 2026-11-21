@@ -45,13 +45,13 @@ template and semantic CSS tokens. This small content site does not need a
 second SvelteKit application or a running Go/API server. It does not change the
 app's Go/SvelteKit/SQLite production shape or its Docker image.
 
-The app's `frontend/project.inlang/settings.json` owns the locale set. Website
-catalogs must match it in locales, keys, nonempty strings and placeholders.
-English is `/`; Dutch, German, French, Spanish and Russian are `/nl/`, `/de/`,
-`/fr/`, `/es/` and `/ru/`. All page copy, metadata, captions, alternative text,
-notices and controls come from these catalogs. Language selection uses ordinary
-links and works without JavaScript. Native review is still pending, as for the
-app catalogs; this work does not sign off #102.
+The app's `frontend/project.inlang/settings.json` owns the published locale set.
+English is at `/`, Dutch at `/nl/` and Russian at `/ru/`. Spanish, French
+and German catalogs stay in source. All website catalogs must match the English
+keys and placeholders and contain nonempty strings. All page copy, metadata,
+captions, alternative text, notices and controls come from these catalogs.
+Language selection uses ordinary links and works without JavaScript. Native
+review for the website and app catalogs remains with #102.
 
 Load all website assets from the site's own origin. Do not add analytics,
 tracking scripts, remote fonts, forms for financial data or app API calls.

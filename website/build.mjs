@@ -4,7 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const repository = resolve(directory, '..');
-export const languageNames = { en: 'English', nl: 'Nederlands', de: 'Deutsch', fr: 'Français', es: 'Español', ru: 'Русский' };
+const languageNames = { en: 'English', nl: 'Nederlands', de: 'Deutsch', fr: 'Français', es: 'Español', ru: 'Русский' };
 const source = 'https://github.com/sergeyfarin/rekenraam';
 
 export function escapeHTML(value) {
@@ -22,10 +22,12 @@ function shape(value, path = '') {
 
 export async function readCatalogs(catalogDirectory = join(directory, 'locales')) {
   const settings = JSON.parse(await readFile(join(repository, 'frontend/project.inlang/settings.json'), 'utf8'));
+  const { partial } = JSON.parse(await readFile(join(repository, 'frontend/src/lib/i18n/locale-status.json'), 'utf8'));
+  const catalogLocales = [...settings.locales, ...partial];
   const files = (await readdir(catalogDirectory)).filter(file => file.endsWith('.json')).sort();
-  const expected = settings.locales.map(locale => `${locale}.json`).sort();
-  if (JSON.stringify(files) !== JSON.stringify(expected)) throw new Error('Website catalogs must match the app locales');
-  const catalogs = Object.fromEntries(await Promise.all(settings.locales.map(async locale => {
+  const expected = catalogLocales.map(locale => `${locale}.json`).sort();
+  if (JSON.stringify(files) !== JSON.stringify(expected)) throw new Error('Website catalogs must match the maintained and partial app catalogs');
+  const catalogs = Object.fromEntries(await Promise.all(catalogLocales.map(async locale => {
     if (!languageNames[locale]) throw new Error(`Missing language name: ${locale}`);
     return [locale, JSON.parse(await readFile(join(catalogDirectory, `${locale}.json`), 'utf8'))];
   })));
@@ -33,7 +35,7 @@ export async function readCatalogs(catalogDirectory = join(directory, 'locales')
   for (const [locale, catalog] of Object.entries(catalogs)) {
     if (JSON.stringify(shape(catalog)) !== baseShape) throw new Error(`Translation keys or placeholders differ: ${locale}`);
   }
-  return catalogs;
+  return Object.fromEntries(settings.locales.map(locale => [locale, catalogs[locale]]));
 }
 
 export function siteConfig({ basePath = '', origin = 'https://rekenraam.com' } = {}) {
@@ -46,15 +48,15 @@ export function siteConfig({ basePath = '', origin = 'https://rekenraam.com' } =
 
 const localePath = (locale, config) => `${config.basePath}/${locale === 'en' ? '' : `${locale}/`}`;
 
-function languageLinks(locale, config) {
-  return Object.entries(languageNames).map(([code, name]) => `<a href="${localePath(code, config)}" lang="${code}" hreflang="${code}"${code === locale ? ' aria-current="page"' : ''}>${name}</a>`).join('');
+function languageLinks(locale, config, locales) {
+  return locales.map(code => `<a href="${localePath(code, config)}" lang="${code}" hreflang="${code}"${code === locale ? ' aria-current="page"' : ''}>${languageNames[code]}</a>`).join('');
 }
 
-function renderPage(locale, t, config, notFound = false) {
+function renderPage(locale, t, config, locales, notFound = false) {
   const e = escapeHTML;
   const asset = name => `${config.basePath}/assets/${name}`;
   const canonical = `${config.origin}${localePath(locale, config)}`;
-  const links = languageLinks(locale, config);
+  const links = languageLinks(locale, config, locales);
   const heading = notFound ? t.notFoundTitle : t.metaTitle;
   const screenshot = (file, caption, alt, primary = false) => `<figure class="screenshot" data-gallery-slide data-caption="${e(caption)}">
     <a class="screenshot-link" href="${asset(file)}" aria-label="${e(`${t.openScreenshot}: ${caption}`)}"><img src="${asset(file)}" alt="${e(alt)}" width="${primary ? 2880 : 1440}" height="${primary ? 2224 : 1050}" ${primary ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async"></a>
@@ -105,7 +107,7 @@ function renderPage(locale, t, config, notFound = false) {
   <title>${e(heading)}</title>
   <meta name="description" content="${e(t.metaDescription)}">
   ${notFound ? '<meta name="robots" content="noindex">' : `<link rel="canonical" href="${canonical}">
-  ${Object.keys(languageNames).map(code => `<link rel="alternate" hreflang="${code}" href="${config.origin}${localePath(code, config)}">`).join('\n  ')}
+  ${locales.map(code => `<link rel="alternate" hreflang="${code}" href="${config.origin}${localePath(code, config)}">`).join('\n  ')}
   <link rel="alternate" hreflang="x-default" href="${config.origin}${localePath('en', config)}">`}
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Rekenraam">
@@ -137,6 +139,7 @@ function renderPage(locale, t, config, notFound = false) {
 export async function build({ outputDirectory = join(directory, 'build'), basePath = '', origin = 'https://rekenraam.com', catalogDirectory } = {}) {
   const config = siteConfig({ basePath, origin });
   const catalogs = await readCatalogs(catalogDirectory);
+  const locales = Object.keys(catalogs);
   // Output is never source; validate first so invalid catalogs leave the last build intact.
   await rm(outputDirectory, { recursive: true, force: true });
   await mkdir(join(outputDirectory, 'assets'), { recursive: true });
@@ -148,13 +151,13 @@ export async function build({ outputDirectory = join(directory, 'build'), basePa
   for (const [locale, catalog] of Object.entries(catalogs)) {
     const pageDirectory = locale === 'en' ? outputDirectory : join(outputDirectory, locale);
     await mkdir(pageDirectory, { recursive: true });
-    await writeFile(join(pageDirectory, 'index.html'), renderPage(locale, catalog, config));
+    await writeFile(join(pageDirectory, 'index.html'), renderPage(locale, catalog, config, locales));
   }
-  await writeFile(join(outputDirectory, '404.html'), renderPage('en', catalogs.en, config, true));
+  await writeFile(join(outputDirectory, '404.html'), renderPage('en', catalogs.en, config, locales, true));
   await writeFile(join(outputDirectory, '.nojekyll'), '');
   await writeFile(join(outputDirectory, 'robots.txt'), `User-agent: *\nAllow: /\nSitemap: ${config.origin}${config.basePath}/sitemap.xml\n`);
-  await writeFile(join(outputDirectory, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${Object.keys(catalogs).map(locale => `<url><loc>${config.origin}${localePath(locale, config)}</loc></url>`).join('')}</urlset>\n`);
-  return { outputDirectory, locales: Object.keys(catalogs), ...config };
+  await writeFile(join(outputDirectory, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${locales.map(locale => `<url><loc>${config.origin}${localePath(locale, config)}</loc></url>`).join('')}</urlset>\n`);
+  return { outputDirectory, locales, ...config };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
