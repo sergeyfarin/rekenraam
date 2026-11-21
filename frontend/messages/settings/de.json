@@ -1053,9 +1053,25 @@
   "investments_suggestions_fetch": "Dividenden beim Anbieter prüfen",
   "investments_suggestions_split_fetch": "Massive-Splits prüfen",
   "investments_suggestions_split_fetch_none": "Zuerst einen Massive-Ticker und den Handelsplatz-MIC für ein US-Instrument hinterlegen.",
-  "investments_suggestions_split_fetch_queued": "Split-Prüfung für {count} Notierungen eingereiht.",
+  "investments_suggestions_split_fetch_queued": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Split-Prüfung für {n} Notierung eingereiht.",
+        "countPlural=*": "Split-Prüfung für {n} Notierungen eingereiht."
+      }
+    }
+  ],
   "investments_suggestion_split": "Aktiensplit",
-  "investments_suggestion_split_ratio": "{newShares} neue für {oldShares} alte Aktien",
+  "investments_suggestion_split_ratio": "{newShares} / {oldShares}",
+  "investments_suggestion_split_date": "Splitdatum {date}",
   "investments_suggestion_split_manual": "Dieser Split muss manuell geprüft werden. Prüfe den Brokerbeleg und verwende bei Bedarf das Split-Formular.",
   "investments_suggestion_split_link": "Erfassten Split verknüpfen",
   "investments_suggestion_split_link_error": "Der erfasste Split konnte nicht verknüpft werden.",

@@ -459,8 +459,14 @@ before the date is eligible for acceptance through the native split writer.
 Missing identity, inconsistent ratios, competing events, multiple holdings,
 short positions, and other activity on the execution date require manual
 review. The native writer enforces quantity precision, replay, reconciliation
-and gain checks. An unrevised suggestion can link a matching posted split
-with the same holding, instrument, date and ratio. Revisions cannot alter a
+and gain checks. For one eligible long holding, an unrevised suggestion can
+link a matching posted split by exact holding, instrument, date and ratio.
+With multiple long holdings, record each split manually and dismiss the
+suggestion. The native split form operates on long lots, so suggestions
+involving short positions require manual review. Linking across holdings is
+tracked in [#621](https://github.com/sergeyfarin/rekenraam/issues/621).
+An unavailable historical listing is reported as a fetch failure. Only changes
+to Massive’s split fields produce revisions. Revisions cannot alter a
 posted or linked split and prevent accepting a pending original. Manual
 split entry remains available independently under ADR 0017.
 

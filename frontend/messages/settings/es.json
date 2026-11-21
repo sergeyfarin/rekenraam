@@ -1053,9 +1053,25 @@
   "investments_suggestions_fetch": "Comprobar dividendos del proveedor",
   "investments_suggestions_split_fetch": "Consultar desdoblamientos en Massive",
   "investments_suggestions_split_fetch_none": "Añade primero el símbolo de Massive y el MIC del mercado de un instrumento de EE. UU.",
-  "investments_suggestions_split_fetch_queued": "Consulta de desdoblamientos en cola para {count} cotizaciones.",
+  "investments_suggestions_split_fetch_queued": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Consulta de desdoblamientos en cola para {n} cotización.",
+        "countPlural=*": "Consulta de desdoblamientos en cola para {n} cotizaciones."
+      }
+    }
+  ],
   "investments_suggestion_split": "Desdoblamiento de acciones",
-  "investments_suggestion_split_ratio": "{newShares} nuevas por {oldShares} antiguas",
+  "investments_suggestion_split_ratio": "{newShares} / {oldShares}",
+  "investments_suggestion_split_date": "Fecha del desdoblamiento {date}",
   "investments_suggestion_split_manual": "Esta operación requiere revisión manual. Consulta el extracto del bróker y usa el formulario de desdoblamiento si es necesario.",
   "investments_suggestion_split_link": "Vincular desdoblamiento registrado",
   "investments_suggestion_split_link_error": "No se pudo vincular el desdoblamiento registrado.",

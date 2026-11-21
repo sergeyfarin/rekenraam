@@ -114,10 +114,15 @@ func (s *PricingService) fetchSplitEvents(ctx context.Context, item db.Backgroun
 	if err != nil {
 		return err
 	}
+	identityFailed := false
 	for _, observation := range observations {
+		identityFailed = identityFailed || (observation.Numerator > 0 && observation.ShareFIGI == "")
 		if err := s.stageSplitObservation(ctx, target, ownerID, observation); err != nil {
 			return err
 		}
+	}
+	if identityFailed {
+		return fmt.Errorf("%w: Massive could not verify a historical listing", marketdata.ErrUnsupportedPair)
 	}
 	return nil
 }
@@ -130,18 +135,26 @@ func (s *PricingService) stageSplitObservation(ctx context.Context, target db.Ma
 	staged, err := s.repository.StagedProviderEventByIdentity(ctx, BookID, target.SourceID, row.ID)
 	switch {
 	case err == nil:
-		if staged.NormalizedJSON == string(normalized) {
+		originalKey, err := marketdata.MassiveSplitContentKey(staged.RawJSON)
+		if err != nil {
+			return err
+		}
+		contentKey, err := marketdata.MassiveSplitContentKey(row.RawJSON)
+		if err != nil {
+			return err
+		}
+		if originalKey == contentKey {
 			return nil
 		}
 		_, err = s.repository.RecordProviderEventRevision(ctx, db.RecordProviderEventRevisionParams{
-			BookID: BookID, ActorUserID: ownerID, ProviderEventID: staged.ID, ContentKey: string(normalized),
+			BookID: BookID, ActorUserID: ownerID, ProviderEventID: staged.ID, ContentKey: contentKey,
 			NormalizedJSON: string(normalized), RawJSON: row.RawJSON, ObservedAt: now,
 		})
 		return err
 	case !errors.Is(err, db.ErrNotFound):
 		return err
 	}
-	if row.Kind != "forward_split" && row.Kind != "reverse_split" {
+	if (row.Kind != "forward_split" && row.Kind != "reverse_split") || (row.Numerator > 0 && row.ShareFIGI == "") {
 		return nil
 	}
 

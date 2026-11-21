@@ -106,15 +106,14 @@ func (p *MassiveProvider) FetchSplits(ctx context.Context, symbol, mic, from, th
 			splitCounts[row.Date]++
 		}
 		numerator, denominator := massiveSplitRatio(row)
-		evidence, _ := json.Marshal(row)
 		observed := MassiveSplit{ID: row.ID, Date: row.Date, Kind: row.Kind, Numerator: numerator,
-			Denominator: denominator, RawJSON: string(evidence)}
+			Denominator: denominator, RawJSON: string(raw)}
 		if numerator > 0 {
 			eventFIGI, cached := listings[row.Date]
 			if !cached {
 				eventFIGI, err = p.listingFIGI(ctx, symbol, mic, row.Date, headers)
-				// Ticker reuse, an inactive historical listing or missing
-				// identity leaves evidence without a postable ratio.
+				// Keep the provider's evidence when a historical listing
+				// cannot be verified. Only a matching FIGI verifies identity.
 				if err != nil && !errors.Is(err, ErrUnsupportedPair) {
 					return nil, err
 				}
@@ -162,13 +161,10 @@ func massiveSplitRatio(row massiveSplitRow) (int64, int64) {
 	if row.Kind != "forward_split" && row.Kind != "reverse_split" {
 		return 0, 0
 	}
-	from, fromScale, fromErr := quoteDecimal(string(row.From))
-	to, toScale, toErr := quoteDecimal(string(row.To))
-	if fromErr != nil || toErr != nil {
+	ratio := massiveShareRatio(row)
+	if ratio == nil {
 		return 0, 0
 	}
-	ratio := new(big.Rat).SetFrac(new(big.Int).Mul(big.NewInt(to), pow10(fromScale)),
-		new(big.Int).Mul(big.NewInt(from), pow10(toScale)))
 	bound := big.NewInt(1_000_000_000)
 	if ratio.Num().Cmp(bound) > 0 || ratio.Denom().Cmp(bound) > 0 {
 		return 0, 0
@@ -179,4 +175,29 @@ func massiveSplitRatio(row massiveSplitRow) (int64, int64) {
 		return 0, 0
 	}
 	return numerator, denominator
+}
+
+func massiveShareRatio(row massiveSplitRow) *big.Rat {
+	from, fromScale, fromErr := quoteDecimal(string(row.From))
+	to, toScale, toErr := quoteDecimal(string(row.To))
+	if fromErr != nil || toErr != nil {
+		return nil
+	}
+	return new(big.Rat).SetFrac(new(big.Int).Mul(big.NewInt(to), pow10(fromScale)),
+		new(big.Int).Mul(big.NewInt(from), pow10(toScale)))
+}
+
+// MassiveSplitContentKey compares provider-stated fields only. Listing
+// verification and duplicate-date checks describe admission, not a revision.
+func MassiveSplitContentKey(raw string) (string, error) {
+	var row massiveSplitRow
+	if err := json.Unmarshal([]byte(raw), &row); err != nil {
+		return "", errors.New("invalid Massive split evidence")
+	}
+	if ratio := massiveShareRatio(row); ratio != nil {
+		content, _ := json.Marshal([]string{row.ID, row.Ticker, row.Kind, row.Date, ratio.RatString()})
+		return string(content), nil
+	}
+	content, _ := json.Marshal([]string{row.ID, row.Ticker, row.Kind, row.Date, string(row.From), string(row.To)})
+	return string(content), nil
 }

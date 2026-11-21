@@ -1053,9 +1053,25 @@
   "investments_suggestions_fetch": "Check provider dividends",
   "investments_suggestions_split_fetch": "Check Massive splits",
   "investments_suggestions_split_fetch_none": "Add a Massive ticker and listing MIC to a US instrument first.",
-  "investments_suggestions_split_fetch_queued": "Split check queued for {count} listings.",
+  "investments_suggestions_split_fetch_queued": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Split check queued for {n} listing.",
+        "countPlural=*": "Split check queued for {n} listings."
+      }
+    }
+  ],
   "investments_suggestion_split": "Stock split",
-  "investments_suggestion_split_ratio": "{newShares} new for {oldShares} old",
+  "investments_suggestion_split_ratio": "{newShares} / {oldShares}",
+  "investments_suggestion_split_date": "Split date {date}",
   "investments_suggestion_split_manual": "This split needs manual review. Check your broker statement and use the manual split form if needed.",
   "investments_suggestion_split_link": "Link recorded split",
   "investments_suggestion_split_link_error": "Could not link the recorded split.",

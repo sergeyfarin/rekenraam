@@ -171,6 +171,7 @@ func (r *PricingRepository) StageProviderEvent(ctx context.Context, params Stage
 type StagedProviderEvent struct {
 	ID             int64
 	NormalizedJSON string
+	RawJSON        string
 }
 
 // StagedProviderEventByIdentity reads the event a source identity already
@@ -178,8 +179,8 @@ type StagedProviderEvent struct {
 func (r *PricingRepository) StagedProviderEventByIdentity(ctx context.Context, bookID, sourceID int64, providerEventID string) (StagedProviderEvent, error) {
 	var event StagedProviderEvent
 	err := r.database.QueryRowContext(ctx, `
-		SELECT id, normalized_json FROM investment_provider_events
-		WHERE book_id = ? AND source_id = ? AND provider_event_id = ?`, bookID, sourceID, providerEventID).Scan(&event.ID, &event.NormalizedJSON)
+		SELECT id, normalized_json, raw_json FROM investment_provider_events
+		WHERE book_id = ? AND source_id = ? AND provider_event_id = ?`, bookID, sourceID, providerEventID).Scan(&event.ID, &event.NormalizedJSON, &event.RawJSON)
 	if errors.Is(err, sql.ErrNoRows) {
 		return StagedProviderEvent{}, ErrNotFound
 	}

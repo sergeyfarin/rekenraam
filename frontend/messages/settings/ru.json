@@ -1053,9 +1053,26 @@
   "investments_suggestions_fetch": "Проверить дивиденды у провайдера",
   "investments_suggestions_split_fetch": "Проверить дробления в Massive",
   "investments_suggestions_split_fetch_none": "Сначала добавьте тикер Massive и MIC биржи для инструмента США.",
-  "investments_suggestions_split_fetch_queued": "Проверка дроблений поставлена в очередь для {count} листингов.",
+  "investments_suggestions_split_fetch_queued": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "В очередь на проверку дроблений добавлен {n} листинг.",
+        "countPlural=few": "В очередь на проверку дроблений добавлены {n} листинга.",
+        "countPlural=*": "В очередь на проверку дроблений добавлено {n} листингов."
+      }
+    }
+  ],
   "investments_suggestion_split": "Дробление акций",
-  "investments_suggestion_split_ratio": "{newShares} новых за {oldShares} старых",
+  "investments_suggestion_split_ratio": "{newShares} / {oldShares}",
+  "investments_suggestion_split_date": "Дата дробления {date}",
   "investments_suggestion_split_manual": "Операция требует ручной проверки. Сверьтесь с отчётом брокера и при необходимости используйте форму дробления.",
   "investments_suggestion_split_link": "Связать с записанным дроблением",
   "investments_suggestion_split_link_error": "Не удалось связать с записанным дроблением.",

@@ -19,10 +19,11 @@ import (
 
 type massiveEventFixture struct {
 	*investTestFixture
-	pricing    *PricingService
-	instrument InvestmentInstrument
-	holding    Account
-	ratio      atomic.Int64
+	pricing                  *PricingService
+	instrument               InvestmentInstrument
+	holding                  Account
+	ratio                    atomic.Int64
+	missingHistoricalListing atomic.Bool
 }
 
 const massiveEventDate = "2026-06-16"
@@ -39,10 +40,14 @@ func newMassiveEventFixture(t *testing.T, key string) *massiveEventFixture {
 		switch r.URL.Path {
 		case "/stocks/v1/splits":
 			fmt.Fprintf(w, `{"status":"OK","results":[
-				{"id":"fixture-split","ticker":"TEST","adjustment_type":"forward_split","execution_date":%q,"split_from":1,"split_to":%d},
+				{"id":"fixture-split","ticker":"TEST","adjustment_type":"forward_split","execution_date":%q,"split_from":1,"split_to":%d,"historical_adjustment_factor":0.25},
 				{"id":"fixture-stock-dividend","ticker":"TEST","adjustment_type":"stock_dividend","execution_date":%q,"split_from":1,"split_to":1.08}
 			]}`, massiveEventDate, f.ratio.Load(), massiveEventDate)
 		case "/v3/reference/tickers/TEST":
+			if f.missingHistoricalListing.Load() && r.URL.Query().Get("date") == massiveEventDate {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
 			fmt.Fprint(w, `{"status":"OK","results":{"ticker":"TEST","primary_exchange":"XNAS","market":"stocks","locale":"us","share_class_figi":"fixture-figi"}}`)
 		default:
 			w.WriteHeader(http.StatusNotFound)
@@ -201,4 +206,29 @@ func TestMassiveSplitFetchKeepsTheMarketDateAcrossMidnight(t *testing.T) {
 		PayloadVersion: 1,
 		PayloadJSON:    fmt.Sprintf(`{"instrument_id":%d}`, f.instrument.ID),
 	}))
+}
+
+func TestMassiveSplitIdentityFailureIsNotAProviderRevision(t *testing.T) {
+	t.Parallel()
+	f := newMassiveEventFixture(t, "synthetic-key")
+	ctx := context.Background()
+	require.Len(t, f.fetch(t), 1)
+	var raw string
+	require.NoError(t, f.database.QueryRow(`SELECT raw_json FROM investment_provider_events`).Scan(&raw))
+	assert.Contains(t, raw, `"historical_adjustment_factor":0.25`, "retain the provider row, including unparsed fields")
+
+	f.missingHistoricalListing.Store(true)
+	suggestions := f.fetch(t)
+	require.Len(t, suggestions, 1)
+	assert.Empty(t, suggestions[0].Revisions)
+	failed, err := f.pricing.FailedBackgroundWork(ctx)
+	require.NoError(t, err)
+	require.Len(t, failed, 1)
+	assert.Contains(t, failed[0].LastError, "could not verify a historical listing")
+
+	f.missingHistoricalListing.Store(false)
+	require.Empty(t, f.fetch(t)[0].Revisions)
+	accepted, err := f.investmentSvc.AcceptSuggestion(ctx, 1, 0, "request", suggestions[0].ID)
+	require.NoError(t, err)
+	assert.Equal(t, "accepted", accepted.Status)
 }

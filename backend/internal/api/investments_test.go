@@ -1838,3 +1838,55 @@ func TestProviderDividendSuggestionCompletionLinkAndFetch_HTTP(t *testing.T) {
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&queued))
 	assert.Zero(t, queued.QueuedCount, "no listing is assigned to a dividend provider")
 }
+
+func TestMassiveSplitSuggestionFetchAndLinkCandidatesHTTP(t *testing.T) {
+	t.Parallel()
+	handler, database := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/instruments", investmentInstrumentRequest{CommodityCode: "SPLITAPI",
+			InstrumentType: "stock", DisplayName: "Synthetic split listing", MIC: "XNAS",
+			QuantityScale: 6, PriceScale: 4,
+			Identifiers: json.RawMessage(`{}`), Metadata: json.RawMessage(`{}`),
+			QuoteIdentifiers: map[string]string{"massive_symbol": "SPLITAPI"}}, http.StatusCreated)
+	var instrument investmentInstrumentResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&instrument))
+	const fetch = "/api/v1/investments/event-suggestions/fetch"
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, fetch,
+		map[string]string{"event_family": "split"}, http.StatusAccepted)
+	var queued dividendEventFetchAccepted
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&queued))
+	assert.Equal(t, 1, queued.QueuedCount)
+	var kind string
+	require.NoError(t, database.QueryRow(`SELECT kind FROM background_work_items WHERE kind = 'investment.split_events'`).Scan(&kind))
+	assert.Equal(t, "investment.split_events", kind)
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, fetch,
+		map[string]string{"event_family": "unsupported"}, http.StatusBadRequest)
+
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	buy := tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 10000)
+	buy.TransactionDate = "2026-01-01"
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy", buy, http.StatusCreated)
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/splits", investmentSplitRequest{EffectiveOn: "2026-02-01", HoldingAccountID: holding.ID,
+			CommodityID: instrument.CommodityID, RatioNumerator: 4, RatioDenominator: 1}, http.StatusCreated)
+	var split investmentSplitResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&split))
+	var sourceID int64
+	require.NoError(t, database.QueryRow(`SELECT id FROM market_data_sources WHERE code = 'massive'`).Scan(&sourceID))
+	proposal, err := json.Marshal(map[string]any{"kind": "split", "holding_account_id": holding.ID})
+	require.NoError(t, err)
+	_, err = ledgerdb.NewPricingRepository(database).StageProviderEvent(context.Background(), ledgerdb.StageProviderEventParams{
+		BookID: 1, ActorUserID: 1, SourceID: sourceID, ProviderEventID: "split-api-fixture",
+		InstrumentID: instrument.ID, EventFamily: "split", EventDate: "2026-02-01",
+		NormalizedJSON: `{"schema":1,"ratio_numerator":4,"ratio_denominator":1,"share_class_figi":"fixture"}`,
+		RawJSON:        "{}", ProposedJSON: string(proposal), RecordedAt: "2026-02-01T12:00:00Z",
+	})
+	require.NoError(t, err)
+	res = doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, "/api/v1/investments/event-suggestions", nil, http.StatusOK)
+	var result investmentEventSuggestionsResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&result))
+	require.Len(t, result.Suggestions, 1)
+	assert.Equal(t, []splitEventLinkCandidateResponse{{TransactionID: split.Transaction.ID, HoldingAccountID: holding.ID,
+		HoldingAccountName: "Holding"}}, result.Suggestions[0].SplitLinkCandidates)
+}

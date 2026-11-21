@@ -1441,10 +1441,14 @@ MIC (for example, `NFLX` and `XNAS`). Clearing the Massive ticker opts the
 instrument out of future checks. Under Investments → Suggestions, select
 **Check Massive splits**. The worker checks up to the last 365 calendar days
 through the US market date and exposes failed jobs and retry in pricing failed
-work. Review the split date, ratio, and holding before accepting. Where the
-ledger needs extra review, use the native split form and link the matching
-posted transaction from Suggestions. Provider observations and revisions are
-part of the installation's private evidence and backups.
+work. Review the split date, ratio, and holding before accepting. For a verified
+event with one eligible long holding, use **Link recorded split** when a matching
+transaction has already been posted on the split date. For multiple long
+holdings, record each split manually, then select **Ignore** on the suggestion.
+Suggestions involving short positions require manual review. The split form
+applies only to long lots. [#621](https://github.com/sergeyfarin/rekenraam/issues/621)
+tracks linking across holdings. Provider observations and revisions are part
+of the installation's private evidence and backups.
 
 ## Quote provider configuration (#117)
 

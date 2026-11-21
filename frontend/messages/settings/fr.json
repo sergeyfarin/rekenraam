@@ -1053,9 +1053,25 @@
   "investments_suggestions_fetch": "Vérifier les dividendes du fournisseur",
   "investments_suggestions_split_fetch": "Rechercher les fractionnements Massive",
   "investments_suggestions_split_fetch_none": "Ajoutez d’abord un symbole Massive et le MIC de cotation à un instrument américain.",
-  "investments_suggestions_split_fetch_queued": "Recherche de fractionnements mise en file pour {count} cotations.",
+  "investments_suggestions_split_fetch_queued": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Recherche de fractionnements mise en file pour {n} cotation.",
+        "countPlural=*": "Recherche de fractionnements mise en file pour {n} cotations."
+      }
+    }
+  ],
   "investments_suggestion_split": "Fractionnement d’actions",
-  "investments_suggestion_split_ratio": "{newShares} nouvelles pour {oldShares} anciennes",
+  "investments_suggestion_split_ratio": "{newShares} / {oldShares}",
+  "investments_suggestion_split_date": "Date du fractionnement {date}",
   "investments_suggestion_split_manual": "Cette opération nécessite une vérification manuelle. Consultez le relevé du courtier et utilisez le formulaire de fractionnement si nécessaire.",
   "investments_suggestion_split_link": "Associer le fractionnement enregistré",
   "investments_suggestion_split_link_error": "Impossible d’associer le fractionnement enregistré.",

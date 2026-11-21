@@ -1053,9 +1053,25 @@
   "investments_suggestions_fetch": "Dividenden bij provider controleren",
   "investments_suggestions_split_fetch": "Massive-splitsingen controleren",
   "investments_suggestions_split_fetch_none": "Voeg eerst een Massive-ticker en beurs-MIC toe aan een Amerikaans instrument.",
-  "investments_suggestions_split_fetch_queued": "Splitsingscontrole voor {count} noteringen in de wachtrij.",
+  "investments_suggestions_split_fetch_queued": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Splitsingscontrole voor {n} notering in de wachtrij.",
+        "countPlural=*": "Splitsingscontrole voor {n} noteringen in de wachtrij."
+      }
+    }
+  ],
   "investments_suggestion_split": "Aandelensplitsing",
-  "investments_suggestion_split_ratio": "{newShares} nieuw voor {oldShares} oud",
+  "investments_suggestion_split_ratio": "{newShares} / {oldShares}",
+  "investments_suggestion_split_date": "Splitsingsdatum {date}",
   "investments_suggestion_split_manual": "Deze splitsing vereist handmatige controle. Controleer je brokeroverzicht en gebruik zo nodig het splitsingsformulier.",
   "investments_suggestion_split_link": "Vastgelegde splitsing koppelen",
   "investments_suggestion_split_link_error": "De vastgelegde splitsing kon niet worden gekoppeld.",

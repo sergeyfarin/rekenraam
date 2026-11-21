@@ -100,7 +100,7 @@
       if (result.queued_count === 0) {
         fetchMessage = { tone: 'info', text: family === 'split' ? m.investments_suggestions_split_fetch_none() : m.investments_suggestions_fetch_none() };
       } else {
-        fetchMessage = { tone: 'info', text: family === 'split' ? m.investments_suggestions_split_fetch_queued({ count: result.queued_count }) : m.investments_suggestions_fetch_queued({ count: result.queued_count }) };
+        fetchMessage = { tone: 'info', text: family === 'split' ? m.investments_suggestions_split_fetch_queued({ count: result.queued_count, n: new Intl.NumberFormat(getLocale()).format(result.queued_count) }) : m.investments_suggestions_fetch_queued({ count: result.queued_count }) };
         pollUntil = Date.now() + 60_000;
         await queryClient.invalidateQueries({ queryKey: investmentEventSuggestionsQueryKey });
       }
@@ -228,7 +228,7 @@
 {#snippet splitEvidence(s: InvestmentEventSuggestionResponse)}
   <p class="tabular-nums text-sm text-foreground">{m.investments_suggestion_split()} · {splitRatio(s.evidence)}</p>
   {#if s.revisions.length > 0}
-    <div class="rounded-(--radius-panel) border border-warning bg-warning-soft p-3 text-sm" role="note">
+    <div class="rounded-(--radius-panel) border border-warning bg-warning-soft p-3 text-sm" role="note" data-testid="split-suggestion-revisions">
       <p class="font-medium">{m.investments_suggestion_revised_title()}</p>
       <ul>
         {#each s.revisions as revision (revision.observed_at + JSON.stringify(revision.evidence))}
@@ -272,7 +272,7 @@
     {#if pending.length > 0}
       <ul class="space-y-3" aria-label={m.investments_suggestions_pending_title()}>
         {#each pending as s (s.id)}
-          {@const evidence = parseProviderDividendEvidence(s.evidence)}
+          {@const evidence = s.event_family === 'split' ? null : parseProviderDividendEvidence(s.evidence)}
           {@const shape = proposalShape(s.proposed_transaction)}
           {@const inLieu = paymentInLieuProposal(s.proposed_transaction)}
           <li>
@@ -281,7 +281,11 @@
                 <div class="flex flex-wrap items-center gap-2">
                   <span class="rounded-full px-2 py-0.5 text-xs font-medium {statusClass(s.status)}">{statusLabel(s.status)}</span>
                   <h3 class="text-sm font-semibold text-foreground">{title(s)}</h3>
-                  <time datetime={s.event_date} class="text-xs text-muted">{m.investments_suggestion_ex_date({ date: s.event_family === 'split' ? formatCalendarDate(s.event_date, getLocale()) : s.event_date })}</time>
+                  <time datetime={s.event_date} class="text-xs text-muted">
+                    {s.event_family === 'split'
+                      ? m.investments_suggestion_split_date({ date: formatCalendarDate(s.event_date, getLocale()) })
+                      : m.investments_suggestion_ex_date({ date: s.event_date })}
+                  </time>
                   <span class="text-xs text-muted">{sourceLabel(s.source_code)}</span>
                   <span class="text-xs text-muted">{m.investments_suggestion_confidence()}: {confidencePct(s.confidence_bps)}</span>
                 </div>
@@ -331,7 +335,9 @@
                   <p class="text-sm text-foreground" role="note">{m.investments_suggestion_payment_in_lieu_note()}</p>
                 {/if}
 
-                {@render revisionNotice(s, evidence, false)}
+                {#if s.event_family !== 'split'}
+                  {@render revisionNotice(s, evidence, false)}
+                {/if}
 
                 {#if (shape === 'needs_completion' || shape === 'payment_in_lieu') && s.link_candidates.length > 0}
                   <div class="rounded-(--radius-panel) border border-border p-3">
@@ -365,8 +371,10 @@
                 {/if}
 
                 <div class="flex flex-wrap justify-end gap-2">
-                  {#if (s.event_family === 'split' && s.proposed_transaction.kind === 'split' &&
-                    !s.proposed_transaction.review_reason && !s.split_link_candidates?.length && s.revisions.length === 0) || shape === 'complete'}
+                  {#if s.event_family === 'split'
+                    ? s.proposed_transaction.kind === 'split' && !s.proposed_transaction.review_reason &&
+                      !s.split_link_candidates?.length && s.revisions.length === 0
+                    : shape === 'complete'}
                     <button type="button" disabled={busy.has(s.id)}
                       onclick={() => act(s, () => acceptEventSuggestion(s.id, csrfToken), s.event_family === 'split' ? m.investments_suggestion_split_accept_error() : m.investments_suggestion_accept_error(), true)}
                       class="rounded-(--radius-control) bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground transition hover:opacity-95 disabled:opacity-40">
@@ -408,14 +416,18 @@
         <h2 class="mb-3 text-sm font-semibold text-foreground">{m.investments_suggestions_history_title()}</h2>
         <ul class="space-y-2">
           {#each history as s (s.id)}
-            {@const retained = parseProviderDividendEvidence(s.evidence)}
+            {@const retained = s.event_family === 'split' ? null : parseProviderDividendEvidence(s.evidence)}
             {@const paymentID = s.generated_transaction_id ?? s.linked_transaction_id}
             <li>
               <Panel>
                 <div class="flex flex-wrap items-center gap-2">
                   <span class="rounded-full px-2 py-0.5 text-xs font-medium {statusClass(s.status)}">{statusLabel(s.status)}</span>
                   <span class="text-sm text-foreground">{title(s)}</span>
-                  <time datetime={s.event_date} class="text-xs text-muted">{m.investments_suggestion_ex_date({ date: s.event_family === 'split' ? formatCalendarDate(s.event_date, getLocale()) : s.event_date })}</time>
+                  <time datetime={s.event_date} class="text-xs text-muted">
+                    {s.event_family === 'split'
+                      ? m.investments_suggestion_split_date({ date: formatCalendarDate(s.event_date, getLocale()) })
+                      : m.investments_suggestion_ex_date({ date: s.event_date })}
+                  </time>
                   <span class="text-xs text-muted">{sourceLabel(s.source_code)}</span>
                 </div>
                 {#if paymentID}
@@ -433,9 +445,9 @@
                 {#if s.failure_reason}
                   <p class="mt-1 text-xs text-danger">{s.failure_reason}</p>
                 {/if}
-                {#if s.revisions.length > 0}
+                {#if s.event_family !== 'split' && s.revisions.length > 0}
                   <div class="mt-2">
-                    {@render revisionNotice(s, parseProviderDividendEvidence(s.evidence), true)}
+                    {@render revisionNotice(s, retained, true)}
                   </div>
                 {/if}
               </Panel>
