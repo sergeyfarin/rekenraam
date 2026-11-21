@@ -15,12 +15,20 @@ describe('resolveAccountLabel', () => {
     expect(resolveAccountLabel(posting)).toBe(m.accounts_starter_cash_name({ currency: 'USD' }));
   });
 
-  it('prefers the system role, then the built-in category, then the name', () => {
+  it('prefers the system role, then the name, then the built-in category', () => {
     expect(resolveAccountLabel({ ...posting, account_system_role: 'transfer_clearing' })).toBe(systemRoleLabel('transfer_clearing'));
     expect(resolveAccountLabel({ ...posting, account_starter_key: null, account_builtin_key: 'expense.food.groceries' }))
       .toBe(builtinCategoryLabel('expense.food.groceries'));
     expect(resolveAccountLabel({ ...posting, account_name: 'Wallet' })).toBe('Wallet');
   });
+
+  it('keeps a renamed starter category by its owner-given name, though its built-in key survives the rename', () => {
+    const groceries = { ...posting, account_class: 'expense', account_name: 'Food shopping', account_code: 'expense_food_groceries',
+      account_builtin_key: 'expense.food.groceries', account_starter_key: null, account_currency_code: null } as PostingResponse;
+    expect(builtinCategoryLabel('expense.food.groceries')).toBe('Groceries');
+    expect(resolveAccountLabel(groceries)).toBe('Food shopping');
+  });
+
 
   it('falls back to the code, then the account number', () => {
     expect(resolveAccountLabel({ ...posting, account_starter_key: null, account_currency_code: null })).toBe('cash:USD');
