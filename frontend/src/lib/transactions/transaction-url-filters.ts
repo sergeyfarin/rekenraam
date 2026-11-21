@@ -47,15 +47,9 @@ function oneOf<T extends readonly string[]>(raw: string | null, allowed: T): T[n
   return raw !== null && (allowed as readonly string[]).includes(raw) ? (raw as T[number]) : undefined;
 }
 
-/**
- * Reads the filters from a URL.
- *
- * A value the API would reject is dropped rather than passed through: a
- * hand-edited link should show an unfiltered list, not a validation error where
- * a list belongs.
- */
+/** Reads individually valid filter values while preserving a date range being edited. */
 export function parseTransactionFilters(params: ReadonlyURLSearchParams): TransactionQueryFilters {
-  const filters: TransactionQueryFilters = {
+  return {
     status: oneOf(params.get('status'), STATUSES),
     kind: oneOf(params.get('kind'), KINDS),
     accountID: positiveInt(params.get('account_id')),
@@ -68,15 +62,15 @@ export function parseTransactionFilters(params: ReadonlyURLSearchParams): Transa
     categoryType: oneOf(params.get('category_type'), CATEGORY_TYPES),
     dateBasis: oneOf(params.get('date_basis'), DATE_BASES)
   };
+}
 
-  // An inverted range is a validation error at the API; drop both ends so the
-  // screen shows a list rather than an error banner it cannot explain.
-  if (filters.afterDate && filters.beforeDate && filters.afterDate > filters.beforeDate) {
-    filters.afterDate = undefined;
-    filters.beforeDate = undefined;
-  }
+export function hasInvertedTransactionRange({ afterDate, beforeDate }: TransactionQueryFilters): boolean {
+  return !!afterDate && !!beforeDate && afterDate > beforeDate;
+}
 
-  return filters;
+/** Temporarily omit an inverted range from the request without changing the bar or URL. */
+export function transactionRequestFilters(filters: TransactionQueryFilters): TransactionQueryFilters {
+  return hasInvertedTransactionRange(filters) ? { ...filters, afterDate: undefined, beforeDate: undefined } : filters;
 }
 
 /** Writes the filters over a copy of the current parameters, clearing cleared ones. */

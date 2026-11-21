@@ -31,6 +31,46 @@ async function revisit(page: Page, assertSelection: (page: Page) => Promise<void
   }
 }
 
+test('Transactions keeps From while To is entered with the keyboard', async ({ page }) => {
+  await readyForLedger(page);
+  await page.goto('/app/ledger/transactions');
+  const from = page.getByLabel('From', { exact: true });
+  const to = page.getByLabel('To', { exact: true });
+  await from.fill('2026-06-01');
+  await expect(page).toHaveURL((url) => url.searchParams.get('after_date') === '2026-06-01');
+  await Promise.all([
+    page.waitForURL((url) => url.searchParams.get('before_date') === '0002-06-30', { timeout: 5_000 }),
+    to.pressSequentially('06302026', { delay: 100 })
+  ]);
+  await expect(to).toHaveValue('2026-06-30');
+  await expect(from).toHaveValue('2026-06-01');
+  await expect(page).toHaveURL((url) =>
+    url.searchParams.get('after_date') === '2026-06-01' && url.searchParams.get('before_date') === '2026-06-30');
+});
+
+test('Transactions keeps both bounds while moving a date range forward', async ({ page }) => {
+  await readyForLedger(page);
+  await page.goto('/app/ledger/transactions?after_date=2026-06-01&before_date=2026-06-30');
+  const from = page.getByLabel('From', { exact: true });
+  const to = page.getByLabel('To', { exact: true });
+  const requests: URL[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === '/api/v1/transactions') requests.push(url);
+  });
+  await expect(to).toHaveValue('2026-06-30');
+  await from.fill('2026-07-01');
+  await expect(page).toHaveURL((url) => url.searchParams.get('after_date') === '2026-07-01');
+  await expect(from).toHaveValue('2026-07-01');
+  await expect(to).toHaveValue('2026-06-30');
+  await expect(page.getByText('From is after To. Showing transactions without a date range.')).toBeVisible();
+  await to.fill('2026-07-31');
+  await expect.poll(() => requests.some(({ searchParams }) =>
+    searchParams.get('after_date') === '2026-07-01' && searchParams.get('before_date') === '2026-07-31')).toBe(true);
+  expect(requests.some(({ searchParams }) =>
+    searchParams.get('after_date') === '2026-07-01' && searchParams.get('before_date') === '2026-06-30')).toBe(false);
+});
+
 for (const width of [1280, 390]) {
   test.describe(`URL selections at ${width}px`, () => {
     test.use({ viewport: { width, height: 900 } });

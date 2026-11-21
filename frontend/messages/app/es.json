@@ -12,7 +12,7 @@
   "payees_rename": "Renombrar",
   "payees_archive": "Archivar",
   "payees_restore": "Restaurar",
-  "payees_action_for": "{action} a {name}",
+  "payees_action_for": "{action} {name}",
   "payees_name": "Nombre del beneficiario",
   "payees_save": "Guardar nombre",
   "payees_archive_copy": "Este beneficiario se conserva en las transacciones anteriores y desaparece de las sugerencias para nuevas transacciones.",

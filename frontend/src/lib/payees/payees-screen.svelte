@@ -1,5 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { beforeNavigate, goto } from '$app/navigation';
+  import { page } from '$app/state';
   import { createQuery } from '@tanstack/svelte-query';
   import { authSessionQueryOptions } from '#lib/api/auth.ts';
   import {
@@ -15,6 +17,9 @@
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { payeeTransactionsHref } from '#lib/transactions/transaction-url-filters.ts';
+  import {
+    changePayeeDirectorySelection, payeeDirectoryURL, readPayeeDirectorySelection, type PayeeDirectoryChange
+  } from './payee-directory-navigation.ts';
 
   type Action = 'rename' | 'archive' | 'restore';
 
@@ -22,13 +27,15 @@
   const buttonClass = 'inline-flex min-h-11 items-center justify-center rounded-(--radius-control) border border-border bg-control px-3 text-sm font-semibold text-foreground hover:bg-control-hover disabled:opacity-50';
   const primaryClass = 'min-h-11 rounded-(--radius-control) bg-accent px-4 text-sm font-semibold text-accent-foreground disabled:opacity-50';
 
-  let search = $state('');
-  let query = $state('');
-  let status = $state<PayeeDirectoryStatus>('active');
-  let cursors = $state<(string | undefined)[]>([undefined]);
+  let searchDraft = $state<string>();
   let searchInput: HTMLInputElement;
-  const cursor = $derived(cursors.at(-1));
-  const directory = createQuery(() => payeeDirectoryQueryOptions(status, query, cursor));
+  const filterURL = $derived(page.shallow?.url ?? page.url);
+  const selection = $derived(readPayeeDirectorySelection(filterURL.searchParams, page.state.payeeDirectory));
+  const searchPending = $derived(searchDraft !== undefined && searchDraft.trim() !== selection.q);
+  const directory = createQuery(() => payeeDirectoryQueryOptions(selection.status, selection.q, selection.cursor));
+  const emptyLaterPage = $derived(
+    !!selection.cursor && directory.isSuccess && !directory.isFetching && directory.data.payees.length === 0
+  );
   const session = createQuery(() => authSessionQueryOptions());
   const formatter = $derived(new Intl.NumberFormat(getLocale()));
 
@@ -38,19 +45,29 @@
   let error = $state<unknown>();
   let notice = $state('');
 
+  beforeNavigate(({ shallow }) => {
+    if (!shallow) searchDraft = undefined;
+  });
+
   $effect(() => {
-    const term = search.trim();
-    if (term === query) return;
-    const timer = setTimeout(() => {
-      query = term;
-      cursors = [undefined];
-    }, 250);
+    if (!searchPending) return;
+    const q = searchDraft;
+    const timer = setTimeout(() => changeLocation({ kind: 'filter', q }), 250);
     return () => clearTimeout(timer);
   });
 
-  function selectStatus(next: PayeeDirectoryStatus) {
-    status = next;
-    cursors = [undefined];
+  $effect(() => {
+    if (emptyLaterPage && !searchPending) changeLocation({ kind: 'previous' });
+  });
+
+  function changeLocation(change: PayeeDirectoryChange) {
+    const next = changePayeeDirectorySelection(selection, change);
+    const url = payeeDirectoryURL(filterURL.href, next);
+    if (url.href === filterURL.href) return;
+    void goto(url, {
+      shallow: true, replace: true, reset: false, persistState: true,
+      state: { ...page.state, payeeDirectory: next.cursor ? next : undefined }
+    });
   }
 
   function startAction(row: PayeeDirectoryRow, action: Action) {
@@ -94,7 +111,7 @@
       }
       editing = undefined;
       await tick();
-      if (status !== 'all' && action !== 'rename') searchInput.focus();
+      if (selection.status !== 'all' && action !== 'rename') searchInput.focus();
     } catch (cause) {
       error = cause;
     } finally {
@@ -108,11 +125,13 @@
     <div class="flex flex-wrap items-end gap-3">
       <label class="min-w-0 flex-1 basis-48 space-y-1">
         <span class="text-sm font-medium text-foreground">{m.payees_search()}</span>
-        <input bind:this={searchInput} bind:value={search} type="search" class={inputClass} />
+        <input bind:this={searchInput} value={searchDraft ?? selection.q} type="search" class={inputClass}
+          oninput={(event) => { searchDraft = event.currentTarget.value; }} />
       </label>
       <label class="min-w-32 space-y-1">
         <span class="text-sm font-medium text-foreground">{m.payees_status()}</span>
-        <select value={status} onchange={(event) => selectStatus(event.currentTarget.value as PayeeDirectoryStatus)} class={inputClass}>
+        <select value={selection.status} class={inputClass} onchange={(event) =>
+          changeLocation({ kind: 'filter', status: event.currentTarget.value as PayeeDirectoryStatus, q: searchDraft })}>
           <option value="active">{m.payees_active()}</option>
           <option value="archived">{m.payees_archived_option()}</option>
           <option value="all">{m.search_all()}</option>
@@ -122,7 +141,7 @@
   </Panel>
 
   <div role="status" class={notice ? 'text-sm text-foreground' : 'sr-only'}>{notice}</div>
-  {#if directory.isPending}
+  {#if directory.isPending || emptyLaterPage}
     <div role="status"><Panel padding="sm"><p class="text-sm text-muted">{m.payees_loading()}</p></Panel></div>
   {:else if directory.isError}
     <StatePanel title={m.payees_load_error()} copy={getAPIClientErrorMessage(directory.error)} alert>
@@ -169,14 +188,14 @@
     </Panel>
   {/if}
 
-  {#if cursors.length > 1 || directory.data?.next_cursor}
+  {#if selection.cursor || directory.data?.next_cursor}
     <div class="flex justify-between gap-2">
-      <button type="button" class={buttonClass} disabled={cursors.length === 1}
-        onclick={() => { cursors = cursors.slice(0, -1); }}>{m.payees_previous()}</button>
-      <button type="button" class={buttonClass} disabled={!directory.data?.next_cursor}
+      <button type="button" class={buttonClass} disabled={!selection.cursor || searchPending}
+        onclick={() => changeLocation({ kind: 'previous' })}>{m.payees_previous()}</button>
+      <button type="button" class={buttonClass} disabled={!directory.data?.next_cursor || searchPending}
         onclick={() => {
           const next = directory.data?.next_cursor;
-          if (next) cursors = [...cursors, next];
+          if (next) changeLocation({ kind: 'next', cursor: next });
         }}>{m.payees_next()}</button>
     </div>
   {/if}

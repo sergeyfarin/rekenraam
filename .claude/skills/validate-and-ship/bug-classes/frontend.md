@@ -97,6 +97,11 @@ regex plus `Date.parse` normalizes impossible dates. Keep ordinary/leap round
 trips and the no-forecast-request invalid-link control in
 `forecast-learning.spec.ts` green.
 
+The Transactions list also keeps individually valid From and To values while
+an edited range is temporarily inverted (#628). The query omits the inverted
+pair until both bounds are in order. `url-selection.spec.ts` covers typing To
+with the keyboard and moving both bounds forward.
+
 ## 69. New version token attached to old form fields
 
 Imported-dividend repair captured its editable resolution once but read the

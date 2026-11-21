@@ -334,7 +334,7 @@ shortcuts once. Page-specific filter fields remain on their own pages.
 
 Pages come from the route registry, including localized search aliases, with
 legacy and parameterized routes excluded. One compact, cursor-paged catalog
-composes current owner-local account, category and instrument names/codes;
+composes current owner-local account, category, instrument and payee names and codes;
 seeded category labels are localized before indexing. It contains no balances,
 transaction history or notes. The field fetches on opening and follows every
 cursor, showing loading and partial-error coverage rather than an unsupported
@@ -342,12 +342,13 @@ empty result. Page links and browser commands remain usable when that read
 fails. The read is refreshed on reopening; reference names are held only in the
 query cache, never browser storage.
 
-Within fixed groups (Pages, Accounts, Categories, Instruments, Commands), exact
+Within fixed groups (Pages, Accounts, Categories, Instruments, Payees, Commands), exact
 names precede prefix and fuzzy matches; multiword queries require all terms.
 Each group's initial six results can be expanded, with shown/total counts.
 Closed and archived objects are hidden until explicitly included. Account and
-category results open their register/detail; instruments use their commodity
-page identity. Scope changes keep keyboard focus in the input. Arrow keys move
+category results open their register or detail page. Instruments use their
+commodity page identity. Payee results open Transactions filtered by payee ID,
+as the directory does. Scope changes keep keyboard focus in the input. Arrow keys move
 an active descendant, Enter chooses, Escape closes, and Tab reaches scope,
 coverage and expansion controls. `/` ignores editable fields; Ctrl/⌘ K also
 works from ordinary fields, while existing modal workflows retain their focus.

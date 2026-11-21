@@ -73,7 +73,10 @@ test('manage payees on a phone and open their transactions from the directory an
   await page.goBack();
   await expect(page).toHaveURL(`/app/ledger/transactions?payee_id=${cafe.id}`);
   await page.goBack();
-  await expect(page).toHaveURL('/app/ledger/payees');
+  await expect(page).toHaveURL((url) => url.pathname === '/app/ledger/payees'
+    && url.searchParams.get('status') === 'archived' && url.searchParams.get('q') === 'harbour');
+  await expect(status).toHaveValue('archived');
+  await expect(filter).toHaveValue('harbour');
 
   await status.selectOption('all');
   await main.getByRole('button', { name: 'Restore Harbour Coffee' }).click();
@@ -85,11 +88,11 @@ test('manage payees on a phone and open their transactions from the directory an
   expect(restoredSuggestions.payees.map((payee) => payee.id)).toEqual([cafe.id]);
 });
 
-test('the payee directory paginates and fits a small phone in dark mode', async ({ page }) => {
+test('the payee directory restores filters and pagination on a small phone in dark mode', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 768 });
   const { csrfToken } = await readyForLedger(page);
   const longName = 'V'.repeat(180);
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < 100; i++) {
     await apiJSON(page, 'POST', '/api/v1/payees', csrfToken, { name: `Vendor ${String(i).padStart(2, '0')}` });
   }
   await apiJSON(page, 'POST', '/api/v1/payees', csrfToken, { name: longName });
@@ -97,16 +100,61 @@ test('the payee directory paginates and fits a small phone in dark mode', async 
     localStorage.setItem('rekenraam-theme', 'dark');
     localStorage.setItem('PARAGLIDE_LOCALE', 'nl');
   });
-  await page.goto('/app/ledger/payees');
+  await page.goto('/app/ledger/payees?highlight=kept');
   const main = page.getByRole('main');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect(main.getByRole('heading', { name: 'Begunstigden' })).toBeVisible();
   await expect(main.getByRole('link')).toHaveCount(50);
-  await main.getByRole('button', { name: 'Volgende pagina' }).click();
-  await expect(main.getByRole('link')).toHaveCount(1);
-  await expect(main.getByRole('link', { name: longName })).toBeVisible();
+  const status = main.getByRole('combobox', { name: 'Status' });
+  const filter = main.getByRole('searchbox', { name: 'Zoek begunstigden' });
+  const historyLength = await page.evaluate(() => history.length);
+  await status.selectOption('all');
+  await filter.fill('v');
+  await expect(page).toHaveURL((url) => url.searchParams.get('status') === 'all' && url.searchParams.get('q') === 'v');
+  const next = main.getByRole('button', { name: 'Volgende pagina' });
+  const last = main.getByRole('link', { name: longName });
+  const middle = main.getByRole('link', { name: 'Vendor 50', exact: true });
+  const first = main.getByRole('link', { name: 'Vendor 00', exact: true });
+  async function openLastPage() {
+    await next.click();
+    await expect(middle).toBeVisible();
+    await next.click();
+    await expect(last).toBeVisible();
+    await expect(main.getByRole('link')).toHaveCount(1);
+  }
+  await openLastPage();
   await expectNoAccessibilityViolations(page, 'Long payee on a small phone in dark mode');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+  const selectedPage = page.url();
+  const params = new URL(selectedPage).searchParams;
+  expect(params.get('cursor')).toBeTruthy();
+  expect(params.get('highlight')).toBe('kept');
+  expect(await page.evaluate(() => history.length)).toBe(historyLength);
+  await last.click();
+  await expect(page).toHaveURL(/\/app\/ledger\/transactions\?payee_id=/);
+  await page.goBack();
+  await expect(page).toHaveURL(selectedPage);
+  await expect(status).toHaveValue('all');
+  await expect(filter).toHaveValue('v');
+  await expect(last).toBeVisible();
   await main.getByRole('button', { name: 'Vorige pagina' }).click();
-  await expect(main.getByRole('link')).toHaveCount(50);
+  await expect(middle).toBeVisible();
+
+  await status.selectOption('active');
+  await expect(page).toHaveURL((url) => !url.searchParams.has('cursor') && !url.searchParams.has('status'));
+  await expect(first).toBeVisible();
+  await openLastPage();
+  await filter.fill('vendor');
+  await expect(page).toHaveURL((url) => url.searchParams.get('q') === 'vendor' && !url.searchParams.has('cursor'));
+  await expect(first).toBeVisible();
+
+  await filter.fill('v');
+  await expect(page).toHaveURL((url) => url.searchParams.get('q') === 'v' && !url.searchParams.has('cursor'));
+  await openLastPage();
+  const emptyPageCursor = new URL(page.url()).searchParams.get('cursor');
+  await main.getByRole('button', { name: `Archiveren · ${longName}` }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Archiveren', exact: true }).click();
+  await expect(middle).toBeVisible();
+  await expect(page).toHaveURL((url) => url.searchParams.has('cursor')
+    && url.searchParams.get('cursor') !== emptyPageCursor && url.searchParams.get('q') === 'v');
 });
