@@ -541,3 +541,36 @@ func (r *PayeeRepository) PayeeByNormalizedName(ctx context.Context, bookID int6
 
 	return payeeID, name, nil
 }
+
+type PayeeName struct {
+	ID             int64
+	Name           string
+	NormalizedName string
+}
+
+// ListAllActivePayeeNames supplies the complete candidate set for ranked lookup.
+func (r *PayeeRepository) ListAllActivePayeeNames(ctx context.Context, bookID int64) ([]PayeeName, error) {
+	rows, err := r.database.QueryContext(ctx, `
+		SELECT p.id, pv.name, pv.normalized_name
+		FROM payees p
+		JOIN `+CurrentReferenceVersions(ctx, "payee")+` pv ON pv.payee_id = p.id
+		WHERE p.book_id = ? AND pv.status = 'active'
+	`, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("read active payee names: %w", err)
+	}
+	defer rows.Close()
+
+	var names []PayeeName
+	for rows.Next() {
+		var name PayeeName
+		if err := rows.Scan(&name.ID, &name.Name, &name.NormalizedName); err != nil {
+			return nil, fmt.Errorf("scan active payee name: %w", err)
+		}
+		names = append(names, name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate active payee names: %w", err)
+	}
+	return names, nil
+}

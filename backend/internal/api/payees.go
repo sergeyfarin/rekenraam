@@ -285,3 +285,32 @@ func toPayeeResponses(payees []app.Payee) []payeeResponse {
 
 	return responses
 }
+
+type payeeSuggestionResponse struct {
+	ID    int64  `json:"id"`
+	Name  string `json:"name"`
+	Exact bool   `json:"exact"`
+}
+
+type payeeSuggestionsResponse struct {
+	Payees []payeeSuggestionResponse `json:"payees"`
+}
+
+func suggestPayees(logger *slog.Logger, authService *app.AuthService, payeeService *app.PayeeService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
+			return
+		}
+
+		suggestions, err := payeeService.PayeeSuggestions(r.Context(), r.URL.Query().Get("q"))
+		if err != nil {
+			writePayeeServiceError(w, r, logger, "suggest payees", err)
+			return
+		}
+		payees := make([]payeeSuggestionResponse, 0, len(suggestions))
+		for _, suggestion := range suggestions {
+			payees = append(payees, payeeSuggestionResponse(suggestion))
+		}
+		writeJSON(w, http.StatusOK, payeeSuggestionsResponse{Payees: payees})
+	}
+}

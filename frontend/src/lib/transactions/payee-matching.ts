@@ -4,8 +4,7 @@
  * T-50: a typed name that names no payee used to be stored as free text, and
  * every such transaction collapsed into one "no payee recorded" row in the
  * spending report. The backend now links an *exact* match on its own; this
- * module covers the rest — recognising when a name is genuinely new, and
- * finding the near matches worth offering before a new record is created.
+ * module matches names against the catalog available to import review.
  */
 
 import MiniSearch from 'minisearch';
@@ -56,47 +55,4 @@ export function payeeSuggestions(name: string, payees: PayeeResponse[]): PayeeRe
     if (matches.length === MAX_SUGGESTIONS) break;
   }
   return matches;
-}
-
-export type PayeeResolution =
-  | { kind: 'none' }
-  | { kind: 'linked'; payee: PayeeResponse }
-  | { kind: 'unknown'; name: string; suggestions: PayeeResponse[] };
-
-/**
- * What a typed name means right now.
- *
- * `none` — nothing typed, so the transaction simply has no payee.
- * `linked` — a record already carries this name; saving needs no confirmation.
- * `unknown` — no record carries it, so creating one has to be confirmed and the
- * near matches are worth showing first.
- */
-export function resolveTypedPayee(
-  name: string,
-  selectedPayeeID: number | undefined,
-  payees: PayeeResponse[]
-): PayeeResolution {
-  if (selectedPayeeID !== undefined) {
-    const selected = payees.find((payee) => payee.id === selectedPayeeID);
-    if (selected) return { kind: 'linked', payee: selected };
-  }
-
-  if (normalizePayeeName(name) === '') return { kind: 'none' };
-
-  const exact = exactPayeeMatch(name, payees);
-  if (exact) return { kind: 'linked', payee: exact };
-
-  return { kind: 'unknown', name: name.trim(), suggestions: payeeSuggestions(name, payees) };
-}
-
-/**
- * Whether saving should stop and ask.
- *
- * Only when the name is new *and* the user changed it. An existing transaction
- * may already carry an unlinked name from before this rule existed, and
- * blocking an edit to an unrelated field over history the user did not create
- * would be punishing them for the old behaviour.
- */
-export function needsPayeeConfirmation(resolution: PayeeResolution, nameChanged: boolean): boolean {
-  return resolution.kind === 'unknown' && nameChanged;
 }

@@ -9164,6 +9164,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/payees/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Suggest active payees for transaction entry
+         * @description Searches all currently active payees. An exact normalized name ranks first, followed by token, prefix and typo matches.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Nonblank payee name or search text, at most 200 bytes after trimming. */
+                    q: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Up to five ranked matches */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PayeeSuggestionsResponse"];
+                    };
+                };
+                /** @description Invalid query */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/transactions": {
         parameters: {
             query?: never;
@@ -29927,6 +29988,15 @@ export interface components {
             /** Format: date */
             effective_from?: string;
             change_reason?: string;
+        };
+        PayeeSuggestionsResponse: {
+            payees: {
+                /** Format: int64 */
+                id: number;
+                name: string;
+                /** @description Whether the full normalized name equals the query. */
+                exact: boolean;
+            }[];
         };
         /** @enum {string} */
         TransactionStatus: "draft" | "posted" | "voided";

@@ -63,13 +63,7 @@
   import { m } from '#lib/paraglide/messages.js';
   import { accountsQueryOptions } from '#lib/api/accounts.ts';
   import { categoriesQueryOptions } from '#lib/api/categories.ts';
-  import { createPayee, payeesQueryKey, payeesQueryOptions, type PayeeResponse } from '#lib/api/payees.ts';
-  import {
-    needsPayeeConfirmation,
-    payeeSuggestions,
-    resolveTypedPayee,
-    type PayeeResolution
-  } from './payee-matching';
+  import { createPayee, payeesQueryKey, payeeSuggestionsQueryOptions, type PayeeSuggestion } from '#lib/api/payees.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import {
     createTransaction,
@@ -184,25 +178,19 @@
   const categoriesQuery = createQuery(() => categoriesQueryOptions());
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
 
-  // Payee autocomplete. The whole payee list is loaded once and ranked here
-  // rather than re-queried per keystroke: a personal book's payees are a small
-  // set, and local fuzzy ranking finds the typo that a server-side LIKE cannot
-  // — which is the case this control exists for (T-50).
   let payeeSearch = $state('');
+  let payeeID = $state<number | undefined>(undefined);
   let payeeDropdownOpen = $state(false);
   /** The name the editor opened with, so an untouched payee never blocks a save. */
   let initialPayeeName = $state('');
-  let payeeConfirm = $state<{ open: boolean; resolution: PayeeResolution | null }>({
-    open: false,
-    resolution: null
-  });
+  let payeeConfirmationName = $state<string | null>(null);
   let payeeCreatePending = $state(false);
-  const payeeInputID = 'transaction-payee-name';
   const queryClient = useQueryClient();
   let categoryDropdownOpen = $state(false);
   let categorySearch = $state('');
   // Suggestion lists are comboboxes: the active option, -1 for none.
   const uid = $props.id();
+  const payeeInputID = `${uid}-payee-name`;
   let payeeActive = $state(-1);
   let categoryActive = $state(-1);
 
@@ -210,15 +198,17 @@
     const val = (e.target as HTMLInputElement).value;
     payeeSearch = val;
     payeeID = undefined; // clear resolved ID when user edits
+    payeeConfirmationName = null;
     payeeDropdownOpen = val.length > 0;
     payeeActive = -1;
   }
 
-  function choosePayee(payee: PayeeResponse) {
+  function choosePayee(payee: Pick<PayeeSuggestion, 'id' | 'name'>) {
     payeeID = payee.id;
     payeeSearch = payee.name;
     payeeDropdownOpen = false;
     payeeActive = -1;
+    payeeConfirmationName = null;
   }
 
   function payeeKeydown(event: KeyboardEvent) {
@@ -254,10 +244,33 @@
     } else { categoryDropdownOpen = false; categoryActive = -1; }
   }
 
-  const payeesQuery = createQuery(() => payeesQueryOptions({}));
-  const allPayees = $derived<PayeeResponse[]>(payeesQuery.data?.payees ?? []);
-  const payeeMatches = $derived(payeeSuggestions(payeeSearch, allPayees));
-  const payeeNameChanged = $derived(payeeSearch.trim() !== initialPayeeName.trim());
+  const payeeLookupTerm = $derived(
+    payeeID === undefined && payeeSearch.trim() !== initialPayeeName.trim() ? payeeSearch.trim() : ''
+  );
+  const payeeNameTooLong = $derived(new TextEncoder().encode(payeeLookupTerm).length > 200);
+  let debouncedPayeeLookup = $state('');
+  $effect(() => {
+    if (!payeeLookupTerm || payeeNameTooLong) return;
+    const term = payeeLookupTerm;
+    const timer = setTimeout(() => { debouncedPayeeLookup = term; }, 250);
+    return () => clearTimeout(timer);
+  });
+  const payeeQuery = createQuery(() => payeeSuggestionsQueryOptions(
+    debouncedPayeeLookup === payeeLookupTerm && !payeeNameTooLong ? payeeLookupTerm : ''
+  ));
+  const payeeLookupReady = $derived(
+    payeeQuery.isSuccess && payeeQuery.fetchStatus === 'idle' && payeeQuery.data.q === payeeLookupTerm
+  );
+  const payeeLookupBlocked = $derived(payeeLookupTerm !== '' && !payeeLookupReady);
+  const payeeLookupFailed = $derived(
+    payeeLookupBlocked && payeeLookupTerm === debouncedPayeeLookup &&
+      payeeQuery.isError && payeeQuery.fetchStatus === 'idle'
+  );
+  const payeeMatches = $derived(payeeLookupReady ? (payeeQuery.data?.payees ?? []) : []);
+  const exactPayee = $derived(payeeMatches.find((payee) => payee.exact));
+  const showPayeeConfirmation = $derived(
+    payeeConfirmationName !== null && payeeConfirmationName === payeeLookupTerm && payeeLookupReady && !exactPayee
+  );
 
   // ── Field state ───────────────────────────────────────────────────
   let tier = $state<Tier>('simple');
@@ -277,7 +290,6 @@
 
   // Tier 1 / shared fields
   let transactionDate = $state(ownerToday());
-  let payeeID = $state<number | undefined>(undefined);
   let description = $state('');
 
   // Tier 1: simple two-posting form
@@ -545,6 +557,7 @@
   // ── Initialise from existing transaction (edit mode) ──────────────
   $effect(() => {
     tagIDs = [...(transaction?.tag_ids ?? initialValues?.tag_ids ?? [])];
+    payeeConfirmationName = null;
     splitPostedOnOpen = {};
     splitCarry = {};
     simpleLineKeys = {};
@@ -782,15 +795,15 @@
       }
     }
 
-    // A newly typed name that names no payee stops here rather than being saved
-    // as free text. Free text is what collapsed every such transaction into one
-    // "no payee recorded" row in the spending report (T-50). An untouched name
-    // is left alone, so editing an unrelated field on older data is never
-    // blocked by history the user did not create.
-    const resolution = resolveTypedPayee(payeeSearch, payeeID, allPayees);
-    if (needsPayeeConfirmation(resolution, payeeNameChanged)) {
-      payeeConfirm = { open: true, resolution };
-      return;
+    // Only a completed lookup for the typed name can establish an exact match
+    // or ask the owner to create a new payee.
+    if (payeeLookupTerm) {
+      if (!payeeLookupReady) return;
+      if (!exactPayee) {
+        payeeConfirmationName = payeeLookupTerm;
+        return;
+      }
+      choosePayee(exactPayee);
     }
 
     await savePayee();
@@ -827,15 +840,14 @@
   }
 
   /** Links the transaction to an existing payee the user recognised. */
-  async function usePayeeSuggestion(payee: PayeeResponse) {
-    payeeID = payee.id;
-    payeeSearch = payee.name;
-    payeeConfirm = { open: false, resolution: null };
+  async function usePayeeSuggestion(payee: PayeeSuggestion) {
+    choosePayee(payee);
     await savePayee();
   }
 
   /** Creates the payee the user typed, then saves — the confirmed act. */
   async function createTypedPayee(name: string) {
+    if (!showPayeeConfirmation || name !== payeeLookupTerm || busy) return;
     if (!csrfToken) {
       formError = new Error(m.transactions_form_missing_session());
       return;
@@ -844,10 +856,8 @@
     formError = undefined;
     try {
       const created = await createPayee({ name }, csrfToken);
+      choosePayee(created);
       await queryClient.invalidateQueries({ queryKey: payeesQueryKey });
-      payeeID = created.id;
-      payeeSearch = created.name;
-      payeeConfirm = { open: false, resolution: null };
     } catch (error) {
       formError = error;
       return;
@@ -859,7 +869,7 @@
   }
 
   function editPayeeName() {
-    payeeConfirm = { open: false, resolution: null };
+    payeeConfirmationName = null;
     payeeDropdownOpen = false;
     document.getElementById(payeeInputID)?.focus();
   }
@@ -1334,7 +1344,7 @@
       // A refusal about the entry as it was no longer describes it.
       entryMessage = '';
       transferMessage = '';
-      if (payeeConfirm.open) payeeConfirm = { open: false, resolution: null };
+      payeeConfirmationName = null;
       if (reconciliationModal.open) reconciliationModal = { open: false, impacts: [], pendingPayload: {} as TransactionRequest };
     });
   });
@@ -1696,27 +1706,47 @@
     </div>
     {/if}
     <!-- Payee autocomplete -->
-    <label class="relative">
-      <span id={`${uid}-payee-label`} class={labelClass}>{m.transactions_field_payee()}</span>
+    <div class="relative">
+      <label for={payeeInputID} class={labelClass}>{m.transactions_field_payee()}</label>
       <input
         id={payeeInputID}
         type="text"
-        aria-labelledby={`${uid}-payee-label`}
         role="combobox"
         aria-autocomplete="list"
         aria-expanded={payeeDropdownOpen && payeeMatches.length > 0}
         aria-controls={payeeDropdownOpen && payeeMatches.length > 0 ? `${uid}-payees` : undefined}
-        aria-activedescendant={payeeDropdownOpen && payeeActive >= 0 ? `${uid}-payee-${payeeActive}` : undefined}
+        aria-activedescendant={payeeDropdownOpen && payeeActive >= 0 && payeeActive < payeeMatches.length ? `${uid}-payee-${payeeActive}` : undefined}
+        aria-describedby={payeeLookupBlocked ? `${uid}-payee-lookup-status` : undefined}
         value={payeeSearch}
         oninput={onPayeeInput}
         onkeydown={payeeKeydown}
         onfocus={() => { if (payeeSearch) payeeDropdownOpen = true; }}
-        onblur={() => setTimeout(() => { payeeDropdownOpen = false; payeeActive = -1; }, 150)}
+        onblur={() => { payeeDropdownOpen = false; payeeActive = -1; }}
         class={inputClass}
         placeholder={m.transactions_field_payee_placeholder()}
         autocomplete="off"
         disabled={isVoided && mode === 'edit'}
       />
+      {#if payeeLookupBlocked}
+        <p id={`${uid}-payee-lookup-status`} class="mt-1 text-xs text-muted" role="status">
+          {#if payeeNameTooLong}
+            {m.transactions_payee_lookup_too_long()}
+          {:else if payeeLookupFailed}
+            {m.transactions_payee_lookup_failed()}
+          {:else}
+            {m.transactions_payee_lookup_loading()}
+          {/if}
+        </p>
+        {#if payeeLookupFailed}
+          <button
+            type="button"
+            class="min-h-10 text-xs font-medium text-accent underline-offset-2 hover:underline"
+            onclick={() => { document.getElementById(payeeInputID)?.focus(); void payeeQuery.refetch(); }}
+          >
+            {m.transactions_retry()}
+          </button>
+        {/if}
+      {/if}
       {#if payeeDropdownOpen && payeeMatches.length > 0}
         <ul
           id={`${uid}-payees`}
@@ -1730,8 +1760,9 @@
                 type="button"
                 id={`${uid}-payee-${index}`}
                 tabindex="-1"
-                class="w-full px-3 py-2 text-left hover:bg-row-hover aria-selected:bg-row-hover"
-                onmousedown={() => choosePayee(payee)}
+                class="min-h-11 w-full px-3 py-2 text-left wrap-anywhere hover:bg-row-hover aria-selected:bg-row-hover"
+                onmousedown={(event) => event.preventDefault()}
+                onclick={() => choosePayee(payee)}
                 role="option"
                 aria-selected={index === payeeActive}
               >
@@ -1741,7 +1772,7 @@
           {/each}
         </ul>
       {/if}
-    </label>
+    </div>
 
     <!--
       No payee carries this name. Creating one is a deliberate act, so it is
@@ -1749,20 +1780,20 @@
       near matches come first, because the usual cause is a typo or a different
       word order for a payee that already exists.
     -->
-    {#if payeeConfirm.open && payeeConfirm.resolution?.kind === 'unknown'}
+    {#if showPayeeConfirmation}
       <div
-        class="rounded-(--radius-control) border border-border bg-control p-3 sm:col-span-2"
+        class="rounded-(--radius-control) border border-border bg-control p-3 wrap-anywhere sm:col-span-2"
         role="group"
-        aria-label={m.transactions_payee_confirm_title({ name: payeeConfirm.resolution.name })}
+        aria-label={m.transactions_payee_confirm_title({ name: payeeLookupTerm })}
       >
         <p class="text-sm font-semibold text-foreground">
-          {m.transactions_payee_confirm_title({ name: payeeConfirm.resolution.name })}
+          {m.transactions_payee_confirm_title({ name: payeeLookupTerm })}
         </p>
 
-        {#if payeeConfirm.resolution.suggestions.length > 0}
+        {#if payeeMatches.length > 0}
           <p class="mt-2 text-xs text-muted">{m.transactions_payee_confirm_suggestions()}</p>
           <ul class="mt-2 flex flex-wrap gap-2">
-            {#each payeeConfirm.resolution.suggestions as suggestion (suggestion.id)}
+            {#each payeeMatches as suggestion (suggestion.id)}
               <li>
                 <button
                   type="button"
@@ -1781,13 +1812,11 @@
             type="button"
             class="rounded-(--radius-control) bg-accent px-3 py-1.5 text-sm font-semibold text-accent-foreground transition hover:opacity-95 disabled:opacity-60"
             disabled={payeeCreatePending}
-            onclick={() =>
-              payeeConfirm.resolution?.kind === 'unknown' &&
-              createTypedPayee(payeeConfirm.resolution.name)}
+            onclick={() => createTypedPayee(payeeLookupTerm)}
           >
             {payeeCreatePending
               ? m.transactions_payee_confirm_creating()
-              : m.transactions_payee_confirm_create({ name: payeeConfirm.resolution.name })}
+              : m.transactions_payee_confirm_create({ name: payeeLookupTerm })}
           </button>
           <button
             type="button"
@@ -2379,8 +2408,8 @@
     {#if !(isVoided && mode === 'edit') && !(tier === 'locked' && mode === 'correct')}
       <button
         type="submit"
-        class="inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
-        disabled={busy}
+        class="inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition-colors hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={busy || payeeLookupBlocked}
       >
         <Save size={16} aria-hidden="true" />
         {submitLabel}

@@ -158,3 +158,29 @@ async function payeeLifecycleMutation(
     throw toNetworkError(error);
   }
 }
+
+type PayeeSuggestionsResponse = components['schemas']['PayeeSuggestionsResponse'];
+export type PayeeSuggestion = PayeeSuggestionsResponse['payees'][number];
+
+export function payeeSuggestionsQueryOptions(q: string) {
+  return {
+    queryKey: [...payeesQueryKey, 'suggestions', q] as const,
+    enabled: q !== '',
+    retry: false,
+    networkMode: 'always' as const,
+    gcTime: 30_000,
+    queryFn: async ({ signal }: { signal: AbortSignal }) => {
+      try {
+        const { data, error, response } = await apiClient.GET('/api/v1/payees/suggestions', {
+          params: { query: { q } },
+          signal
+        });
+        if (data !== undefined) return { q, payees: data.payees };
+        throw toAPIClientError(response, error);
+      } catch (error) {
+        if (error instanceof APIClientError) throw error;
+        throw toNetworkError(error);
+      }
+    }
+  };
+}
