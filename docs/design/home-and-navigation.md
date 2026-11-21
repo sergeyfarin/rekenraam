@@ -870,6 +870,10 @@ the period, bucket and reporting currency or the budget month and currency.
 Home keeps the read cached across navigation, so Back restores its scroll
 without late content moving it.
 
+Accounts, Holdings brokerage details, and Reconciliation use the same account
+labels as Ledger. The composed Home read supplies starter keys and currency codes
+so the app can localize unnamed starter accounts.
+
 ### More to explore contract (#479)
 
 More to explore lists every widget not on My Home, by category, from the same

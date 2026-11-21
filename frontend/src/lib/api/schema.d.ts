@@ -30131,6 +30131,10 @@ export interface components {
             account_id: number;
             code: string;
             name: string;
+            /** @description The starter account key used for its localized label. */
+            starter_key: string | null;
+            /** @description The currency code from the starter account's metadata. */
+            currency_code: string | null;
             /** @enum {string} */
             account_class: "asset" | "liability";
             account_kind: string;
@@ -30210,6 +30214,12 @@ export interface components {
             /** Format: int64 */
             brokerage_id: number | null;
             brokerage_name: string;
+            /** @description The brokerage account code or an empty string if unavailable. */
+            brokerage_code: string;
+            /** @description The starter key from the brokerage account's metadata. */
+            brokerage_starter_key: string | null;
+            /** @description The currency code from the brokerage account's metadata. */
+            brokerage_currency_code: string | null;
             balances: components["schemas"]["BalanceQuantity"][];
             /** @description The position in the default currency today; null when its price or rate is missing. */
             value: components["schemas"]["BalanceQuantity"] | null;

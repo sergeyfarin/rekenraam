@@ -80,6 +80,7 @@ TESTS = [
  'TestReplaceAndReverseWriteOffAPI',
  'TestCashInLieuAPICorrectReverseAndPreviewValidParentReversal',
  'TestHomeReadAuthenticationShapeAndPurity',
+ 'TestHomeWidgetAccountLabels',
  'TestHomeReturnsWidgetsReadTheLatestSavedRun',
  'TestLedgerOverviewHTTPComposesAccountMetadataAndBalances',
  'TestReconciliationPolicyHTTPSavesTheWindowTheAccountListReads',

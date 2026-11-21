@@ -131,9 +131,12 @@ export function holdingsWidget(home: Home, locale: string): WidgetView {
     const commodity = instrument ? commodities.get(instrument.commodity_id) : undefined;
     return {
       key: String(row.account_id),
-      label: commodity?.code ?? m.accounts_unnamed_account({ id: row.account_id }),
+      label: commodity?.code ?? accountLabelFromParts({ id: row.account_id }),
       href: instrument ? `/app/investments/instruments/${instrument.commodity_id}` : undefined,
-      detail: row.brokerage_name.trim() || undefined,
+      detail: row.brokerage_id == null ? undefined : accountLabelFromParts({
+        id: row.brokerage_id, name: row.brokerage_name, code: row.brokerage_code,
+        starterKey: row.brokerage_starter_key, currencyCode: row.brokerage_currency_code
+      }),
       amount: row.value ? money(row.value, commodities, locale) : home.reporting_currency ? m.home_holdings_no_price() : m.home_accounts_no_value()
     };
   });

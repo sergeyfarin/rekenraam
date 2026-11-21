@@ -37,9 +37,9 @@ export function widgets(overrides: Partial<HomeWidgets> = {}): HomeWidgets {
       summary: {
         as_of: '2026-10-15', open_count: 5,
         accounts: [
-          { account_id: 21, code: 'CARD', name: 'Card', account_class: 'liability', account_kind: 'credit_card', balances: [q('-200000')], value: q('-200000') },
-          { account_id: 22, code: 'USD', name: 'Dollar savings', account_class: 'asset', account_kind: 'savings', balances: [q('100000', USD)], value: q('90000') },
-          { account_id: 23, code: 'BRK', name: 'Brokerage', account_class: 'asset', account_kind: 'brokerage', balances: [q('10', TEST, 0)], value: null }
+          { account_id: 21, code: 'CARD', name: 'Card', starter_key: null, currency_code: null, account_class: 'liability', account_kind: 'credit_card', balances: [q('-200000')], value: q('-200000') },
+          { account_id: 22, code: 'USD', name: 'Dollar savings', starter_key: null, currency_code: null, account_class: 'asset', account_kind: 'savings', balances: [q('100000', USD)], value: q('90000') },
+          { account_id: 23, code: 'BRK', name: 'Brokerage', starter_key: null, currency_code: null, account_class: 'asset', account_kind: 'brokerage', balances: [q('10', TEST, 0)], value: null }
         ]
       }
     },
@@ -69,7 +69,7 @@ export function widgets(overrides: Partial<HomeWidgets> = {}): HomeWidgets {
       status: 'ok',
       summary: {
         as_of: '2026-10-15', position_count: 4, unpriced_count: 0, missing: [], stale: [],
-        holdings: [{ account_id: 41, brokerage_id: 23, brokerage_name: 'Brokerage', balances: [q('10', TEST, 0)], value: q('60000') }]
+        holdings: [{ account_id: 41, brokerage_id: 23, brokerage_name: 'Brokerage', brokerage_code: 'BRK', brokerage_starter_key: null, brokerage_currency_code: null, balances: [q('10', TEST, 0)], value: q('60000') }]
       }
     },
     returns: {

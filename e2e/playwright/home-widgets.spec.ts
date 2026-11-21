@@ -14,20 +14,24 @@ test('My Home widgets come from the one Home read, drill down with filters, and 
   await apiJSON(page, 'POST', `/api/v1/currencies/${currencyID}/default`, csrfToken, undefined, [200]);
   csrfToken = await csrfTokenFor(page);
   const account = await createCashAccount(page, csrfToken, 'Widget checking', currencyID);
+  const { accounts } = await apiJSON<{ accounts: Array<{ id: number; code?: string }> }>(page, 'GET', '/api/v1/accounts');
+  const starter = accounts.find(item => item.code === 'cash:USD');
+  if (!starter) throw new Error('expected the starter USD cash account');
   const salary = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/categories', csrfToken, { name: 'Widget salary', category_type: 'income' });
   // A starter category has no name of its own: Home labels it by its built-in key.
   const { categories } = await apiJSON<{ categories: Category[] }>(page, 'GET', '/api/v1/categories');
   const groceries = categories.find(category => category.builtin_key === 'expense.food.groceries');
   if (!groceries) throw new Error('expected the starter Groceries category');
   const { owner_today: today } = await apiJSON<{ owner_today: string }>(page, 'GET', '/api/v1/auth/session');
-  const post = (categoryID: number, cents: number) => apiJSON(page, 'POST', '/api/v1/transactions', csrfToken, {
+  const post = (otherAccountID: number, cents: number) => apiJSON(page, 'POST', '/api/v1/transactions', csrfToken, {
     status: 'posted', transaction_date: today, journal_entries: [{ entry_date: today, postings: [
       { account_id: account.id, commodity_id: currencyID, quantity_value: String(-cents), quantity_scale: 2 },
-      { account_id: categoryID, commodity_id: currencyID, quantity_value: String(cents), quantity_scale: 2 }
+      { account_id: otherAccountID, commodity_id: currencyID, quantity_value: String(cents), quantity_scale: 2 }
     ] }]
   });
   await post(salary.id, -250000);
   await post(groceries.id, 4560);
+  await post(starter.id, 10000);
 
   const reads: string[] = [];
   page.on('request', request => {
@@ -45,6 +49,7 @@ test('My Home widgets come from the one Home read, drill down with filters, and 
   await expect(row).toHaveAttribute('href', new RegExp(`category_id=${groceries.id}`));
   await expect(spending.getByRole('link', { name: /Open spending report/ })).toHaveAttribute('href', new RegExp(`start_date=${today.slice(0, 8)}01&end_date=${today}&bucket=month&reporting_currency_id=${currencyID}`));
   await expect(page.getByTestId('home-widget-accounts').getByRole('link', { name: 'Widget checking' })).toHaveAttribute('href', `/app/ledger/accounts/${account.id}/register`);
+  await expect(page.getByTestId('home-widget-accounts').getByRole('link', { name: 'Cash USD', exact: true })).toHaveAttribute('href', `/app/ledger/accounts/${starter.id}/register`);
   await expect(page.getByTestId('home-widget-budgets')).toHaveAttribute('data-state', 'not_set_up');
   await expect(page.getByTestId('home-widget-recurring')).toHaveAttribute('data-state', 'not_set_up');
   await expect(page.getByTestId('home-widget-net_worth_trend').getByRole('img')).toBeVisible();
@@ -73,6 +78,8 @@ test('My Home widgets come from the one Home read, drill down with filters, and 
   // Late content never displaces it.
   await page.waitForLoadState('networkidle');
   expect(await page.evaluate(() => scrollY)).toBe(scrolled);
+  await page.goto('/app/ledger');
+  await expect(page.getByRole('link', { name: 'View register for Cash USD', exact: true })).toHaveText('Cash USD');
 });
 
 for (const theme of ['light', 'dark'] as const) {
