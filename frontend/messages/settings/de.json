@@ -1070,9 +1070,10 @@
     }
   ],
   "investments_suggestion_split": "Aktiensplit",
-  "investments_suggestion_split_ratio": "{newShares} / {oldShares}",
+  "investments_suggestion_split_ratio": "Neue Aktien {newShares} · Alte Aktien {oldShares}",
   "investments_suggestion_split_date": "Splitdatum {date}",
   "investments_suggestion_split_manual": "Dieser Split muss manuell geprüft werden. Prüfe den Brokerbeleg und verwende bei Bedarf das Split-Formular.",
+  "investments_suggestion_split_unverified_listing": "Massive konnte die Börsennotierung am Split-Datum nicht verifizieren. Prüfe den Brokerbeleg.",
   "investments_suggestion_split_link": "Erfassten Split verknüpfen",
   "investments_suggestion_split_link_error": "Der erfasste Split konnte nicht verknüpft werden.",
   "investments_suggestion_split_accept_error": "Dieser Split konnte nicht angenommen werden. Prüfe den Brokerbeleg und verwende bei Bedarf das Split-Formular.",

@@ -1070,9 +1070,10 @@
     }
   ],
   "investments_suggestion_split": "Stock split",
-  "investments_suggestion_split_ratio": "{newShares} / {oldShares}",
+  "investments_suggestion_split_ratio": "{newShares} new for {oldShares} old",
   "investments_suggestion_split_date": "Split date {date}",
   "investments_suggestion_split_manual": "This split needs manual review. Check your broker statement and use the manual split form if needed.",
+  "investments_suggestion_split_unverified_listing": "Massive could not verify the listing on the split date. Check your broker statement.",
   "investments_suggestion_split_link": "Link recorded split",
   "investments_suggestion_split_link_error": "Could not link the recorded split.",
   "investments_suggestion_split_accept_error": "Could not accept this split. Review the broker statement and use the manual split form if needed.",

@@ -1070,9 +1070,10 @@
     }
   ],
   "investments_suggestion_split": "Desdoblamiento de acciones",
-  "investments_suggestion_split_ratio": "{newShares} / {oldShares}",
+  "investments_suggestion_split_ratio": "Acciones nuevas {newShares} · Acciones antiguas {oldShares}",
   "investments_suggestion_split_date": "Fecha del desdoblamiento {date}",
   "investments_suggestion_split_manual": "Esta operación requiere revisión manual. Consulta el extracto del bróker y usa el formulario de desdoblamiento si es necesario.",
+  "investments_suggestion_split_unverified_listing": "Massive no pudo verificar la cotización en la fecha del desdoblamiento. Consulta el extracto del bróker.",
   "investments_suggestion_split_link": "Vincular desdoblamiento registrado",
   "investments_suggestion_split_link_error": "No se pudo vincular el desdoblamiento registrado.",
   "investments_suggestion_split_accept_error": "No se pudo aceptar la operación. Consulta el extracto del bróker y usa el formulario si es necesario.",

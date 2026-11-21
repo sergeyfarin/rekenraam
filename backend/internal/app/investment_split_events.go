@@ -114,20 +114,16 @@ func (s *PricingService) fetchSplitEvents(ctx context.Context, item db.Backgroun
 	if err != nil {
 		return err
 	}
-	identityFailed := false
 	for _, observation := range observations {
-		identityFailed = identityFailed || (observation.Numerator > 0 && observation.ShareFIGI == "")
 		if err := s.stageSplitObservation(ctx, target, ownerID, observation); err != nil {
 			return err
 		}
-	}
-	if identityFailed {
-		return fmt.Errorf("%w: Massive could not verify a historical listing", marketdata.ErrUnsupportedPair)
 	}
 	return nil
 }
 
 func (s *PricingService) stageSplitObservation(ctx context.Context, target db.MassiveSplitTarget, ownerID int64, row marketdata.MassiveSplit) error {
+	unverifiedListing := row.Numerator > 0 && row.ShareFIGI == ""
 	content := providerSplitEvidence{Schema: 1, Provider: marketdata.MassiveCode, ProviderID: row.ID, Symbol: target.Symbol, MIC: target.MIC, ShareFIGI: row.ShareFIGI,
 		Date: row.Date, Kind: row.Kind, Numerator: row.Numerator, Denominator: row.Denominator, Conflict: row.Conflict}
 	normalized, _ := json.Marshal(content)
@@ -135,6 +131,10 @@ func (s *PricingService) stageSplitObservation(ctx context.Context, target db.Ma
 	staged, err := s.repository.StagedProviderEventByIdentity(ctx, BookID, target.SourceID, row.ID)
 	switch {
 	case err == nil:
+		// An inconclusive listing lookup cannot revise retained split evidence.
+		if unverifiedListing {
+			return nil
+		}
 		originalKey, err := marketdata.MassiveSplitContentKey(staged.RawJSON)
 		if err != nil {
 			return err
@@ -154,7 +154,7 @@ func (s *PricingService) stageSplitObservation(ctx context.Context, target db.Ma
 	case !errors.Is(err, db.ErrNotFound):
 		return err
 	}
-	if (row.Kind != "forward_split" && row.Kind != "reverse_split") || (row.Numerator > 0 && row.ShareFIGI == "") {
+	if row.Kind != "forward_split" && row.Kind != "reverse_split" {
 		return nil
 	}
 
@@ -178,7 +178,9 @@ func (s *PricingService) stageSplitObservation(ctx context.Context, target db.Ma
 		}
 	}
 	switch {
-	case row.Numerator == 0 || row.ShareFIGI == "" || row.Conflict:
+	case unverifiedListing:
+		proposal.ReviewReason = "identity"
+	case row.Numerator == 0 || row.Conflict:
 		proposal.ReviewReason = "evidence"
 	case proposal.HoldingAccountID == 0:
 		proposal.ReviewReason = "holdings"

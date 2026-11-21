@@ -19,20 +19,24 @@ import (
 
 type massiveEventFixture struct {
 	*investTestFixture
-	pricing                  *PricingService
-	instrument               InvestmentInstrument
-	holding                  Account
-	ratio                    atomic.Int64
-	missingHistoricalListing atomic.Bool
+	pricing            *PricingService
+	instrument         InvestmentInstrument
+	holding            Account
+	ratio              atomic.Int64
+	missingListingDate atomic.Value
 }
 
-const massiveEventDate = "2026-06-16"
+const (
+	massiveEventDate       = "2026-06-16"
+	massiveUnheldEventDate = "2026-01-15"
+)
 
 func newMassiveEventFixture(t *testing.T, key string) *massiveEventFixture {
 	t.Helper()
 	ctx := context.Background()
 	f := &massiveEventFixture{investTestFixture: newInvestTestFixture(t)}
 	f.ratio.Store(4)
+	f.missingListingDate.Store("")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// The single writer connection is free while fetching.
 		var count int
@@ -41,10 +45,11 @@ func newMassiveEventFixture(t *testing.T, key string) *massiveEventFixture {
 		case "/stocks/v1/splits":
 			fmt.Fprintf(w, `{"status":"OK","results":[
 				{"id":"fixture-split","ticker":"TEST","adjustment_type":"forward_split","execution_date":%q,"split_from":1,"split_to":%d,"historical_adjustment_factor":0.25},
+				{"id":"fixture-unheld-split","ticker":"TEST","adjustment_type":"reverse_split","execution_date":%q,"split_from":10,"split_to":1},
 				{"id":"fixture-stock-dividend","ticker":"TEST","adjustment_type":"stock_dividend","execution_date":%q,"split_from":1,"split_to":1.08}
-			]}`, massiveEventDate, f.ratio.Load(), massiveEventDate)
+			]}`, massiveEventDate, f.ratio.Load(), massiveUnheldEventDate, massiveEventDate)
 		case "/v3/reference/tickers/TEST":
-			if f.missingHistoricalListing.Load() && r.URL.Query().Get("date") == massiveEventDate {
+			if r.URL.Query().Get("date") == f.missingListingDate.Load().(string) {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
@@ -85,6 +90,14 @@ func (f *massiveEventFixture) fetch(t *testing.T) []InvestmentEventSuggestion {
 	suggestions, err := f.investmentSvc.ListEventSuggestions(ctx)
 	require.NoError(t, err)
 	return suggestions
+}
+
+func (f *massiveEventFixture) requireCompletedSplitChecks(t *testing.T, want int) {
+	t.Helper()
+	var count int
+	require.NoError(t, f.database.QueryRow(`SELECT COUNT(*) FROM background_work_items WHERE kind = ? AND status = 'completed'`,
+		splitEventWorkKind).Scan(&count))
+	require.Equal(t, want, count)
 }
 
 func TestMassiveSplitSuggestionAcceptsOnceAndRetainsRevisions(t *testing.T) {
@@ -208,7 +221,34 @@ func TestMassiveSplitFetchKeepsTheMarketDateAcrossMidnight(t *testing.T) {
 	}))
 }
 
-func TestMassiveSplitIdentityFailureIsNotAProviderRevision(t *testing.T) {
+func TestMassiveSplitUnheldUnverifiedListingDoesNotFailFetch(t *testing.T) {
+	t.Parallel()
+	f := newMassiveEventFixture(t, "synthetic-key")
+	f.missingListingDate.Store(massiveUnheldEventDate)
+
+	suggestions := f.fetch(t)
+	require.Len(t, suggestions, 1)
+	assert.Equal(t, massiveEventDate, suggestions[0].EventDate)
+	assert.NotContains(t, suggestions[0].ProposedTransactionJSON, "review_reason")
+	f.requireCompletedSplitChecks(t, 1)
+}
+
+func TestMassiveSplitHeldUnverifiedListingRequiresManualReview(t *testing.T) {
+	t.Parallel()
+	f := newMassiveEventFixture(t, "synthetic-key")
+	f.missingListingDate.Store(massiveEventDate)
+
+	suggestions := f.fetch(t)
+	require.Len(t, suggestions, 1)
+	assert.Contains(t, suggestions[0].ProposedTransactionJSON, `"review_reason":"identity"`)
+	assert.Empty(t, suggestions[0].SplitLinkCandidates)
+	_, err := f.investmentSvc.AcceptSuggestion(context.Background(), 1, 0, "", suggestions[0].ID)
+	require.ErrorContains(t, err, "requires manual review")
+	assert.Zero(t, countSplitRows(t, f.database).facts)
+	f.requireCompletedSplitChecks(t, 1)
+}
+
+func TestMassiveSplitIdentityFailureLeavesStagedEventIntact(t *testing.T) {
 	t.Parallel()
 	f := newMassiveEventFixture(t, "synthetic-key")
 	ctx := context.Background()
@@ -217,16 +257,16 @@ func TestMassiveSplitIdentityFailureIsNotAProviderRevision(t *testing.T) {
 	require.NoError(t, f.database.QueryRow(`SELECT raw_json FROM investment_provider_events`).Scan(&raw))
 	assert.Contains(t, raw, `"historical_adjustment_factor":0.25`, "retain the provider row, including unparsed fields")
 
-	f.missingHistoricalListing.Store(true)
+	f.ratio.Store(5)
+	f.missingListingDate.Store(massiveEventDate)
 	suggestions := f.fetch(t)
 	require.Len(t, suggestions, 1)
 	assert.Empty(t, suggestions[0].Revisions)
-	failed, err := f.pricing.FailedBackgroundWork(ctx)
-	require.NoError(t, err)
-	require.Len(t, failed, 1)
-	assert.Contains(t, failed[0].LastError, "could not verify a historical listing")
+	assert.NotContains(t, suggestions[0].ProposedTransactionJSON, "review_reason")
+	f.requireCompletedSplitChecks(t, 2)
 
-	f.missingHistoricalListing.Store(false)
+	f.ratio.Store(4)
+	f.missingListingDate.Store("")
 	require.Empty(t, f.fetch(t)[0].Revisions)
 	accepted, err := f.investmentSvc.AcceptSuggestion(ctx, 1, 0, "request", suggestions[0].ID)
 	require.NoError(t, err)

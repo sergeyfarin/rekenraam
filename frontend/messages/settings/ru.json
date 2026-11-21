@@ -1071,9 +1071,10 @@
     }
   ],
   "investments_suggestion_split": "Дробление акций",
-  "investments_suggestion_split_ratio": "{newShares} / {oldShares}",
+  "investments_suggestion_split_ratio": "Новые акции {newShares} · Старые акции {oldShares}",
   "investments_suggestion_split_date": "Дата дробления {date}",
   "investments_suggestion_split_manual": "Операция требует ручной проверки. Сверьтесь с отчётом брокера и при необходимости используйте форму дробления.",
+  "investments_suggestion_split_unverified_listing": "Massive не смог подтвердить листинг на дату дробления. Сверьтесь с отчётом брокера.",
   "investments_suggestion_split_link": "Связать с записанным дроблением",
   "investments_suggestion_split_link_error": "Не удалось связать с записанным дроблением.",
   "investments_suggestion_split_accept_error": "Не удалось принять дробление. Проверьте отчёт брокера и при необходимости заполните форму вручную.",

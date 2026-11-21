@@ -465,10 +465,12 @@ With multiple long holdings, record each split manually and dismiss the
 suggestion. The native split form operates on long lots, so suggestions
 involving short positions require manual review. Linking across holdings is
 tracked in [#621](https://github.com/sergeyfarin/rekenraam/issues/621).
-An unavailable historical listing is reported as a fetch failure. Only changes
-to Massive’s split fields produce revisions. Revisions cannot alter a
-posted or linked split and prevent accepting a pending original. Manual
-split entry remains available independently under ADR 0017.
+Unheld splits are skipped. If a historical lookup cannot verify the listing
+on the date of a newly observed held split, the suggestion shows the identity
+issue for manual review. An inconclusive lookup leaves existing suggestions
+as they are. Revisions track changes to Massive’s split fields and cannot alter
+a posted or linked split. A revision prevents accepting a pending original.
+Manual split entry remains available independently under ADR 0017.
 
 ## Slice-start preconditions (blocking)
 

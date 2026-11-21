@@ -47,14 +47,14 @@ test('[acceptance] a Massive split is reviewed and posted once on a phone', asyn
   await page.getByRole('button', { name: 'Check Massive splits', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Split check queued for 1 listing.' })).toBeVisible();
   const card = page.getByTestId('event-suggestion').filter({ hasText: name });
-  await expect(card).toContainText('4 / 1', { timeout: 30_000 });
+  await expect(card).toContainText('4 new for 1 old', { timeout: 30_000 });
   await expect(card.locator('time')).toHaveAttribute('datetime', splitDate);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await expectNoAccessibilityViolations(page, 'Massive split suggestion on a phone');
 
   await card.getByRole('button', { name: 'Accept', exact: true }).click();
   const settled = page.getByRole('listitem').filter({ hasText: name }).filter({ hasText: 'Accepted' });
-  await expect(settled).toContainText('4 / 1');
+  await expect(settled).toContainText('4 new for 1 old');
   await expect(settled.getByRole('link', { name: /^Open split #/ })).toBeVisible();
   await page.getByRole('button', { name: 'Check Massive splits', exact: true }).click();
   await expect(settled).toHaveCount(1);
@@ -71,7 +71,8 @@ test('split cards offer manual review or a link without showing Accept', async (
   };
   const revision = { observed_at: '2026-06-17T12:00:00Z', evidence: { schema: 1, ratio_numerator: 5, ratio_denominator: 1 } };
   await page.route('**/api/v1/investments/event-suggestions', (route) => route.fulfill({ json: { suggestions: [
-    { ...split, id: 1, provider_event_id: 1, proposed_transaction: { kind: 'split', review_reason: 'holdings' } },
+    { ...split, id: 1, provider_event_id: 1, confidence_bps: 0, proposed_transaction: { kind: 'split', review_reason: 'identity' },
+      evidence: { schema: 1, ratio_numerator: 1, ratio_denominator: 20 } },
     { ...split, id: 2, provider_event_id: 2, proposed_transaction: { kind: 'split', holding_account_id: 42 },
       split_link_candidates: [{ transaction_id: 12, holding_account_id: 42, holding_account_name: 'Broker holding' }] },
     { ...split, id: 3, provider_event_id: 3, proposed_transaction: { kind: 'split', holding_account_id: 42 }, revisions: [revision] },
@@ -82,7 +83,8 @@ test('split cards offer manual review or a link without showing Accept', async (
   await page.getByRole('link', { name: /^Suggestions/ }).click();
   const cards = page.getByTestId('event-suggestion');
   await expect(cards).toHaveCount(3);
-  await expect(cards.nth(0)).toContainText('This split needs manual review');
+  await expect(cards.nth(0)).toContainText('1 new for 20 old');
+  await expect(cards.nth(0)).toContainText('Massive could not verify the listing on the split date');
   await expect(cards.nth(1).getByRole('button', { name: 'Link recorded split' })).toBeVisible();
   await expect(cards.getByRole('button', { name: 'Accept', exact: true })).toHaveCount(0);
   await expect(page.getByTestId('split-suggestion-revisions')).toHaveCount(2);

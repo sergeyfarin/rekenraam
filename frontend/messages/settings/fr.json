@@ -1070,9 +1070,10 @@
     }
   ],
   "investments_suggestion_split": "Fractionnement d’actions",
-  "investments_suggestion_split_ratio": "{newShares} / {oldShares}",
+  "investments_suggestion_split_ratio": "Nouvelles actions {newShares} · Anciennes actions {oldShares}",
   "investments_suggestion_split_date": "Date du fractionnement {date}",
   "investments_suggestion_split_manual": "Cette opération nécessite une vérification manuelle. Consultez le relevé du courtier et utilisez le formulaire de fractionnement si nécessaire.",
+  "investments_suggestion_split_unverified_listing": "Massive n’a pas pu vérifier la cotation à la date du fractionnement. Consultez le relevé du courtier.",
   "investments_suggestion_split_link": "Associer le fractionnement enregistré",
   "investments_suggestion_split_link_error": "Impossible d’associer le fractionnement enregistré.",
   "investments_suggestion_split_accept_error": "Impossible d’accepter cette opération. Vérifiez le relevé du courtier et utilisez le formulaire si nécessaire.",

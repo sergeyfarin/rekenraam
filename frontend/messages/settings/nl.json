@@ -1070,9 +1070,10 @@
     }
   ],
   "investments_suggestion_split": "Aandelensplitsing",
-  "investments_suggestion_split_ratio": "{newShares} / {oldShares}",
+  "investments_suggestion_split_ratio": "{newShares} nieuw voor {oldShares} oud",
   "investments_suggestion_split_date": "Splitsingsdatum {date}",
   "investments_suggestion_split_manual": "Deze splitsing vereist handmatige controle. Controleer je brokeroverzicht en gebruik zo nodig het splitsingsformulier.",
+  "investments_suggestion_split_unverified_listing": "Massive kon de beursnotering op de splitsingsdatum niet verifiëren. Controleer je brokeroverzicht.",
   "investments_suggestion_split_link": "Vastgelegde splitsing koppelen",
   "investments_suggestion_split_link_error": "De vastgelegde splitsing kon niet worden gekoppeld.",
   "investments_suggestion_split_accept_error": "Deze splitsing kon niet worden geaccepteerd. Controleer je brokeroverzicht en gebruik zo nodig het splitsingsformulier.",

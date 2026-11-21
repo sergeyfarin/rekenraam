@@ -296,7 +296,11 @@
                     <p class="text-sm text-muted">{s.proposed_transaction.holding_account_name}</p>
                   {/if}
                   {#if s.proposed_transaction.review_reason || s.revisions.length > 0}
-                    <p role="note" class="text-sm text-muted">{m.investments_suggestion_split_manual()}</p>
+                    <p role="note" class="text-sm text-muted">
+                      {s.proposed_transaction.review_reason === 'identity'
+                        ? m.investments_suggestion_split_unverified_listing()
+                        : m.investments_suggestion_split_manual()}
+                    </p>
                   {/if}
                   {#if s.split_link_candidates?.length}
                     <ul class="space-y-2">
