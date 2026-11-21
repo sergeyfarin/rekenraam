@@ -57,7 +57,7 @@ function amountSeparators(locale: string) {
  * standard scale. Returns `null` for anything that is not a valid signed
  * decimal so callers can reject the input instead of sending a malformed
  * amount. The active locale decides decimal/group separators; no fallback to
- * another locale or separator guessing is permitted. All six shipping locales
+ * another locale or separator guessing is permitted. The supported locales
  * group in threes. Space-grouping locales also accept keyboard space, NBSP and
  * narrow NBSP, but a single amount must use one consistent grouping character.
  */

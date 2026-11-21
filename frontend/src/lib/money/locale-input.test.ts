@@ -9,11 +9,11 @@ import { parseStatementBalance } from '#lib/reconcile/statement-balance.ts';
 import type { InvestmentTradeCorrectionContextResponse } from '#lib/api/investments.ts';
 import { exactDecimal } from '#lib/reports/report-csv.ts';
 
-const locales = ['en', 'es', 'fr', 'nl', 'de', 'ru'] as const;
+const formattingLocales = ['en', 'es', 'fr', 'nl', 'de', 'ru'] as const;
 afterEach(() => vi.restoreAllMocks());
 
 describe('locale-aware editable amounts (#100)', () => {
-  it.each(locales)('uses the active %s locale for entry and exact rehydration', (locale) => {
+  it.each(runtime.locales)('uses the active %s locale for entry and exact rehydration', (locale) => {
     vi.spyOn(runtime, 'getLocale').mockReturnValue(locale);
     const decimal = locale === 'en' ? '.' : ',';
     for (const [value, scale] of [['9007199254740993', 2], ['-5', 2], ['0', 2], ['12345678901234567890123456789012345678', 24]] as const) {
@@ -39,7 +39,7 @@ describe('locale-aware editable amounts (#100)', () => {
     expect(parseDecimalAmount('1.50', { locale: 'de' })).toBeNull();
   });
 
-  it.each(locales)('rejects malformed, foreign and mixed grouping in %s', (locale) => {
+  it.each(formattingLocales)('rejects malformed, foreign and mixed grouping in %s', (locale) => {
     const parts = new Intl.NumberFormat(locale).formatToParts(12345.6);
     const group = parts.find(p => p.type === 'group')!.value;
     const decimal = parts.find(p => p.type === 'decimal')!.value;
@@ -58,7 +58,7 @@ describe('locale-aware editable amounts (#100)', () => {
   });
 
   it('uses the active locale throughout investment, price, reconciliation and split helpers', () => {
-    vi.spyOn(runtime, 'getLocale').mockReturnValue('de');
+    vi.spyOn(runtime, 'getLocale').mockReturnValue('nl');
     expect(parseTradeAmounts({ quantityStr: '2,50', cashAmountStr: '9.007.199.254.740,993' })).toEqual({ ok: true, values: { quantity: { value: '250', scale: 2 }, cashAmount: { value: '9007199254740993', scale: 3 } } });
     const source = { quantity_value: '9007199254740993', quantity_scale: 2, net_value: '-12550', net_scale: 2, charges: [], effective_elected_lots: [{ lot_id: 9, quantity_value: '125', quantity_scale: 2 }] } as unknown as InvestmentTradeCorrectionContextResponse;
     expect(correctionTradeDraft(source)).toMatchObject({ quantity: '90071992547409,93', net: '125,50' });

@@ -88,7 +88,9 @@ Admission happens **before** ranking:
   valuation. This is a live observation admission boundary, **not** a historical
   reconstruction of what was active before a withdrawal.
 - The observation date cannot exceed the consumer's valuation ceiling. For
-  current values that ceiling is the server's saved owner-zone calendar date.
+  current values that ceiling is the owner-zone calendar date the operation
+  pinned at entry, or the date resolved by the standalone valuation read.
+  A historical reference-data override only changes reference selection.
 - Currency bases accept `manual`, `valuation_override`, `official_fixing`,
   `spot_mid`, and `trade_implied`, with `raw` or `not_applicable` basis.
 - Security/other countable bases accept `manual`, `valuation_override`,

@@ -88,8 +88,7 @@ test.describe.serial('gains FX conversion', () => {
 
   // One test per locale (#251), over the CAD gains the journey booked.
   const locales = [
-    ['nl', 'Winsten', 'Rapportagevaluta'], ['de', 'Gewinne', 'Berichtswährung'],
-    ['fr', 'Plus-values', 'Devise de présentation'], ['es', 'Ganancias', 'Moneda de presentación'],
+    ['nl', 'Winsten', 'Rapportagevaluta'],
     ['ru', 'Прибыль', 'Валюта отчёта']
   ] as const;
   for (const [locale, tab, title] of locales) {

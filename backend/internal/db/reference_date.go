@@ -7,6 +7,19 @@ import (
 )
 
 type referenceDateKey struct{}
+type ownerTodayKey struct{}
+
+// WithOwnerToday pins a resolved owner-local day for both live observation
+// selection and current reference data. A subsequent WithReferenceDate can
+// override reference selection without moving the live observation ceiling.
+func WithOwnerToday(ctx context.Context, date string) context.Context {
+	return context.WithValue(WithReferenceDate(ctx, date), ownerTodayKey{}, date)
+}
+
+func pinnedOwnerToday(ctx context.Context) string {
+	date, _ := ctx.Value(ownerTodayKey{}).(string)
+	return date
+}
 
 // referenceDay is the reference date as parsed civil-date parts. It holds no
 // caller text at all: CurrentReferenceVersions renders its SQL literal from the

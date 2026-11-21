@@ -1,9 +1,8 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { allLocales } from './playwright/support/locales';
 
-const locales = ['en', 'nl', 'de', 'fr', 'es', 'ru'];
-
-for (const locale of locales) {
+for (const locale of allLocales) {
   test(`${locale}: localized content, responsive layouts and accessible themes`, async ({ page }) => {
     const failures: string[] = [];
     const origins = new Set<string>();
@@ -46,7 +45,8 @@ test('language switching and content work without JavaScript', async ({ browser 
   try {
     const page = await context.newPage();
     await page.goto('/');
-    for (const locale of ['ru', 'de', 'fr', 'es', 'nl', 'en']) {
+    await expect(page.locator('.language-picker a')).toHaveCount(allLocales.length);
+    for (const locale of [...allLocales].reverse()) {
       await page.locator('.language-picker summary').click();
       await page.locator(`.language-picker a[hreflang="${locale}"]`).click();
       await expect(page.locator('html')).toHaveAttribute('lang', locale);

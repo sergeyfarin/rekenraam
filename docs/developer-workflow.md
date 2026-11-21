@@ -130,7 +130,7 @@ FX source. Keep the app ID in the environment or secrets store.
 
 ### Public website
 
-The separate `website/` project renders static HTML for the app's six locales.
+The separate `website/` project renders static HTML for the app's shipped locales.
 It needs Node 26 and no npm dependencies or Go server. The website source and
 the self-hosted application have independent builds; `pnpm build` still builds
 only the app. See the [website contract](design/public-website.md) for content,
@@ -144,19 +144,21 @@ pnpm website:preview          # existing build at http://127.0.0.1:1889
 pnpm website:check-browser    # needs E2E dependencies and Playwright Chromium
 ```
 
-The dev command watches catalogs and assets; restart it after editing the
-build template. `WEBSITE_PORT` changes the preview port. Stop the preview before
-browser checks, which own port 1889. Website checks/build run in the existing
+The dev command watches catalogs and assets. Restart it after editing the
+build template or app locale configuration. `WEBSITE_PORT` changes the preview
+port. Stop the preview before browser checks, which own port 1889.
+Website checks and builds run in the existing
 Frontend Check CI job. The browser command checks all locales at 320, 390, 768
 and 1280 px, light/dark accessibility, theme persistence, image loading, no
 external asset requests and language navigation without JavaScript. Screenshot
 checks cover the manual carousel's selection, wraparound, keyboard focus,
 announcements and three-image fallback without scripts.
 
-The site uses `/` for English and `/nl/`, `/de/`, `/fr/`, `/es/`, `/ru/` for
-the other languages. Catalogs and all user-facing metadata live under
-`website/locales/`. Their language set is checked against
-`frontend/project.inlang/settings.json`; native-language review remains #102.
+The site uses `/` for English, `/nl/` for Dutch and `/ru/` for Russian.
+Catalogs and all user-facing metadata live under `website/locales/`.
+The build validates the shipped and partial catalogs and publishes the locales
+listed in `frontend/project.inlang/settings.json`. Native-language review
+remains #102.
 All images/CSS/scripts are local. There are no analytics or external fonts.
 
 The README's spending screenshot is reused during the build. It is a diagonal
@@ -882,10 +884,18 @@ pnpm test:release-preflight
 - Money parsing, editable prefills and exact arithmetic belong to `frontend/src/lib/money/amount.ts`; read-only display belongs to `frontend/src/lib/money/format.ts` (`formatQuantity`). These use strings/BigInt and `Intl.NumberFormat`, with no money-formatting dependency. Use `date-fns` for date manipulation and `Intl.DateTimeFormat` for final locale-aware date display. See [the formatting conventions](conventions.md#frontend-conventions) and the frontend-screen skill.
 - The frontend runs **TypeScript 6.0** as a deliberate, tested exception: `openapi-typescript` 7.13 still declares `peerDependencies.typescript: ^5.x`, but schema generation, `pnpm --dir frontend run check` and the build pass on 6.0 with unchanged generated output. Re-run those three checks on every TypeScript or generator bump, and fall back to the newest 5.x if generation breaks. TypeScript 7 still breaks the schema generator; that upgrade stays tracked as T-48 [#112](https://github.com/sergeyfarin/rekenraam/issues/112), which the 6.0 upgrade does not close.
 - Frontend message catalogs live in `frontend/messages/`, split by domain as `frontend/messages/<domain>/<locale>.json`. Keep message IDs flat and prefixed by domain or screen intent instead of using one growing locale file or deep nested objects. Generated Paraglide output lives in `frontend/src/lib/paraglide/`. Regenerate the typed message layer with `pnpm --dir frontend run paraglide:compile` when changing catalog structure outside the normal `dev`, `check`, or `build` scripts.
-- Shipping locales are `en, es, fr, nl, de, ru`, listed in `frontend/project.inlang/settings.json`. All configured message directories compile into the single `m` namespace, so **a key must be unique across all configured domains** — which file it lives in is grouping, not namespacing.
-- Add each new message to the maintained locales (`en`, `nl`, `ru`) in the same change. `es`, `fr` and `de` are partial (owner decision 2026-11-01, #493): new or changed messages may be missing there and fall back to English, tracked in `frontend/src/lib/i18n/missing.json` (`pnpm --dir frontend run catalogs:missing` rewrites it; `catalogs:check` fails when it is stale) and caught up in batches, complete before the v0.1.0 tag. The split itself is `frontend/src/lib/i18n/locale-status.json`. The fallback is proved twice: `partial-fallback.test.ts` compiles a two-locale project, and the harness spec `e2e/harness/partial-locale-fallback.spec.ts` builds an isolated copy of the frontend with one Spanish message removed, serves it with every API call failing, and checks that the sign-in screen shows that message in English while the rest stays Spanish (about 20 s, in every `test:harness` run). Per-message English fallback remains a runtime safeguard. Adding a *term* requires review — put it in `docs/localization-glossary.md` first, because a plausible-but-wrong financial term is worse than English.
+- Shipping locales are `en, nl, ru`, listed in `frontend/project.inlang/settings.json`. All configured message directories compile into the single `m` namespace, so **a key must be unique across all configured domains** — which file it lives in is grouping, not namespacing.
+- Add each new message to the maintained locales (`en`, `nl`, `ru`) in the
+  same change. `es`, `fr` and `de` remain partial in
+  `frontend/src/lib/i18n/locale-status.json` and stay out of release builds
+  (#579). Run `pnpm --dir frontend run catalogs:missing` to regenerate
+  `frontend/src/lib/i18n/missing.json`. The catalog check rejects a stale list.
+  Per-message English fallback remains a runtime safeguard. Both
+  `partial-fallback.test.ts` and `e2e/harness/partial-locale-fallback.spec.ts`
+  compile isolated fixtures with an incomplete Spanish catalog to verify it.
+  Add new terms to `docs/localization-glossary.md` before translating them.
 - **Locale resolution is configured in two places that must agree**: `strategy` in `frontend/vite.config.ts` and the `--strategy` flag on the `paraglide:compile` script in `frontend/package.json`. Both list `localStorage`, `preferredLanguage`, `baseLocale` — the CLI flag is variadic, so the names are space-separated there, not comma-separated. If they drift, the plugin's compile usually wins and hides the mistake — until something skips it and the app silently ships English only.
-- Run `pnpm --dir frontend run catalogs:check` to compare every configured domain and locale with the Inlang base locale, including keys, placeholders, nonempty values and shared-namespace collisions. Frontend dev/check/build and the shared frontend/CI gate run it automatically. Catalog parity does not establish native terminology approval; use [the #102 review packet](reviews/localization-native-review-2026-10-13.md). `e2e/playwright/language.spec.ts` covers the switcher end to end and deliberately asserts strings from both the app and settings catalogs, since a missing file would otherwise show up only as English on half a screen.
+- Run `pnpm --dir frontend run catalogs:check` to compare maintained and partial catalogs against the Inlang base locale, including keys, placeholders, nonempty values and shared-namespace collisions. Frontend dev/check/build and the shared frontend/CI gate run it automatically. Catalog parity does not establish native terminology approval; use [the #102 review packet](reviews/localization-native-review-2026-10-13.md). `e2e/playwright/language.spec.ts` covers the switcher end to end and deliberately asserts strings from both the app and settings catalogs, since a missing file would otherwise show up only as English on half a screen.
 - Multi-state Svelte routes should stay thin route entrypoints. Move reusable workflow UI and route-specific helpers into feature folders under `frontend/src/lib/`, as with `frontend/src/lib/install-gate/`.
 - Frontend OpenAPI types are generated from `api/openapi/openapi.yaml` into `frontend/src/lib/api/schema.d.ts`. The root OpenAPI file is only the entrypoint: keep top-level metadata, global components, and `$ref` registrations there rather than inline path or schema bodies.
 - Add new API endpoints by creating or extending a path item under `api/openapi/paths/`, then referencing that file from `api/openapi/openapi.yaml` under `paths`. Keep each path item focused on one route pattern such as `institutions.yaml` or `institution-versions.yaml`.
@@ -899,7 +909,7 @@ pnpm test:release-preflight
 - Browser e2e tests live in `e2e/` and use Playwright. Keep them focused on user journeys that need a browser.
 - `e2e/playwright/release-preflight.spec.ts` is the local release preflight for critical financial workflows. It is intentionally serial against one fresh SQLite database and is not part of push CI; `.github/workflows/release-preflight.yml` runs it weekly and via `workflow_dispatch` so it cannot drift unseen (#306). Because it is `describe.serial`, a failure in the first test skips the rest of the file — check "did not run" counts before concluding a journey passed.
 - **Never hard-code a calendar date for a transaction, statement, or imported row in an e2e spec.** Everything a spec seeds is versioned as effective from *today*, and posting validation resolves account and commodity rules as of the entry date, so a date in the past relative to that seeded data matches no version and the posting is rejected. Use `todayISO()` / `todayQIF()` from `e2e/playwright/support/dates.ts`. A hard-coded `2026-07-08` silently broke every browser transaction-entry journey once the wall clock passed it (fixed 2026-08-06).
-- **Per-locale translation journeys run in `en` and `ru`** (`translationLocales` from `e2e/playwright/support/locales.ts`; `nonEnglishTranslationLocales` for non-English-only loops); formatting tests such as `locale-amounts`, and the route sweep's per-locale phone/language pass (one test, and the check that caught #455's Dutch and German label-in-name failures), use `allLocales`; a spec that reads a partial locale's catalog layers it over English, as the app does. **Give each locale of a multi-locale journey its own test.** Loop `for (const locale of [...]) test(...)` around the body rather than walking every locale inside one test: six passes in one body exceed the default 30 s budget under full-suite load (#250), and a fresh browser context per test means a stored `PARAGLIDE_LOCALE` needs no `finally` reset — which itself fails once a timeout has closed the page. When the locale passes check state an earlier journey built (a saved report, a currency's cumulative totals), put the journey and the per-locale tests in one `test.describe.serial`, seeding in the journey test or a `beforeAll`; keep the `[acceptance]` tag on split-off tests whose journey carried it, since `--grep` selects tests by title (#251).
+- **Per-locale translation journeys run in `en` and `ru`** (`translationLocales` from `e2e/playwright/support/locales.ts`; `nonEnglishTranslationLocales` for non-English-only loops); formatting tests such as `locale-amounts` and the route sweep's phone and language pass use `allLocales` from the shipping configuration. **Give each locale of a multi-locale journey its own test.** Loop `for (const locale of [...]) test(...)` around the body rather than walking every locale inside one test: six passes in one body exceed the default 30 s budget under full-suite load (#250), and a fresh browser context per test means a stored `PARAGLIDE_LOCALE` needs no `finally` reset — which itself fails once a timeout has closed the page. When the locale passes check state an earlier journey built (a saved report, a currency's cumulative totals), put the journey and the per-locale tests in one `test.describe.serial`, seeding in the journey test or a `beforeAll`; keep the `[acceptance]` tag on split-off tests whose journey carried it, since `--grep` selects tests by title (#251).
 - **Assert a saved transaction with `expectSavedTransaction()`, not a bare `getByText(description)`.** Saving opens a detail panel, so the description can be on screen three times at once and a loose text locator fails Playwright strict mode — a failure that reads as "not saved" when the opposite is true. Note also that the list row shows the *payee* instead of the description when there is one, so asserting against the row alone is not portable either.
 - Docker assets live in `deploy/docker/` and must preserve the same single-app production shape as the binary.
 - `deploy/docker/proxy-audit/run.sh` stands up a disposable Caddy TLS proxy (local CA) in front of the supplied Compose app. It runs the #268 proxy/shared-browser checks (`e2e/proxy-audit.config.ts`, outside the main suite) and tears everything down. Rerun it when changing cookies, proxy trust, security headers, session exit or MFA key handling. See its README.
