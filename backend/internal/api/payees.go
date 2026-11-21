@@ -28,6 +28,19 @@ type payeesResponse struct {
 	Payees []payeeResponse `json:"payees"`
 }
 
+type payeeDirectoryRow struct {
+	ID               int64   `json:"id"`
+	Name             string  `json:"name"`
+	Status           string  `json:"status"`
+	TransactionCount int64   `json:"transaction_count"`
+	LastUsedOn       *string `json:"last_used_on"`
+}
+
+type payeeDirectoryResponse struct {
+	Payees     []payeeDirectoryRow `json:"payees"`
+	NextCursor string              `json:"next_cursor,omitempty"`
+}
+
 type payeeRequest struct {
 	Name                     *string         `json:"name"`
 	DefaultAccountID         *int64          `json:"default_account_id"`
@@ -67,6 +80,26 @@ func listPayees(logger *slog.Logger, authService *app.AuthService, payeeService 
 		}
 
 		writeJSON(w, http.StatusOK, payeesResponse{Payees: toPayeeResponses(payees)})
+	}
+}
+
+func payeeDirectory(logger *slog.Logger, authService *app.AuthService, payeeService *app.PayeeService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
+			return
+		}
+		query := r.URL.Query()
+		result, err := payeeService.PayeeDirectory(r.Context(), query.Get("status"), query.Get("q"), query.Get("cursor"))
+		if err != nil {
+			writePayeeServiceError(w, r, logger, "read payee directory", err)
+			return
+		}
+		rows := make([]payeeDirectoryRow, 0, len(result.Rows))
+		for _, row := range result.Rows {
+			rows = append(rows, payeeDirectoryRow{ID: row.ID, Name: row.Name, Status: row.Status,
+				TransactionCount: row.TransactionCount, LastUsedOn: optionalNullString(row.LastUsedOn)})
+		}
+		writeJSON(w, http.StatusOK, payeeDirectoryResponse{Payees: rows, NextCursor: result.NextCursor})
 	}
 }
 

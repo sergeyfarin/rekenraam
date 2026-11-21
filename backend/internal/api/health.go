@@ -97,6 +97,7 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 	mux.HandleFunc("DELETE /api/v1/categories/{category_id}", deleteCategory(logger, services.Auth, services.Category, options))
 	mux.HandleFunc("POST /api/v1/setup/categories", completeCategoriesSetup(logger, services.Auth, services.Category, options))
 	mux.HandleFunc("GET /api/v1/payees", listPayees(logger, services.Auth, services.Payee))
+	mux.HandleFunc("GET /api/v1/payees/directory", payeeDirectory(logger, services.Auth, services.Payee))
 	mux.HandleFunc("GET /api/v1/recurring/summary", recurringSummary(logger, services.Auth, services.Recurring))
 	mux.HandleFunc("POST /api/v1/recurring/preview", previewRecurringSchedule(logger, services.Auth, services.Recurring))
 	mux.HandleFunc("POST /api/v1/recurring/templates/{template_id}/run-now", runRecurringNow(logger, services.Auth, services.Recurring, options))

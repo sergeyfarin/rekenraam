@@ -1,0 +1,43 @@
+get:
+  summary: List payees with their transaction usage
+  security:
+    - CookieSession: []
+  parameters:
+    - in: query
+      name: status
+      schema:
+        type: string
+        enum: [active, archived, all]
+        default: active
+    - in: query
+      name: q
+      description: Case-insensitive substring of the payee name.
+      schema:
+        type: string
+    - in: query
+      name: cursor
+      description: Continue with the same search and status using the previous response's cursor.
+      schema:
+        type: string
+  responses:
+    "200":
+      description: Payees ordered by normalized name, up to 50 per page.
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/PayeeDirectoryResponse"
+    "400":
+      description: Invalid query
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

@@ -3,7 +3,6 @@
   import { transactionTitle } from '#lib/transactions/transaction-title.ts';
   import { systemLabelText } from '#lib/transactions/system-label.ts';
   import { joinCommodityAmount } from '#lib/money/format.ts';
-  import { untrack } from 'svelte';
   import { createInfiniteQuery, useQueryClient } from '@tanstack/svelte-query';
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
@@ -37,7 +36,7 @@
   let {
     csrfToken,
     actions,
-    initialFilters,
+    filters,
     onFiltersChange,
     onRowClick,
     lockStatus,
@@ -46,10 +45,8 @@
   }: {
     csrfToken?: string;
     actions: TransactionWorkspaceActions;
-    /** Seeds the bar from the URL, so a drill-down link lands pre-filtered. */
-    initialFilters?: TransactionQueryFilters;
-    /** Reports each change back so the route can keep the URL in step. */
-    onFiltersChange?: (filters: TransactionQueryFilters) => void;
+    filters: TransactionQueryFilters;
+    onFiltersChange: (filters: TransactionQueryFilters) => void;
     onRowClick?: (tx: TransactionResponse) => void;
     /** A view that owns lifecycle, such as Drafts, hides the status filter. */
     lockStatus?: TransactionFilters['status'];
@@ -57,36 +54,15 @@
     emptyCopy?: string;
   } = $props();
 
-  // Filters the bar cannot set — a drill-down's category and date basis — are
-  // held separately so the bar's own edits never silently drop them.
-  // `untrack` states the intent the warning asks about: the URL seeds this list
-  // once. After that the bar owns the filters and the route follows it.
-  const seed = untrack(() => initialFilters);
-  let linkFilters = $state<TransactionQueryFilters>({
-    categoryID: seed?.categoryID,
-    categoryType: seed?.categoryType,
-    dateBasis: seed?.dateBasis
-  });
-  const fromReport = $derived(linkFilters.categoryID !== undefined || linkFilters.categoryType !== undefined);
-  let filters = $state<TransactionFilters>({
-    status: untrack(() => lockStatus ?? seed?.status),
-    kind: seed?.kind,
-    accountID: seed?.accountID,
-    payeeID: seed?.payeeID,
-    q: seed?.q,
-    needsReview: seed?.needsReview,
-    afterDate: seed?.afterDate,
-    beforeDate: seed?.beforeDate
-  });
+  const fromReport = $derived(filters.categoryID !== undefined || filters.categoryType !== undefined);
   const activeFilters = $derived<TransactionQueryFilters>({
-    ...linkFilters,
     ...filters,
     ...(lockStatus ? { status: lockStatus } : {})
   });
 
-  $effect(() => {
-    onFiltersChange?.(activeFilters);
-  });
+  function updateBar(next: TransactionFilters) {
+    onFiltersChange({ ...filters, ...next });
+  }
   const locale = $derived(getLocale());
   const queryClient = useQueryClient();
 
@@ -146,7 +122,7 @@
         <button
           type="button"
           class="text-sm font-semibold text-accent underline underline-offset-2 transition hover:opacity-80"
-          onclick={() => (linkFilters = {})}
+          onclick={() => onFiltersChange({ ...filters, categoryID: undefined, categoryType: undefined, dateBasis: undefined })}
         >
           {m.transactions_from_report_clear()}
         </button>
@@ -156,7 +132,7 @@
 
   <Panel variant="toolbar">
     <TransactionFilterBar
-      bind:filters
+      bind:filters={() => activeFilters, updateBar}
       show={{ status: !lockStatus, kind: true, account: true, payee: true, search: true, dateRange: true, needsReview: true }}
     />
   </Panel>

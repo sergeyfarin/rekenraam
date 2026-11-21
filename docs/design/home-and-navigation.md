@@ -286,10 +286,10 @@ header's *Search Ctrl K* button.
 Existing support: the `transaction_search` FTS5 index (payee, description,
 external reference, notes), the transactions API `q` and `payee_id`
 parameters with matching Transactions URL filters, and MiniSearch-based
-payee matching in the frontend. New work: a last-used-category read per
-payee and payee/Everything result grouping (#439). The page/object/command
-grouping foundation is delivered in #457; the Home placement and the shared
-entry dialog in #477.
+payee matching in the frontend. #443 adds payee results and their Transactions
+links to the shared catalog. The prefilled payee action, last-used category
+and Everything result remain #439. The grouping foundation is delivered in
+#457, and the Home placement and shared entry dialog in #477.
 
 Delivered in #477 (2026-10-31): Home renders the shared search with
 `variant="home"` below the briefing, as wide as its column, and the header

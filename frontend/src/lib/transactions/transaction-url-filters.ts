@@ -24,6 +24,10 @@ export type TransactionQueryFilters = Pick<
   | 'dateBasis'
 >;
 
+export function payeeTransactionsHref(payeeID: number): string {
+  return `/app/ledger/transactions?payee_id=${payeeID}`;
+}
+
 const STATUSES = ['draft', 'posted', 'voided'] as const;
 const KINDS = ['ordinary', 'transfer', 'investment', 'opening_balance', 'adjustment'] as const;
 const CATEGORY_TYPES = ['income', 'expense'] as const;

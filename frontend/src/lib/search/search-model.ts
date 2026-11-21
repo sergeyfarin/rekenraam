@@ -1,6 +1,6 @@
 import MiniSearch from 'minisearch';
 
-export const searchGroups = ['page', 'account', 'category', 'instrument', 'command'] as const;
+export const searchGroups = ['page', 'account', 'category', 'instrument', 'payee', 'command'] as const;
 export type SearchGroup = typeof searchGroups[number];
 export type SearchScope = SearchGroup | 'all';
 export type SearchResult = {

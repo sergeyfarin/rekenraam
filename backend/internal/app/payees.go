@@ -3,8 +3,10 @@ package app
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -13,9 +15,10 @@ import (
 )
 
 const (
-	payeeNameMaxBytes = 200
-	payeeJSONMaxBytes = 10000
-	payeeListLimit    = 2000
+	payeeNameMaxBytes      = 200
+	payeeJSONMaxBytes      = 10000
+	payeeListLimit         = 2000
+	payeeDirectoryPageSize = 50
 )
 
 var (
@@ -125,6 +128,49 @@ func (s *PayeeService) ListPayees(ctx context.Context, input ListPayeesInput) ([
 	}
 
 	return toPayees(records), nil
+}
+
+type PayeeDirectory struct {
+	Rows       []db.PayeeDirectoryRow
+	NextCursor string
+}
+
+func (s *PayeeService) PayeeDirectory(ctx context.Context, status, query, cursor string) (PayeeDirectory, error) {
+	switch status {
+	case "":
+		status = "active"
+	case "active", "archived", "all":
+	default:
+		return PayeeDirectory{}, ValidationError{Message: "payee status is invalid"}
+	}
+	params := db.PayeeDirectoryParams{
+		BookID: BookID, Status: status, Query: normalizePayeeNameForMatch(query), Limit: payeeDirectoryPageSize + 1,
+	}
+	if cursor != "" {
+		decoded, decodeErr := base64.RawURLEncoding.DecodeString(cursor)
+		id, name, ok := strings.Cut(string(decoded), ":")
+		afterID, parseErr := strconv.ParseInt(id, 10, 64)
+		if decodeErr != nil || !ok || parseErr != nil || afterID <= 0 || name == "" {
+			return PayeeDirectory{}, ValidationError{Message: "payee cursor is invalid"}
+		}
+		params.AfterID, params.AfterName = afterID, name
+	}
+
+	ctx, err := s.settings.referenceContext(ctx, s.now())
+	if err != nil {
+		return PayeeDirectory{}, err
+	}
+	rows, err := s.repository.PayeeDirectory(ctx, params)
+	if err != nil {
+		return PayeeDirectory{}, err
+	}
+	result := PayeeDirectory{Rows: rows}
+	if len(rows) > payeeDirectoryPageSize {
+		result.Rows = rows[:payeeDirectoryPageSize]
+		last := result.Rows[len(result.Rows)-1]
+		result.NextCursor = base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%d:%s", last.ID, last.NormalizedName)))
+	}
+	return result, nil
 }
 
 func (s *PayeeService) Payee(ctx context.Context, payeeID int64) (Payee, error) {
