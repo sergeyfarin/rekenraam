@@ -213,6 +213,7 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 		"frankfurter",
 		"exchangerate_api_open_access",
 		"open_exchange_rates_free",
+		"massive",
 	})
 	assert.Subset(t, readTableColumns(t, database, "posting_versions"), []string{
 		"id",
@@ -239,6 +240,7 @@ func TestMigrateSeededBaselineMatchesFreshSchema(t *testing.T) {
 	seeded := seededBaselineDatabase(t)
 
 	before := captureLedgerState(t, seeded)
+	sources := readMarketDataSourceCodes(t, seeded)
 	require.NoError(t, Migrate(ctx, seeded))
 	after := captureLedgerState(t, seeded)
 	// A table a forward migration creates (#485's import_posting_links)
@@ -249,6 +251,9 @@ func TestMigrateSeededBaselineMatchesFreshSchema(t *testing.T) {
 			delete(after, key)
 		}
 	}
+	// #615 adds one built-in provider without changing the seeded book.
+	assert.ElementsMatch(t, append(sources, "massive"), readMarketDataSourceCodes(t, seeded))
+	before["count:market_data_sources"] = fmt.Sprint(len(sources) + 1)
 	assert.Equal(t, before, after, "upgrading must not change a single durable figure")
 
 	// Stated separately from the snapshot comparison so a failure names what
@@ -1220,7 +1225,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 
 	version, err := EmbeddedMigrationVersion()
 	require.NoError(t, err)
-	assert.Equal(t, int64(13), version, "the unused v0.1 baseline, #417 category guard, #481 transfer sides, #485 posting links/history/evidence, #411 allocation revisions/reference guards, #480 retired policy base, #532 holding FX wakeup, #540 later quote-currency wakeups, #561 split facts lookup and #482 reconciliation policy")
+	assert.Equal(t, int64(14), version, "the latest forward migration seeds the Massive split source")
 
 	ctx := context.Background()
 	database, err := Open(ctx, SQLiteFileURL(filepath.Join(t.TempDir(), "schema.sqlite")))

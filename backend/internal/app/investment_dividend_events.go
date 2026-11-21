@@ -108,38 +108,42 @@ func (s *PricingService) QueueDividendEventFetch(ctx context.Context, ownerID in
 }
 
 func (s *PricingService) runDueDividendEvents(ctx context.Context, logger *slog.Logger, workerID string) {
+	s.runDueProviderEvents(ctx, logger, workerID, dividendEventWorkKind, s.fetchDividendEvents)
+}
+
+func (s *PricingService) runDueProviderEvents(ctx context.Context, logger *slog.Logger, workerID, kind string, fetch func(context.Context, db.BackgroundWorkItemRecord) error) {
 	for range 4 {
 		now := s.now().UTC()
-		item, err := s.repository.ClaimBackgroundWork(ctx, dividendEventWorkKind, workerID, now.Format(time.RFC3339), now.Add(15*time.Minute).Format(time.RFC3339))
+		item, err := s.repository.ClaimBackgroundWork(ctx, kind, workerID, now.Format(time.RFC3339), now.Add(15*time.Minute).Format(time.RFC3339))
 		if errors.Is(err, db.ErrNotFound) || ctx.Err() != nil {
 			return
 		}
 		if err != nil {
-			logger.WarnContext(ctx, "claim dividend event work", slog.Any("err", err))
+			logger.WarnContext(ctx, "claim provider event work", slog.String("kind", kind), slog.Any("err", err))
 			return
 		}
-		s.processDividendEvents(ctx, logger, workerID, item)
+		s.finishProviderEventWork(ctx, logger, workerID, item, fetch(ctx, item))
 	}
 }
 
-func (s *PricingService) processDividendEvents(ctx context.Context, logger *slog.Logger, workerID string, item db.BackgroundWorkItemRecord) {
+func (s *PricingService) fetchDividendEvents(ctx context.Context, item db.BackgroundWorkItemRecord) error {
 	var payload dividendEventPayload
-	var workErr error
 	if item.PayloadVersion != 1 || json.Unmarshal([]byte(item.PayloadJSON), &payload) != nil || payload.AssignmentID <= 0 {
-		workErr = &marketdata.QuoteError{Status: 400, Terminal: true}
-	} else {
-		targets, err := s.currentQuoteTargets(ctx, 0)
-		workErr = err
-		if err == nil {
-			// An assignment ended since queueing has nothing left to fetch.
-			for _, target := range targets {
-				if target.AssignmentID == payload.AssignmentID {
-					workErr = s.stageDividendEvents(ctx, target)
-					break
-				}
-			}
+		return &marketdata.QuoteError{Status: 400, Terminal: true}
+	}
+	targets, err := s.currentQuoteTargets(ctx, 0)
+	if err != nil {
+		return err
+	}
+	for _, target := range targets {
+		if target.AssignmentID == payload.AssignmentID {
+			return s.stageDividendEvents(ctx, target)
 		}
 	}
+	return nil
+}
+
+func (s *PricingService) finishProviderEventWork(ctx context.Context, logger *slog.Logger, workerID string, item db.BackgroundWorkItemRecord, workErr error) {
 	now := s.now().UTC()
 	var stateErr error
 	if workErr == nil {
@@ -154,7 +158,7 @@ func (s *PricingService) processDividendEvents(ctx context.Context, logger *slog
 		stateErr = s.repository.RetryBackgroundWork(ctx, item.ID, workerID, now.Add(delay).Format(time.RFC3339), now.Format(time.RFC3339), workErr.Error())
 	}
 	if stateErr != nil && ctx.Err() == nil {
-		logger.WarnContext(ctx, "record dividend event work outcome", slog.Int64("work_id", item.ID), slog.Any("err", stateErr))
+		logger.WarnContext(ctx, "record provider event work outcome", slog.Int64("work_id", item.ID), slog.Any("err", stateErr))
 	}
 }
 

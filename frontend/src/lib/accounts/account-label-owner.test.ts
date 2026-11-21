@@ -56,9 +56,6 @@ const allowed: Record<string, { fragment: string; reason: string }[]> = {
   ],
   'lib/investments/split-activity.svelte': [
     { fragment: '{row.account_name}', reason: 'a split names a security holding account, which always has a name (the API requires one; only starter cash is unnamed)' }
-  ],
-  'lib/investments/event-suggestions.svelte': [
-    { fragment: 'candidate.holding_account_name', reason: 'a holding account, which always has a name (only starter cash is unnamed)' }
   ]
 };
 

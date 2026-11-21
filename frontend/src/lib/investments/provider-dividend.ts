@@ -48,14 +48,14 @@ export function parseProviderDividendEvidence(raw: Record<string, unknown> | nul
   };
 }
 
-export type ProposalShape = 'complete' | 'needs_completion' | 'payment_in_lieu' | 'informational';
+export type ProposalShape = 'complete' | 'needs_completion' | 'payment_in_lieu' | 'informational' | 'unsupported';
 
 /** How a suggestion can be acted on, from its proposed_transaction. */
 export function proposalShape(proposal: Record<string, unknown> | null | undefined): ProposalShape {
   if (proposal?.kind === 'informational') return 'informational';
   if (proposal?.kind === 'payment_in_lieu') return 'payment_in_lieu';
-  if (proposal?.kind === 'dividend_income' && proposal.complete === false) return 'needs_completion';
-  return 'complete';
+  if (proposal?.kind === 'dividend_income') return proposal.complete === false ? 'needs_completion' : 'complete';
+  return 'unsupported';
 }
 
 /**

@@ -4,7 +4,9 @@ post:
     A complete proposal is accepted with no body. An incomplete provider dividend (proposed_transaction.complete
     = false, #111) requires `completion` with the facts a per-share announcement cannot state; a missing or
     refused completion returns an error and the suggestion stays pending. Informational events cannot be accepted.
-    The posted dividend, the suggestion and the provider event status commit atomically.
+    An eligible Massive split is accepted with no body. The native split command rechecks the holding,
+    replay and reconciliation. Ambiguous evidence or an impact that needs a separate acknowledgement leaves the
+    suggestion pending for manual review. Posting, the suggestion and the provider event status commit atomically.
   requestBody:
     required: false
     content:
@@ -68,7 +70,7 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Suggestion is no longer pending, or the completed dividend needs a reconciliation override
+      description: Suggestion is no longer pending, or the proposed investment action needs reconciliation or gain review
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"

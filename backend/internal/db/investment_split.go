@@ -358,13 +358,17 @@ func (r *InvestmentRepository) createSplit(ctx context.Context, journal CreateTr
 	if preview {
 		write = previewInvestmentWriteTx[SplitPlan]
 	}
-	return write(ctx, r.database, journal, func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (SplitPlan, error) {
+	return write(ctx, r.database, journal, splitEffectsForWrite(ctx, journal, params), nil)
+}
+
+func splitEffectsForWrite(ctx context.Context, journal CreateTransactionParams, params CreateSplitParams) func(*sql.Tx, TransactionRecord, int64) (SplitPlan, error) {
+	return func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (SplitPlan, error) {
 		operationID, err := investmentCommandOperationTx(ctx, tx, journal, transaction, auditEventID)
 		if err != nil {
 			return SplitPlan{}, err
 		}
 		return writeSplitEffectsTx(ctx, tx, params, transaction, operationID, auditEventID, journal.ActorUserID, journal.CreatedAt)
-	}, nil)
+	}
 }
 
 // writeSplitEffectsTx recomputes a journal-bearing or journal-free split at

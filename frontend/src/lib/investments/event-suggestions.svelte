@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+  import { accountLabelFromParts } from '#lib/accounts/account-labels.ts';
   import Panel from '#lib/components/panel.svelte';
   import StatePanel from '#lib/components/state-panel.svelte';
   import {
@@ -9,9 +10,10 @@
     acceptEventSuggestion,
     ignoreEventSuggestion,
     linkEventSuggestion,
-    queueDividendEventFetch,
+    queueProviderEventFetch,
     type InvestmentEventSuggestionResponse
   } from '#lib/api/investments.ts';
+  import { formatCalendarDate } from '#lib/dates/calendar-date.ts';
   import { formatQuantity } from '#lib/money/format.ts';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { m } from '#lib/paraglide/messages.js';
@@ -54,7 +56,7 @@
   let busy = $state<Set<number>>(new Set());
   let errors = $state<Map<number, string>>(new Map());
   let completing = $state<number | null>(null);
-  let fetchPending = $state(false);
+  let fetchPending = $state<'dividend' | 'split' | null>(null);
   let fetchMessage = $state<{ tone: 'info' | 'error'; text: string } | null>(null);
 
   function setBusy(id: number, on: boolean) {
@@ -91,22 +93,22 @@
     }
   }
 
-  async function checkProviders() {
-    fetchPending = true;
+  async function checkProviders(family: 'dividend' | 'split') {
+    fetchPending = family;
     fetchMessage = null;
     try {
-      const result = await queueDividendEventFetch(csrfToken);
+      const result = await queueProviderEventFetch(csrfToken, family);
       if (result.queued_count === 0) {
-        fetchMessage = { tone: 'info', text: m.investments_suggestions_fetch_none() };
+        fetchMessage = { tone: 'info', text: family === 'split' ? m.investments_suggestions_split_fetch_none() : m.investments_suggestions_fetch_none() };
       } else {
-        fetchMessage = { tone: 'info', text: m.investments_suggestions_fetch_queued({ count: result.queued_count }) };
+        fetchMessage = { tone: 'info', text: family === 'split' ? m.investments_suggestions_split_fetch_queued({ count: result.queued_count, n: new Intl.NumberFormat(getLocale()).format(result.queued_count) }) : m.investments_suggestions_fetch_queued({ count: result.queued_count }) };
         pollUntil = Date.now() + 60_000;
         await queryClient.invalidateQueries({ queryKey: investmentEventSuggestionsQueryKey });
       }
     } catch {
       fetchMessage = { tone: 'error', text: m.investments_suggestions_fetch_error() };
     } finally {
-      fetchPending = false;
+      fetchPending = null;
     }
   }
 
@@ -150,7 +152,16 @@
   }
 
   function sourceLabel(code: string): string {
+    if (code === 'massive') return 'Massive';
     return code === 'twelve_data' ? m.investments_suggestion_source_twelve_data() : code;
+  }
+
+  function splitRatio(evidence: Record<string, unknown>): string {
+    const numerator = evidence.ratio_numerator;
+    const denominator = evidence.ratio_denominator;
+    if (typeof numerator !== 'number' || typeof denominator !== 'number') return m.investments_suggestion_unknown();
+    const number = new Intl.NumberFormat(getLocale());
+    return m.investments_suggestion_split_ratio({ newShares: number.format(numerator), oldShares: number.format(denominator) });
   }
 
   function amount(decimal: ProviderDecimal | null): string {
@@ -215,13 +226,34 @@
   {/if}
 {/snippet}
 
+{#snippet splitEvidence(s: InvestmentEventSuggestionResponse)}
+  <p class="tabular-nums text-sm text-foreground">{m.investments_suggestion_split()} · {splitRatio(s.evidence)}</p>
+  {#if s.revisions.length > 0}
+    <div class="rounded-(--radius-panel) border border-warning bg-warning-soft p-3 text-sm" role="note" data-testid="split-suggestion-revisions">
+      <p class="font-medium">{m.investments_suggestion_revised_title()}</p>
+      <ul>
+        {#each s.revisions as revision (revision.observed_at + JSON.stringify(revision.evidence))}
+          <li>
+            {observed(revision.observed_at)} · {splitRatio(revision.evidence)}
+            {#if typeof revision.evidence.effective_on === 'string'} · {formatCalendarDate(revision.evidence.effective_on, getLocale())}{/if}
+          </li>
+        {/each}
+      </ul>
+    </div>
+  {/if}
+{/snippet}
+
 <div class="space-y-6">
   <Panel>
     <div class="flex flex-wrap items-start justify-between gap-3">
       <p class="min-w-0 flex-1 text-sm text-muted">{m.investments_suggestions_intro()}</p>
-      <button type="button" onclick={checkProviders} disabled={fetchPending}
+      <button type="button" onclick={() => checkProviders('dividend')} disabled={fetchPending !== null}
         class="rounded-(--radius-control) border border-border bg-control px-3 py-1.5 text-sm font-semibold text-foreground transition hover:bg-control-hover disabled:opacity-40">
-        {fetchPending ? m.investments_suggestions_fetch_pending() : m.investments_suggestions_fetch()}
+        {fetchPending === 'dividend' ? m.investments_suggestions_fetch_pending() : m.investments_suggestions_fetch()}
+      </button>
+      <button type="button" onclick={() => checkProviders('split')} disabled={fetchPending !== null}
+        class="min-h-11 rounded-(--radius-control) border border-border bg-control px-3 text-sm font-semibold text-foreground transition hover:bg-control-hover disabled:opacity-40">
+        {fetchPending === 'split' ? m.investments_suggestions_fetch_pending() : m.investments_suggestions_split_fetch()}
       </button>
     </div>
     {#if fetchMessage}
@@ -241,7 +273,7 @@
     {#if pending.length > 0}
       <ul class="space-y-3" aria-label={m.investments_suggestions_pending_title()}>
         {#each pending as s (s.id)}
-          {@const evidence = parseProviderDividendEvidence(s.evidence)}
+          {@const evidence = s.event_family === 'split' ? null : parseProviderDividendEvidence(s.evidence)}
           {@const shape = proposalShape(s.proposed_transaction)}
           {@const inLieu = paymentInLieuProposal(s.proposed_transaction)}
           <li>
@@ -250,12 +282,46 @@
                 <div class="flex flex-wrap items-center gap-2">
                   <span class="rounded-full px-2 py-0.5 text-xs font-medium {statusClass(s.status)}">{statusLabel(s.status)}</span>
                   <h3 class="text-sm font-semibold text-foreground">{title(s)}</h3>
-                  <span class="text-xs text-muted">{m.investments_suggestion_ex_date({ date: s.event_date })}</span>
+                  <time datetime={s.event_date} class="text-xs text-muted">
+                    {s.event_family === 'split'
+                      ? m.investments_suggestion_split_date({ date: formatCalendarDate(s.event_date, getLocale()) })
+                      : m.investments_suggestion_ex_date({ date: s.event_date })}
+                  </time>
                   <span class="text-xs text-muted">{sourceLabel(s.source_code)}</span>
                   <span class="text-xs text-muted">{m.investments_suggestion_confidence()}: {confidencePct(s.confidence_bps)}</span>
                 </div>
 
-                {#if evidence}
+                {#if s.event_family === 'split'}
+                  {@const { holding_account_id: holdingID, holding_account_name: holdingName } = s.proposed_transaction}
+                  {@render splitEvidence(s)}
+                  {#if typeof holdingID === 'number'}
+                    <p class="text-sm text-muted">
+                      {accountLabelFromParts({ id: holdingID, name: typeof holdingName === 'string' ? holdingName : null })}
+                    </p>
+                  {/if}
+                  {#if s.proposed_transaction.review_reason || s.revisions.length > 0}
+                    <p role="note" class="text-sm text-muted">
+                      {s.proposed_transaction.review_reason === 'identity'
+                        ? m.investments_suggestion_split_unverified_listing()
+                        : m.investments_suggestion_split_manual()}
+                    </p>
+                  {/if}
+                  {#if s.split_link_candidates?.length}
+                    <ul class="space-y-2">
+                      {#each s.split_link_candidates as candidate (candidate.transaction_id)}
+                        <li class="flex flex-wrap items-center justify-between gap-2 text-sm">
+                          <span>{accountLabelFromParts({ id: candidate.holding_account_id, name: candidate.holding_account_name })}</span>
+                          <button type="button" disabled={busy.has(s.id)}
+                            onclick={() => act(s, () => linkEventSuggestion(s.id, candidate.transaction_id, csrfToken),
+                              m.investments_suggestion_split_link_error(), false)}
+                            class="min-h-11 rounded-(--radius-control) border border-border bg-control px-3 text-sm font-semibold disabled:opacity-40">
+                            {m.investments_suggestion_split_link()}
+                          </button>
+                        </li>
+                      {/each}
+                    </ul>
+                  {/if}
+                {:else if evidence}
                   {@render evidenceValues(evidence, shape)}
                   {#if (shape === 'needs_completion' || shape === 'payment_in_lieu') && evidence.missing.length > 0}
                     <p class="text-xs text-muted">
@@ -277,7 +343,9 @@
                   <p class="text-sm text-foreground" role="note">{m.investments_suggestion_payment_in_lieu_note()}</p>
                 {/if}
 
-                {@render revisionNotice(s, evidence, false)}
+                {#if s.event_family !== 'split'}
+                  {@render revisionNotice(s, evidence, false)}
+                {/if}
 
                 {#if (shape === 'needs_completion' || shape === 'payment_in_lieu') && s.link_candidates.length > 0}
                   <div class="rounded-(--radius-panel) border border-border p-3">
@@ -289,7 +357,7 @@
                           <span class="min-w-0 tabular-nums text-foreground">
                             {#if candidate.holding_account_id !== undefined}
                               {m.investments_suggestion_link_candidate_holding({ date: candidate.transaction_date, amount: candidateAmount, currency: candidate.cash_code,
-                                holding: candidate.holding_account_name || `#${candidate.holding_account_id}` })}
+                                holding: accountLabelFromParts({ id: candidate.holding_account_id, name: candidate.holding_account_name }) })}
                             {:else}
                               {m.investments_suggestion_link_candidate({ date: candidate.transaction_date, amount: candidateAmount, currency: candidate.cash_code })}
                             {/if}
@@ -311,9 +379,12 @@
                 {/if}
 
                 <div class="flex flex-wrap justify-end gap-2">
-                  {#if shape === 'complete'}
+                  {#if s.event_family === 'split'
+                    ? s.proposed_transaction.kind === 'split' && !s.proposed_transaction.review_reason &&
+                      !s.split_link_candidates?.length && s.revisions.length === 0
+                    : shape === 'complete'}
                     <button type="button" disabled={busy.has(s.id)}
-                      onclick={() => act(s, () => acceptEventSuggestion(s.id, csrfToken), m.investments_suggestion_accept_error(), true)}
+                      onclick={() => act(s, () => acceptEventSuggestion(s.id, csrfToken), s.event_family === 'split' ? m.investments_suggestion_split_accept_error() : m.investments_suggestion_accept_error(), true)}
                       class="rounded-(--radius-control) bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground transition hover:opacity-95 disabled:opacity-40">
                       {m.investments_suggestion_accept()}
                     </button>
@@ -353,22 +424,28 @@
         <h2 class="mb-3 text-sm font-semibold text-foreground">{m.investments_suggestions_history_title()}</h2>
         <ul class="space-y-2">
           {#each history as s (s.id)}
-            {@const retained = parseProviderDividendEvidence(s.evidence)}
+            {@const retained = s.event_family === 'split' ? null : parseProviderDividendEvidence(s.evidence)}
             {@const paymentID = s.generated_transaction_id ?? s.linked_transaction_id}
             <li>
               <Panel>
                 <div class="flex flex-wrap items-center gap-2">
                   <span class="rounded-full px-2 py-0.5 text-xs font-medium {statusClass(s.status)}">{statusLabel(s.status)}</span>
                   <span class="text-sm text-foreground">{title(s)}</span>
-                  <span class="text-xs text-muted">{m.investments_suggestion_ex_date({ date: s.event_date })}</span>
+                  <time datetime={s.event_date} class="text-xs text-muted">
+                    {s.event_family === 'split'
+                      ? m.investments_suggestion_split_date({ date: formatCalendarDate(s.event_date, getLocale()) })
+                      : m.investments_suggestion_ex_date({ date: s.event_date })}
+                  </time>
                   <span class="text-xs text-muted">{sourceLabel(s.source_code)}</span>
                 </div>
                 {#if paymentID}
                   <a class="mt-1 inline-block text-sm underline" href={`/app/ledger/transactions?transaction_id=${paymentID}`}>
-                    {m.investments_attribution_payment_link({ id: String(paymentID) })}
+                      {s.event_family === 'split' ? m.investments_suggestion_split_open({ id: String(paymentID) }) : m.investments_attribution_payment_link({ id: String(paymentID) })}
                   </a>
                 {/if}
-                {#if retained}
+                {#if s.event_family === 'split'}
+                  {@render splitEvidence(s)}
+                {:else if retained}
                   <div class="mt-2" data-testid="settled-event-evidence">
                     {@render evidenceValues(retained, proposalShape(s.proposed_transaction))}
                   </div>
@@ -376,9 +453,9 @@
                 {#if s.failure_reason}
                   <p class="mt-1 text-xs text-danger">{s.failure_reason}</p>
                 {/if}
-                {#if s.revisions.length > 0}
+                {#if s.event_family !== 'split' && s.revisions.length > 0}
                   <div class="mt-2">
-                    {@render revisionNotice(s, parseProviderDividendEvidence(s.evidence), true)}
+                    {@render revisionNotice(s, retained, true)}
                   </div>
                 {/if}
               </Panel>

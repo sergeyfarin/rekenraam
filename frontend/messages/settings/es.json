@@ -1049,8 +1049,35 @@
   "investments_suggestion_status_auto_posted": "Registrada automáticamente",
   "investments_suggestion_status_failed": "Fallida",
   "investments_suggestion_status_superseded": "Sustituida",
-  "investments_suggestions_intro": "Los anuncios de proveedores nunca se contabilizan solos. Completa uno con el extracto de tu bróker, vincúlalo a un dividendo ya registrado o ignóralo.",
+  "investments_suggestions_intro": "Contrasta los avisos del proveedor con el extracto de tu bróker. Acepta o completa un evento válido, vincúlalo a una transacción registrada que coincida o ignóralo.",
   "investments_suggestions_fetch": "Comprobar dividendos del proveedor",
+  "investments_suggestions_split_fetch": "Consultar desdoblamientos en Massive",
+  "investments_suggestions_split_fetch_none": "Añade primero el símbolo de Massive y el MIC del mercado de un instrumento de EE. UU.",
+  "investments_suggestions_split_fetch_queued": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Consulta de desdoblamientos en cola para {n} cotización.",
+        "countPlural=*": "Consulta de desdoblamientos en cola para {n} cotizaciones."
+      }
+    }
+  ],
+  "investments_suggestion_split": "Desdoblamiento de acciones",
+  "investments_suggestion_split_ratio": "Acciones nuevas {newShares} · Acciones antiguas {oldShares}",
+  "investments_suggestion_split_date": "Fecha del desdoblamiento {date}",
+  "investments_suggestion_split_manual": "Esta operación requiere revisión manual. Consulta el extracto del bróker y usa el formulario de desdoblamiento si es necesario.",
+  "investments_suggestion_split_unverified_listing": "Massive no pudo verificar la cotización en la fecha del desdoblamiento. Consulta el extracto del bróker.",
+  "investments_suggestion_split_link": "Vincular desdoblamiento registrado",
+  "investments_suggestion_split_link_error": "No se pudo vincular el desdoblamiento registrado.",
+  "investments_suggestion_split_accept_error": "No se pudo aceptar la operación. Consulta el extracto del bróker y usa el formulario si es necesario.",
+  "investments_suggestion_split_open": "Abrir desdoblamiento #{id}",
   "investments_suggestions_fetch_pending": "Encolando…",
   "investments_suggestions_fetch_queued": "Comprobación de dividendos encolada para cotizaciones: {count}. Los anuncios nuevos aparecerán aquí cuando termine.",
   "investments_suggestions_fetch_none": "Ninguna cotización usa un proveedor con dividendos. Asigna Twelve Data (un plan de pago incluye dividendos) a las cotizaciones de un instrumento o sigue registrando los dividendos a mano.",

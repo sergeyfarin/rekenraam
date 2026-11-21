@@ -1235,11 +1235,11 @@ export async function linkEventSuggestion(
   }
 }
 
-export async function queueDividendEventFetch(csrfToken: string): Promise<DividendEventFetchAccepted> {
+export async function queueProviderEventFetch(csrfToken: string, family: 'dividend' | 'split'): Promise<DividendEventFetchAccepted> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/event-suggestions/fetch', {
       params: { header: { 'X-CSRF-Token': csrfToken } },
-      body: {}
+      body: family === 'split' ? { event_family: family } : {}
     });
 
     if (data !== undefined) {

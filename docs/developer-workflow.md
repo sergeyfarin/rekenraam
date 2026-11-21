@@ -1432,6 +1432,28 @@ runner-image rollouts and cold workload variants from complete cache misses.
 - Do not port archive implementation details directly.
 - If an archive idea is adopted, rewrite it in current-stack terms and add it to active docs.
 
+## Massive split source configuration (#615)
+
+Set `MASSIVE_API_KEY` in the backend environment or Docker Compose deployment
+secrets. Use your own Massive Stocks key and applicable data rights. In
+Investments → Instruments, enter the exact **Massive ticker** and the listing
+MIC (for example, `NFLX` and `XNAS`). Clearing the Massive ticker opts the
+instrument out of future checks. Under Investments → Suggestions, select
+**Check Massive splits**. The worker checks up to the last 365 calendar days
+through the US market date and exposes failed jobs and retry in pricing failed
+work. If Massive cannot verify a newly observed split for a listing you held,
+its suggestion asks you to check your broker statement. If the statement
+confirms the split for a long holding, record it manually and select
+**Ignore** on the suggestion. Review the split date, ratio, and holding
+before accepting. For a verified event with one eligible long holding, use
+**Link recorded split** when a matching transaction has
+already been posted on the split date. For multiple long holdings, record each
+split manually, then select **Ignore** on the suggestion.
+Suggestions involving short positions require manual review. The split form
+applies only to long lots. [#621](https://github.com/sergeyfarin/rekenraam/issues/621)
+tracks linking across holdings. Provider observations and revisions are part
+of the installation's private evidence and backups.
+
 ## Quote provider configuration (#117)
 
 `COINGECKO_DEMO_API_KEY` enables the CoinGecko Demo quote adapter;

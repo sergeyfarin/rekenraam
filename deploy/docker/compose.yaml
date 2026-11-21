@@ -12,6 +12,7 @@ services:
             SETUP_TOKEN: "${SETUP_TOKEN:?SETUP_TOKEN must be set to a random value of at least 32 characters}"
             COINGECKO_DEMO_API_KEY: "${COINGECKO_DEMO_API_KEY:-}"
             TWELVE_DATA_API_KEY: "${TWELVE_DATA_API_KEY:-}"
+            MASSIVE_API_KEY: "${MASSIVE_API_KEY:-}"
             REKENRAAM_SECRET_KEY: "${REKENRAAM_SECRET_KEY:-}"
         volumes:
             - rekenraam-data:/app/data

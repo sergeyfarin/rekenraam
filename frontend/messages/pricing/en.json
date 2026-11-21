@@ -106,6 +106,8 @@
   "quotes_coingecko_id": "CoinGecko coin ID (for example, bitcoin)",
   "quotes_yahoo_symbol": "Yahoo symbol (unofficial, for example, ASML.AS)",
   "quotes_twelve_symbol": "Twelve Data symbol (for example, ASML)",
+  "quotes_massive_symbol": "Massive ticker",
+  "quotes_massive_symbol_help": "Optional. Enter a US ticker and its listing MIC to check for splits.",
   "quotes_mic": "Market identifier (MIC, for example, XAMS)",
   "quotes_identity_help": "Enter exact provider identities. Save changes before enabling quotes. Currency and market must match the provider response.",
   "quotes_save": "Save instrument",

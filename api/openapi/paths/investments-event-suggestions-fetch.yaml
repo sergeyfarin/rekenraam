@@ -1,6 +1,6 @@
 post:
-  summary: Queue provider dividend event fetches
-  description: Accepts durable work for each active instrument assignment whose provider has a verified dividend mapping (Twelve Data, #111). Does not download synchronously; exact active duplicates coalesce. Each held ex-date in the last year is staged once as an immutable provider event with a pending suggestion. Failures appear in pricing failed work and never affect manual entry.
+  summary: Queue provider dividend or split event fetches
+  description: Queues durable work for active Twelve Data dividend assignments or instruments explicitly assigned a Massive split ticker. Exact active duplicates coalesce. Fetching retains reviewable evidence and leaves posting to an owner decision. Failures appear in pricing failed work.
   parameters:
     - in: header
       name: X-CSRF-Token
@@ -10,7 +10,14 @@ post:
     required: true
     content:
       application/json:
-        schema: { type: object, additionalProperties: false }
+        schema:
+          type: object
+          additionalProperties: false
+          properties:
+            event_family:
+              type: string
+              enum: [dividend, split]
+              default: dividend
   responses:
     "413":
       $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"

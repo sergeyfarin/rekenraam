@@ -106,6 +106,8 @@
   "quotes_coingecko_id": "ID монеты CoinGecko (например, bitcoin)",
   "quotes_yahoo_symbol": "Символ Yahoo (неофициально, например, ASML.AS)",
   "quotes_twelve_symbol": "Символ Twelve Data (например, ASML)",
+  "quotes_massive_symbol": "Тикер Massive",
+  "quotes_massive_symbol_help": "Необязательно. Укажите тикер США и MIC биржи для проверки дроблений.",
   "quotes_mic": "Код рынка (MIC, например, XAMS)",
   "quotes_identity_help": "Введите точные идентификаторы поставщика. Сохраните изменения перед включением котировок. Валюта и рынок должны совпадать с ответом поставщика.",
   "quotes_save": "Сохранить инструмент",

@@ -39,6 +39,8 @@ describe('provider dividend evidence', () => {
     expect(proposalShape({ kind: 'dividend_income', complete: false })).toBe('needs_completion');
     expect(proposalShape({ kind: 'dividend_income', amount_value: 1 })).toBe('complete');
     expect(proposalShape({ kind: 'informational', reason: 'short_position' })).toBe('informational');
+    expect(proposalShape({ kind: 'split' })).toBe('unsupported');
+    expect(proposalShape({ kind: 'future_kind' })).toBe('unsupported');
     expect(proposalCommodityID({ commodity_id: 4 })).toBe(4);
     expect(proposalCommodityID({ commodity_id: '4' })).toBeUndefined();
   });

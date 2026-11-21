@@ -26637,7 +26637,7 @@ export interface paths {
         put?: never;
         /**
          * Accept an investment event suggestion (posts the proposed transaction)
-         * @description A complete proposal is accepted with no body. An incomplete provider dividend (proposed_transaction.complete = false, #111) requires `completion` with the facts a per-share announcement cannot state; a missing or refused completion returns an error and the suggestion stays pending. Informational events cannot be accepted. The posted dividend, the suggestion and the provider event status commit atomically.
+         * @description A complete proposal is accepted with no body. An incomplete provider dividend (proposed_transaction.complete = false, #111) requires `completion` with the facts a per-share announcement cannot state; a missing or refused completion returns an error and the suggestion stays pending. Informational events cannot be accepted. An eligible Massive split is accepted with no body. The native split command rechecks the holding, replay and reconciliation. Ambiguous evidence or an impact that needs a separate acknowledgement leaves the suggestion pending for manual review. Posting, the suggestion and the provider event status commit atomically.
          */
         post: {
             parameters: {
@@ -26707,7 +26707,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Suggestion is no longer pending, or the completed dividend needs a reconciliation override */
+                /** @description Suggestion is no longer pending, or the proposed investment action needs reconciliation or gain review */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -26828,8 +26828,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Link a provider dividend suggestion to an owner-recorded payment (posts nothing)
-         * @description For a dividend suggestion the transaction must be an effective posted cash dividend of the suggestion's instrument dated from the ex-date up to 90 days after it. For a payment-in-lieu suggestion (#258) it must be an effective posted payment in lieu of the suggestion's instrument, for one of the proposal's holding_account_ids, with the event's ex-date; a cash dividend is never linked to it, nor a payment in lieu to a dividend suggestion. Either way it must not already be admitted by another provider event. The link and the event status commit atomically; later fetches of the same event stay duplicates.
+         * Link a provider suggestion to an owner-recorded investment transaction
+         * @description For a dividend suggestion the transaction must be an effective posted cash dividend of the suggestion's instrument dated from the ex-date up to 90 days after it. For a payment-in-lieu suggestion (#258) it must be an effective posted payment in lieu of the suggestion's instrument, for one of the proposal's holding_account_ids, with the event's ex-date; a cash dividend is never linked to it, nor a payment in lieu to a dividend suggestion. Either way it must not already be admitted by another provider event. The link and the event status commit atomically; later fetches of the same event stay duplicates. A Massive split can link a posted split of the same holding, instrument, date and ratio. Linking creates no posting.
          */
         post: {
             parameters: {
@@ -26928,8 +26928,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Queue provider dividend event fetches
-         * @description Accepts durable work for each active instrument assignment whose provider has a verified dividend mapping (Twelve Data,
+         * Queue provider dividend or split event fetches
+         * @description Queues durable work for active Twelve Data dividend assignments or instruments explicitly assigned a Massive split ticker. Exact active duplicates coalesce. Fetching retains reviewable evidence and leaves posting to an owner decision. Failures appear in pricing failed work.
          */
         post: {
             parameters: {
@@ -26942,7 +26942,13 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        /**
+                         * @default dividend
+                         * @enum {string}
+                         */
+                        event_family?: "dividend" | "split";
+                    };
                 };
             };
             responses: {
@@ -32820,6 +32826,8 @@ export interface components {
                 coingecko_id?: string;
                 yahoo_symbol?: string;
                 twelve_data_symbol?: string;
+                /** @description Explicit Massive US ticker for split suggestions. Empty clears it. */
+                massive_symbol?: string;
             };
             identifiers?: {
                 [key: string]: unknown;
@@ -35242,6 +35250,14 @@ export interface components {
             /** Format: int64 */
             linked_transaction_id?: number;
             link_candidates: components["schemas"]["InvestmentEventLinkCandidate"][];
+            /** @description Posted splits matching the suggestion's verified instrument, date, holding and ratio. */
+            split_link_candidates?: {
+                /** Format: int64 */
+                transaction_id: number;
+                /** Format: int64 */
+                holding_account_id: number;
+                holding_account_name: string;
+            }[];
             /** @description Later provider observations of this event whose stated content differs from the first observation (#254), oldest first. Evidence only: a revision never changes the suggestion, the event status, or any posted or linked transaction. */
             revisions: components["schemas"]["InvestmentEventRevision"][];
             /** Format: int64 */

@@ -155,6 +155,11 @@ Quote providers are optional and require your own API key: set
 instruments under Investments → Instruments. Details are in the
 [quote provider notes](docs/plans/quote-providers-crypto-plan.md).
 
+For reviewed US stock splits, set `MASSIVE_API_KEY` in the server environment,
+then enter a Massive ticker and listing MIC for the instrument. Use **Check
+Massive splits** under Investments → Suggestions. The key belongs in your
+deployment secrets. [Split source configuration](docs/developer-workflow.md#massive-split-source-configuration-615)
+
 ## Backups and exports
 
 Use a backup to restore Rekenraam. Exports are for use outside the app.

@@ -439,6 +439,39 @@ native split command in the meantime. This is a Twelve Data evidence gap only;
 per ADR 0017 it neither blocks nor is blocked by Trading 212 split fills
 ([#145](https://github.com/sergeyfarin/rekenraam/issues/145)).
 
+### Massive US split suggestions ([#615](https://github.com/sergeyfarin/rekenraam/issues/615))
+
+Massive's Stocks split endpoint supplies typed forward and reverse events.
+Live Stocks Basic responses matched the issuer or exchange notices for Netflix
+(10-for-1, first split-adjusted date 2025-11-17) and SkinHealth Systems
+(1-for-20, 2026-10-14). Stock dividends are a separate event type and are
+excluded. The split's exact share ratio is `split_to / split_from`. The
+execution date is the first split-adjusted trading session. Confirm the exact
+assigned ticker, supported US exchange MIC and share-class FIGI from dated
+ticker lookups on the execution date and range end. Use provider event IDs for
+deduplication and preserve materially different observations as revisions.
+[Massive split contract](https://massive.com/docs/rest/stocks/corporate-actions/splits)
+
+A saved Massive ticker is explicit opt-in for a single user's own listing.
+**Check Massive splits** queues per-instrument durable work with a 365-day
+lookback. Nothing posts during a fetch. A single long holding at the close
+before the date is eligible for acceptance through the native split writer.
+Missing identity, inconsistent ratios, competing events, multiple holdings,
+short positions, and other activity on the execution date require manual
+review. The native writer enforces quantity precision, replay, reconciliation
+and gain checks. For one eligible long holding, an unrevised suggestion can
+link a matching posted split by exact holding, instrument, date and ratio.
+With multiple long holdings, record each split manually and dismiss the
+suggestion. The native split form operates on long lots, so suggestions
+involving short positions require manual review. Linking across holdings is
+tracked in [#621](https://github.com/sergeyfarin/rekenraam/issues/621).
+Unheld splits are skipped. If a historical lookup cannot verify the listing
+on the date of a newly observed held split, the suggestion shows the identity
+issue for manual review. Revisions track changes to Massive’s split fields,
+including when a later historical lookup is inconclusive. A revision prevents
+accepting a pending original. Posted and linked splits retain their recorded
+effects. Manual split entry remains available independently under ADR 0017.
+
 ## Slice-start preconditions (blocking)
 
 Reclassified 2026-08-05: these were sitting in `todo.md` as "decisions

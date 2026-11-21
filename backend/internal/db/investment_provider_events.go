@@ -28,18 +28,36 @@ type EntitlementHoldings struct {
 	Short []DatedHolding
 }
 
+// SingleLongAccount refuses uncertain entitlement across accounts or sides.
+func (h EntitlementHoldings) SingleLongAccount() int64 {
+	if len(h.Long) == 0 || len(h.Short) != 0 {
+		return 0
+	}
+	accountID := h.Long[0].AccountID
+	for _, position := range h.Long[1:] {
+		if position.AccountID != accountID {
+			return 0
+		}
+	}
+	return accountID
+}
+
 // DividendEntitlementHoldings replays every position of commodityID up to
 // asOf in one rolled-back read. It is evidence for a suggestion only; the
 // dividend writer never consumes it.
 func (r *PricingRepository) DividendEntitlementHoldings(ctx context.Context, bookID, commodityID int64, asOf string) (EntitlementHoldings, error) {
-	if !isDisposalCalendarDate(asOf) {
-		return EntitlementHoldings{}, fmt.Errorf("%w: entitlement needs a calendar date", ErrInvalidDisposalParams)
-	}
 	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {
 		return EntitlementHoldings{}, fmt.Errorf("begin entitlement read: %w", err)
 	}
 	defer rollbackTx(ctx, tx)
+	return entitlementHoldingsTx(ctx, tx, bookID, commodityID, asOf)
+}
+
+func entitlementHoldingsTx(ctx context.Context, tx *sql.Tx, bookID, commodityID int64, asOf string) (EntitlementHoldings, error) {
+	if !isDisposalCalendarDate(asOf) {
+		return EntitlementHoldings{}, fmt.Errorf("%w: entitlement needs a calendar date", ErrInvalidDisposalParams)
+	}
 	rows, err := tx.QueryContext(ctx, `
 		SELECT DISTINCT account_id, cost_commodity_id, position_side
 		FROM investment_lots
@@ -153,6 +171,7 @@ func (r *PricingRepository) StageProviderEvent(ctx context.Context, params Stage
 type StagedProviderEvent struct {
 	ID             int64
 	NormalizedJSON string
+	RawJSON        string
 }
 
 // StagedProviderEventByIdentity reads the event a source identity already
@@ -160,8 +179,8 @@ type StagedProviderEvent struct {
 func (r *PricingRepository) StagedProviderEventByIdentity(ctx context.Context, bookID, sourceID int64, providerEventID string) (StagedProviderEvent, error) {
 	var event StagedProviderEvent
 	err := r.database.QueryRowContext(ctx, `
-		SELECT id, normalized_json FROM investment_provider_events
-		WHERE book_id = ? AND source_id = ? AND provider_event_id = ?`, bookID, sourceID, providerEventID).Scan(&event.ID, &event.NormalizedJSON)
+		SELECT id, normalized_json, raw_json FROM investment_provider_events
+		WHERE book_id = ? AND source_id = ? AND provider_event_id = ?`, bookID, sourceID, providerEventID).Scan(&event.ID, &event.NormalizedJSON, &event.RawJSON)
 	if errors.Is(err, sql.ErrNoRows) {
 		return StagedProviderEvent{}, ErrNotFound
 	}
@@ -408,10 +427,20 @@ func (r *InvestmentRepository) LinkSuggestion(ctx context.Context, params LinkSu
 		return EventSuggestionRecord{}, ErrEventSuggestionNotPending
 	}
 	var found int64
-	err = tx.QueryRowContext(ctx, eventLinkCandidatesSQL(ctx)+` WHERE suggestion_id = ? AND transaction_id = ? LIMIT 1`,
-		append(eventLinkCandidatesArgs(params.BookID), params.SuggestionID, params.TransactionID)...).Scan(&found, new(int64), new(string), new(string),
-		new(exact.Coefficient), new(int), new(sql.NullInt64), new(string))
+	reason := "linked provider event to recorded payment"
+	if current.EventFamily == "split" {
+		reason = "linked provider event to recorded split"
+		err = tx.QueryRowContext(ctx, splitEventLinkCandidatesSQL(ctx)+` AND s.id = ? AND t.id = ? LIMIT 1`,
+			params.BookID, params.SuggestionID, params.TransactionID).Scan(&found, new(int64), new(int64), new(string))
+	} else {
+		err = tx.QueryRowContext(ctx, eventLinkCandidatesSQL(ctx)+` WHERE suggestion_id = ? AND transaction_id = ? LIMIT 1`,
+			append(eventLinkCandidatesArgs(params.BookID), params.SuggestionID, params.TransactionID)...).Scan(&found, new(int64), new(string), new(string),
+			new(exact.Coefficient), new(int), new(sql.NullInt64), new(string))
+	}
 	if errors.Is(err, sql.ErrNoRows) {
+		if current.EventFamily == "split" {
+			return EventSuggestionRecord{}, ErrSplitEventLinkTarget
+		}
 		return EventSuggestionRecord{}, ErrEventLinkTarget
 	}
 	if err != nil {
@@ -419,7 +448,7 @@ func (r *InvestmentRepository) LinkSuggestion(ctx context.Context, params LinkSu
 	}
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{BookID: params.BookID, ActorUserID: params.ActorUserID, AuthSessionID: params.AuthSessionID,
 		OccurredAt: params.RecordedAt, RequestID: params.RequestID, OriginType: "browser_api", Operation: "investment.event_suggestion.link",
-		Reason: "linked provider event to recorded payment"})
+		Reason: reason})
 	if err != nil {
 		return EventSuggestionRecord{}, err
 	}

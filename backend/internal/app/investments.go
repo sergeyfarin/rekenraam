@@ -13,6 +13,7 @@ import (
 
 	"rekenraam/backend/internal/db"
 	"rekenraam/backend/internal/exact"
+	"rekenraam/backend/internal/marketdata"
 )
 
 const (
@@ -650,7 +651,8 @@ type InvestmentEventSuggestion struct {
 	// LinkCandidates are owner-recorded dividends, or payments in lieu for a
 	// short-only suggestion (#258), a pending suggestion may be linked to
 	// instead of posting again; composed only by the list read.
-	LinkCandidates []InvestmentEventLinkCandidate
+	LinkCandidates      []InvestmentEventLinkCandidate
+	SplitLinkCandidates []db.SplitEventLinkCandidate
 	// Revisions are later differing provider observations of the event, in
 	// observation order (#254); composed only by the list read. They are
 	// evidence beside the first observation and never change the decision.
@@ -2190,6 +2192,14 @@ func (s *InvestmentService) ListEventSuggestions(ctx context.Context) ([]Investm
 			TransactionID: candidate.TransactionID, TransactionDate: candidate.TransactionDate, CashCode: candidate.CashCode,
 			GrossValue: value, GrossScale: normalized.Scale(), HoldingAccountID: candidate.HoldingAccountID, HoldingAccountName: candidate.HoldingAccountName})
 	}
+	splits, err := s.repository.SplitEventLinkCandidates(ctx, BookID)
+	if err != nil {
+		return nil, err
+	}
+	splitsBySuggestion := map[int64][]db.SplitEventLinkCandidate{}
+	for _, candidate := range splits {
+		splitsBySuggestion[candidate.SuggestionID] = append(splitsBySuggestion[candidate.SuggestionID], candidate)
+	}
 	revisions, err := s.repository.ProviderEventRevisions(ctx, BookID)
 	if err != nil {
 		return nil, fmt.Errorf("list investment provider event revisions: %w", err)
@@ -2200,6 +2210,7 @@ func (s *InvestmentService) ListEventSuggestions(ctx context.Context) ([]Investm
 	}
 	for index := range suggestions {
 		suggestions[index].LinkCandidates = bySuggestion[suggestions[index].ID]
+		suggestions[index].SplitLinkCandidates = splitsBySuggestion[suggestions[index].ID]
 		suggestions[index].Revisions = byEvent[suggestions[index].ProviderEventID]
 	}
 	return suggestions, nil
@@ -2243,6 +2254,12 @@ func (s *InvestmentService) AcceptSuggestionWithCompletion(ctx context.Context, 
 		return InvestmentEventSuggestion{}, ErrInvestmentSuggestionNotPending
 	}
 
+	if record.EventFamily == "split" && record.SourceCode == marketdata.MassiveCode {
+		if completion != nil {
+			return InvestmentEventSuggestion{}, ValidationError{Message: "split suggestion does not take dividend completion"}
+		}
+		return s.acceptSplitSuggestion(ctx, record, ownerUserID, authSessionID, requestID)
+	}
 	now := s.now().UTC().Format(time.RFC3339)
 	if record.EventFamily == "return_of_capital" || record.EventFamily == "cash_in_lieu" {
 		return s.failSuggestion(ctx, suggestionID, "return of capital or cash in lieu requires an investment basis workflow", now, ownerUserID, authSessionID, requestID)
@@ -2349,6 +2366,8 @@ func (s *InvestmentService) LinkSuggestion(ctx context.Context, ownerUserID int6
 		return InvestmentEventSuggestion{}, ErrInvestmentSuggestionNotFound
 	case errors.Is(err, db.ErrEventSuggestionNotPending):
 		return InvestmentEventSuggestion{}, ErrInvestmentSuggestionNotPending
+	case errors.Is(err, db.ErrSplitEventLinkTarget):
+		return InvestmentEventSuggestion{}, ValidationError{Message: "only an unlinked posted split with the same instrument, holding, date and ratio can be linked"}
 	case errors.Is(err, db.ErrEventLinkTarget):
 		return InvestmentEventSuggestion{}, ValidationError{Message: "only an unlinked posted cash dividend of this instrument recording this ex-date, or recording none and dated on or after it, or for a short holder an unlinked payment in lieu of this instrument, holding and ex-date, can be linked"}
 	case err != nil:
@@ -2661,12 +2680,18 @@ func cleanInvestmentInstrumentSpec(input InvestmentInstrumentInput) (db.Investme
 			return db.InvestmentInstrumentSpec{}, err
 		}
 		for key, value := range input.QuoteIdentifiers {
-			if key != "coingecko_id" && key != "yahoo_symbol" && key != "twelve_data_symbol" {
+			if key != "coingecko_id" && key != "yahoo_symbol" && key != "twelve_data_symbol" && key != "massive_symbol" {
 				return db.InvestmentInstrumentSpec{}, ValidationError{Message: "unsupported quote identifier"}
 			}
 			text, err := cleanOptionalText(value, "quote identifier", 128)
 			if err != nil {
 				return db.InvestmentInstrumentSpec{}, err
+			}
+			if key == "massive_symbol" && text != "" {
+				text = strings.ToUpper(text)
+				if instrumentType == "crypto" || !marketdata.ValidMassiveTicker(text) || !marketdata.MassiveListingMIC(mic) {
+					return db.InvestmentInstrumentSpec{}, ValidationError{Message: "Massive requires an explicit ticker and supported US listing MIC"}
+				}
 			}
 			if text == "" {
 				delete(identifiers, key)
