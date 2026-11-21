@@ -1442,9 +1442,11 @@ instrument out of future checks. Under Investments → Suggestions, select
 **Check Massive splits**. The worker checks up to the last 365 calendar days
 through the US market date and exposes failed jobs and retry in pricing failed
 work. If Massive cannot verify a newly observed split for a listing you held,
-its suggestion asks you to check your broker statement. Review the split date,
-ratio, and holding before accepting. For a verified event with one eligible
-long holding, use **Link recorded split** when a matching transaction has
+its suggestion asks you to check your broker statement. If the statement
+confirms the split for a long holding, record it manually and select
+**Ignore** on the suggestion. Review the split date, ratio, and holding
+before accepting. For a verified event with one eligible long holding, use
+**Link recorded split** when a matching transaction has
 already been posted on the split date. For multiple long holdings, record each
 split manually, then select **Ignore** on the suggestion.
 Suggestions involving short positions require manual review. The split form

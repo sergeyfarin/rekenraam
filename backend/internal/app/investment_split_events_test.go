@@ -248,7 +248,7 @@ func TestMassiveSplitHeldUnverifiedListingRequiresManualReview(t *testing.T) {
 	f.requireCompletedSplitChecks(t, 1)
 }
 
-func TestMassiveSplitIdentityFailureLeavesStagedEventIntact(t *testing.T) {
+func TestMassiveSplitRecordsProviderCorrectionDespiteUnverifiedListing(t *testing.T) {
 	t.Parallel()
 	f := newMassiveEventFixture(t, "synthetic-key")
 	ctx := context.Background()
@@ -257,18 +257,26 @@ func TestMassiveSplitIdentityFailureLeavesStagedEventIntact(t *testing.T) {
 	require.NoError(t, f.database.QueryRow(`SELECT raw_json FROM investment_provider_events`).Scan(&raw))
 	assert.Contains(t, raw, `"historical_adjustment_factor":0.25`, "retain the provider row, including unparsed fields")
 
-	f.ratio.Store(5)
 	f.missingListingDate.Store(massiveEventDate)
 	suggestions := f.fetch(t)
 	require.Len(t, suggestions, 1)
 	assert.Empty(t, suggestions[0].Revisions)
 	assert.NotContains(t, suggestions[0].ProposedTransactionJSON, "review_reason")
-	f.requireCompletedSplitChecks(t, 2)
 
-	f.ratio.Store(4)
-	f.missingListingDate.Store("")
-	require.Empty(t, f.fetch(t)[0].Revisions)
-	accepted, err := f.investmentSvc.AcceptSuggestion(ctx, 1, 0, "request", suggestions[0].ID)
+	f.ratio.Store(5)
+	f.fetch(t)
+	suggestions = f.fetch(t)
+	require.Len(t, suggestions, 1)
+	require.Len(t, suggestions[0].Revisions, 1)
+	assert.Contains(t, suggestions[0].EventEvidenceJSON, `"ratio_numerator":4`)
+	assert.Contains(t, suggestions[0].Revisions[0].EvidenceJSON, `"ratio_numerator":5`)
+	f.requireCompletedSplitChecks(t, 4)
+
+	_, err := f.investmentSvc.AcceptSuggestion(ctx, 1, 0, "request", suggestions[0].ID)
+	require.ErrorContains(t, err, "requires manual review")
+	assert.Zero(t, countSplitRows(t, f.database).facts)
+	lots, err := f.investmentSvc.ListLots(ctx, f.holding.ID, f.instrument.CommodityID)
 	require.NoError(t, err)
-	assert.Equal(t, "accepted", accepted.Status)
+	require.Len(t, lots, 1)
+	assert.Equal(t, "10", lots[0].RemainingQuantityValue.String())
 }
