@@ -40,7 +40,13 @@ func (s *SettingsService) referenceContextInZone(ctx context.Context, now time.T
 	if db.ReferenceDate(ctx) != "" {
 		return ctx, location, nil
 	}
-	return db.WithReferenceDate(ctx, now.In(location).Format(time.DateOnly)), location, nil
+	day := now.In(location).Format(time.DateOnly)
+	if s == nil {
+		// Without settings, reference reads default to UTC. Live valuation
+		// can still resolve the actual owner zone from its repository.
+		return db.WithReferenceDate(ctx, day), location, nil
+	}
+	return db.WithOwnerToday(ctx, day), location, nil
 }
 
 // pinnedOwnerDay returns the owner day referenceContext pinned on ctx. A write
