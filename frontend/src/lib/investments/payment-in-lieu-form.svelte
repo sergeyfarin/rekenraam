@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { accountDisplayName, accountLabelByID } from '#lib/accounts/account-labels.ts';
   import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
   import { useSettlementCandidates } from '#lib/investments/settlement-candidates.svelte.ts';
   import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
@@ -223,7 +224,7 @@
         {#if accountsQuery.data && holdingAccountID && !holdingAccounts.some(account => String(account.id) === holdingAccountID)}
           <option value={holdingAccountID}>#{holdingAccountID}</option>
         {/if}
-        {#each holdingAccounts as account (account.id)}<option value={String(account.id)}>{account.name}</option>{/each}
+        {#each holdingAccounts as account (account.id)}<option value={String(account.id)}>{accountDisplayName(account)}</option>{/each}
       </select>
     </div>
     <div>
@@ -260,9 +261,9 @@
     <select onchange={chooseSettlement} id="pil-cash" bind:value={cashAccountID} required class={inputClass}>
       <option value="">{m.investments_form_select_account()}</option>
       {#if cashAccountID && !cashAccounts.some((account) => String(account.id) === cashAccountID)}
-        <option value={cashAccountID} disabled>{(accountsQuery.data?.accounts ?? []).find((account) => String(account.id) === cashAccountID)?.name ?? cashAccountID}</option>
+        <option value={cashAccountID} disabled>{accountLabelByID(accountsQuery.data?.accounts, cashAccountID) ?? cashAccountID}</option>
       {/if}
-      {#each cashAccounts as account (account.id)}<option value={String(account.id)}>{account.name}</option>{/each}
+      {#each cashAccounts as account (account.id)}<option value={String(account.id)}>{accountDisplayName(account)}</option>{/each}
     </select>
     <p class="mt-1 text-xs text-muted">{cashAccountID ? m.investments_activity_settlement_hint() : m.investments_activity_settlement_choice()}</p>
     {#if accountsQuery.data && cashAccountID && !cashAccounts.some((account) => String(account.id) === cashAccountID)}
@@ -282,7 +283,7 @@
     <label for="pil-expense" class="mb-1 block text-sm font-medium text-foreground">{m.investments_payment_in_lieu_expense_account()}</label>
     <select id="pil-expense" bind:value={expenseAccountID} required class={inputClass}>
       <option value="">{m.investments_form_select_account()}</option>
-      {#each expenseAccounts as account (account.id)}<option value={String(account.id)}>{account.name}</option>{/each}
+      {#each expenseAccounts as account (account.id)}<option value={String(account.id)}>{accountDisplayName(account)}</option>{/each}
     </select>
   </div>
 
@@ -304,7 +305,7 @@
         <label for="pil-recovery-account" class="mb-1 block text-sm font-medium text-foreground">{m.investments_payment_in_lieu_recovery_account()}</label>
         <select id="pil-recovery-account" bind:value={recoveryAccountID} class={inputClass}>
           <option value="">{m.investments_form_select_account()}</option>
-          {#each recoveryAccounts as account (account.id)}<option value={String(account.id)}>{account.name}</option>{/each}
+          {#each recoveryAccounts as account (account.id)}<option value={String(account.id)}>{accountDisplayName(account)}</option>{/each}
         </select>
       </div>
     </div>

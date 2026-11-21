@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { accountDisplayName } from '#lib/accounts/account-labels.ts';
   import { m } from '#lib/paraglide/messages.js';
   import type { AccountResponse } from '#lib/api/accounts.ts';
   import type { CurrencyResponse } from '#lib/api/currencies.ts';
@@ -87,7 +88,7 @@
               <select bind:value={charge.chargeAccountID} class="mt-1 w-full rounded-(--radius-control) border border-border bg-control px-2 py-2 text-sm text-foreground">
                 <option value="">{m.investments_form_select_account()}</option>
                 {#each accounts.filter((account) => account.status === 'active' && account.allows_postings && account.account_class === (charge.kind === 'rebate' ? 'income' : 'expense')) as account (account.id)}
-                  <option value={String(account.id)}>{account.name}</option>
+                  <option value={String(account.id)}>{accountDisplayName(account)}</option>
                 {/each}
               </select>
             </label>
@@ -96,7 +97,7 @@
             <label class="block text-xs text-muted">{m.investments_trade_foreign_cash_account()}
               <select bind:value={charge.cashAccountID} class="mt-1 w-full rounded-(--radius-control) border border-border bg-control px-2 py-2 text-sm text-foreground">
                 <option value="">{m.investments_form_select_account()}</option>
-                {#each cashAccounts as account (account.id)}<option value={String(account.id)}>{account.name}</option>{/each}
+                {#each cashAccounts as account (account.id)}<option value={String(account.id)}>{accountDisplayName(account)}</option>{/each}
               </select>
             </label>
             <label class="block text-xs text-muted">{m.investments_trade_charge_paid_on()}

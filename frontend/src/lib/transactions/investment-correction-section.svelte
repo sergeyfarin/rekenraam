@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { resolveAccountLabel } from '#lib/transactions/transaction-labels.ts';
+  import { accountLabelByID } from '#lib/accounts/account-labels.ts';
   import { autofocus } from '#lib/components/autofocus.ts';
   import BasisProvenanceSummary from '#lib/investments/basis-provenance-summary.svelte';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
@@ -191,7 +193,7 @@
     return instrument?.display_name ?? instrument?.commodity_code ?? `#${commodityID}`;
   }
   function exchangeAccountName(accountID: number): string {
-    return (exchangeAccountsQuery.data?.accounts ?? []).find((account) => account.id === accountID)?.name ?? `#${accountID}`;
+    return accountLabelByID(exchangeAccountsQuery.data?.accounts, accountID) ?? `#${accountID}`;
   }
 
   const sourceLinkedEffectiveBuy = $derived(
@@ -1038,7 +1040,7 @@
           <li class="flex gap-2 py-2 text-foreground">
             <TriangleExclamationPoint size={16} class="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
             {m.transactions_reconciliation_checkpoint_label({
-              account: checkpoint.account_label,
+              account: resolveAccountLabel(checkpoint),
               commodity: checkpoint.commodity_code,
               date: checkpoint.statement_date
             })}

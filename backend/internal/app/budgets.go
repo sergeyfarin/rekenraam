@@ -36,6 +36,7 @@ type BudgetTypeTotal struct {
 type BudgetAccount struct {
 	ID                                               int64
 	Code, Name, AccountClass, AccountKind, Treatment string
+	StarterKey, CurrencyCode                         string
 }
 type BudgetCommodity struct {
 	ID           int64

@@ -603,7 +603,6 @@
   "forecast_recorded_only": "Recorded only",
   "forecast_with_recurring": "With recurring",
   "forecast_unknown_account": "Unknown account",
-  "forecast_account_number": "Account {id}",
   "forecast_event_title": "Movements on {date}",
   "forecast_event_count": "Showing {shown} of {total} events",
   "forecast_event_close": "Close details",

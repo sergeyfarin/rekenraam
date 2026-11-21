@@ -345,6 +345,8 @@ type PostingAccountSummary struct {
 	AccountKind  string
 	BaseKind     string         // account_kinds.base_kind — the kind's family
 	BuiltinKey   sql.NullString // json_extract(metadata_json, '$.category.builtin_key')
+	StarterKey   sql.NullString // starter label parts: see accountStarterLabelColumnsSQL
+	CurrencyCode sql.NullString
 }
 
 // AccountsByIDs returns a PostingAccountSummary keyed by account ID for the given IDs.
@@ -371,7 +373,8 @@ func (r *AccountRepository) AccountsByIDs(ctx context.Context, bookID int64, ids
 			av.account_class,
 			av.account_kind,
 			ak.base_kind,
-			json_extract(av.metadata_json, '$.category.builtin_key')
+			json_extract(av.metadata_json, '$.category.builtin_key'),
+			` + accountStarterLabelColumnsSQL("av") + `
 		FROM accounts a
 		JOIN ` + CurrentReferenceVersions(ctx, "account") + ` av ON av.account_id = a.id
 		JOIN account_kinds ak ON ak.code = av.account_kind AND ak.account_class = av.account_class
@@ -387,7 +390,7 @@ func (r *AccountRepository) AccountsByIDs(ctx context.Context, bookID int64, ids
 	result := make(map[int64]PostingAccountSummary, len(ids))
 	for rows.Next() {
 		var s PostingAccountSummary
-		if err := rows.Scan(&s.ID, &s.Name, &s.Code, &s.SystemRole, &s.AccountClass, &s.AccountKind, &s.BaseKind, &s.BuiltinKey); err != nil {
+		if err := rows.Scan(&s.ID, &s.Name, &s.Code, &s.SystemRole, &s.AccountClass, &s.AccountKind, &s.BaseKind, &s.BuiltinKey, &s.StarterKey, &s.CurrencyCode); err != nil {
 			return nil, fmt.Errorf("scan posting account summary: %w", err)
 		}
 		result[s.ID] = s
@@ -1359,6 +1362,24 @@ func (r *AccountRepository) ensureStarterCashAccount(ctx context.Context, tx *sq
 			OpenedOn:           effectiveFrom,
 		},
 	})
+}
+
+// accountMetadataTextSQL selects one text field of an account version's
+// metadata, or NULL when the metadata is not valid JSON or the field is not
+// text. alias names the account_versions row.
+func accountMetadataTextSQL(alias, field string) string {
+	path := "'$." + field + "'"
+	return "CASE WHEN json_valid(" + alias + ".metadata_json) THEN CASE json_type(" + alias + ".metadata_json, " + path +
+		") WHEN 'text' THEN json_extract(" + alias + ".metadata_json, " + path + ") END END"
+}
+
+// accountStarterLabelColumnsSQL selects the starter label parts, starter_key
+// then currency_code, of an account version. Every account read the frontend
+// labels carries them, so an unnamed starter cash account reads as the
+// localized "Cash USD" on every screen, never its raw `cash:USD` code
+// (frontend `accountLabelFromParts`; #594, #597).
+func accountStarterLabelColumnsSQL(alias string) string {
+	return accountMetadataTextSQL(alias, "starter_key") + ", " + accountMetadataTextSQL(alias, "currency_code")
 }
 
 func starterCashMetadataJSON(currencyCode string) (string, error) {

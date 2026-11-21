@@ -10,6 +10,7 @@
   import APIFormError from '#lib/components/api-form-error.svelte';
   import StatusBadge from '#lib/components/status-badge.svelte';
   import { m } from '#lib/paraglide/messages.js';
+  import { forecastAccountLabel } from './forecast-model.ts';
 
   let {
     date,
@@ -60,7 +61,7 @@
 
   function accountName(id: number): string {
     const account = accounts.find((row) => row.id === id);
-    return account?.name?.trim() || account?.code?.trim() || m.forecast_account_number({ id });
+    return account ? forecastAccountLabel(account) : m.accounts_unnamed_account({ id });
   }
 
   // Exhaustive over the wire enum: a new source must define its meaning and

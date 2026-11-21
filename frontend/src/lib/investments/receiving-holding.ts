@@ -1,3 +1,4 @@
+import { accountDisplayName, type AccountLabelSource } from '#lib/accounts/account-labels.ts';
 // Where a corporate action's new units arrive (share exchange, spin-off,
 // cash-and-stock merger). A holding tied to one instrument cannot hold
 // another, so the candidates are the accounts that are untied or tied to the
@@ -8,7 +9,7 @@
 // no longer a candidate stays chosen and is reported unavailable, so the form
 // names it and refuses to preview instead of selecting another account.
 
-export type ReceivingAccount = { id: number; name?: string; default_commodity_id?: number | null };
+export type ReceivingAccount = AccountLabelSource & { default_commodity_id?: number | null };
 
 export type ReceivingOption = { id: number; name: string; source: boolean };
 
@@ -32,9 +33,9 @@ export function receivingHolding(
     account.default_commodity_id == null || account.default_commodity_id === newCommodityID;
   const source = accounts.find((account) => account.id === sourceAccountID);
   const options: ReceivingOption[] = !source || newCommodityID <= 0 ? [] : [
-    ...(canHold(source) ? [{ id: source.id, name: source.name ?? '', source: true }] : []),
+    ...(canHold(source) ? [{ id: source.id, name: accountDisplayName(source), source: true }] : []),
     ...accounts.filter((account) => account.id !== source.id && canHold(account))
-      .map((account) => ({ id: account.id, name: account.name ?? '', source: false }))
+      .map((account) => ({ id: account.id, name: accountDisplayName(account), source: false }))
   ];
   const suggested = options.find((option) => option.source)
     ?? options.find((option) => accounts.find((account) => account.id === option.id)?.default_commodity_id === newCommodityID);

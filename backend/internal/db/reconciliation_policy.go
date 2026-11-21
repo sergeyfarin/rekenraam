@@ -144,8 +144,8 @@ func (r *TransactionRepository) ReconciliationAccountFacts(ctx context.Context, 
 		byID := map[int64]int{}
 		rows, err := tx.QueryContext(ctx, `
 			SELECT a.id, COALESCE(av.name, ''), COALESCE(av.code, ''),
-				COALESCE(json_extract(av.metadata_json, '$.starter_key'), ''),
-				COALESCE(json_extract(av.metadata_json, '$.currency_code'), '')
+				COALESCE(`+accountMetadataTextSQL("av", "starter_key")+`, ''),
+				COALESCE(`+accountMetadataTextSQL("av", "currency_code")+`, '')
 			`+reconcilableAccountsFrom(ctx)+`
 			ORDER BY a.id
 		`, bookID, accountID, accountID)

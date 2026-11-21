@@ -684,7 +684,7 @@ func TestImportBatchOverrideIsBoundToTheReviewedCheckpointUnion(t *testing.T) {
 	for _, checkpoint := range preview.ReconciliationCheckpoints {
 		union = append(union, checkpoint.CheckpointID)
 		assert.Equal(t, "2026-06-07", checkpoint.StatementDate)
-		assert.NotEmpty(t, checkpoint.AccountLabel)
+		assert.NotNil(t, checkpoint.AccountName, "the checkpoint carries the account's label parts")
 	}
 	assert.ElementsMatch(t, []int64{checkpointA, checkpointC}, union)
 	reviewed := reviewedImportOverrideBody(t, handler, cookie, started.Batch.ID)

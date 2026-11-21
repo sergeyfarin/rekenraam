@@ -2,6 +2,7 @@ import type { AccountResponse } from '#lib/api/accounts.ts';
 import type { InstitutionResponse } from '#lib/api/institutions.ts';
 import type { CurrencyResponse } from '#lib/api/currencies.ts';
 import { m } from '#lib/paraglide/messages.js';
+import { builtinCategoryLabel } from '#lib/categories/category-labels.ts';
 
 export type AccountClass = AccountResponse['account_class'];
 export type ManagedAccountClass = Exclude<AccountClass, 'income' | 'expense'>;
@@ -155,31 +156,67 @@ export function accountLabelWithStatus(account: AccountResponse): string {
   return account.status === 'active' ? name : `${name} (${accountStatusLabel(account.status)})`;
 }
 
-export function accountDisplayName(account: AccountResponse): string {
-  const starterKey = account.metadata['starter_key'];
-  const currencyCode = account.metadata['currency_code'];
+/**
+ * What an account label needs from an account read: a full AccountResponse,
+ * or a subset that keeps its metadata (the starter fields live there).
+ */
+export type AccountLabelSource = Pick<AccountResponse, 'id' | 'name' | 'code'> & {
+  metadata?: AccountResponse['metadata'];
+};
+
+/**
+ * The one label for an account the frontend holds as an AccountResponse.
+ * Every screen names accounts through this or accountLabelFromParts, never
+ * `name || code` or a bare `name`: an unnamed starter cash account reads as
+ * the localized "Cash USD" and an unnamed starter category (an income or
+ * expense account in a picker) by its built-in label, everywhere
+ * (`account-label-owner.test.ts`).
+ */
+export function accountDisplayName(account: AccountLabelSource): string {
+  const metadata = account.metadata ?? {};
+  const category = metadata['category'];
+  const builtinKey = category && typeof category === 'object' ? (category as Record<string, unknown>)['builtin_key'] : undefined;
+  const text = (value: unknown) => (typeof value === 'string' ? value : null);
   return accountLabelFromParts({
     id: account.id,
     name: account.name,
     code: account.code,
-    starterKey: typeof starterKey === 'string' ? starterKey : null,
-    currencyCode: typeof currencyCode === 'string' ? currencyCode : null
+    builtinKey: text(builtinKey),
+    starterKey: text(metadata['starter_key']),
+    currencyCode: text(metadata['currency_code'])
   });
 }
 
 /**
- * The shared label for full accounts and summary rows. The starter fields
- * give unnamed accounts a localized label such as "Cash USD".
+ * The label of the account with this ID in an account list, or undefined
+ * when there is no ID or the list does not hold it (still loading, or
+ * filtered out), so each screen keeps its own fallback.
+ */
+export function accountLabelByID(
+  accounts: readonly AccountLabelSource[] | undefined,
+  id: number | string | null | undefined
+): string | undefined {
+  if (id === null || id === undefined || id === '') return undefined;
+  const account = accounts?.find((candidate) => String(candidate.id) === String(id));
+  return account ? accountDisplayName(account) : undefined;
+}
+
+/**
+ * The shared label for full accounts and summary rows: the owner's name, else
+ * a seeded account's localized label (a built-in category's, or "Cash USD"
+ * from the starter fields), else the code, else the account number.
  */
 export function accountLabelFromParts(parts: {
   id: number;
   name?: string | null;
   code?: string | null;
+  builtinKey?: string | null;
   starterKey?: string | null;
   currencyCode?: string | null;
 }): string {
   const name = parts.name?.trim();
   if (name) return name;
+  if (parts.builtinKey) return builtinCategoryLabel(parts.builtinKey);
   const currency = parts.currencyCode?.trim();
   if (parts.starterKey === 'cash' && currency) return m.accounts_starter_cash_name({ currency });
   return parts.code?.trim() || m.accounts_unnamed_account({ id: parts.id });

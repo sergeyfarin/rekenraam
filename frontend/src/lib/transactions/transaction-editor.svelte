@@ -96,7 +96,7 @@
     NonNullable<TransactionRequest['journal_entries']>[number]['postings']
   >[number];
   import { accountDisplayName } from '#lib/accounts/account-labels.ts';
-  import { systemRoleLabel } from './transaction-labels';
+  import { resolveAccountLabel, systemRoleLabel } from './transaction-labels';
   import { categoryDisplayName } from '#lib/categories/category-labels.ts';
   import {
     commodityImbalance,
@@ -535,7 +535,7 @@
           entry.postings.map((posting) => ({
             key: `${entry.entry_seq}-${posting.line_key}`,
             date: entry.entry_date,
-            label: posting.account_system_role ? systemRoleLabel(posting.account_system_role) : (posting.account_name ?? String(posting.account_id)),
+            label: resolveAccountLabel(posting),
             amount: joinCommodityAmount(posting.commodity_code ?? '', formatQuantity(posting.quantity_value, posting.quantity_scale, getLocale()))
           }))
         )
@@ -1556,7 +1556,7 @@
       {#each reconciliationModal.impacts as cp (cp.checkpoint_id)}
         <li class="py-2 text-foreground">
           {m.transactions_reconciliation_checkpoint_label({
-            account: cp.account_label,
+            account: resolveAccountLabel(cp),
             commodity: cp.commodity_code,
             date: cp.statement_date
           })}

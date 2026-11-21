@@ -9,13 +9,15 @@ import (
 )
 
 type searchCatalogItemResponse struct {
-	Kind        string `json:"kind"`
-	ID          int64  `json:"id"`
-	Name        string `json:"name"`
-	Code        string `json:"code"`
-	BuiltinKey  string `json:"builtin_key"`
-	Status      string `json:"status"`
-	AccountKind string `json:"account_kind"`
+	Kind         string  `json:"kind"`
+	ID           int64   `json:"id"`
+	Name         string  `json:"name"`
+	Code         string  `json:"code"`
+	BuiltinKey   string  `json:"builtin_key"`
+	StarterKey   *string `json:"starter_key"`
+	CurrencyCode *string `json:"currency_code"`
+	Status       string  `json:"status"`
+	AccountKind  string  `json:"account_kind"`
 }
 type searchCatalogResponse struct {
 	Items      []searchCatalogItemResponse `json:"items"`
@@ -43,7 +45,8 @@ func searchCatalog(logger *slog.Logger, auth *app.AuthService, service *app.Sear
 		}
 		items := make([]searchCatalogItemResponse, 0, len(result.Items))
 		for _, item := range result.Items {
-			items = append(items, searchCatalogItemResponse(item))
+			items = append(items, searchCatalogItemResponse{Kind: item.Kind, ID: item.ID, Name: item.Name, Code: item.Code, BuiltinKey: item.BuiltinKey,
+				StarterKey: optionalNullString(item.StarterKey), CurrencyCode: optionalNullString(item.CurrencyCode), Status: item.Status, AccountKind: item.AccountKind})
 		}
 		writeJSON(w, http.StatusOK, searchCatalogResponse{Items: items, NextCursor: result.NextCursor})
 	}

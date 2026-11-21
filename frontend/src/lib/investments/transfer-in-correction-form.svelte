@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { accountDisplayName } from '#lib/accounts/account-labels.ts';
   import { autofocus } from '#lib/components/autofocus.ts';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import { untrack } from 'svelte';
@@ -169,7 +170,7 @@
       <select id="transfer-in-correction-holding" bind:value={holdingAccountID} required
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         {#each holdingAccounts as account (account.id)}
-          <option value={String(account.id)}>{account.name}</option>
+          <option value={String(account.id)}>{accountDisplayName(account)}</option>
         {/each}
       </select>
     </div>

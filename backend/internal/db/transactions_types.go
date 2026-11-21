@@ -503,8 +503,11 @@ type CheckpointInvalidationRef struct {
 	EntryDate                string
 	StatementDate            string
 	StatementAccountSequence int64
-	// Enriched fields — set by the app layer after the DB lookup.
-	AccountLabel  string
+	// Enriched fields — set by the app layer after the DB lookup. Account
+	// carries the label parts, never a composed label: the frontend owns
+	// account labels (account-labels.ts), and a server-composed one showed the
+	// unnamed starter cash account as its code, cash:USD.
+	Account       PostingAccountSummary
 	CommodityCode string
 }
 

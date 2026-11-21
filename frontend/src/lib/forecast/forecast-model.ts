@@ -1,6 +1,7 @@
 import type { ReadonlyURLSearchParams } from '$app/state';
 import type { components } from '#lib/api/schema.js';
 import { isCalendarDate } from '#lib/dates/calendar-date.ts';
+import { accountLabelFromParts } from '#lib/accounts/account-labels.ts';
 
 export type ForecastSpendingModel = 'off' | 'adaptive_v1';
 export type ForecastLearningPattern = 'daily' | 'weekly' | 'monthly' | 'annual_seasonal';
@@ -237,4 +238,15 @@ export function forecastChartPoints(series: ForecastSeries, estimated?: Forecast
       estimatedY: estimate ? ratio(scaledValue(estimate.quantity_value, estimate.quantity_scale, scale)) : undefined
     };
   });
+}
+
+type ForecastAccount = components['schemas']['ForecastAccount'];
+
+/**
+ * A forecast account's label: the shared account label, so an unnamed starter
+ * account reads as "Cash USD" here as it does in Ledger (#597 sweep).
+ */
+export function forecastAccountLabel(account: ForecastAccount): string {
+  return accountLabelFromParts({ id: account.id, name: account.name, code: account.code,
+    starterKey: account.starter_key, currencyCode: account.currency_code });
 }

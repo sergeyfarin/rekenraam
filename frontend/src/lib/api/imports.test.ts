@@ -93,7 +93,7 @@ describe('Trading 212 sale source correction', () => {
 
 describe('previewTrading212BuyCorrectionReconciliation', () => {
   it('reads the staged-row impact with the authenticated session without a mutation token', async () => {
-    const impact = { affected_checkpoints: [{ checkpoint_id: 8, account_id: 2, account_label: 'Cash', commodity_id: 1, commodity_code: 'EUR', statement_date: '2026-06-10' }] };
+    const impact = { affected_checkpoints: [{ checkpoint_id: 8, account_id: 2, account_name: 'Cash', account_code: null, account_system_role: null, account_builtin_key: null, account_starter_key: null, account_currency_code: null, commodity_id: 1, commodity_code: 'EUR', statement_date: '2026-06-10' }] };
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(JSON.stringify(impact), { status: 200, headers: { 'content-type': 'application/json' } })
     );

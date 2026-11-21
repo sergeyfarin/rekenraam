@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { accountDisplayName } from '#lib/accounts/account-labels.ts';
   import { autofocus } from '#lib/components/autofocus.ts';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import { untrack } from 'svelte';
@@ -181,7 +182,7 @@
       class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" />
   </div>
 
-  <p class="text-sm text-foreground">{m.investments_transfer_internal_source()}: <strong>{sourceAccount?.name ?? `#${sourceAccountID}`}</strong></p>
+  <p class="text-sm text-foreground">{m.investments_transfer_internal_source()}: <strong>{sourceAccount ? accountDisplayName(sourceAccount) : `#${sourceAccountID}`}</strong></p>
 
   <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
     <div class={outbound ? 'sm:col-span-2' : ''}>
@@ -199,7 +200,7 @@
         <select id="transfer-correction-destination" bind:value={destinationAccountID} required
           class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
           {#each destinationAccounts as account (account.id)}
-            <option value={String(account.id)}>{account.name}</option>
+            <option value={String(account.id)}>{accountDisplayName(account)}</option>
           {/each}
         </select>
       </div>

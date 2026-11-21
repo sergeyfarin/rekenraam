@@ -24,6 +24,7 @@
   import ForecastEvents from './forecast-events.svelte';
   import ForecastLearning from './forecast-learning.svelte';
   import {
+    forecastAccountLabel,
     forecastHasMovements,
     forecastLearnedSeriesFor,
     parseForecastFilters,
@@ -140,7 +141,7 @@
 
   function accountName(account: ForecastBalancesResponse['scope']['account_options'][number] | undefined): string {
     if (!account) return m.forecast_unknown_account();
-    return account.name?.trim() || account.code?.trim() || m.forecast_account_number({ id: account.id });
+    return forecastAccountLabel(account);
   }
 
   function formatDate(value: string): string {

@@ -89,7 +89,13 @@ PostingResponse:
       description: "Non-null for system accounts (e.g. transfer_clearing). Use as the display label for system postings."
     account_builtin_key:
       type: [string, 'null']
-      description: "Non-null for built-in/starter category accounts. Localise via Paraglide on the client."
+      description: "Non-null for built-in/starter category accounts. Localise on the client when the account has no name of its own (account_name wins)."
+    account_starter_key:
+      type: [string, 'null']
+      description: "The starter account key from the account's metadata; labels an unnamed starter account. Null otherwise."
+    account_currency_code:
+      type: [string, 'null']
+      description: "The currency code from the starter account's metadata. Null otherwise."
     account_class:
       $ref: "../../openapi.yaml#/components/schemas/AccountClass"
       description: "Account class (asset | liability | income | expense | equity). Always present."
@@ -945,7 +951,12 @@ ReconciliationCheckpointImpact:
   required:
     - checkpoint_id
     - account_id
-    - account_label
+    - account_name
+    - account_code
+    - account_system_role
+    - account_builtin_key
+    - account_starter_key
+    - account_currency_code
     - commodity_id
     - commodity_code
     - statement_date
@@ -958,9 +969,24 @@ ReconciliationCheckpointImpact:
     account_id:
       type: integer
       format: int64
-    account_label:
-      type: string
-      description: Display label for the account (system_role, builtin_key, name, or code — first non-empty in that order). Localise system_role and builtin_key values client-side via Paraglide.
+    account_name:
+      type: [string, 'null']
+      description: The account's own name. The account's label parts, as on PostingResponse; the client composes the label (an unnamed starter cash account reads "Cash USD", never its code).
+    account_code:
+      type: [string, 'null']
+      description: Account code. Null when not set.
+    account_system_role:
+      type: [string, 'null']
+      description: Non-null for system accounts. Localise on the client.
+    account_builtin_key:
+      type: [string, 'null']
+      description: Non-null for built-in/starter category accounts. Localise on the client when the account has no name of its own.
+    account_starter_key:
+      type: [string, 'null']
+      description: The starter account key from the account's metadata; labels an unnamed starter account. Null otherwise.
+    account_currency_code:
+      type: [string, 'null']
+      description: The currency code from the starter account's metadata. Null otherwise.
     commodity_id:
       type: integer
       format: int64

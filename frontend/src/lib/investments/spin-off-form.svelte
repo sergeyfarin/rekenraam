@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { accountLabelByID } from '#lib/accounts/account-labels.ts';
   import { receivingHolding } from '#lib/investments/receiving-holding.ts';
   import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
   import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
@@ -301,7 +302,7 @@
       <label for="spin-off-holding" class="mb-1 block text-sm font-medium text-foreground">{m.investments_spin_off_holding()}</label>
       {#if correction}
         <p id="spin-off-holding" class="rounded-(--radius-control) border border-border bg-surface px-3 py-2 text-sm text-foreground">
-          {accounts.find((account) => account.id === correction.terms.holding_account_id)?.name ?? `#${correction.terms.holding_account_id}`}
+          {accountLabelByID(accounts, correction.terms.holding_account_id) ?? `#${correction.terms.holding_account_id}`}
           · {instrumentLabel(correction.terms.commodity_id)}
         </p>
       {:else}
@@ -311,7 +312,7 @@
         {#if holdingKey && !holdings.some((item) => item.key === holdingKey)}<option value={holdingKey} disabled>{m.investments_activity_position_unavailable_option()}</option>{/if}
         {#each holdings as holding (holding.key)}
           <option value={holding.key}>
-            {accounts.find((account) => account.id === holding.accountID)?.name} · {instrumentLabel(holding.commodityID)}
+            {accountLabelByID(accounts, holding.accountID) ?? `#${holding.accountID}`} · {instrumentLabel(holding.commodityID)}
           </option>
         {/each}
       </select>

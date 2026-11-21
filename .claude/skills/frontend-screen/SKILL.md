@@ -143,6 +143,15 @@ description: SvelteKit frontend rules for Rekenraam - static adapter constraints
   own inline formatting.
 - Built-in DB labels arrive as stable codes; resolve display text here, at
   render time.
+- **Every account label goes through `#lib/accounts/account-labels.ts`**:
+  `accountDisplayName` for an account record, `accountLabelByID` to look one
+  up in a list, `accountLabelFromParts` for a read model's row (pass its
+  `starter_key`/`currency_code`), `resolveAccountLabel` for a posting or a
+  reconciliation checkpoint (its `account_` parts). Never `name || code`, a
+  bare `{account.name}` or a server-composed label: the unnamed starter cash
+  account then shows `cash:USD` or a blank option instead of "Cash USD", and a
+  built-in key placed before the name hides a renamed starter category.
+  `account-label-owner.test.ts` fails on a new copy (#597 sweep).
 - Regenerate outside dev/check/build with
   `pnpm --dir frontend run paraglide:compile`.
 

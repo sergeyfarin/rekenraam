@@ -48,6 +48,11 @@ describe('receivingHolding', () => {
     expect(receivingHolding(accounts, 1, 20, '99').unavailable).toBe(true);
   });
 
+  it('names each option by the shared account label, never a blank (#597 sweep)', () => {
+    const named = [{ id: 1, name: 'Source', default_commodity_id: null }, { id: 7, name: '', code: 'HOLD-7', default_commodity_id: null }];
+    expect(receivingHolding(named, 1, 20, null).options.map((option) => option.name)).toEqual(['Source', 'HOLD-7']);
+  });
+
   it('has no options without a source or new instrument', () => {
     expect(receivingHolding(accounts, undefined, 20, null).options).toEqual([]);
     expect(receivingHolding(accounts, 1, 0, null).value).toBe('');

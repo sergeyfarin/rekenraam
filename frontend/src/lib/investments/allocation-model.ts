@@ -1,5 +1,7 @@
 import { parseDate } from '@internationalized/date';
-import type { AllocationPoint, AllocationRevision } from '#lib/api/allocation.ts';
+import type { AllocationPoint, AllocationResponse, AllocationRevision } from '#lib/api/allocation.ts';
+import { accountLabelFromParts } from '#lib/accounts/account-labels.ts';
+import { m } from '#lib/paraglide/messages.js';
 import { parseDecimalAmount } from '#lib/money/amount.ts';
 
 export function parseTargetUnits(input: string, locale: string): number | null {
@@ -54,4 +56,15 @@ export function savedCalendarDay(timestamp: string, timeZone: string): string {
 
 export function allocationColor(index: number): string {
   return `var(--color-chart-${index % 5 + 1})`;
+}
+
+/**
+ * An allocation account's label: the shared account label (an unnamed
+ * starter account reads as "Cash USD", #597 sweep), or "Account N ·
+ * unavailable" for an ID the read no longer lists.
+ */
+export function allocationAccountLabel(accounts: AllocationResponse['accounts'] | undefined, id: number): string {
+  const account = accounts?.find(candidate => candidate.id === id);
+  if (!account) return `${m.accounts_unnamed_account({ id })} · ${m.allocation_unavailable()}`;
+  return accountLabelFromParts({ id, name: account.name, code: account.code, starterKey: account.starter_key, currencyCode: account.currency_code });
 }

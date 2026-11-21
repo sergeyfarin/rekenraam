@@ -1,4 +1,5 @@
 import type { SearchCatalogItem } from '#lib/api/search.ts';
+import { accountLabelFromParts } from '#lib/accounts/account-labels.ts';
 import { builtinCategoryLabel } from '#lib/categories/category-labels.ts';
 import { routes, routeSearchKeywords, sectionFor } from '#lib/navigation/routes.ts';
 import { m } from '#lib/paraglide/messages.js';
@@ -12,7 +13,9 @@ export function searchItems(catalog: SearchCatalogItem[], hidden: boolean): Sear
   });
   const objects: SearchResult[] = catalog.map(item => ({
     id: `${item.kind}:${item.id}`, group: item.kind,
-    title: item.name.trim() || (item.builtin_key ? builtinCategoryLabel(item.builtin_key) : item.code.trim()) || `#${item.id}`,
+    title: item.kind === 'account'
+      ? accountLabelFromParts({ id: item.id, name: item.name, code: item.code, starterKey: item.starter_key, currencyCode: item.currency_code })
+      : item.name.trim() || (item.builtin_key ? builtinCategoryLabel(item.builtin_key) : item.code.trim()) || `#${item.id}`,
     keywords: `${item.code} ${item.account_kind}`,
     detail: item.kind === 'category' && item.builtin_key ? undefined : item.code.trim(), inactive: item.status !== 'active',
     href: item.kind === 'account' ? `/app/ledger/accounts/${item.id}/register`

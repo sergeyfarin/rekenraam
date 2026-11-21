@@ -352,8 +352,8 @@ func (s *TransactionService) resolveCheckpointRefs(ctx context.Context, candidat
 	return s.repository.PeriodScopedCheckpointInvalidationRefs(ctx, BookID, candidates)
 }
 
-// enrichCheckpointRefs populates AccountLabel and CommodityCode on each ref
-// using one bulk account lookup and one bulk commodity lookup.
+// enrichCheckpointRefs populates the account label parts and CommodityCode on
+// each ref using one bulk account lookup and one bulk commodity lookup.
 func (s *TransactionService) enrichCheckpointRefs(ctx context.Context, refs []db.CheckpointInvalidationRef) error {
 	ctx, referenceErr := s.settings.referenceContext(ctx, s.now())
 	if referenceErr != nil {
@@ -391,18 +391,7 @@ func (s *TransactionService) enrichCheckpointRefs(ctx context.Context, refs []db
 
 	for i := range refs {
 		if acct, ok := accountMap[refs[i].AccountID]; ok {
-			switch {
-			case acct.SystemRole.Valid:
-				refs[i].AccountLabel = acct.SystemRole.String
-			case acct.BuiltinKey.Valid:
-				refs[i].AccountLabel = acct.BuiltinKey.String
-			case acct.Name.Valid:
-				refs[i].AccountLabel = acct.Name.String
-			case acct.Code.Valid:
-				refs[i].AccountLabel = acct.Code.String
-			default:
-				refs[i].AccountLabel = fmt.Sprintf("account:%d", refs[i].AccountID)
-			}
+			refs[i].Account = acct
 		}
 		if comm, ok := commodityMap[refs[i].CommodityID]; ok {
 			refs[i].CommodityCode = comm.Code

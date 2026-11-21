@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { accountDisplayName } from '#lib/accounts/account-labels.ts';
   import { createQuery } from '@tanstack/svelte-query';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
@@ -160,7 +161,7 @@
   }
 
   function accountLabel(account: AccountResponse): string {
-    const name = account.name || account.code || `#${account.id}`;
+    const name = accountDisplayName(account);
     if (account.status === 'archived') return m.returns_account_archived({ name });
     if (account.status === 'closed') return m.returns_account_closed({ name });
     return name;
