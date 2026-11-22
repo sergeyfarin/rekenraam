@@ -2,9 +2,11 @@ package app
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,13 +14,14 @@ import (
 )
 
 const (
-	tagNameMaxBytes     = 120
-	tagIconMaxBytes     = 64
-	tagJSONMaxBytes     = 10000
-	tagListLimit        = 2000
-	defaultTagKind      = "custom"
-	tagLifecycleArchive = "archived tag"
-	tagLifecycleRestore = "restored tag"
+	tagNameMaxBytes      = 120
+	tagIconMaxBytes      = 64
+	tagJSONMaxBytes      = 10000
+	tagListLimit         = 2000
+	tagDirectoryPageSize = 50
+	defaultTagKind       = "custom"
+	tagLifecycleArchive  = "archived tag"
+	tagLifecycleRestore  = "restored tag"
 )
 
 var (
@@ -78,6 +81,7 @@ type UpdateTagInput struct {
 	Operation     string
 	TagID         int64
 	Name          string
+	NameOnly      bool
 	Kind          string
 	Color         string
 	Icon          string
@@ -128,6 +132,46 @@ func (s *TagService) ListTags(ctx context.Context, input ListTagsInput) ([]Tag, 
 	}
 
 	return toTags(records), nil
+}
+
+type TagDirectory struct {
+	Rows       []db.TagDirectoryRow
+	NextCursor string
+}
+
+func (s *TagService) TagDirectory(ctx context.Context, status, query, cursor string) (TagDirectory, error) {
+	switch status {
+	case "":
+		status = "active"
+	case "active", "archived", "all":
+	default:
+		return TagDirectory{}, ValidationError{Message: "tag status is invalid"}
+	}
+
+	params := db.TagDirectoryParams{
+		BookID: BookID, Status: status, Query: strings.TrimSpace(query), Limit: tagDirectoryPageSize + 1,
+	}
+	if cursor != "" {
+		decoded, decodeErr := base64.RawURLEncoding.DecodeString(cursor)
+		id, name, ok := strings.Cut(string(decoded), ":")
+		afterID, parseErr := strconv.ParseInt(id, 10, 64)
+		if decodeErr != nil || !ok || parseErr != nil || afterID <= 0 || name == "" {
+			return TagDirectory{}, ValidationError{Message: "tag cursor is invalid"}
+		}
+		params.AfterID, params.AfterName = afterID, name
+	}
+
+	rows, err := s.repository.TagDirectory(ctx, params)
+	if err != nil {
+		return TagDirectory{}, err
+	}
+	result := TagDirectory{Rows: rows}
+	if len(rows) > tagDirectoryPageSize {
+		result.Rows = rows[:tagDirectoryPageSize]
+		last := result.Rows[len(result.Rows)-1]
+		result.NextCursor = base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%d:%s", last.ID, last.Name)))
+	}
+	return result, nil
 }
 
 func (s *TagService) Tag(ctx context.Context, tagID int64) (Tag, error) {
@@ -188,13 +232,17 @@ func (s *TagService) UpdateTag(ctx context.Context, input UpdateTagInput) (Tag, 
 		return Tag{}, ValidationError{Message: "tag id is required"}
 	}
 
-	spec, err := tagSpec(tagSpecInput{
+	specInput := tagSpecInput{
 		Name:         input.Name,
 		Kind:         input.Kind,
 		Color:        input.Color,
 		Icon:         input.Icon,
 		MetadataJSON: input.MetadataJSON,
-	})
+	}
+	if input.NameOnly {
+		specInput = tagSpecInput{Name: input.Name}
+	}
+	spec, err := tagSpec(specInput)
 	if err != nil {
 		return Tag{}, err
 	}
@@ -209,6 +257,7 @@ func (s *TagService) UpdateTag(ctx context.Context, input UpdateTagInput) (Tag, 
 		OriginType:    input.OriginType,
 		Operation:     input.Operation,
 		Spec:          spec,
+		NameOnly:      input.NameOnly,
 		UpdatedAt:     now,
 	})
 	if err != nil {

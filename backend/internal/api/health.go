@@ -82,6 +82,7 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 	mux.HandleFunc("POST /api/v1/accounts/{account_id}/restore", restoreAccount(logger, services.Auth, services.Account, options))
 	mux.HandleFunc("GET /api/v1/accounts/{account_id}/versions", listAccountVersions(logger, services.Auth, services.Account))
 	mux.HandleFunc("POST /api/v1/setup/system-accounts", completeSystemAccountsSetup(logger, services.Auth, services.Account, options))
+	mux.HandleFunc("GET /api/v1/tags/directory", tagDirectory(logger, services.Auth, services.Tag))
 	mux.HandleFunc("GET /api/v1/tags", listTags(logger, services.Auth, services.Tag))
 	mux.HandleFunc("POST /api/v1/tags", createTag(logger, services.Auth, services.Tag, options))
 	mux.HandleFunc("GET /api/v1/tags/{tag_id}", readTag(logger, services.Auth, services.Tag))

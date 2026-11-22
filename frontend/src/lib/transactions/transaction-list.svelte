@@ -3,7 +3,8 @@
   import { transactionTitle } from '#lib/transactions/transaction-title.ts';
   import { systemLabelText } from '#lib/transactions/system-label.ts';
   import { joinCommodityAmount } from '#lib/money/format.ts';
-  import { createInfiniteQuery, useQueryClient } from '@tanstack/svelte-query';
+  import { createInfiniteQuery, createQuery, useQueryClient } from '@tanstack/svelte-query';
+  import { tagQueryOptions } from '#lib/api/tags.ts';
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import Panel from '#lib/components/panel.svelte';
@@ -54,6 +55,7 @@
     emptyCopy?: string;
   } = $props();
 
+  const selectedTag = createQuery(() => tagQueryOptions(filters.tagID));
   const fromReport = $derived(filters.categoryID !== undefined || filters.categoryType !== undefined);
   const activeFilters = $derived<TransactionQueryFilters>({
     ...filters,
@@ -130,6 +132,19 @@
     </Panel>
   {/if}
 
+  {#if filters.tagID !== undefined}
+    <Panel variant="toolbar">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <p class="min-w-0 wrap-anywhere text-sm text-foreground">
+          {m.tags_transaction_filter({ name: selectedTag.data?.name ?? `#${filters.tagID}` })}
+        </p>
+        <button type="button" class="min-h-11 text-sm font-semibold text-accent underline underline-offset-2"
+          onclick={() => onFiltersChange({ ...filters, tagID: undefined })}>
+          {m.tags_clear_filter()}
+        </button>
+      </div>
+    </Panel>
+  {/if}
   <Panel variant="toolbar">
     <TransactionFilterBar
       bind:filters={() => activeFilters, updateBar}

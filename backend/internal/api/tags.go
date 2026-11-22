@@ -35,6 +35,41 @@ type tagRequest struct {
 	Metadata json.RawMessage `json:"metadata"`
 }
 
+type tagDirectoryRow struct {
+	ID               int64  `json:"id"`
+	Name             string `json:"name"`
+	Kind             string `json:"kind"`
+	Status           string `json:"status"`
+	TransactionCount int64  `json:"transaction_count"`
+}
+
+type tagDirectoryResponse struct {
+	Tags       []tagDirectoryRow `json:"tags"`
+	NextCursor *string           `json:"next_cursor"`
+}
+
+func tagDirectory(logger *slog.Logger, authService *app.AuthService, tagService *app.TagService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
+			return
+		}
+
+		query := r.URL.Query()
+		result, err := tagService.TagDirectory(r.Context(), query.Get("status"), query.Get("q"), query.Get("cursor"))
+		if err != nil {
+			writeTagServiceError(w, r, logger, "read tag directory", err)
+			return
+		}
+		rows := make([]tagDirectoryRow, 0, len(result.Rows))
+		for _, row := range result.Rows {
+			rows = append(rows, tagDirectoryRow{
+				ID: row.ID, Name: row.Name, Kind: row.Kind, Status: row.Status, TransactionCount: row.TransactionCount,
+			})
+		}
+		writeJSON(w, http.StatusOK, tagDirectoryResponse{Tags: rows, NextCursor: nullableCursor(result.NextCursor)})
+	}
+}
+
 func listTags(logger *slog.Logger, authService *app.AuthService, tagService *app.TagService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
@@ -129,6 +164,12 @@ func updateTag(logger *slog.Logger, authService *app.AuthService, tagService *ap
 			return
 		}
 
+		nameOnly, err := parseOptionalBool(r.URL.Query().Get("name_only"))
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "name_only is invalid")
+			return
+		}
+
 		var request tagRequest
 		if err := decodeJSONBody(r, &request); err != nil {
 			writeDecodeError(w, err)
@@ -143,6 +184,7 @@ func updateTag(logger *slog.Logger, authService *app.AuthService, tagService *ap
 			Operation:     "tag.update",
 			TagID:         tagID,
 			Name:          request.Name,
+			NameOnly:      nameOnly,
 			Kind:          request.Kind,
 			Color:         request.Color,
 			Icon:          request.Icon,

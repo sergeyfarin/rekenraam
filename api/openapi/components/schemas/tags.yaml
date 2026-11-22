@@ -57,6 +57,31 @@ TagResponse:
     updated_at:
       type: string
       format: date-time
+TagDirectoryResponse:
+  type: object
+  required: [tags, next_cursor]
+  properties:
+    tags:
+      type: array
+      items:
+        type: object
+        required: [id, name, kind, status, transaction_count]
+        properties:
+          id:
+            type: integer
+            format: int64
+          name:
+            type: string
+          kind:
+            $ref: "../../openapi.yaml#/components/schemas/TagKind"
+          status:
+            $ref: "../../openapi.yaml#/components/schemas/TagStatus"
+          transaction_count:
+            type: integer
+            minimum: 0
+            description: Non-deleted and non-draft transactions with the tag on the transaction or a current posting. Each transaction is counted once.
+    next_cursor:
+      type: [string, 'null']
 TagsResponse:
   type: object
   required:

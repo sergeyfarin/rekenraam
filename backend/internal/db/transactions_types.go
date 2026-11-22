@@ -201,6 +201,7 @@ type ListTransactionsParams struct {
 	CategoryID        int64
 	CommodityID       int64
 	PayeeID           int64
+	TagID             int64
 	Status            string
 	ExcludeDraft      bool // true when no Status filter: omit draft rows
 	Kind              string

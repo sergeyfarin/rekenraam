@@ -179,6 +179,8 @@ paths:
     $ref: "./paths/category-disable.yaml"
   /api/v1/categories/{category_id}/restore:
     $ref: "./paths/category-restore.yaml"
+  /api/v1/tags/directory:
+    $ref: "./paths/tag-directory.yaml"
   /api/v1/tags:
     $ref: "./paths/tags.yaml"
   /api/v1/tags/{tag_id}:
@@ -1011,6 +1013,8 @@ components:
       $ref: "./components/schemas/tags.yaml#/TagStatus"
     TagResponse:
       $ref: "./components/schemas/tags.yaml#/TagResponse"
+    TagDirectoryResponse:
+      $ref: "./components/schemas/tags.yaml#/TagDirectoryResponse"
     TagsResponse:
       $ref: "./components/schemas/tags.yaml#/TagsResponse"
     TagRequest:

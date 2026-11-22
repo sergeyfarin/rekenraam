@@ -28,6 +28,13 @@ get:
         type: integer
         format: int64
     - in: query
+      name: tag_id
+      description: Match the tag on the transaction or any current posting. Archived tags can be used for filtering.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    - in: query
       name: q
       description: Literal free-text phrase; FTS operators are not interpreted. NUL (U+0000) is rejected with HTTP 400 VALIDATION_FAILED.
       schema:

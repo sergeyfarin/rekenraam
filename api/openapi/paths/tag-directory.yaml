@@ -1,0 +1,49 @@
+get:
+  summary: List tags with their transaction usage
+  security:
+    - CookieSession: []
+  parameters:
+    - in: query
+      name: status
+      schema:
+        type: string
+        enum: [active, archived, all]
+        default: active
+    - in: query
+      name: q
+      description: Literal substring (ASCII case-insensitive) of the tag name.
+      schema:
+        type: string
+    - in: query
+      name: cursor
+      description: Continue with the same search and status using the previous response's cursor.
+      schema:
+        type: string
+  responses:
+    "200":
+      description: Tags ordered by name and ID, up to 50 per page.
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/TagDirectoryResponse"
+    "400":
+      description: Invalid query
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

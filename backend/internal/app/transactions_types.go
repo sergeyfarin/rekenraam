@@ -152,6 +152,7 @@ type ListTransactionsInput struct {
 	// withholding operation facts naming it as payer, including corrections (#229).
 	CommodityID int64
 	PayeeID     int64
+	TagID       int64
 	Status      string
 	Kind        string
 	NeedsReview bool

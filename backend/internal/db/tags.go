@@ -69,6 +69,7 @@ type UpdateTagParams struct {
 	OriginType    string
 	Operation     string
 	Spec          TagSpec
+	NameOnly      bool
 	UpdatedAt     string
 }
 
@@ -246,7 +247,14 @@ func (r *TagRepository) UpdateTag(ctx context.Context, params UpdateTagParams) (
 	if current.Status == "archived" {
 		return TagRecord{}, ErrTagArchived
 	}
-	if err := ensureActiveTagNameAvailable(ctx, tx, params.BookID, params.Spec.Kind, params.Spec.Name, params.TagID); err != nil {
+	spec := params.Spec
+	if params.NameOnly {
+		spec.Kind = current.Kind
+		spec.Color = current.Color.String
+		spec.Icon = current.Icon.String
+		spec.MetadataJSON = current.MetadataJSON
+	}
+	if err := ensureActiveTagNameAvailable(ctx, tx, params.BookID, spec.Kind, spec.Name, params.TagID); err != nil {
 		return TagRecord{}, err
 	}
 
@@ -275,7 +283,7 @@ func (r *TagRepository) UpdateTag(ctx context.Context, params UpdateTagParams) (
 			updated_by_user_id = ?,
 			updated_audit_event_id = ?
 		WHERE book_id = ? AND id = ?
-	`, params.Spec.Name, params.Spec.Kind, params.Spec.Color, params.Spec.Icon, params.Spec.MetadataJSON, params.UpdatedAt, params.ActorUserID, auditEventID, params.BookID, params.TagID); err != nil {
+	`, spec.Name, spec.Kind, spec.Color, spec.Icon, spec.MetadataJSON, params.UpdatedAt, params.ActorUserID, auditEventID, params.BookID, params.TagID); err != nil {
 		return TagRecord{}, fmt.Errorf("update tag: %w", err)
 	}
 

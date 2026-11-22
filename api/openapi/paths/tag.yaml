@@ -65,6 +65,12 @@ patch:
   summary: Update a tag
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/TagID"
+    - in: query
+      name: name_only
+      schema:
+        type: boolean
+        default: false
+      description: Update only the name, preserving the current kind, color, icon and metadata. Other body fields are ignored in this mode.
     - in: header
       name: X-CSRF-Token
       required: true
