@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,7 +11,28 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"rekenraam/backend/internal/app"
+	"rekenraam/backend/internal/testdb"
 )
+
+func TestPayeeSuggestionsUseTheOwnersCurrentDay(t *testing.T) {
+	t.Parallel()
+
+	today := testdb.RealUTCToday()
+	instance := fixedReferenceDateInstance(t, testdb.UTCDayInstant(today, 7, "23:01:00"))
+	handler := instance.handler
+	cookie, csrf, _ := setupAccountAPITest(t, handler)
+	_, err := instance.services.Settings.SavePreferences(context.Background(), app.SaveUserPreferencesInput{UserID: 1, TimeZone: "Europe/Amsterdam"})
+	require.NoError(t, err)
+
+	payee := createPayeeForSession(t, handler, cookie, csrf, `{"name":"Owner day vendor"}`)
+	require.Equal(t, testdb.UTCDay(today, 8), payee.EffectiveFrom)
+
+	res := doInvestmentRequest(t, handler, cookie, "", http.MethodGet, "/api/v1/payees/suggestions?q=Owner%20day%20vendor", nil, http.StatusOK)
+	var result payeeSuggestionsResponse
+	require.NoError(t, json.Unmarshal(res.Body.Bytes(), &result))
+	assert.Equal(t, []payeeSuggestionResponse{{ID: payee.ID, Name: payee.Name, Exact: true}}, result.Payees)
+}
 
 func TestPayeeSuggestionsSearchPastTheLegacyListLimit(t *testing.T) {
 	t.Parallel()

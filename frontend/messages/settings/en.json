@@ -650,7 +650,7 @@
   "transactions_payee_confirm_creating": "Creating…",
   "transactions_payee_confirm_edit": "Edit the name",
   "transactions_payee_lookup_loading": "Searching payees…",
-  "transactions_payee_lookup_failed": "Could not search payees. Try again before saving.",
+  "transactions_payee_lookup_failed": "Could not search payees.",
   "transactions_payee_lookup_too_long": "The payee name is too long.",
   "transactions_field_posting_account": "Account",
   "transactions_field_posting_amount": "Amount",

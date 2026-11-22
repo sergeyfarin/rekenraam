@@ -161,6 +161,7 @@ survives a run that crosses midnight, and check that every case fails with
 an unpinned read, so such a case catches nothing without a later version. Named checks:
 `TestAccountRegisterReadsTheCardCreatedJustAfterOwnerMidnight`,
 `TestOwnerCurrentReferenceHTTPCreateListAndFutureExclusion`,
+`TestPayeeSuggestionsUseTheOwnersCurrentDay`,
 `TestCurrentReferenceReadsFollowOwnerDay`,
 `TestCurrentReferenceSiblingsAndComposedReadsUseOwnerDay`,
 `owner-current-reference.spec.ts`.

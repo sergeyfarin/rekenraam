@@ -4,11 +4,35 @@
  * T-50: a typed name that names no payee used to be stored as free text, and
  * every such transaction collapsed into one "no payee recorded" row in the
  * spending report. The backend now links an *exact* match on its own; this
- * module matches names against the catalog available to import review.
+ * editor and import review use the matches to decide when to ask the owner.
  */
 
 import MiniSearch from 'minisearch';
-import type { PayeeResponse } from '#lib/api/payees.ts';
+import type { PayeeResponse, PayeeSuggestion } from '#lib/api/payees.ts';
+
+export type PayeeInteraction = 'untouched' | 'focused' | 'typed';
+
+export function payeeLookupRequest(name: string, openingName: string, interaction: PayeeInteraction) {
+  const term = interaction === 'untouched' ? '' : name.trim();
+  return {
+    term,
+    requiredForSave: interaction === 'typed' && term !== '' && term !== openingName.trim()
+  };
+}
+
+type PayeeSaveDecision =
+  | { kind: 'save' | 'block' | 'confirm' }
+  | { kind: 'link'; payee: PayeeSuggestion };
+
+export function resolvePayeeSave(
+  request: ReturnType<typeof payeeLookupRequest>,
+  status: 'pending' | 'failed' | 'ready',
+  exact: PayeeSuggestion | undefined
+): PayeeSaveDecision {
+  if (!request.requiredForSave) return { kind: 'save' };
+  if (status !== 'ready') return { kind: 'block' };
+  return exact ? { kind: 'link', payee: exact } : { kind: 'confirm' };
+}
 
 /** The same normalization payee records are stored under, mirrored here. */
 export function normalizePayeeName(value: string): string {

@@ -1,7 +1,7 @@
-import { execFileSync } from 'node:child_process';
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './support/owned-book';
 import { apiJSON } from './support/api';
+import { seedBulkPayees } from './support/bulk-payees';
 import { createCashAccount, readyForLedger } from './support/ledger';
 
 const suggestionPath = '/api/v1/payees/suggestions';
@@ -18,6 +18,21 @@ async function openExpense(page: Page, account: string, category: string) {
 
 function saveButton(entry: Locator) {
   return entry.getByRole('button', { name: 'Save transaction', exact: true });
+}
+
+async function submitDespiteDisabledButton(entry: Locator) {
+  const form = entry.locator('form');
+  const dispatched = await form.evaluate((element) => {
+    const formElement = element as HTMLFormElement;
+    let submitted = false;
+    const observe = () => { submitted = true; };
+    formElement.addEventListener('submit', observe);
+    formElement.requestSubmit();
+    formElement.removeEventListener('submit', observe);
+    return submitted;
+  });
+  expect(dispatched).toBe(true);
+  await expect(form).toHaveAttribute('aria-busy', 'false');
 }
 
 async function expectLinkedSave(page: Page, entry: Locator, payeeID: number, action: Locator) {
@@ -42,20 +57,8 @@ test.describe('on a touch phone', () => {
     const category = await apiJSON<{ name: string }>(page, 'POST', '/api/v1/categories', csrfToken, {
       name: 'Payee lookup expense', category_type: 'expense'
     });
-    // Seed ordinary effective payee versions in this test's disposable book.
-    execFileSync('python3', ['-c', `
-import sqlite3, sys
-with sqlite3.connect(sys.argv[1], timeout=10) as db:
-    db.execute('PRAGMA foreign_keys=ON')
-    book, owner = db.execute('SELECT id, owner_user_id FROM books').fetchone()
-    db.executemany("INSERT INTO payees (id, book_id, created_at, created_by_user_id) VALUES (?, ?, '2020-01-01T00:00:00Z', ?)",
-                   [(n + 1, book, owner) for n in range(2000)])
-    db.execute("""INSERT INTO payee_versions
-      (payee_id, version_seq, effective_from, recorded_at, changed_by_user_id, change_reason, status, name, normalized_name)
-      SELECT id, 1, '2020-01-01', created_at, created_by_user_id, 'e2e seed', 'active',
-             printf('Vendor %04d', id - 1), printf('vendor %04d', id - 1)
-      FROM payees""")
-`, ownedBookDatabasePath]);
+    await apiJSON(page, 'POST', '/api/v1/payees', csrfToken, { name: 'Zz existing payee' });
+    seedBulkPayees(ownedBookDatabasePath, 2000);
     const target = await apiJSON<{ id: number; name: string }>(page, 'POST', '/api/v1/payees', csrfToken, { name: 'Vendor 2000' });
     await page.goto('/app');
 
@@ -145,14 +148,15 @@ test('pending and failed payee lookups stop a new-payee confirmation until retry
     await expect(entry.getByText('Searching payees…')).toBeVisible();
     await expect(previousOption).toHaveCount(0);
     await expect(saveButton(entry)).toBeDisabled();
-    await field.press('Enter');
+    await submitDespiteDisabledButton(entry);
     await expect(confirmation).toHaveCount(0);
   } finally {
     releaseFailure();
   }
 
-  await expect(entry.getByText('Could not search payees. Try again before saving.')).toBeVisible();
+  await expect(entry.getByText('Could not search payees.', { exact: true })).toBeVisible();
   await expect(saveButton(entry)).toBeDisabled();
+  await submitDespiteDisabledButton(entry);
   await expect(confirmation).toHaveCount(0);
   expect(writes).toEqual([]);
 
