@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import type { PayeeResponse } from '#lib/api/payees.ts';
 import {
   exactPayeeMatch,
-  needsPayeeConfirmation,
   normalizePayeeName,
+  payeeLookupRequest,
   payeeSuggestions,
-  resolveTypedPayee
+  resolvePayeeSave
 } from './payee-matching';
 
 const payee = (id: number, name: string): PayeeResponse => ({ id, name }) as unknown as PayeeResponse;
@@ -56,47 +56,36 @@ describe('payeeSuggestions', () => {
   });
 });
 
-describe('resolveTypedPayee', () => {
-  it('is none when nothing was typed', () => {
-    expect(resolveTypedPayee('', undefined, payees).kind).toBe('none');
-    expect(resolveTypedPayee('   ', undefined, payees).kind).toBe('none');
+describe('transaction editor payee lookup', () => {
+  const openingName = 'Old unlinked payee';
+
+  it('keeps a save available for an untouched unlinked name', () => {
+    const request = payeeLookupRequest(openingName, openingName, 'untouched');
+    expect(request.term).toBe('');
+    expect(resolvePayeeSave(request, 'pending', undefined).kind).toBe('save');
   });
 
-  it('is linked when a record already carries the name', () => {
-    const resolution = resolveTypedPayee('market hall', undefined, payees);
-    expect(resolution).toMatchObject({ kind: 'linked' });
-    expect(resolution.kind === 'linked' && resolution.payee.id).toBe(1);
+  it.each(['focused', 'typed'] as const)('looks up the opening name when %s without gating the save', (interaction) => {
+    const request = payeeLookupRequest(` ${openingName} `, openingName, interaction);
+    expect(request.term).toBe(openingName);
+    expect(resolvePayeeSave(request, 'pending', undefined).kind).toBe('save');
+    expect(resolvePayeeSave(request, 'failed', undefined).kind).toBe('save');
+    expect(resolvePayeeSave(request, 'ready', undefined).kind).toBe('save');
   });
 
-  it('is linked when the user picked from the list, whatever the text says', () => {
-    const resolution = resolveTypedPayee('anything', 2, payees);
-    expect(resolution.kind === 'linked' && resolution.payee.id).toBe(2);
+  it('lets the owner clear the payee without a lookup', () => {
+    const request = payeeLookupRequest(' ', openingName, 'typed');
+    expect(request.term).toBe('');
+    expect(resolvePayeeSave(request, 'pending', undefined).kind).toBe('save');
   });
 
-  it('is unknown with suggestions when no record carries the name', () => {
-    const resolution = resolveTypedPayee('Markt Hall', undefined, payees);
-    expect(resolution.kind).toBe('unknown');
-    expect(resolution.kind === 'unknown' && resolution.suggestions.map((p) => p.id)).toContain(1);
-    // The trimmed name is what a new record would be created as.
-    expect(resolution.kind === 'unknown' && resolution.name).toBe('Markt Hall');
-  });
-});
-
-describe('needsPayeeConfirmation', () => {
-  const unknown = resolveTypedPayee('Markt Hall', undefined, payees);
-
-  it('asks when a new name was typed', () => {
-    expect(needsPayeeConfirmation(unknown, true)).toBe(true);
-  });
-
-  it('stays silent when the user did not touch the payee', () => {
-    // Editing an unrelated field on a transaction that predates this rule must
-    // not be blocked by history the user did not create.
-    expect(needsPayeeConfirmation(unknown, false)).toBe(false);
-  });
-
-  it('stays silent for a name that resolves', () => {
-    expect(needsPayeeConfirmation(resolveTypedPayee('Market Hall', undefined, payees), true)).toBe(false);
-    expect(needsPayeeConfirmation(resolveTypedPayee('', undefined, payees), true)).toBe(false);
+  it('requires a successful lookup before linking or confirming a changed name', () => {
+    const request = payeeLookupRequest('New payee', openingName, 'typed');
+    expect(request.term).toBe('New payee');
+    const exact = { id: 5, name: 'New payee', exact: true };
+    expect(resolvePayeeSave(request, 'pending', undefined).kind).toBe('block');
+    expect(resolvePayeeSave(request, 'failed', undefined).kind).toBe('block');
+    expect(resolvePayeeSave(request, 'ready', undefined).kind).toBe('confirm');
+    expect(resolvePayeeSave(request, 'ready', exact)).toEqual({ kind: 'link', payee: exact });
   });
 });

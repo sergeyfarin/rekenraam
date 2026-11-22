@@ -120,6 +120,7 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 	mux.HandleFunc("PATCH /api/v1/payees/{payee_id}", updatePayee(logger, services.Auth, services.Payee, options))
 	mux.HandleFunc("POST /api/v1/payees/{payee_id}/archive", archivePayee(logger, services.Auth, services.Payee, options))
 	mux.HandleFunc("POST /api/v1/payees/{payee_id}/restore", restorePayee(logger, services.Auth, services.Payee, options))
+	mux.HandleFunc("GET /api/v1/payees/suggestions", suggestPayees(logger, services.Auth, services.Payee))
 	mux.HandleFunc("GET /api/v1/ledger/account-balances", accountBalances(logger, services.Auth, services.Transaction))
 	mux.HandleFunc("GET /api/v1/ledger/category-totals", categoryTotals(logger, services.Auth, services.Transaction))
 	mux.HandleFunc("GET /api/v1/ledger/net-worth", netWorth(logger, services.Auth, services.Transaction))

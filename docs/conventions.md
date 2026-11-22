@@ -789,7 +789,7 @@ has actual installations, its migration files are immutable.
   Page hits come from the route registry; reference names come from the composed
   cursor-paged catalog, never a request per result. Follow all cursors and show
   incomplete/error coverage until loaded. See the [search contract](design/home-and-navigation.md#shared-search-foundation-457).
-- Use **`minisearch`** for client-side fuzzy filtering of small in-memory sets (account name dropdowns, payee autocomplete). Do not use client-side search for full transaction lists.
+- Use **`minisearch`** for client-side fuzzy filtering of small in-memory sets, such as account name dropdowns. Transaction entry searches all active payees on the server and shows a bounded set of suggestions. Do not use client-side search for full transaction lists.
 - Use **`date-fns` v4** for frontend date manipulation (parsing, arithmetic, formatting helpers). Use `Intl.DateTimeFormat` for final locale-aware display output. Do not use `luxon`, `moment`, or the browser `Date` constructor for financial date logic.
 - All new frontend files must be **TypeScript** (`.ts`, `.svelte` with `<script lang="ts">`). No JavaScript-only files in `frontend/src`.
 - Component state uses **Svelte 5 runes** (`$state`, `$derived`, `$effect`, `$props`). Cross-component and cross-route shared state uses `$state` in `.svelte.ts` module files. No Svelte 4 stores (`writable`, `readable`, `derived` from `svelte/store`) in new code.
