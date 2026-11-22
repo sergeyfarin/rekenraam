@@ -779,13 +779,20 @@ carries the tag uneditable (#650). An edit that restates an archived tag the
 transaction, or the same kept posting line, already carries keeps that
 assignment, and leaving it out removes it. Naming an archived tag anywhere it is
 not already assigned (a new transaction, a correction, a new posting line, a
-recurring template or another line) is a fresh assignment and is refused. The
-writer keeps unchanged association rows instead of deleting and reinserting
-them, so the active-tag insert triggers guard only fresh assignments. Import
-rules follow the same rule for the tags they name; applying a rule still skips
-it while any of its targets is archived. The editor lists an archived
-assignment, labelled archived, for the owner to keep or clear, and offers only
-active tags for new assignments.
+new recurring template or another line) is a fresh assignment and is refused.
+The writer keeps unchanged association rows instead of deleting and
+reinserting them, so the active-tag insert triggers guard only fresh
+assignments. Import rules and recurring templates follow the same rule for the
+tags they already name (#656). Applying a rule still skips it while any of its
+targets is archived, and each generated occurrence is a fresh assignment, so a
+template naming an archived tag blocks its occurrences until the owner removes
+or replaces the tag. The editor lists an archived assignment, labelled
+archived, on the transaction or template and on each posting line, for the
+owner to keep or clear, and offers only active tags for new assignments. It
+reads active choices and assigned tags separately: the active list never
+includes archived rows, and assigned tags are resolved by ID
+(`GET /api/v1/tags?id=…&include_archived=true`), so neither depends on a tag's
+position in the capped catalog (#657).
 
 Use join tables rather than embedding tag ids on the transaction row:
 

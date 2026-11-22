@@ -114,10 +114,16 @@ reference data stops *new* use: a restated record keeps what it already
 carries (transaction tags by transaction, posting tags by kept line key), and
 only a fresh assignment must name an active record. A writer that replaces a
 set by delete-and-reinsert turns every kept row into a fresh insert for its
-triggers; diff instead. The archived-account template pause (#283) is the same
-shape; open siblings are the archived payee on a transaction (#631), an archived
+triggers; diff instead. A form that filters a record's archived assignment
+out "because it would be fresh" silently removes it from the saved record: the
+recurring template editor did that until #656, so a form's notion of fresh must
+match the server's (only a new record is). Resolve assignments by ID, never from
+the capped catalog, which archived rows can crowd (#657, item 1). The
+archived-account template pause (#283) is the same shape; open siblings are the archived payee on a transaction (#631), an archived
 category or payee on an import rule (#652) and archived tags on a correction
 (#653). Named checks: `TestArchivedTagAssignmentsSurviveEdits`,
 `TestImportRules_ArchivedTagSurvivesRuleEdits`,
 `TestImportedDividendRepairKeepsArchivedTagAssignments`,
-`transaction-archived-tags.spec.ts`.
+`TestRecurringTemplateKeepsArchivedTagUntilRemoved`,
+`TestTagListByIDResolvesAssignmentsPastTheCatalogLimit`,
+`transaction-archived-tags.spec.ts`, `recurring.spec.ts`.
