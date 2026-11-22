@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -935,11 +936,27 @@ func (r *TransactionRepository) insertTransactionVersion(ctx context.Context, tx
 	return records[0], nil
 }
 
+// replaceTransactionTags makes the transaction's tag assignments exactly
+// tagIDs. It keeps the rows that stay, deletes the rest and inserts only the
+// new ones, so an assignment made before its tag was archived survives an edit
+// that restates it; the insert trigger refuses an archived tag only on a fresh
+// assignment (#650). A kept row also keeps its own created_* provenance.
 func replaceTransactionTags(ctx context.Context, tx statementExecQueryer, bookID int64, transactionID int64, tagIDs []int64, recordedAt string, actorUserID int64, auditEventID int64) error {
-	if _, err := tx.ExecContext(ctx, "DELETE FROM transaction_tags WHERE book_id = ? AND transaction_id = ?", bookID, transactionID); err != nil {
+	keep, err := tagIDsJSON(tagIDs)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		DELETE FROM transaction_tags
+		WHERE book_id = ? AND transaction_id = ?
+			AND tag_id NOT IN (SELECT value FROM json_each(?))
+	`, bookID, transactionID, keep); err != nil {
 		return fmt.Errorf("delete transaction tags: %w", err)
 	}
 	for _, tagID := range tagIDs {
+		// INSERT ... SELECT with no row for a kept assignment, rather than
+		// ON CONFLICT DO NOTHING: a BEFORE INSERT trigger fires before
+		// conflict resolution and would refuse a kept archived tag.
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO transaction_tags (
 				book_id,
@@ -949,16 +966,29 @@ func replaceTransactionTags(ctx context.Context, tx statementExecQueryer, bookID
 				created_by_user_id,
 				created_audit_event_id
 			)
-			VALUES (?, ?, ?, ?, ?, ?)
-		`, bookID, transactionID, tagID, recordedAt, actorUserID, auditEventID); err != nil {
+			SELECT ?, ?, ?, ?, ?, ?
+			WHERE NOT EXISTS (
+				SELECT 1 FROM transaction_tags WHERE transaction_id = ? AND tag_id = ?
+			)
+		`, bookID, transactionID, tagID, recordedAt, actorUserID, auditEventID, transactionID, tagID); err != nil {
 			return mapTransactionConstraintError(fmt.Errorf("insert transaction tag: %w", err))
 		}
 	}
 	return nil
 }
 
+// replacePostingTags is replaceTransactionTags for one posting line: a line
+// kept across versions keeps the assignments the edit restates (#650).
 func replacePostingTags(ctx context.Context, tx statementExecQueryer, bookID int64, postingLineID int64, tagIDs []int64, recordedAt string, actorUserID int64, auditEventID int64) error {
-	if _, err := tx.ExecContext(ctx, "DELETE FROM posting_tags WHERE book_id = ? AND posting_line_id = ?", bookID, postingLineID); err != nil {
+	keep, err := tagIDsJSON(tagIDs)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		DELETE FROM posting_tags
+		WHERE book_id = ? AND posting_line_id = ?
+			AND tag_id NOT IN (SELECT value FROM json_each(?))
+	`, bookID, postingLineID, keep); err != nil {
 		return fmt.Errorf("delete posting tags: %w", err)
 	}
 	for _, tagID := range tagIDs {
@@ -971,12 +1001,29 @@ func replacePostingTags(ctx context.Context, tx statementExecQueryer, bookID int
 				created_by_user_id,
 				created_audit_event_id
 			)
-			VALUES (?, ?, ?, ?, ?, ?)
-		`, bookID, postingLineID, tagID, recordedAt, actorUserID, auditEventID); err != nil {
+			SELECT ?, ?, ?, ?, ?, ?
+			WHERE NOT EXISTS (
+				SELECT 1 FROM posting_tags WHERE posting_line_id = ? AND tag_id = ?
+			)
+		`, bookID, postingLineID, tagID, recordedAt, actorUserID, auditEventID, postingLineID, tagID); err != nil {
 			return mapTransactionConstraintError(fmt.Errorf("insert posting tag: %w", err))
 		}
 	}
 	return nil
+}
+
+// tagIDsJSON encodes the tag IDs a replacement keeps as one JSON array
+// parameter, so the delete statement's text does not vary with their count
+// and a statementSet compiles it once per write.
+func tagIDsJSON(tagIDs []int64) (string, error) {
+	if tagIDs == nil {
+		tagIDs = []int64{}
+	}
+	encoded, err := json.Marshal(tagIDs)
+	if err != nil {
+		return "", fmt.Errorf("encode kept tag ids: %w", err)
+	}
+	return string(encoded), nil
 }
 
 func clearUnusedPostingLineTags(ctx context.Context, tx *sql.Tx, bookID int64, transactionID int64, usedPostingLineIDs map[int64]bool) error {

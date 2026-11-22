@@ -101,6 +101,7 @@ func (s *TransactionService) ReconciliationImpactForUpdate(ctx context.Context, 
 		ForcedStatus:     current.Status,
 		ExistingLineKeys: lineKeySet(current),
 		ExistingPostings: existingPostingStateSet(current),
+		ExistingTagIDs:   tagIDSet(current.TagIDs),
 	})
 	if err != nil {
 		return ReconciliationImpact{}, err
@@ -141,6 +142,7 @@ func (s *TransactionService) ReconciliationImpactForPost(ctx context.Context, ow
 	_, err = s.cleanTransactionSpec(ctx, storedTransactionInput(toTransaction(current)), cleanTransactionOptions{
 		OwnerUserID:  ownerID,
 		ForcedStatus: "posted", ExistingLineKeys: lineKeySet(current), ExistingPostings: existingPostingStateSet(current),
+		ExistingTagIDs: tagIDSet(current.TagIDs),
 	})
 	if err != nil {
 		return ReconciliationImpact{}, err

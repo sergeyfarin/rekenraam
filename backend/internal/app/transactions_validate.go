@@ -256,7 +256,7 @@ func (s *TransactionService) cleanTransactionSpec(ctx context.Context, input Tra
 		return db.TransactionSpec{}, err
 	}
 
-	tagIDs, err := s.cleanTagIDs(ctx, input.TagIDs)
+	tagIDs, err := s.cleanTagIDs(ctx, input.TagIDs, options.ExistingTagIDs)
 	if err != nil {
 		return db.TransactionSpec{}, err
 	}
@@ -535,6 +535,10 @@ func (s *TransactionService) cleanPosting(ctx context.Context, input PostingInpu
 	}
 
 	existingState, hasExistingState := options.ExistingPostings[lineKey]
+	// The line's stored tags are read before a financial change resets its
+	// reconciliation state below: a tag stays assigned to the line whatever
+	// else the edit changes about it (#650).
+	assignedTagIDs := tagIDSet(existingState.Posting.TagIDs)
 	if hasExistingState && reconciliationAffectingChange(existingState.EntryDate, existingState.Posting, entryDate, db.PostingSpec{
 		AccountID: input.AccountID, CommodityID: input.CommodityID, QuantityValue: input.QuantityValue, QuantityScale: input.QuantityScale,
 	}) {
@@ -569,7 +573,7 @@ func (s *TransactionService) cleanPosting(ctx context.Context, input PostingInpu
 	if err != nil {
 		return db.PostingSpec{}, err
 	}
-	tagIDs, err := s.cleanTagIDs(ctx, input.TagIDs)
+	tagIDs, err := s.cleanTagIDs(ctx, input.TagIDs, assignedTagIDs)
 	if err != nil {
 		return db.PostingSpec{}, err
 	}
@@ -588,7 +592,13 @@ func (s *TransactionService) cleanPosting(ctx context.Context, input PostingInpu
 	}, nil
 }
 
-func (s *TransactionService) cleanTagIDs(ctx context.Context, tagIDs []int64) ([]int64, error) {
+// cleanTagIDs deduplicates tag IDs and refuses any archived or unknown tag that
+// is not already assigned. Archiving a tag stops new assignments; it does not
+// make records that already carry it uneditable, so a tag in assigned is kept
+// whatever its status (#650). The writer keeps those rows instead of
+// reinserting them, and the insert triggers still refuse an archived tag on a
+// fresh assignment.
+func (s *TransactionService) cleanTagIDs(ctx context.Context, tagIDs []int64, assigned map[int64]bool) ([]int64, error) {
 	if len(tagIDs) == 0 {
 		return nil, nil
 	}
@@ -609,7 +619,7 @@ func (s *TransactionService) cleanTagIDs(ctx context.Context, tagIDs []int64) ([
 		return nil, fmt.Errorf("read active tags: %w", err)
 	}
 	for _, tagID := range cleaned {
-		if !active[tagID] {
+		if !active[tagID] && !assigned[tagID] {
 			return nil, ErrTransactionTag
 		}
 	}
@@ -708,6 +718,14 @@ func lineKeySet(record db.TransactionRecord) map[string]bool {
 		}
 	}
 	return keys
+}
+
+func tagIDSet(tagIDs []int64) map[int64]bool {
+	set := make(map[int64]bool, len(tagIDs))
+	for _, tagID := range tagIDs {
+		set[tagID] = true
+	}
+	return set
 }
 
 func existingPostingStateSet(record db.TransactionRecord) map[string]existingPostingState {
