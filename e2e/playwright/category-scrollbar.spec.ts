@@ -3,6 +3,8 @@ import { expect, test } from './support/fixtures';
 import { readyForLedger } from './support/ledger';
 
 // Keep the native scrollbar visible in Chromium's headless test browser.
+// test.use replaces launchOptions. Keep this override in sync with
+// e2e/playwright.config.ts.
 test.use({
   launchOptions: {
     executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,
