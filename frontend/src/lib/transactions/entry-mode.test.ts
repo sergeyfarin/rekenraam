@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { inflowPositiveAmount, negateCoefficient } from '#lib/money/amount.ts';
+import { accountNormalCoefficient, negateCoefficient } from '#lib/money/amount.ts';
 import {
   accountLedgerValue,
   approvalKey,
@@ -107,7 +107,7 @@ describe('mode → ledger sign', () => {
         expect(magnitude.startsWith('-')).toBe(false);
         expect(accountLedgerValue(direction, magnitude)).toBe(value);
         // And it agrees with the signed amount the editor used to show.
-        const shown = inflowPositiveAmount({ quantity_value: value, quantity_scale: 0, account_class: accountClass });
+        const shown = accountNormalCoefficient(value, accountClass);
         expect(before(accountClass, shown)).toBe(value);
       }
     }

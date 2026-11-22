@@ -67,6 +67,7 @@ type ReconciliationPosting struct {
 	EntryDate            string
 	QuantityValue        exact.Coefficient
 	QuantityScale        int
+	NormalQuantityValue  exact.Coefficient
 	ReconciliationStatus string
 	PayeeName            string
 	Description          string
@@ -527,8 +528,8 @@ func toReconciliationSession(record db.ReconciliationSessionRecord) Reconciliati
 		FinishedAt:           nullableString(record.FinishedAt),
 		VoidedAt:             nullableString(record.VoidedAt),
 		ChangeReason:         record.ChangeReason,
-		Candidates:           toReconciliationPostings(record.Candidates),
-		SelectedPostings:     toReconciliationPostings(record.SelectedPostings),
+		Candidates:           toReconciliationPostings(record.Candidates, record.AccountClass),
+		SelectedPostings:     toReconciliationPostings(record.SelectedPostings, record.AccountClass),
 	}
 }
 
@@ -551,7 +552,7 @@ func toReconciliationCheckpoint(record db.ReconciliationCheckpointRecord) Reconc
 	}
 }
 
-func toReconciliationPostings(records []db.ReconciliationPostingRecord) []ReconciliationPosting {
+func toReconciliationPostings(records []db.ReconciliationPostingRecord, accountClass string) []ReconciliationPosting {
 	postings := make([]ReconciliationPosting, 0, len(records))
 	for _, record := range records {
 		postings = append(postings, ReconciliationPosting{
@@ -564,6 +565,7 @@ func toReconciliationPostings(records []db.ReconciliationPostingRecord) []Reconc
 			EntryDate:            record.EntryDate,
 			QuantityValue:        record.QuantityValue,
 			QuantityScale:        record.QuantityScale,
+			NormalQuantityValue:  normalBalanceValue(record.QuantityValue, accountClass),
 			ReconciliationStatus: record.ReconciliationStatus,
 			PayeeName:            nullableString(record.PayeeName),
 			Description:          record.Description,

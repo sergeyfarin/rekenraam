@@ -7,7 +7,6 @@
   import StatePanel from '#lib/components/state-panel.svelte';
   import StatusBadge from '#lib/components/status-badge.svelte';
   import APIFormError from '#lib/components/api-form-error.svelte';
-  import { accountNormalCoefficient } from '#lib/money/amount.ts';
   import { formatQuantity } from '#lib/money/format.ts';
   import { invalidateReconciliationReads } from '#lib/reconcile/invalidate.ts';
   import {
@@ -22,7 +21,6 @@
   let {
     reconciliationID,
     accountLabel,
-    accountClass,
     csrfToken,
     initialSession,
     onFinished,
@@ -30,7 +28,6 @@
   }: {
     reconciliationID: number;
     accountLabel: string;
-    accountClass: string;
     csrfToken: string | undefined;
     initialSession: ReconciliationSessionResponse;
     onFinished: (session: ReconciliationSessionResponse) => void;
@@ -188,7 +185,7 @@
                       {/if}
                     </td>
                     <td class="px-3 py-3 text-right tabular-nums text-foreground">
-                      {formatQuantity(accountNormalCoefficient(posting.quantity_value, accountClass), posting.quantity_scale, locale)}
+                      {formatQuantity(posting.normal_quantity_value, posting.quantity_scale, locale)}
                     </td>
                   </tr>
                 {/each}

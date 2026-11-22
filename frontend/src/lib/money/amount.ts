@@ -158,22 +158,6 @@ export function fitsInt64Coefficient(value: string): boolean {
 	return coefficient >= -9223372036854775808n && coefficient <= 9223372036854775807n;
 }
 
-/**
- * Present a posting as an inflow-positive amount for the account it sits on.
- *
- * Storage is debit-positive (positive = debit). For liability, income, and
- * equity accounts a debit is a decrease, so the displayed sign is flipped to
- * match what a user means by "money in".
- */
-export function inflowPositiveAmount(posting: {
-	quantity_value: string;
-	quantity_scale: number;
-	account_class: string;
-}): string {
-	const value = accountNormalCoefficient(posting.quantity_value, posting.account_class);
-	return formatEditableAmount(value, posting.quantity_scale);
-}
-
 /** Restate a coefficient at a larger scale. `to` must be >= `from`. */
 function rescale(value: bigint, from: number, to: number): bigint {
 	return value * 10n ** BigInt(to - from);
@@ -241,11 +225,7 @@ export function commodityImbalance(legs: AmountLeg[]): { commodityID: string; am
 	return null;
 }
 
-/**
- * A posting reduced to the three fields any sign- or scale-aware operation
- * needs. Matches what `inflowPositiveAmount` already takes, plus the commodity
- * that groups it.
- */
+/** A posting's exact amount, account class, and grouping commodity. */
 export interface PostingAmount {
 	commodity_id: number;
 	quantity_value: string;
@@ -266,7 +246,7 @@ export interface CommodityTotal {
  * Sum postings per commodity, scale-aware, in the ledger's normal-sign
  * convention.
  *
- * The convention is the same one `inflowPositiveAmount` applies to a single
+ * The convention is the same one `accountNormalCoefficient` applies to a single
  * posting and `balanceMapToQuantities` applies on the backend: storage is
  * debit-positive, so a liability, income, or equity posting has its sign
  * flipped to make "money in" and "activity" read positive. Expense and asset
@@ -286,12 +266,7 @@ export function sumByCommodity(postings: PostingAmount[]): CommodityTotal[] {
 	const order: number[] = [];
 
 	for (const posting of postings) {
-		const signed =
-			posting.account_class === 'liability' ||
-			posting.account_class === 'income' ||
-			posting.account_class === 'equity'
-				? -BigInt(posting.quantity_value)
-				: BigInt(posting.quantity_value);
+		const signed = BigInt(accountNormalCoefficient(posting.quantity_value, posting.account_class));
 
 		const prev = totals.get(posting.commodity_id);
 		if (prev === undefined) {

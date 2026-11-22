@@ -47,9 +47,6 @@
   const activeAccountID = $derived(
     view.type === 'start' ? undefined : view.session.account_id
   );
-  const activeAccountClass = $derived(
-    accountsQuery.data?.accounts.find((account) => account.id === activeAccountID)?.account_class ?? ''
-  );
 
   function accountLabel(accountID: number): string {
     return accountLabelByID(accountsQuery.data?.accounts, accountID) ?? String(accountID);
@@ -104,7 +101,6 @@
   <ReconcileSession
     reconciliationID={view.session.id}
     accountLabel={accountLabel(view.session.account_id)}
-    accountClass={activeAccountClass}
     {csrfToken}
     initialSession={view.session}
     onFinished={handleFinished}

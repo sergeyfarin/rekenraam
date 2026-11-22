@@ -52,6 +52,8 @@ func TestReconciliationBalanceQuantitiesUseAccountNormalSign(t *testing.T) {
 			assertBalance("starting", started.StartingBalance, 400)
 			assertBalance("unselected difference", started.Difference, 100)
 			require.Len(t, started.Candidates, 1)
+			assert.Equal(t, exact.New(tc.ledgerSign*100), started.Candidates[0].QuantityValue)
+			assert.Equal(t, exact.New(100), started.Candidates[0].NormalQuantityValue)
 
 			selection := ReconciliationSelectionInput{
 				OriginType: "browser_api", OwnerUserID: f.ownerUserID, SessionID: started.ID,
@@ -71,6 +73,9 @@ func TestReconciliationBalanceQuantitiesUseAccountNormalSign(t *testing.T) {
 			require.NoError(t, err)
 			assertBalance("reloaded statement", read.StatementBalance, 500)
 			assertBalance("reloaded selection", read.SelectedBalance, 100)
+			require.Len(t, read.SelectedPostings, 1)
+			assert.Equal(t, exact.New(tc.ledgerSign*100), read.SelectedPostings[0].QuantityValue)
+			assert.Equal(t, exact.New(100), read.SelectedPostings[0].NormalQuantityValue)
 
 			checkpoints, err := service.ReconciliationCheckpoints(ctx, ListReconciliationCheckpointsInput{
 				AccountID: accountID, CommodityID: f.eurCommodityID,

@@ -60,6 +60,7 @@ type reconciliationPostingResponse struct {
 	EntryDate            string            `json:"entry_date"`
 	QuantityValue        exact.Coefficient `json:"quantity_value"`
 	QuantityScale        int               `json:"quantity_scale"`
+	NormalQuantityValue  exact.Coefficient `json:"normal_quantity_value"`
 	ReconciliationStatus string            `json:"reconciliation_status"`
 	PayeeName            string            `json:"payee_name,omitempty"`
 	Description          string            `json:"description,omitempty"`
@@ -427,6 +428,7 @@ func toReconciliationPostingResponses(postings []app.ReconciliationPosting) []re
 			EntryDate:            posting.EntryDate,
 			QuantityValue:        posting.QuantityValue,
 			QuantityScale:        posting.QuantityScale,
+			NormalQuantityValue:  posting.NormalQuantityValue,
 			ReconciliationStatus: posting.ReconciliationStatus,
 			PayeeName:            posting.PayeeName,
 			Description:          posting.Description,

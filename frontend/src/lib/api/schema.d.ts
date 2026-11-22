@@ -32463,6 +32463,8 @@ export interface components {
             entry_date: string;
             quantity_value: string;
             quantity_scale: number;
+            /** @description Posting coefficient in the reconciliation account's normal sign. */
+            normal_quantity_value: string;
             reconciliation_status: components["schemas"]["ReconciliationStatus"];
             payee_name?: string;
             description?: string;
