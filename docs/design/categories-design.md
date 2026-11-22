@@ -122,7 +122,6 @@ keeps its existing transaction and posting assignments. A tag's count and
 link cover the same Transactions view: a match at either level counts once,
 including voided transactions and excluding drafts and soft-deleted records.
 
-
 ## Protected Built-In Categories
 
 - Other Expense

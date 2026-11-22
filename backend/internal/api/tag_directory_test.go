@@ -43,7 +43,7 @@ func TestTagDirectoryUsageMatchesFilteredTransactions(t *testing.T) {
 		`{"change_reason":"duplicate"}`, http.StatusOK)
 
 	tagPath := fmt.Sprintf("/api/v1/tags/%d", tag.ID)
-	rename := tokenAPIRequest(handler, http.MethodPatch, tagPath+"?name_only=true", `{"name":"Travel 50%"}`, cookie, csrf, "")
+	rename := tokenAPIRequest(handler, http.MethodPatch, tagPath, `{"name":"Travel 50%"}`, cookie, csrf, "")
 	require.Equal(t, http.StatusOK, rename.Code, rename.Body.String())
 	var renamed tagResponse
 	require.NoError(t, json.Unmarshal(rename.Body.Bytes(), &renamed))

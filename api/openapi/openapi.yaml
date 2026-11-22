@@ -1017,6 +1017,8 @@ components:
       $ref: "./components/schemas/tags.yaml#/TagDirectoryResponse"
     TagsResponse:
       $ref: "./components/schemas/tags.yaml#/TagsResponse"
+    TagPatchRequest:
+      $ref: "./components/schemas/tags.yaml#/TagPatchRequest"
     TagRequest:
       $ref: "./components/schemas/tags.yaml#/TagRequest"
     PayeeStatus:

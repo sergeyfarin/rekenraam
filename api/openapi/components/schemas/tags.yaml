@@ -113,3 +113,27 @@ TagRequest:
       type: object
       additionalProperties: true
   additionalProperties: false
+TagPatchRequest:
+  type: object
+  description: Omitted fields retain their stored values.
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 120
+    kind:
+      $ref: "../../openapi.yaml#/components/schemas/TagKind"
+    color:
+      type: string
+      pattern: "^(#[0-9A-Fa-f]{6})?$"
+      description: An empty string clears the color.
+    icon:
+      type: string
+      maxLength: 64
+      pattern: "^([a-z][a-z0-9_-]*)?$"
+      description: An empty string clears the icon.
+    metadata:
+      type: object
+      additionalProperties: true
+      description: Send an empty object to clear metadata.
+  additionalProperties: false

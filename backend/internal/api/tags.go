@@ -35,6 +35,14 @@ type tagRequest struct {
 	Metadata json.RawMessage `json:"metadata"`
 }
 
+type tagPatchRequest struct {
+	Name     *string         `json:"name"`
+	Kind     *string         `json:"kind"`
+	Color    *string         `json:"color"`
+	Icon     *string         `json:"icon"`
+	Metadata json.RawMessage `json:"metadata"`
+}
+
 type tagDirectoryRow struct {
 	ID               int64  `json:"id"`
 	Name             string `json:"name"`
@@ -164,13 +172,7 @@ func updateTag(logger *slog.Logger, authService *app.AuthService, tagService *ap
 			return
 		}
 
-		nameOnly, err := parseOptionalBool(r.URL.Query().Get("name_only"))
-		if err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "name_only is invalid")
-			return
-		}
-
-		var request tagRequest
+		var request tagPatchRequest
 		if err := decodeJSONBody(r, &request); err != nil {
 			writeDecodeError(w, err)
 			return
@@ -184,11 +186,10 @@ func updateTag(logger *slog.Logger, authService *app.AuthService, tagService *ap
 			Operation:     "tag.update",
 			TagID:         tagID,
 			Name:          request.Name,
-			NameOnly:      nameOnly,
 			Kind:          request.Kind,
 			Color:         request.Color,
 			Icon:          request.Icon,
-			MetadataJSON:  rawJSONText(request.Metadata),
+			MetadataJSON:  rawJSONPointer(request.Metadata),
 		})
 		if err != nil {
 			writeTagServiceError(w, r, logger, "update tag", err)

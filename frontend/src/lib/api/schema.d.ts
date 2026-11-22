@@ -8515,10 +8515,7 @@ export interface paths {
         /** Update a tag */
         patch: {
             parameters: {
-                query?: {
-                    /** @description Update only the name, preserving the current kind, color, icon and metadata. Other body fields are ignored in this mode. */
-                    name_only?: boolean;
-                };
+                query?: never;
                 header: {
                     /** @description Session-bound CSRF token for authenticated mutating requests. */
                     "X-CSRF-Token": string;
@@ -8530,7 +8527,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["TagRequest"];
+                    "application/json": components["schemas"]["TagPatchRequest"];
                 };
             };
             responses: {
@@ -30079,6 +30076,19 @@ export interface components {
         };
         TagsResponse: {
             tags: components["schemas"]["TagResponse"][];
+        };
+        /** @description Omitted fields retain their stored values. */
+        TagPatchRequest: {
+            name?: string;
+            kind?: components["schemas"]["TagKind"];
+            /** @description An empty string clears the color. */
+            color?: string;
+            /** @description An empty string clears the icon. */
+            icon?: string;
+            /** @description Send an empty object to clear metadata. */
+            metadata?: {
+                [key: string]: unknown;
+            };
         };
         TagRequest: {
             name: string;

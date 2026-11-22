@@ -80,12 +80,11 @@ type UpdateTagInput struct {
 	OriginType    string
 	Operation     string
 	TagID         int64
-	Name          string
-	NameOnly      bool
-	Kind          string
-	Color         string
-	Icon          string
-	MetadataJSON  string
+	Name          *string
+	Kind          *string
+	Color         *string
+	Icon          *string
+	MetadataJSON  *string
 }
 
 type TagLifecycleInput struct {
@@ -196,7 +195,7 @@ func (s *TagService) CreateTag(ctx context.Context, input CreateTagInput) (Tag, 
 	}
 
 	spec, err := tagSpec(tagSpecInput{
-		Name:         input.Name,
+		Name:         &input.Name,
 		Kind:         input.Kind,
 		Color:        input.Color,
 		Icon:         input.Icon,
@@ -232,17 +231,13 @@ func (s *TagService) UpdateTag(ctx context.Context, input UpdateTagInput) (Tag, 
 		return Tag{}, ValidationError{Message: "tag id is required"}
 	}
 
-	specInput := tagSpecInput{
+	spec, err := tagSpec(tagSpecInput{
 		Name:         input.Name,
-		Kind:         input.Kind,
-		Color:        input.Color,
-		Icon:         input.Icon,
-		MetadataJSON: input.MetadataJSON,
-	}
-	if input.NameOnly {
-		specInput = tagSpecInput{Name: input.Name}
-	}
-	spec, err := tagSpec(specInput)
+		Kind:         valueOr(input.Kind, ""),
+		Color:        valueOr(input.Color, ""),
+		Icon:         valueOr(input.Icon, ""),
+		MetadataJSON: valueOr(input.MetadataJSON, ""),
+	})
 	if err != nil {
 		return Tag{}, err
 	}
@@ -256,8 +251,11 @@ func (s *TagService) UpdateTag(ctx context.Context, input UpdateTagInput) (Tag, 
 		RequestID:     input.RequestID,
 		OriginType:    input.OriginType,
 		Operation:     input.Operation,
-		Spec:          spec,
-		NameOnly:      input.NameOnly,
+		Name:          normalizedTagField(input.Name, spec.Name),
+		Kind:          normalizedTagField(input.Kind, spec.Kind),
+		Color:         normalizedTagField(input.Color, spec.Color),
+		Icon:          normalizedTagField(input.Icon, spec.Icon),
+		MetadataJSON:  normalizedTagField(input.MetadataJSON, spec.MetadataJSON),
 		UpdatedAt:     now,
 	})
 	if err != nil {
@@ -303,8 +301,15 @@ func (s *TagService) changeTagStatus(ctx context.Context, input TagLifecycleInpu
 	return toTag(record), nil
 }
 
+func normalizedTagField(input *string, normalized string) *string {
+	if input == nil {
+		return nil
+	}
+	return &normalized
+}
+
 type tagSpecInput struct {
-	Name         string
+	Name         *string
 	Kind         string
 	Color        string
 	Icon         string
@@ -312,15 +317,18 @@ type tagSpecInput struct {
 }
 
 func tagSpec(input tagSpecInput) (db.TagSpec, error) {
-	name := strings.TrimSpace(input.Name)
-	if name == "" {
-		return db.TagSpec{}, ValidationError{Message: "tag name is required"}
-	}
-	if len(name) > tagNameMaxBytes {
-		return db.TagSpec{}, ValidationError{Message: fmt.Sprintf("tag name must be at most %d bytes", tagNameMaxBytes)}
-	}
-	if hasControlCharacter(name) {
-		return db.TagSpec{}, ValidationError{Message: "tag name must not contain control characters"}
+	var name string
+	if input.Name != nil {
+		name = strings.TrimSpace(*input.Name)
+		if name == "" {
+			return db.TagSpec{}, ValidationError{Message: "tag name is required"}
+		}
+		if len(name) > tagNameMaxBytes {
+			return db.TagSpec{}, ValidationError{Message: fmt.Sprintf("tag name must be at most %d bytes", tagNameMaxBytes)}
+		}
+		if hasControlCharacter(name) {
+			return db.TagSpec{}, ValidationError{Message: "tag name must not contain control characters"}
+		}
 	}
 
 	kind := strings.TrimSpace(input.Kind)

@@ -116,6 +116,28 @@ func TestUpdateTagAndFilters(t *testing.T) {
 	assert.Equal(t, tag.ID, filtered.Tags[0].ID)
 }
 
+func TestTagPatchKeepsOmittedFieldsAndClearsExplicitValues(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	cookie, csrf, _ := setupAccountAPITest(t, handler)
+	tag := createTagForSession(t, handler, cookie, csrf, `{
+		"name":"Vacation","kind":"project","color":"#3B82F6","icon":"sun",
+		"metadata":{"reference":9007199254740993}
+	}`)
+	createTagForSession(t, handler, cookie, csrf, `{"name":"Vacation","kind":"flag"}`)
+
+	patchTag(t, handler, cookie, csrf, tag.ID, `{"kind":"flag"}`, http.StatusConflict)
+	patchTag(t, handler, cookie, csrf, tag.ID, `{"name":""}`, http.StatusBadRequest)
+
+	changed := patchTag(t, handler, cookie, csrf, tag.ID, `{"color":"","icon":"","metadata":{}}`, http.StatusOK)
+	assert.Equal(t, tag.Name, changed.Name)
+	assert.Equal(t, tag.Kind, changed.Kind)
+	assert.Empty(t, changed.Color)
+	assert.Empty(t, changed.Icon)
+	assert.JSONEq(t, `{}`, string(changed.Metadata))
+}
+
 func TestArchiveAndRestoreTag(t *testing.T) {
 	t.Parallel()
 

@@ -37,6 +37,11 @@ test('find, rename, archive and restore a tag from Categories on a phone', async
   await expect(tagLink('Station trip')).toBeVisible();
   await search.fill('harbour');
   await expect(tagLink('Station trip')).toHaveCount(0);
+  await views.getByRole('link', { name: 'Tags' }).click();
+  await expect(search).toHaveValue('');
+  await expect(tagLink('Station trip')).toBeVisible();
+  await search.fill('harbour');
+  await expect(tagLink('Station trip')).toHaveCount(0);
   const tagRow = main.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'Harbour trip', exact: true }) });
   await expect(tagRow.getByRole('definition')).toHaveText('1');
   await expectNoAccessibilityViolations(page, 'Tags view on a phone');

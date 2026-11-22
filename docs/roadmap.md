@@ -210,8 +210,8 @@ Deliver incrementally, tracked in #441, in this order:
    pages with Trash moved to Transactions › Deleted and export to Reports
    (#446) delivered 2026-10-31; Import views (#447) and Ledger overview,
    Institutions and brokerages (#448) delivered 2026-11-13. Ledger › Payees
-   (#443) delivered 2026-11-21, and the Tags view (#444) is delivered.
-   Planning and Reports overviews (#450) remain.
+   (#443) delivered 2026-11-21. The Tags view (#444) ships with
+   archived-tag editing (#650). Planning and Reports overviews (#450) remain.
 5. **Object navigation (#442):** the switcher as scoped search, pinned
    accounts and breadcrumbs, after #448 and the owner-run real-book count
    (#449).

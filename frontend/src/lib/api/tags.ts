@@ -126,7 +126,6 @@ export async function renameTag(tagID: number, name: string, csrfToken: string):
   try {
     const { data, error, response } = await apiClient.PATCH('/api/v1/tags/{tag_id}', {
       params: {
-        query: { name_only: true },
         path: {
           tag_id: tagID
         },

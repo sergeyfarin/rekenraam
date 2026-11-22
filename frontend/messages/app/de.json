@@ -14,7 +14,7 @@
   "tags_action_for": "{action}: {name}",
   "tags_name": "Name des Schlagworts",
   "tags_save": "Namen speichern",
-  "tags_archive_copy": "Das Schlagwort bleibt bei früheren Transaktionen erhalten und verschwindet aus den Vorschlägen.",
+  "tags_archive_copy": "Das Schlagwort bleibt bei früheren Transaktionen erhalten und verschwindet aus den Vorschlägen. Importregeln mit diesem Schlagwort werden übersprungen. Wiederkehrende Transaktionen mit dem Schlagwort werden blockiert, bis Sie es entfernen oder wiederherstellen.",
   "tags_renamed": "Umbenannt in {name}.",
   "tags_archived": "{name} wurde archiviert.",
   "tags_restored": "{name} wurde wiederhergestellt.",

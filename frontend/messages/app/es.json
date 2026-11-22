@@ -14,7 +14,7 @@
   "tags_action_for": "{action} {name}",
   "tags_name": "Nombre de la etiqueta",
   "tags_save": "Guardar nombre",
-  "tags_archive_copy": "La etiqueta se conserva en las transacciones anteriores y desaparece de las sugerencias.",
+  "tags_archive_copy": "La etiqueta se conserva en las transacciones anteriores y desaparece de las sugerencias. Se omiten las reglas de importación que la usan y se bloquean las transacciones recurrentes que la usan hasta que quites o restaures la etiqueta.",
   "tags_renamed": "Se ha cambiado el nombre a {name}.",
   "tags_archived": "Se ha archivado {name}.",
   "tags_restored": "Se ha restaurado {name}.",

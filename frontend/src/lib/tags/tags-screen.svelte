@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { replaceState } from '$app/navigation';
+  import { beforeNavigate, goto } from '$app/navigation';
   import { page } from '$app/state';
   import { createInfiniteQuery, createQuery } from '@tanstack/svelte-query';
   import { authSessionQueryOptions } from '#lib/api/auth.ts';
@@ -46,13 +46,19 @@
   let error = $state<unknown>();
   let notice = $state('');
 
+  beforeNavigate(({ shallow }) => {
+    if (!shallow) searchDraft = undefined;
+  });
+
   function setFilters(nextStatus: string, nextSearch: string) {
     const next = new URL(url.href);
     if (nextStatus === 'active') next.searchParams.delete('status');
     else next.searchParams.set('status', nextStatus);
     if (nextSearch) next.searchParams.set('q', nextSearch);
     else next.searchParams.delete('q');
-    if (next.href !== url.href) replaceState(next, page.state);
+    if (next.href !== url.href) {
+      void goto(next, { shallow: true, replace: true, reset: false, persistState: true });
+    }
   }
 
   $effect(() => {
