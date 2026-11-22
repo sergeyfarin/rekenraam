@@ -1008,11 +1008,12 @@ rewritten so that `books.id` is held at 1 by the `books_single_id_insert` and
 `books_id_no_update` triggers instead of `CHECK (id = 1)`, and the baseline
 identity becomes **20261118**. The head stays at the same forward number.
 
-**#584 (2026-11-22) — BREAKING DEV DATABASE.** The baseline uses calendar-exact
-checks in place of the 44 date-shape checks. This build uses baseline identity
-**20261122** and Goose head **14**. Export anything worth keeping with the
-previous build before updating, then move the disposable development database
-aside and start fresh with the procedure above.
+**#584 and #635 (2026-11-22) — BREAKING DEV DATABASE.** The baseline uses
+calendar-exact checks in 46 columns, including budget targets' month starts.
+This build uses baseline identity **20261122** and Goose head **14**.
+Export anything worth keeping with the previous build before updating, then
+move the disposable development database aside and start fresh with the
+procedure above.
 
 The baseline records its generation in SQLite's `PRAGMA user_version`,
 separately from Goose's forward migration number. Startup refuses older

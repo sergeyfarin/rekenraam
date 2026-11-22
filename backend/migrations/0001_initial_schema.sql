@@ -1571,7 +1571,10 @@ CREATE TABLE budget_targets (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
   category_account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
   commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
-  period_start TEXT NOT NULL CHECK (period_start GLOB '????-??-01'),
+  period_start TEXT NOT NULL CHECK (
+    CASE WHEN length(period_start) = 10 THEN date(period_start, '+0 days') END IS period_start
+    AND substr(period_start, 9) = '01'
+  ),
   quantity_value TEXT NOT NULL CHECK (instr(quantity_value, char(0)) = 0 AND (quantity_value = '0' OR (length(quantity_value) BETWEEN 1 AND 38 AND quantity_value NOT GLOB '*[^0-9]*' AND quantity_value NOT GLOB '0*'))),
   quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 12),
   created_at TEXT NOT NULL,
@@ -1917,7 +1920,7 @@ CREATE TABLE "investment_payment_in_lieu_facts" (
   book_id INTEGER NOT NULL REFERENCES books(id),
   holding_account_id INTEGER REFERENCES accounts(id),
   commodity_id INTEGER REFERENCES commodities(id),
-  ex_date TEXT CHECK (ex_date IS NULL OR (ex_date GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]' AND length(ex_date) = 10)),
+  ex_date TEXT CHECK (CASE WHEN length(ex_date) = 10 THEN date(ex_date, '+0 days') END IS ex_date),
   created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id)
 );
 

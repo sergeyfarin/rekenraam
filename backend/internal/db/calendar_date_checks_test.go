@@ -1,11 +1,128 @@
 package db
 
 import (
+	"context"
+	"database/sql"
+	"regexp"
 	"testing"
 
 	"github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/require"
 )
+
+var (
+	sqliteCheckStart = regexp.MustCompile(`(?i)\bCHECK\s*\(`)
+	sqliteDateCall   = regexp.MustCompile(`(?i)\bdate\s*\(`)
+	legacyDateGlob   = regexp.MustCompile(`(?i)\bGLOB\s*'(\?{4}-\?{2}-[^']*)'`)
+)
+
+func TestInstalledCalendarDateChecks(t *testing.T) {
+	t.Parallel()
+	for _, encoding := range []string{"UTF-8", "UTF-16le", "UTF-16be"} {
+		t.Run(encoding, func(t *testing.T) {
+			database := openTestDatabase(t)
+			_, err := database.Exec(`PRAGMA encoding = '` + encoding + `'`)
+			require.NoError(t, err)
+			require.NoError(t, Migrate(context.Background(), database))
+			var installedEncoding string
+			require.NoError(t, database.QueryRow(`PRAGMA encoding`).Scan(&installedEncoding))
+			require.Equal(t, encoding, installedEncoding)
+			requireCalendarDateCheckInventory(t, database)
+
+			for _, column := range calendarDateColumns {
+				t.Run(column.table+"."+column.name, func(t *testing.T) {
+					check := columnCheckExpression(t, database, column.table, column.name)
+					require.Regexp(t, sqliteDateCall, check)
+					requireCalendarDateCheckValues(t, database, column.name, check)
+				})
+			}
+		})
+	}
+}
+
+func requireCalendarDateCheckInventory(t *testing.T, database *sql.DB) {
+	t.Helper()
+	expected := make(map[string]int)
+	listed := make(map[string]bool)
+	for _, column := range calendarDateColumns {
+		key := column.table + "." + column.name
+		require.False(t, listed[key], "duplicate inventory entry %s", key)
+		listed[key] = true
+		expected[column.table]++
+	}
+
+	// Every inventoried column is also tested below with its own installed
+	// inline CHECK. Matching the count per table detects any additional CHECK,
+	// including one added by a forward migration or declared at table level.
+	rows, err := database.Query(`SELECT type, name, sql FROM sqlite_schema WHERE sql IS NOT NULL`)
+	require.NoError(t, err)
+	defer rows.Close()
+	installed := make(map[string]int)
+	for rows.Next() {
+		var kind, name, definition string
+		require.NoError(t, rows.Scan(&kind, &name, &definition))
+		for _, match := range legacyDateGlob.FindAllStringSubmatch(definition, -1) {
+			// The audit timestamp has its own RFC 3339 shape constraint.
+			require.True(t, kind == "table" && name == "audit_events" && match[1] == "????-??-??T??:??:??Z",
+				"%s contains a shape-only date check: %s", name, match[0])
+		}
+		if kind == "table" {
+			for _, start := range sqliteCheckStart.FindAllStringIndex(definition, -1) {
+				if sqliteDateCall.MatchString(sqliteCheckBody(t, definition, start[1]-1)) {
+					installed[name]++
+				}
+			}
+		}
+	}
+	require.NoError(t, rows.Err())
+	require.Equal(t, expected, installed, "inventory of installed date CHECKs by table")
+}
+
+func requireCalendarDateCheckValues(t *testing.T, database *sql.DB, column, check string) {
+	t.Helper()
+	supportingColumns := ""
+	if column == "ends_on" {
+		supportingColumns = ", starts_on TEXT NOT NULL DEFAULT '0000-01-01'"
+	}
+	// Keep the real TEXT affinity and isolate this CHECK from foreign keys,
+	// triggers, and other columns' constraints.
+	_, err := database.Exec(`CREATE TEMP TABLE date_probe (` + column + ` TEXT CHECK (` + check + `)` + supportingColumns + `)`)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, err := database.Exec(`DROP TABLE date_probe`)
+		require.NoError(t, err)
+	})
+
+	insert := `INSERT INTO date_probe (` + column + `) VALUES (?)`
+	for _, value := range []any{nil, "0000-01-01", "2024-02-01", "2026-02-01"} {
+		_, err := database.Exec(insert, value)
+		require.NoError(t, err, "value %v", value)
+	}
+	for _, value := range []string{"2026-02-28", "2024-02-29", "0000-02-29", "2000-02-29", "9999-12-31"} {
+		_, err := database.Exec(insert, value)
+		if column == "period_start" {
+			requireDateCheckFailure(t, err, value)
+		} else {
+			require.NoError(t, err, "value %q", value)
+		}
+	}
+	for _, value := range []any{
+		"2026-02-29", "2026-02-30", "2026-04-31", "1900-02-29",
+		"2026-00-01", "2026-13-01", "2026-02-00", "2026-02-32", "abcd-ef-gh", "abcd-ef-01",
+		"2026-02-03T00:00:00Z", "2026-2-3", " 2026-02-01", "2026-02-01 ", "-0001-02-01",
+		"", "now", "NOW", "2461074.50", "2026-02-01\x00tail", []byte("2026-02-01"), 20260201,
+	} {
+		_, err := database.Exec(insert, value)
+		requireDateCheckFailure(t, err, value)
+	}
+}
+
+func requireDateCheckFailure(t *testing.T, err error, value any) {
+	t.Helper()
+	var constraint sqlite3.Error
+	require.ErrorAs(t, err, &constraint, "value %v", value)
+	require.Equal(t, sqlite3.ErrConstraintCheck, constraint.ExtendedCode, "value %v", value)
+}
 
 func TestPayeeVersionsRequireCalendarExactDates(t *testing.T) {
 	t.Parallel()
@@ -36,9 +153,7 @@ func TestPayeeVersionsRequireCalendarExactDates(t *testing.T) {
 				require.NoError(t, err)
 				return
 			}
-			var constraint sqlite3.Error
-			require.ErrorAs(t, err, &constraint)
-			require.Equal(t, sqlite3.ErrConstraintCheck, constraint.ExtendedCode)
+			requireDateCheckFailure(t, err, test.date)
 			require.ErrorContains(t, err, "effective_from")
 		})
 	}
@@ -58,9 +173,79 @@ func TestRecurringTemplateEndDateIsOptionalAndOrdered(t *testing.T) {
 	}
 	for _, end := range []string{"2026-01-31", "2026-02-30"} {
 		_, err := database.Exec(insert, end)
-		var constraint sqlite3.Error
-		require.ErrorAs(t, err, &constraint, "end date %s", end)
-		require.Equal(t, sqlite3.ErrConstraintCheck, constraint.ExtendedCode)
+		requireDateCheckFailure(t, err, end)
 		require.ErrorContains(t, err, "ends_on")
 	}
+}
+
+func TestBudgetTargetsRequireRealMonthStarts(t *testing.T) {
+	t.Parallel()
+	database := seedReplayTestBook(t)
+	var category int64
+	require.NoError(t, database.QueryRow(`SELECT account_id FROM account_versions
+		WHERE account_class = 'expense' ORDER BY id LIMIT 1`).Scan(&category))
+	const insert = `INSERT INTO budget_targets (book_id, category_account_id, commodity_id, period_start,
+		quantity_value, quantity_scale, created_at, updated_at, updated_by_user_id, updated_audit_event_id)
+		VALUES (1, ?, 1, ?, '100', 2, '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z', 1, 1)`
+	for _, value := range []string{"2026-02-01", "2024-02-01"} {
+		_, err := database.Exec(insert, category, value)
+		require.NoError(t, err, "month start %q", value)
+	}
+	for _, value := range []string{"2026-02-02", "2026-13-01", "abcd-ef-01"} {
+		t.Run(value, func(t *testing.T) {
+			_, err := database.Exec(insert, category, value)
+			requireDateCheckFailure(t, err, value)
+			require.ErrorContains(t, err, "period_start")
+		})
+	}
+}
+
+// Each column exercises its own CHECK from the fully migrated SQLite schema.
+var calendarDateColumns = []struct{ table, name string }{
+	{"account_budget_treatment_versions", "effective_from"},
+	{"account_versions", "closed_on"},
+	{"account_versions", "effective_from"},
+	{"account_versions", "opened_on"},
+	{"backup_runs", "scheduled_for_local_date"},
+	{"budget_targets", "period_start"},
+	{"commodity_versions", "effective_from"},
+	{"dividend_defaults", "effective_from"},
+	{"dividend_defaults", "effective_to"},
+	{"institution_versions", "effective_from"},
+	{"investment_automation_rules", "effective_from"},
+	{"investment_automation_rules", "effective_to"},
+	{"investment_capital_return_facts", "effective_on"},
+	{"investment_capital_return_facts", "payment_on"},
+	{"investment_cash_in_lieu_facts", "payment_on"},
+	{"investment_disposal_decisions", "event_date"},
+	{"investment_disposal_decisions", "source_effective_from"},
+	{"investment_fee_policy_versions", "effective_from"},
+	{"investment_instrument_versions", "effective_from"},
+	{"investment_lot_events", "event_date"},
+	{"investment_lots", "opened_on"},
+	{"investment_operation_components", "amount_date"},
+	{"investment_operation_dates", "event_date"},
+	{"investment_operations", "event_date"},
+	{"investment_payment_in_lieu_facts", "ex_date"},
+	{"investment_provider_events", "event_date"},
+	{"investment_split_facts", "effective_on"},
+	{"investment_transfer_facts", "effective_on"},
+	{"investment_transfer_link_revisions", "original_acquired_on"},
+	{"investment_transfer_lot_links", "original_acquired_on"},
+	{"journal_entries", "entry_date"},
+	{"payee_versions", "effective_from"},
+	{"posting_versions", "cleared_on"},
+	{"price_observations", "valuation_date"},
+	{"pricing_refresh_state", "last_success_date"},
+	{"pricing_source_assignments", "effective_from"},
+	{"pricing_source_assignments", "effective_to"},
+	{"reconciliation_checkpoint_postings", "entry_date"},
+	{"reconciliation_checkpoints", "statement_date"},
+	{"reconciliation_session_postings", "entry_date"},
+	{"reconciliation_sessions", "statement_date"},
+	{"recurring_occurrences", "occurrence_date"},
+	{"recurring_templates", "ends_on"},
+	{"recurring_templates", "generate_from"},
+	{"recurring_templates", "starts_on"},
+	{"transaction_versions", "transaction_date"},
 }

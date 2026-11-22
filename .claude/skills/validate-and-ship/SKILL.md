@@ -104,8 +104,8 @@ item 31"); they are not an order and are never reused. To read one entry:
 - 61 — JSON decoder limits drifting from operations and EOF checks
 - 66 — A fresh connection per call hiding connection-lifetime state
 - 82 — A reference read before the owner's day is pinned
-- 84 — Date-shaped text mistaken for a calendar date in SQLite CHECKs
 - 83 — A second clock reading after the owner day is pinned
+- 84 — Date-shaped text mistaken for a calendar date in SQLite CHECKs
 
 **Auth, sessions and secrets** — `bug-classes/auth-security.md`
 

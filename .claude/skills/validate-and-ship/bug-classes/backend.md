@@ -245,6 +245,9 @@ and `date(col) = col` lets an unparseable input yield NULL and pass. Use
 `CASE WHEN length(col) = 10 THEN date(col, '+0 days') END IS col`. The length
 guard excludes special values such as `now`, and `IS` compares the result to
 the full stored value while allowing SQL NULL for nullable columns.
-`TestPayeeVersionsRequireCalendarExactDates` exercises raw version writes.
+`TestInstalledCalendarDateChecks` exercises each installed calendar-date
+CHECK in UTF-8, UTF-16le and UTF-16be and rejects shape-only date GLOBs.
+`TestPayeeVersionsRequireCalendarExactDates` exercises raw version writes,
 `TestRecurringTemplateEndDateIsOptionalAndOrdered` covers a nullable date
-with a separate ordering invariant.
+with an ordering invariant, and `TestBudgetTargetsRequireRealMonthStarts`
+covers the first-of-month rule (#635).

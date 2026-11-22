@@ -22,8 +22,8 @@ ADR 0013 permits an explicitly declared redesign before any installed release;
 each rewrite updates the checksum, fixtures and upgrade/equivalence tests.
 After the first installed release, schema changes use forward migrations.
 
-#584 rewrites the baseline to identity `20261122`. SQLite validates the full
-calendar date in all 44 columns previously guarded by date-shape checks.
+#584 and #635 rewrite the baseline to identity `20261122`. SQLite validates the
+full calendar date in 46 columns, including budget targets' month starts.
 Development databases on earlier generations require the documented reset.
 
 #573 rewrites the baseline to identity `20261118`: `books.id` loses its
