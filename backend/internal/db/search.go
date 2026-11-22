@@ -43,8 +43,12 @@ func (r *SearchRepository) Catalog(ctx context.Context, bookID int64, afterKind 
  FROM investment_instruments ii JOIN commodities c ON c.id=ii.commodity_id
  JOIN `+CurrentReferenceVersions(ctx, "investment_instrument")+` iiv ON iiv.instrument_id=ii.id
  WHERE ii.book_id=?
+ UNION ALL
+ SELECT 'payee', p.id, pv.name, '', '', NULL, NULL, pv.status, ''
+ FROM payees p JOIN `+CurrentReferenceVersions(ctx, "payee")+` pv ON pv.payee_id=p.id
+ WHERE p.book_id=?
  ) SELECT kind,id,name,code,builtin_key,starter_key,currency_code,status,account_kind FROM catalog
- WHERE kind > ? OR (kind = ? AND id > ?) ORDER BY kind,id LIMIT ?`, bookID, bookID, afterKind, afterKind, afterID, limit)
+ WHERE kind > ? OR (kind = ? AND id > ?) ORDER BY kind,id LIMIT ?`, bookID, bookID, bookID, afterKind, afterKind, afterID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("read search catalog: %w", err)
 	}

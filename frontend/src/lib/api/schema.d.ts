@@ -5175,7 +5175,7 @@ export interface paths {
         };
         /**
          * Compact shared-search reference catalog
-         * @description Composes names, codes and localization keys for accounts, categories and instruments, using current owner-local reference versions. Excludes system accounts; includes closed/archived objects for an explicit frontend filter. No balances, notes, transactions or financial writes. Stable kind/ID cursor order; consume every cursor before claiming complete search coverage.
+         * @description Composes names, codes and localization keys for accounts, categories, instruments and payees, using current owner-local reference versions. Excludes system accounts; includes closed/archived objects for an explicit frontend filter. No balances, notes, transactions or financial writes. Stable kind/ID cursor order; consume every cursor before claiming complete search coverage.
          */
         get: {
             parameters: {
@@ -8856,6 +8856,67 @@ export interface paths {
                 413: components["responses"]["JSONBodyTooLarge"];
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payees/directory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List payees with their transaction usage */
+        get: {
+            parameters: {
+                query?: {
+                    status?: "active" | "archived" | "all";
+                    /** @description Case-insensitive substring of the payee name. */
+                    q?: string;
+                    /** @description Continue with the same search and status using the previous response's cursor. */
+                    cursor?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Payees ordered by normalized name, up to 50 per page. */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PayeeDirectoryResponse"];
+                    };
+                };
+                /** @description Invalid query */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -29715,17 +29776,17 @@ export interface components {
         };
         SearchCatalogItem: {
             /** @enum {string} */
-            kind: "account" | "category" | "instrument";
+            kind: "account" | "category" | "instrument" | "payee";
             /**
              * Format: int64
-             * @description Account/category ID or instrument commodity ID (its page identity).
+             * @description Account, category or payee ID, or instrument commodity ID (its page identity).
              */
             id: number;
             name: string;
             code: string;
             /** @description Resolve seeded category labels in the active frontend locale. */
             builtin_key: string;
-            /** @description The starter account key from an account's metadata; labels an unnamed starter account. Null for categories and instruments. */
+            /** @description The starter account key from an account's metadata. Null for other kinds. */
             starter_key: string | null;
             /** @description The currency code from the starter account's metadata. */
             currency_code: string | null;
@@ -29968,6 +30029,25 @@ export interface components {
         };
         PayeesResponse: {
             payees: components["schemas"]["PayeeResponse"][];
+        };
+        PayeeDirectoryResponse: {
+            payees: {
+                /** Format: int64 */
+                id: number;
+                name: string;
+                status: components["schemas"]["PayeeStatus"];
+                /**
+                 * Format: int64
+                 * @description Number of current, non-deleted transactions in the ordinary Transactions view linked to this payee.
+                 */
+                transaction_count: number;
+                /**
+                 * Format: date
+                 * @description Latest transaction date among the counted transactions, or null when unused.
+                 */
+                last_used_on: string | null;
+            }[];
+            next_cursor?: string;
         };
         PayeeRequest: {
             name?: string;

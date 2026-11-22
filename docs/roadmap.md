@@ -209,16 +209,17 @@ Deliver incrementally, tracked in #441, in this order:
 4. **Pages in their new places**, in any order after #436: settings in five
    pages with Trash moved to Transactions › Deleted and export to Reports
    (#446) delivered 2026-10-31; Import views (#447) and Ledger overview,
-   Institutions and brokerages (#448) delivered 2026-11-13. Remaining:
-   Planning and Reports overviews (#450); Payees page (#443); Tags view (#444).
+   Institutions and brokerages (#448) delivered 2026-11-13. Ledger › Payees
+   (#443) delivered 2026-11-21. Remaining: Planning and
+   Reports overviews (#450) and Tags view (#444).
 5. **Object navigation (#442):** the switcher as scoped search, pinned
    accounts and breadcrumbs, after #448 and the owner-run real-book count
    (#449).
 6. **Personalization (#438):** server-persisted layout and revision-checked
    API, headline choices, Customize panel (also in Settings › Preferences),
    item actions with Undo, sizes and settings.
-7. **Search depth (#439):** payee actions with editor prefill and last-used
-   category, payee filtering and full-text transaction search.
+7. **Search depth (#439):** prefilled expense entry from a payee result with
+   its last-used category, and full-text transaction search.
 8. **Widget depth (#440):** lazy expanded returns, allocation and forecast
    charts, then further widgets for existing capabilities: the forecast's
    lowest balance and first negative date (#533), savings rate (#534) and

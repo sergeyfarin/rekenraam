@@ -189,6 +189,8 @@ paths:
     $ref: "./paths/tag-restore.yaml"
   /api/v1/payees:
     $ref: "./paths/payees.yaml"
+  /api/v1/payees/directory:
+    $ref: "./paths/payee-directory.yaml"
   /api/v1/payees/{payee_id}:
     $ref: "./paths/payee.yaml"
   /api/v1/payees/{payee_id}/archive:
@@ -1019,6 +1021,8 @@ components:
       $ref: "./components/schemas/payees.yaml#/PayeeResponse"
     PayeesResponse:
       $ref: "./components/schemas/payees.yaml#/PayeesResponse"
+    PayeeDirectoryResponse:
+      $ref: "./components/schemas/payees.yaml#/PayeeDirectoryResponse"
     PayeeRequest:
       $ref: "./components/schemas/payees.yaml#/PayeeRequest"
     PayeeLifecycleRequest:

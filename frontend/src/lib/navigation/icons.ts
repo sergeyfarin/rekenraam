@@ -20,6 +20,7 @@ import Palette from '@lucide/svelte/icons/palette';
 import Languages from '@lucide/svelte/icons/languages';
 import Database from '@lucide/svelte/icons/database';
 import ShieldCheck from '@lucide/svelte/icons/shield-check';
+import Contact from '@lucide/svelte/icons/contact';
 
 /** Rendering stays separate so the route registry is plain data. */
 export const routeIcons = {
@@ -45,6 +46,7 @@ export const routeIcons = {
   'languages': Languages,
   'database': Database,
   'shield-check': ShieldCheck,
+  'contact': Contact,
 };
 
 export type RouteIcon = keyof typeof routeIcons;

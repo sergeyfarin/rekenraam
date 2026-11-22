@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseTransactionFilters, writeTransactionFilters } from './transaction-url-filters';
+import { parseTransactionFilters, transactionRequestFilters, writeTransactionFilters } from './transaction-url-filters';
 
 const params = (query: string) => new URLSearchParams(query);
 
@@ -26,10 +26,12 @@ describe('parseTransactionFilters', () => {
     expect(filters.afterDate).toBeUndefined();
   });
 
-  it('drops an inverted range rather than sending a 400', () => {
-    const filters = parseTransactionFilters(params('after_date=2026-06-30&before_date=2026-06-01'));
-    expect(filters.afterDate).toBeUndefined();
-    expect(filters.beforeDate).toBeUndefined();
+  it('keeps an inverted range in the URL and only drops its dates from the request', () => {
+    const query = 'after_date=2026-06-30&before_date=2026-06-01&payee_id=7';
+    const filters = parseTransactionFilters(params(query));
+    expect(filters).toMatchObject({ afterDate: '2026-06-30', beforeDate: '2026-06-01', payeeID: 7 });
+    expect(transactionRequestFilters(filters)).toMatchObject({ afterDate: undefined, beforeDate: undefined, payeeID: 7 });
+    expect(parseTransactionFilters(writeTransactionFilters(params(''), filters))).toEqual(filters);
   });
 
   it.each(['2026-02-31', '2026-13-01', '2026-00-10', '2026-04-31'])(
@@ -48,6 +50,7 @@ describe('parseTransactionFilters', () => {
     const filters = parseTransactionFilters(params('after_date=2026-06-01&before_date=2026-06-01'));
     expect(filters.afterDate).toBe('2026-06-01');
     expect(filters.beforeDate).toBe('2026-06-01');
+    expect(transactionRequestFilters(filters)).toEqual(filters);
   });
 
   it('treats needs_review as true only for the literal true', () => {

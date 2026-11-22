@@ -19,33 +19,23 @@
   const linkedTransactionID = $derived(Number(page.url.searchParams.get('transaction_id') ?? 0));
   const view = $derived(parseTransactionView(page.url.searchParams));
 
-  // The URL seeds the list once, so a report drill-down lands pre-filtered, and
-  // is rewritten in place as the bar changes. `replaceState` keeps filter
-  // tweaking out of history — Back returns to wherever the link came from.
-  const initialFilters = $derived(parseTransactionFilters(page.url.searchParams));
-  let filteredAccountID = $state(parseTransactionFilters(page.url.searchParams).accountID);
+  // Drill-down links can arrive while this page is already mounted.
+  const filters = $derived(parseTransactionFilters(page.url.searchParams));
 
-  function handleFiltersChange(filters: TransactionQueryFilters) {
-    filteredAccountID = filters.accountID;
+  function handleFiltersChange(next: TransactionQueryFilters) {
     // Drafts own their lifecycle: keep the view URL clean rather than writing
     // an explicit `status=draft` beside `view=drafts`.
-    const urlFilters = view === 'drafts' ? { ...filters, status: undefined } : filters;
-    const params = writeTransactionFilters(page.url.searchParams, urlFilters);
-    const search = params.toString();
-    if (search === page.url.searchParams.toString()) {
-      return;
-    }
-    void goto(`/app/ledger/transactions${search ? `?${search}` : ''}`, {
-      replaceState: true,
-      reset: false
-    });
+    const urlFilters = view === 'drafts' ? { ...next, status: undefined } : next;
+    const url = new URL(page.url.href);
+    url.search = writeTransactionFilters(url.searchParams, urlFilters).toString();
+    if (url.search !== page.url.search) void goto(url, { replace: true, reset: false });
   }
 
   // A list filtered to one ordinary account starts a new transaction there (#185).
   const accountsQuery = createQuery(() => accountsQueryOptions(false, false));
   const create = $derived.by<TransactionWorkspaceCreate>(() => {
     if (view === 'deleted') return { kind: 'none' };
-    const account = (accountsQuery.data?.accounts ?? []).find((item) => item.id === filteredAccountID);
+    const account = (accountsQuery.data?.accounts ?? []).find((item) => item.id === filters.accountID);
     return { kind: 'entry', defaults: account && isOrdinaryEntryAccount(account) ? { accountID: account.id } : undefined };
   });
 </script>
@@ -66,7 +56,7 @@
         <TransactionList
           {csrfToken}
           {actions}
-          {initialFilters}
+          {filters}
           onFiltersChange={handleFiltersChange}
           onRowClick={actions.showDetail}
           lockStatus={view === 'drafts' ? 'draft' : undefined}

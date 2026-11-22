@@ -5,13 +5,45 @@ export type PayeeResponse = components['schemas']['PayeeResponse'];
 export type PayeesResponse = components['schemas']['PayeesResponse'];
 export type PayeeRequest = components['schemas']['PayeeRequest'];
 export type PayeeLifecycleRequest = components['schemas']['PayeeLifecycleRequest'];
+export type PayeeDirectoryResponse = components['schemas']['PayeeDirectoryResponse'];
+export type PayeeDirectoryRow = PayeeDirectoryResponse['payees'][number];
+export type PayeeDirectoryStatus = PayeeDirectoryRow['status'] | 'all';
 
 export const payeesQueryKey = ['api', 'payees'] as const;
+export const payeeDirectoryQueryKey = ['api', 'payee-directory'] as const;
+
+export function payeeDirectoryQueryOptions(status: PayeeDirectoryStatus, q: string, cursor?: string) {
+  return {
+    queryKey: [...payeeDirectoryQueryKey, { status, q, cursor }] as const,
+    queryFn: async ({ signal }: { signal: AbortSignal }): Promise<PayeeDirectoryResponse> => {
+      try {
+        const { data, error, response } = await apiClient.GET('/api/v1/payees/directory', {
+          params: { query: { status, q: q || undefined, cursor } },
+          signal
+        });
+        if (data !== undefined) return data;
+        throw toAPIClientError(response, error);
+      } catch (error) {
+        if (error instanceof APIClientError) throw error;
+        throw toNetworkError(error);
+      }
+    }
+  };
+}
 
 export function payeesQueryOptions(options: { includeArchived?: boolean; q?: string } = {}) {
   return {
     queryKey: [...payeesQueryKey, options] as const,
     queryFn: () => getPayees(options),
+    staleTime: 10_000
+  };
+}
+
+export function payeeQueryOptions(payeeID: number | undefined) {
+  return {
+    queryKey: [...payeesQueryKey, 'one', payeeID] as const,
+    queryFn: () => getPayee(payeeID!),
+    enabled: payeeID !== undefined,
     staleTime: 10_000
   };
 }
