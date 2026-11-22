@@ -398,6 +398,9 @@ When a feature introduces a durable new rule, update one of those documents in t
   increases are usually positive. Liability, equity, and income increases are
   usually negative.
 - Use calendar dates for financial facts.
+- SQLite calendar-date checks compare the stored text to its normalized date with
+  `CASE WHEN length(col) = 10 THEN date(col, '+0 days') END IS col`. This enforces
+  canonical `YYYY-MM-DD` and lets nullable columns accept SQL `NULL`.
 - Use UTC timestamps for system facts.
 - Store recurring user-facing schedules as local wall-clock time plus an IANA
   time zone, then record each actual run/attempt as UTC timestamps. Storing only
@@ -443,8 +446,8 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Soft-deletion uses a nullable `deleted_at` timestamp for current state and append-only deletion/restoration events for auditable history. Do not represent soft-delete as a lifecycle status. The transaction implementation is the reference pattern: it hides a transaction from ordinary views while keeping the row durable for audit and recovery.
 - Schema changes require explicit migrations under `backend/migrations`.
 - The migration runner is **`pressly/goose`** with embedded SQL files. Migrations are sequential numbered `.sql` files under `backend/migrations/`. Run at startup; goose tracks applied versions in the database.
-- The v0.1 baseline generation is `20261118` (`PRAGMA user_version`; #405
-  set `20261026`, #573 replaced it), independent of Goose's forward migration sequence. Additive migrations retain
+- The v0.1 baseline generation is `20261122` (`PRAGMA user_version`),
+  independent of Goose's forward migration sequence. Additive migrations retain
   it. An incompatible pre-release rewrite must change it and its refusal/reset
   tests; installed releases never rewrite their baseline. Startup and restore
   reject mismatched generations, including obsolete files also numbered 1.

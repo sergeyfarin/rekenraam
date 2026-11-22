@@ -61,9 +61,9 @@ func TestBaselineIndexesKeepOrderedAndForeignKeyLookups(t *testing.T) {
 
 func TestMigrateRefusesIncompatibleDevelopmentBaselinesWithoutWrites(t *testing.T) {
 	t.Parallel()
-	// Old version-numbered candidates carry no identity; a #405 database
-	// carries 20261026, which #573's books-trigger rewrite superseded.
-	for _, test := range []struct{ identity, version int }{{0, 1}, {0, 26}, {0, 27}, {20261026, 12}} {
+	// Old version-numbered candidates carry no identity. #405 and #573 used
+	// 20261026 and 20261118, respectively.
+	for _, test := range []struct{ identity, version int }{{0, 1}, {0, 26}, {0, 27}, {20261026, 12}, {20261118, 14}} {
 		version := test.version
 		t.Run(strconv.Itoa(test.identity)+"/"+strconv.Itoa(version), func(t *testing.T) {
 			database := openTestDatabase(t)
@@ -92,7 +92,7 @@ func TestRestoreRefusesIncompatibleBaselineBeforePreservingDestination(t *testin
 	ctx := context.Background()
 	database := openTestDatabase(t)
 	require.NoError(t, Migrate(ctx, database))
-	_, err := database.Exec(`PRAGMA user_version=0`)
+	_, err := database.Exec(`PRAGMA user_version=20261118`)
 	require.NoError(t, err)
 	source := filepath.Join(t.TempDir(), "old.sqlite")
 	require.NoError(t, BackupSQLiteDatabase(ctx, database, source))

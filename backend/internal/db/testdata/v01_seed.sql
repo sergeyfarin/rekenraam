@@ -1,14 +1,16 @@
 -- Frozen v0.1 seed: a realistic book built through the real HTTP API against
 -- migration 0001, then dumped. TestMigrateSeededBaselineMatchesFreshSchema
--- Rebased for #405 on 2026-10-26 without changing original financial facts.
--- Loads it into the unused candidate baseline and checks repeated migration
+-- loads it into the unused candidate baseline and checks repeated migration
 -- admission, schema equivalence and preservation of every durable figure.
+-- Rebased for #405 on 2026-10-26 without changing original financial facts.
 -- Reviewed for #192's whole-value canonical CHECKs (2026-10-12): its exact
 -- coefficient data remains valid without changing any financial figures.
 -- Reviewed for #148's required opening operation/source journal (2026-10-13):
 -- every seeded lot already names both; financial rows and IDs are unchanged.
 -- Reviewed for #573's single-book triggers (2026-11-18): the one book is id 1
 -- and only its default currency is updated later, so it loads unchanged.
+-- Reviewed for the calendar-date CHECKs in #584 and #635: the fixture passes
+-- the rewritten baseline without changes to its dates or financial rows.
 --
 -- It is frozen on purpose. Regenerating it against a later schema would defeat
 -- the test: the point is to migrate data written by the OLD app, which future

@@ -2,9 +2,13 @@
 -- #405: unused v0.1 baseline consolidated from head 27.
 -- Baseline identity is independent of forward migration numbers (see db/schema_baseline.go).
 -- #573 (20261118): the single-book rule moved from a CHECK to triggers.
-PRAGMA user_version = 20261118;
+-- #584 (20261122): calendar date CHECKs compare the full value to SQLite's normalized date.
+PRAGMA user_version = 20261122;
 
 -- TABLES
+-- Calendar dates have ten characters. The CASE keeps SQLite's special 'now'
+-- value out of date(), and IS rejects unparseable text while permitting NULL
+-- where the column is nullable.
 
 CREATE TABLE users (
   id INTEGER PRIMARY KEY,
@@ -118,7 +122,7 @@ CREATE TABLE commodity_versions (
   id INTEGER PRIMARY KEY,
   commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   version_seq INTEGER NOT NULL CHECK (version_seq > 0),
-  effective_from TEXT NOT NULL CHECK (effective_from GLOB '????-??-??'),
+  effective_from TEXT NOT NULL CHECK (CASE WHEN length(effective_from) = 10 THEN date(effective_from, '+0 days') END IS effective_from),
   recorded_at TEXT NOT NULL,
   changed_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   change_reason TEXT NOT NULL,
@@ -146,7 +150,7 @@ CREATE TABLE institution_versions (
   id INTEGER PRIMARY KEY,
   institution_id INTEGER NOT NULL REFERENCES institutions(id) ON DELETE RESTRICT,
   version_seq INTEGER NOT NULL CHECK (version_seq > 0),
-  effective_from TEXT NOT NULL CHECK (effective_from GLOB '????-??-??'),
+  effective_from TEXT NOT NULL CHECK (CASE WHEN length(effective_from) = 10 THEN date(effective_from, '+0 days') END IS effective_from),
   recorded_at TEXT NOT NULL,
   changed_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   change_reason TEXT NOT NULL,
@@ -198,13 +202,13 @@ CREATE TABLE account_versions (
   id INTEGER PRIMARY KEY,
   account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
   version_seq INTEGER NOT NULL CHECK (version_seq > 0),
-  effective_from TEXT NOT NULL CHECK (effective_from GLOB '????-??-??'),
+  effective_from TEXT NOT NULL CHECK (CASE WHEN length(effective_from) = 10 THEN date(effective_from, '+0 days') END IS effective_from),
   recorded_at TEXT NOT NULL,
   changed_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   change_reason TEXT NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('active', 'closed', 'archived')),
-  opened_on TEXT NOT NULL CHECK (opened_on GLOB '????-??-??'),
-  closed_on TEXT CHECK (closed_on IS NULL OR closed_on GLOB '????-??-??'),
+  opened_on TEXT NOT NULL CHECK (CASE WHEN length(opened_on) = 10 THEN date(opened_on, '+0 days') END IS opened_on),
+  closed_on TEXT CHECK (CASE WHEN length(closed_on) = 10 THEN date(closed_on, '+0 days') END IS closed_on),
   code TEXT,
   name TEXT,
   account_class TEXT NOT NULL CHECK (account_class IN ('asset', 'liability', 'equity', 'income', 'expense')),
@@ -245,7 +249,7 @@ CREATE TABLE payee_versions (
   id INTEGER PRIMARY KEY,
   payee_id INTEGER NOT NULL REFERENCES payees(id) ON DELETE RESTRICT,
   version_seq INTEGER NOT NULL CHECK (version_seq > 0),
-  effective_from TEXT NOT NULL CHECK (effective_from GLOB '????-??-??'),
+  effective_from TEXT NOT NULL CHECK (CASE WHEN length(effective_from) = 10 THEN date(effective_from, '+0 days') END IS effective_from),
   recorded_at TEXT NOT NULL,
   changed_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   change_reason TEXT NOT NULL,
@@ -282,7 +286,7 @@ CREATE TABLE transaction_versions (
   supersedes_version_id INTEGER REFERENCES transaction_versions(id) ON DELETE RESTRICT,
   status TEXT NOT NULL CHECK (status IN ('draft', 'posted', 'voided')),
   transaction_kind TEXT NOT NULL CHECK (transaction_kind IN ('ordinary', 'transfer', 'investment', 'opening_balance', 'adjustment')),
-  transaction_date TEXT NOT NULL CHECK (transaction_date GLOB '????-??-??'),
+  transaction_date TEXT NOT NULL CHECK (CASE WHEN length(transaction_date) = 10 THEN date(transaction_date, '+0 days') END IS transaction_date),
   payee_id INTEGER REFERENCES payees(id) ON DELETE RESTRICT,
   payee_name TEXT,
   description TEXT NOT NULL DEFAULT '',
@@ -313,7 +317,7 @@ CREATE TABLE journal_entries (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
   transaction_version_id INTEGER NOT NULL REFERENCES transaction_versions(id) ON DELETE RESTRICT,
   entry_seq INTEGER NOT NULL CHECK (entry_seq > 0),
-  entry_date TEXT NOT NULL CHECK (entry_date GLOB '????-??-??'),
+  entry_date TEXT NOT NULL CHECK (CASE WHEN length(entry_date) = 10 THEN date(entry_date, '+0 days') END IS entry_date),
   entry_kind TEXT NOT NULL CHECK (entry_kind IN ('ordinary', 'transfer_leg', 'exchange', 'investment', 'opening_balance', 'adjustment')),
   memo TEXT NOT NULL DEFAULT '',
   metadata_json TEXT NOT NULL DEFAULT '{}',
@@ -347,7 +351,7 @@ CREATE TABLE posting_versions (
   commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   memo TEXT NOT NULL DEFAULT '',
   reconciliation_status TEXT NOT NULL CHECK (reconciliation_status IN ('uncleared', 'cleared', 'reconciled')),
-  cleared_on TEXT CHECK (cleared_on IS NULL OR cleared_on GLOB '????-??-??'),
+  cleared_on TEXT CHECK (CASE WHEN length(cleared_on) = 10 THEN date(cleared_on, '+0 days') END IS cleared_on),
   metadata_json TEXT NOT NULL DEFAULT '{}',
   account_day_sequence INTEGER NOT NULL DEFAULT 0,
   UNIQUE (journal_entry_id, line_seq)
@@ -380,7 +384,7 @@ CREATE TABLE reconciliation_sessions (
   commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   status TEXT NOT NULL CHECK (status IN ('open', 'finished', 'voided')),
   source_kind TEXT NOT NULL CHECK (source_kind IN ('statement', 'online_balance', 'manual_cash_count', 'asset_valuation', 'other')),
-  statement_date TEXT NOT NULL CHECK (statement_date GLOB '????-??-??'),
+  statement_date TEXT NOT NULL CHECK (CASE WHEN length(statement_date) = 10 THEN date(statement_date, '+0 days') END IS statement_date),
   statement_balance_value TEXT NOT NULL DEFAULT '0' CHECK (instr(statement_balance_value, char(0)) = 0 AND (statement_balance_value = '0' OR (
     length(statement_balance_value) BETWEEN 1 + (statement_balance_value GLOB '-*') AND 38 + (statement_balance_value GLOB '-*')
     AND substr(statement_balance_value, 1 + (statement_balance_value GLOB '-*')) NOT GLOB '*[^0-9]*' AND substr(statement_balance_value, 1 + (statement_balance_value GLOB '-*')) NOT GLOB '0*'))),
@@ -419,7 +423,7 @@ CREATE TABLE reconciliation_session_postings (
   posting_line_id INTEGER NOT NULL REFERENCES posting_lines(id) ON DELETE RESTRICT,
   account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
   commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
-  entry_date TEXT NOT NULL CHECK (entry_date GLOB '????-??-??'),
+  entry_date TEXT NOT NULL CHECK (CASE WHEN length(entry_date) = 10 THEN date(entry_date, '+0 days') END IS entry_date),
   quantity_value TEXT NOT NULL DEFAULT '0' CHECK (instr(quantity_value, char(0)) = 0 AND (quantity_value = '0' OR (
     length(quantity_value) BETWEEN 1 + (quantity_value GLOB '-*') AND 38 + (quantity_value GLOB '-*')
     AND substr(quantity_value, 1 + (quantity_value GLOB '-*')) NOT GLOB '*[^0-9]*' AND substr(quantity_value, 1 + (quantity_value GLOB '-*')) NOT GLOB '0*'))),
@@ -440,7 +444,7 @@ CREATE TABLE reconciliation_checkpoints (
   session_id INTEGER REFERENCES reconciliation_sessions(id) ON DELETE RESTRICT,
   previous_checkpoint_id INTEGER REFERENCES reconciliation_checkpoints(id) ON DELETE RESTRICT,
   status TEXT NOT NULL CHECK (status IN ('active', 'invalidated', 'voided')),
-  statement_date TEXT NOT NULL CHECK (statement_date GLOB '????-??-??'),
+  statement_date TEXT NOT NULL CHECK (CASE WHEN length(statement_date) = 10 THEN date(statement_date, '+0 days') END IS statement_date),
   statement_balance_value TEXT NOT NULL DEFAULT '0' CHECK (instr(statement_balance_value, char(0)) = 0 AND (statement_balance_value = '0' OR (
     length(statement_balance_value) BETWEEN 1 + (statement_balance_value GLOB '-*') AND 38 + (statement_balance_value GLOB '-*')
     AND substr(statement_balance_value, 1 + (statement_balance_value GLOB '-*')) NOT GLOB '*[^0-9]*' AND substr(statement_balance_value, 1 + (statement_balance_value GLOB '-*')) NOT GLOB '0*'))),
@@ -465,7 +469,7 @@ CREATE TABLE reconciliation_checkpoint_postings (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
   account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
   commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
-  entry_date TEXT NOT NULL CHECK (entry_date GLOB '????-??-??'),
+  entry_date TEXT NOT NULL CHECK (CASE WHEN length(entry_date) = 10 THEN date(entry_date, '+0 days') END IS entry_date),
   quantity_value TEXT NOT NULL DEFAULT '0' CHECK (instr(quantity_value, char(0)) = 0 AND (quantity_value = '0' OR (
     length(quantity_value) BETWEEN 1 + (quantity_value GLOB '-*') AND 38 + (quantity_value GLOB '-*')
     AND substr(quantity_value, 1 + (quantity_value GLOB '-*')) NOT GLOB '*[^0-9]*' AND substr(quantity_value, 1 + (quantity_value GLOB '-*')) NOT GLOB '0*'))),
@@ -547,8 +551,8 @@ CREATE TABLE pricing_source_assignments (
   source_id INTEGER NOT NULL REFERENCES market_data_sources(id) ON DELETE RESTRICT,
   priority INTEGER NOT NULL DEFAULT 100 CHECK (priority >= 0),
   status TEXT NOT NULL CHECK (status IN ('active', 'archived')),
-  effective_from TEXT NOT NULL CHECK (effective_from GLOB '????-??-??'),
-  effective_to TEXT CHECK (effective_to IS NULL OR effective_to GLOB '????-??-??'),
+  effective_from TEXT NOT NULL CHECK (CASE WHEN length(effective_from) = 10 THEN date(effective_from, '+0 days') END IS effective_from),
+  effective_to TEXT CHECK (CASE WHEN length(effective_to) = 10 THEN date(effective_to, '+0 days') END IS effective_to),
   created_at TEXT NOT NULL,
   created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
@@ -584,7 +588,7 @@ CREATE TABLE price_observations (
   price_scale INTEGER NOT NULL CHECK (price_scale BETWEEN 0 AND 18),
   base_quantity_value INTEGER NOT NULL DEFAULT 1 CHECK (base_quantity_value > 0),
   base_quantity_scale INTEGER NOT NULL DEFAULT 0 CHECK (base_quantity_scale BETWEEN 0 AND 18),
-  valuation_date TEXT NOT NULL CHECK (valuation_date GLOB '????-??-??'),
+  valuation_date TEXT NOT NULL CHECK (CASE WHEN length(valuation_date) = 10 THEN date(valuation_date, '+0 days') END IS valuation_date),
   observed_at TEXT,
   source_published_at TEXT,
   source_id INTEGER REFERENCES market_data_sources(id) ON DELETE RESTRICT,
@@ -644,7 +648,7 @@ CREATE TABLE pricing_refresh_state (
   base_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   quote_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   source_id INTEGER NOT NULL REFERENCES market_data_sources(id) ON DELETE RESTRICT,
-  last_success_date TEXT CHECK (last_success_date IS NULL OR last_success_date GLOB '????-??-??'),
+  last_success_date TEXT CHECK (CASE WHEN length(last_success_date) = 10 THEN date(last_success_date, '+0 days') END IS last_success_date),
   last_attempt_at TEXT,
   last_error TEXT,
   updated_at TEXT NOT NULL,
@@ -700,8 +704,8 @@ CREATE TABLE dividend_defaults (
   tax_country_code TEXT,
   tax_treatment TEXT,
   status TEXT NOT NULL CHECK (status IN ('active', 'archived')),
-  effective_from TEXT NOT NULL CHECK (effective_from GLOB '????-??-??'),
-  effective_to TEXT CHECK (effective_to IS NULL OR effective_to GLOB '????-??-??'),
+  effective_from TEXT NOT NULL CHECK (CASE WHEN length(effective_from) = 10 THEN date(effective_from, '+0 days') END IS effective_from),
+  effective_to TEXT CHECK (CASE WHEN length(effective_to) = 10 THEN date(effective_to, '+0 days') END IS effective_to),
   metadata_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL,
   created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
@@ -717,7 +721,7 @@ CREATE TABLE investment_lots (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
   account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
   commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
-  opened_on TEXT NOT NULL CHECK (opened_on GLOB '????-??-??'),
+  opened_on TEXT NOT NULL CHECK (CASE WHEN length(opened_on) = 10 THEN date(opened_on, '+0 days') END IS opened_on),
   source_transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE RESTRICT,
   quantity_value TEXT NOT NULL DEFAULT '0' CHECK (instr(quantity_value, char(0)) = 0 AND (length(quantity_value) BETWEEN 1 AND 38 AND quantity_value NOT GLOB '*[^0-9]*' AND quantity_value NOT GLOB '0*')),
   quantity_scale INTEGER NOT NULL DEFAULT 0 CHECK (quantity_scale BETWEEN 0 AND 24),
@@ -767,7 +771,7 @@ CREATE TABLE investment_lot_events (
   lot_id INTEGER NOT NULL REFERENCES investment_lots(id) ON DELETE RESTRICT,
   event_kind TEXT NOT NULL CHECK (event_kind IN ('acquisition', 'disposal', 'split_adjustment', 'reinvested_dividend', 'manual_adjustment', 'transfer_in', 'transfer_out', 'basis_reduction')),
   transaction_id INTEGER REFERENCES transactions(id) ON DELETE RESTRICT,
-  event_date TEXT NOT NULL CHECK (event_date GLOB '????-??-??'),
+  event_date TEXT NOT NULL CHECK (CASE WHEN length(event_date) = 10 THEN date(event_date, '+0 days') END IS event_date),
   quantity_value TEXT NOT NULL DEFAULT '0' CHECK (instr(quantity_value, char(0)) = 0 AND (quantity_value = '0' OR (
     length(quantity_value) BETWEEN 1 + (quantity_value GLOB '-*') AND 38 + (quantity_value GLOB '-*')
     AND substr(quantity_value, 1 + (quantity_value GLOB '-*')) NOT GLOB '*[^0-9]*' AND substr(quantity_value, 1 + (quantity_value GLOB '-*')) NOT GLOB '0*'))),
@@ -813,7 +817,7 @@ CREATE TABLE investment_disposal_decisions (
   account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
   commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   cost_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
-  event_date TEXT NOT NULL CHECK (event_date GLOB '????-??-??'),
+  event_date TEXT NOT NULL CHECK (CASE WHEN length(event_date) = 10 THEN date(event_date, '+0 days') END IS event_date),
   quantity_value TEXT NOT NULL CHECK (instr(quantity_value, char(0)) = 0 AND (quantity_value = '0' OR (length(quantity_value) BETWEEN 1 AND 38 AND quantity_value NOT GLOB '*[^0-9]*' AND quantity_value NOT GLOB '0*'))),
   quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 24),
   disposed_basis_value TEXT CHECK (instr(disposed_basis_value, char(0)) = 0 AND (disposed_basis_value = '0' OR (length(disposed_basis_value) BETWEEN 1 AND 38 AND disposed_basis_value NOT GLOB '*[^0-9]*' AND disposed_basis_value NOT GLOB '0*'))),
@@ -827,7 +831,7 @@ CREATE TABLE investment_disposal_decisions (
   account_version_id INTEGER REFERENCES account_versions(id) ON DELETE RESTRICT,
   profile_id INTEGER REFERENCES cost_basis_profiles(id) ON DELETE RESTRICT,
   profile_version_id INTEGER REFERENCES cost_basis_profile_versions(id) ON DELETE RESTRICT,
-  source_effective_from TEXT CHECK (source_effective_from IS NULL OR source_effective_from GLOB '????-??-??'),
+  source_effective_from TEXT CHECK (CASE WHEN length(source_effective_from) = 10 THEN date(source_effective_from, '+0 days') END IS source_effective_from),
   source_recorded_at TEXT,
   created_at TEXT NOT NULL,
   created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
@@ -921,7 +925,7 @@ CREATE TABLE investment_operations (
   id INTEGER PRIMARY KEY,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
   operation_kind TEXT NOT NULL CHECK (length(trim(operation_kind)) > 0 AND operation_kind = trim(operation_kind)),
-  event_date TEXT NOT NULL CHECK (event_date GLOB '????-??-??'),
+  event_date TEXT NOT NULL CHECK (CASE WHEN length(event_date) = 10 THEN date(event_date, '+0 days') END IS event_date),
   created_at TEXT NOT NULL,
   created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
   correction_of_operation_id INTEGER UNIQUE REFERENCES investment_operations(id) ON DELETE RESTRICT,
@@ -953,7 +957,7 @@ CREATE TABLE investment_operation_dates (
   operation_id INTEGER NOT NULL REFERENCES investment_operations(id) ON DELETE RESTRICT,
   date_role TEXT NOT NULL CHECK (date_role IN ('trade', 'settlement', 'ex', 'record', 'payable', 'payment', 'effective')),
   date_seq INTEGER NOT NULL DEFAULT 1 CHECK (date_seq > 0),
-  event_date TEXT NOT NULL CHECK (event_date GLOB '????-??-??'),
+  event_date TEXT NOT NULL CHECK (CASE WHEN length(event_date) = 10 THEN date(event_date, '+0 days') END IS event_date),
   PRIMARY KEY (operation_id, date_role, date_seq)
 );
 
@@ -969,7 +973,7 @@ CREATE TABLE investment_operation_components (
     length(amount_value) BETWEEN 1 + (amount_value GLOB '-*') AND 38 + (amount_value GLOB '-*')
     AND substr(amount_value, 1 + (amount_value GLOB '-*')) NOT GLOB '*[^0-9]*' AND substr(amount_value, 1 + (amount_value GLOB '-*')) NOT GLOB '0*'))),
   amount_scale INTEGER NOT NULL CHECK (amount_scale BETWEEN 0 AND 24),
-  amount_date TEXT NOT NULL CHECK (amount_date GLOB '????-??-??'),
+  amount_date TEXT NOT NULL CHECK (CASE WHEN length(amount_date) = 10 THEN date(amount_date, '+0 days') END IS amount_date),
   gross_unknown INTEGER NOT NULL DEFAULT 0 CHECK (gross_unknown IN (0, 1)),
   separately_paid INTEGER NOT NULL DEFAULT 0 CHECK (separately_paid IN (0, 1)),
   posting_version_id INTEGER REFERENCES posting_versions(id) ON DELETE RESTRICT,
@@ -1001,7 +1005,7 @@ CREATE TABLE investment_fee_policy_versions (
   id INTEGER PRIMARY KEY,
   policy_id INTEGER NOT NULL REFERENCES investment_fee_policies(id) ON DELETE RESTRICT,
   version_seq INTEGER NOT NULL CHECK (version_seq > 0),
-  effective_from TEXT NOT NULL CHECK (effective_from GLOB '????-??-??'),
+  effective_from TEXT NOT NULL CHECK (CASE WHEN length(effective_from) = 10 THEN date(effective_from, '+0 days') END IS effective_from),
   treatment TEXT NOT NULL CHECK (treatment IN ('clearing_included', 'separately_expensed')),
   charge_account_id INTEGER REFERENCES accounts(id) ON DELETE RESTRICT,
   recorded_at TEXT NOT NULL,
@@ -1021,7 +1025,7 @@ CREATE TABLE investment_transfer_facts (
   operation_id INTEGER PRIMARY KEY REFERENCES investment_operations(id) ON DELETE RESTRICT,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
   transfer_kind TEXT NOT NULL CHECK (transfer_kind IN ('external_in', 'external_out', 'internal', 'exchange', 'spin_off')),
-  effective_on TEXT NOT NULL CHECK (effective_on GLOB '????-??-??'),
+  effective_on TEXT NOT NULL CHECK (CASE WHEN length(effective_on) = 10 THEN date(effective_on, '+0 days') END IS effective_on),
   commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   source_account_id INTEGER REFERENCES accounts(id) ON DELETE RESTRICT,
   destination_account_id INTEGER REFERENCES accounts(id) ON DELETE RESTRICT,
@@ -1103,7 +1107,7 @@ CREATE TABLE investment_transfer_lot_links (
   carried_basis_scale INTEGER CHECK (carried_basis_scale IS NULL OR carried_basis_scale BETWEEN 0 AND 12),
   cost_commodity_id INTEGER REFERENCES commodities(id) ON DELETE RESTRICT,
   original_date_knowledge TEXT NOT NULL CHECK (original_date_knowledge IN ('known', 'unknown')),
-  original_acquired_on TEXT CHECK (original_acquired_on IS NULL OR original_acquired_on GLOB '????-??-??'),
+  original_acquired_on TEXT CHECK (CASE WHEN length(original_acquired_on) = 10 THEN date(original_acquired_on, '+0 days') END IS original_acquired_on),
   source_evidence_json TEXT NOT NULL DEFAULT '{}',
   PRIMARY KEY (operation_id, link_seq),
   UNIQUE (operation_id, source_lot_id),
@@ -1137,7 +1141,7 @@ CREATE TABLE investment_transfer_link_revisions (
       OR (basis_knowledge = 'unknown' AND carried_basis_value IS NULL AND carried_basis_scale IS NULL)),
   -- pooled_lot only: the revised latest original acquisition date, or unknown.
   original_date_knowledge TEXT CHECK (original_date_knowledge IS NULL OR original_date_knowledge IN ('known', 'unknown')),
-  original_acquired_on TEXT CHECK (original_acquired_on IS NULL OR original_acquired_on GLOB '????-??-??'),
+  original_acquired_on TEXT CHECK (CASE WHEN length(original_acquired_on) = 10 THEN date(original_acquired_on, '+0 days') END IS original_acquired_on),
   created_at TEXT NOT NULL,
   created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
   FOREIGN KEY (operation_id, link_seq) REFERENCES investment_transfer_lot_links(operation_id, link_seq) ON DELETE RESTRICT,
@@ -1185,7 +1189,7 @@ CREATE TABLE investment_split_facts (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
   account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
   commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
-  effective_on TEXT NOT NULL CHECK (effective_on GLOB '????-??-??'),
+  effective_on TEXT NOT NULL CHECK (CASE WHEN length(effective_on) = 10 THEN date(effective_on, '+0 days') END IS effective_on),
   ratio_numerator INTEGER NOT NULL CHECK (ratio_numerator BETWEEN 1 AND 1000000000),
   ratio_denominator INTEGER NOT NULL CHECK (ratio_denominator BETWEEN 1 AND 1000000000),
   source_evidence_json TEXT NOT NULL DEFAULT '{}',
@@ -1232,8 +1236,8 @@ CREATE TABLE investment_capital_return_facts (
   commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   cost_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   cash_account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
-  effective_on TEXT NOT NULL CHECK (effective_on GLOB '????-??-??'),
-  payment_on TEXT NOT NULL CHECK (payment_on GLOB '????-??-??'),
+  effective_on TEXT NOT NULL CHECK (CASE WHEN length(effective_on) = 10 THEN date(effective_on, '+0 days') END IS effective_on),
+  payment_on TEXT NOT NULL CHECK (CASE WHEN length(payment_on) = 10 THEN date(payment_on, '+0 days') END IS payment_on),
   amount_value TEXT NOT NULL CHECK (instr(amount_value, char(0)) = 0 AND (length(amount_value) BETWEEN 1 AND 38 AND amount_value NOT GLOB '*[^0-9]*' AND amount_value NOT GLOB '0*')),
   amount_scale INTEGER NOT NULL CHECK (amount_scale BETWEEN 0 AND 12),
   -- open_lots_per_share: every lot open on the effective date; explicit_lots:
@@ -1272,7 +1276,7 @@ CREATE TABLE investment_cash_in_lieu_facts (
   operation_id INTEGER PRIMARY KEY REFERENCES investment_operations(id) ON DELETE RESTRICT,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
   settled_operation_id INTEGER NOT NULL REFERENCES investment_operations(id) ON DELETE RESTRICT,
-  payment_on TEXT NOT NULL CHECK (payment_on GLOB '????-??-??'),
+  payment_on TEXT NOT NULL CHECK (CASE WHEN length(payment_on) = 10 THEN date(payment_on, '+0 days') END IS payment_on),
   created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT
 );
 
@@ -1283,7 +1287,7 @@ CREATE TABLE investment_provider_events (
   provider_event_id TEXT,
   instrument_id INTEGER REFERENCES investment_instruments(id) ON DELETE RESTRICT,
   event_family TEXT NOT NULL CHECK (event_family IN ('dividend', 'distribution', 'split', 'merger', 'spin_off', 'ticker_change', 'delisting', 'cash_in_lieu', 'return_of_capital', 'corporate_action')),
-  event_date TEXT NOT NULL CHECK (event_date GLOB '????-??-??'),
+  event_date TEXT NOT NULL CHECK (CASE WHEN length(event_date) = 10 THEN date(event_date, '+0 days') END IS event_date),
   status TEXT NOT NULL CHECK (status IN ('new', 'matched', 'ignored', 'superseded')),
   normalized_json TEXT NOT NULL DEFAULT '{}',
   raw_json TEXT NOT NULL DEFAULT '{}',
@@ -1302,8 +1306,8 @@ CREATE TABLE investment_automation_rules (
   confidence_threshold_bps INTEGER NOT NULL CHECK (confidence_threshold_bps BETWEEN 0 AND 10000),
   required_accounts_json TEXT NOT NULL DEFAULT '{}',
   status TEXT NOT NULL CHECK (status IN ('active', 'archived')),
-  effective_from TEXT NOT NULL CHECK (effective_from GLOB '????-??-??'),
-  effective_to TEXT CHECK (effective_to IS NULL OR effective_to GLOB '????-??-??'),
+  effective_from TEXT NOT NULL CHECK (CASE WHEN length(effective_from) = 10 THEN date(effective_from, '+0 days') END IS effective_from),
+  effective_to TEXT CHECK (CASE WHEN length(effective_to) = 10 THEN date(effective_to, '+0 days') END IS effective_to),
   created_at TEXT NOT NULL,
   created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   updated_at TEXT NOT NULL,
@@ -1525,7 +1529,7 @@ CREATE TABLE backup_runs (
   -- Deterministic from the occurrence, not from the clock at execution time, so
   -- a retry writes to the same path instead of scattering near-duplicates.
   target_path TEXT NOT NULL,
-  scheduled_for_local_date TEXT CHECK (scheduled_for_local_date IS NULL OR scheduled_for_local_date GLOB '????-??-??'),
+  scheduled_for_local_date TEXT CHECK (CASE WHEN length(scheduled_for_local_date) = 10 THEN date(scheduled_for_local_date, '+0 days') END IS scheduled_for_local_date),
   byte_size INTEGER,
   page_count INTEGER,
   verified INTEGER NOT NULL DEFAULT 0 CHECK (verified IN (0, 1)),
@@ -1567,7 +1571,10 @@ CREATE TABLE budget_targets (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
   category_account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
   commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
-  period_start TEXT NOT NULL CHECK (period_start GLOB '????-??-01'),
+  period_start TEXT NOT NULL CHECK (
+    CASE WHEN length(period_start) = 10 THEN date(period_start, '+0 days') END IS period_start
+    AND substr(period_start, 9) = '01'
+  ),
   quantity_value TEXT NOT NULL CHECK (instr(quantity_value, char(0)) = 0 AND (quantity_value = '0' OR (length(quantity_value) BETWEEN 1 AND 38 AND quantity_value NOT GLOB '*[^0-9]*' AND quantity_value NOT GLOB '0*'))),
   quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 12),
   created_at TEXT NOT NULL,
@@ -1581,7 +1588,7 @@ CREATE TABLE account_budget_treatment_versions (
   id INTEGER PRIMARY KEY,
   account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
   version_seq INTEGER NOT NULL CHECK (version_seq > 0),
-  effective_from TEXT NOT NULL CHECK (effective_from GLOB '????-??-??'),
+  effective_from TEXT NOT NULL CHECK (CASE WHEN length(effective_from) = 10 THEN date(effective_from, '+0 days') END IS effective_from),
   treatment TEXT NOT NULL CHECK (treatment IN ('on_budget', 'off_budget', 'excluded')),
   recorded_at TEXT NOT NULL,
   changed_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
@@ -1607,11 +1614,14 @@ CREATE TABLE recurring_templates (
   day_of_month INTEGER CHECK (day_of_month IS NULL OR day_of_month BETWEEN 1 AND 31),
   last_day_of_month INTEGER NOT NULL DEFAULT 0 CHECK (last_day_of_month IN (0, 1)),
   month_of_year INTEGER CHECK (month_of_year IS NULL OR month_of_year BETWEEN 1 AND 12),
-  starts_on TEXT NOT NULL CHECK (starts_on GLOB '????-??-??'),
-  ends_on TEXT CHECK (ends_on IS NULL OR (ends_on GLOB '????-??-??' AND ends_on >= starts_on)),
+  starts_on TEXT NOT NULL CHECK (CASE WHEN length(starts_on) = 10 THEN date(starts_on, '+0 days') END IS starts_on),
+  ends_on TEXT CHECK (
+    CASE WHEN length(ends_on) = 10 THEN date(ends_on, '+0 days') END IS ends_on
+    AND (ends_on IS NULL OR ends_on >= starts_on)
+  ),
   max_occurrences INTEGER CHECK (max_occurrences IS NULL OR max_occurrences >= 1),
   lead_days INTEGER NOT NULL DEFAULT 5 CHECK (lead_days BETWEEN 0 AND 90),
-  generate_from TEXT NOT NULL CHECK (generate_from GLOB '????-??-??'),
+  generate_from TEXT NOT NULL CHECK (CASE WHEN length(generate_from) = 10 THEN date(generate_from, '+0 days') END IS generate_from),
   created_at TEXT NOT NULL,
   created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   updated_at TEXT NOT NULL,
@@ -1658,7 +1668,7 @@ CREATE TABLE recurring_occurrences (
   id INTEGER PRIMARY KEY,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
   template_id INTEGER NOT NULL REFERENCES recurring_templates(id) ON DELETE RESTRICT,
-  occurrence_date TEXT NOT NULL CHECK (occurrence_date GLOB '????-??-??'),
+  occurrence_date TEXT NOT NULL CHECK (CASE WHEN length(occurrence_date) = 10 THEN date(occurrence_date, '+0 days') END IS occurrence_date),
   status TEXT NOT NULL CHECK (status IN ('generated', 'skipped', 'blocked')),
   transaction_id INTEGER REFERENCES transactions(id) ON DELETE RESTRICT,
   error_summary TEXT NOT NULL DEFAULT '',
@@ -1751,7 +1761,7 @@ CREATE TABLE investment_instrument_versions (
   id INTEGER PRIMARY KEY,
   instrument_id INTEGER NOT NULL REFERENCES investment_instruments(id) ON DELETE RESTRICT,
   version_seq INTEGER NOT NULL CHECK (version_seq > 0),
-  effective_from TEXT NOT NULL CHECK (effective_from GLOB '????-??-??'),
+  effective_from TEXT NOT NULL CHECK (CASE WHEN length(effective_from) = 10 THEN date(effective_from, '+0 days') END IS effective_from),
   recorded_at TEXT NOT NULL,
   changed_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   change_reason TEXT NOT NULL,
@@ -1910,7 +1920,7 @@ CREATE TABLE "investment_payment_in_lieu_facts" (
   book_id INTEGER NOT NULL REFERENCES books(id),
   holding_account_id INTEGER REFERENCES accounts(id),
   commodity_id INTEGER REFERENCES commodities(id),
-  ex_date TEXT CHECK (ex_date IS NULL OR (ex_date GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]' AND length(ex_date) = 10)),
+  ex_date TEXT CHECK (CASE WHEN length(ex_date) = 10 THEN date(ex_date, '+0 days') END IS ex_date),
   created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id)
 );
 
