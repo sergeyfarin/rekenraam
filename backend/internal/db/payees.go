@@ -49,6 +49,24 @@ type ListPayeesParams struct {
 	Limit           int
 }
 
+type PayeeDirectoryParams struct {
+	BookID    int64
+	Status    string
+	Query     string
+	AfterName string
+	AfterID   int64
+	Limit     int
+}
+
+type PayeeDirectoryRow struct {
+	ID               int64
+	Name             string
+	NormalizedName   string
+	Status           string
+	TransactionCount int64
+	LastUsedOn       sql.NullString
+}
+
 type CreatePayeeParams struct {
 	BookID        int64
 	ActorUserID   int64
@@ -114,6 +132,49 @@ func (r *PayeeRepository) ListPayees(ctx context.Context, params ListPayeesParam
 	defer rows.Close()
 
 	return scanPayeeRecords(rows)
+}
+
+func (r *PayeeRepository) PayeeDirectory(ctx context.Context, params PayeeDirectoryParams) ([]PayeeDirectoryRow, error) {
+	// Bound the reference rows before looking up usage. Use the same current,
+	// non-deleted, non-draft transaction set as the ordinary Transactions view.
+	rows, err := r.database.QueryContext(ctx, `
+		WITH page AS (
+			SELECT p.id, pv.name, pv.normalized_name, pv.status
+			FROM payees p
+			JOIN `+CurrentReferenceVersions(ctx, "payee")+` pv ON pv.payee_id = p.id
+			WHERE p.book_id = ? AND (? = 'all' OR pv.status = ?)
+				AND instr(pv.normalized_name, ?) > 0
+				AND (pv.normalized_name, p.id) > (?, ?)
+			ORDER BY pv.normalized_name, p.id
+			LIMIT ?
+		)
+		SELECT page.id, page.name, page.normalized_name, page.status,
+			count(tv.id), max(tv.transaction_date)
+		FROM page
+		LEFT JOIN current_transaction_versions tv ON tv.payee_id = page.id
+			AND tv.book_id = ? AND tv.status <> 'draft'
+			AND EXISTS (SELECT 1 FROM transactions t WHERE t.id = tv.transaction_id AND t.deleted_at IS NULL)
+		GROUP BY page.id, page.name, page.normalized_name, page.status
+		ORDER BY page.normalized_name, page.id
+	`, params.BookID, params.Status, params.Status, params.Query,
+		params.AfterName, params.AfterID, params.Limit, params.BookID)
+	if err != nil {
+		return nil, fmt.Errorf("read payee directory: %w", err)
+	}
+	defer rows.Close()
+
+	var result []PayeeDirectoryRow
+	for rows.Next() {
+		var row PayeeDirectoryRow
+		if err := rows.Scan(&row.ID, &row.Name, &row.NormalizedName, &row.Status, &row.TransactionCount, &row.LastUsedOn); err != nil {
+			return nil, fmt.Errorf("scan payee directory: %w", err)
+		}
+		result = append(result, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate payee directory: %w", err)
+	}
+	return result, nil
 }
 
 // PayeeNamesByID resolves current display names for an explicit set of payee
@@ -540,4 +601,37 @@ func (r *PayeeRepository) PayeeByNormalizedName(ctx context.Context, bookID int6
 	}
 
 	return payeeID, name, nil
+}
+
+type PayeeName struct {
+	ID             int64
+	Name           string
+	NormalizedName string
+}
+
+// ListAllActivePayeeNames supplies the complete candidate set for ranked lookup.
+func (r *PayeeRepository) ListAllActivePayeeNames(ctx context.Context, bookID int64) ([]PayeeName, error) {
+	rows, err := r.database.QueryContext(ctx, `
+		SELECT p.id, pv.name, pv.normalized_name
+		FROM payees p
+		JOIN `+CurrentReferenceVersions(ctx, "payee")+` pv ON pv.payee_id = p.id
+		WHERE p.book_id = ? AND pv.status = 'active'
+	`, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("read active payee names: %w", err)
+	}
+	defer rows.Close()
+
+	var names []PayeeName
+	for rows.Next() {
+		var name PayeeName
+		if err := rows.Scan(&name.ID, &name.Name, &name.NormalizedName); err != nil {
+			return nil, fmt.Errorf("scan active payee name: %w", err)
+		}
+		names = append(names, name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate active payee names: %w", err)
+	}
+	return names, nil
 }

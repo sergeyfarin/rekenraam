@@ -445,6 +445,8 @@ useful.
 API:
 
 - `GET /api/v1/payees`
+- `GET /api/v1/payees/suggestions` — ranked matches across active payees for
+  transaction entry (#627)
 - `POST /api/v1/payees`
 - `GET /api/v1/payees/{payee_id}`
 - `PATCH /api/v1/payees/{payee_id}`

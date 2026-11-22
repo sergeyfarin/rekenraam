@@ -1,4 +1,5 @@
 {
+  "transactions_filter_date_inverted": "Van ligt na Tot. Transacties worden zonder datumbereik getoond.",
   "api_error_recurring_occurrence_already_materialized": "Deze herhaling is al verwerkt of gewijzigd. Laad opnieuw voordat u deze opnieuw beoordeelt.",
   "api_error_recurring_template_unbalanced": "Het sjabloon voor periodieke transacties moet voor elk instrument in evenwicht zijn.",
   "api_error_reconciliation_start_stale": "Het afschrift waarvan deze afstemming uitging is niet meer actueel. Laat haar vervallen en start een nieuwe afstemming.",
@@ -649,6 +650,9 @@
   "transactions_payee_confirm_create": "“{name}” aanmaken",
   "transactions_payee_confirm_creating": "Aanmaken…",
   "transactions_payee_confirm_edit": "Naam aanpassen",
+  "transactions_payee_lookup_loading": "Begunstigden zoeken…",
+  "transactions_payee_lookup_failed": "Zoeken naar begunstigden is mislukt.",
+  "transactions_payee_lookup_too_long": "De naam van de begunstigde is te lang.",
   "transactions_field_posting_account": "Rekening",
   "transactions_field_posting_amount": "Bedrag",
   "transactions_field_posting_commodity": "Valuta",

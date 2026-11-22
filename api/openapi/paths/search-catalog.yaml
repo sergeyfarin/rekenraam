@@ -1,8 +1,8 @@
 get:
   summary: Compact shared-search reference catalog
   description: >-
-    Composes names, codes and localization keys for accounts, categories and
-    instruments, using current owner-local reference versions. Excludes system
+    Composes names, codes and localization keys for accounts, categories,
+    instruments and payees, using current owner-local reference versions. Excludes system
     accounts; includes closed/archived objects for an explicit frontend filter.
     No balances, notes, transactions or financial writes. Stable kind/ID cursor
     order; consume every cursor before claiming complete search coverage.

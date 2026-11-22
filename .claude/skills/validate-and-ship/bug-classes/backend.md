@@ -11,6 +11,11 @@ Internal full-set reads using a paginated repo method whose limit gets clamped
 (import commit processed only 200 of 201 rows). Internal reads use explicit
 `ListAll*` methods.
 
+Ranked search also needs the full candidate set before applying its response
+limit. Transaction entry once searched only the first 2,000 active payees
+(#627). `TestPayeeSuggestionsSearchPastTheLegacyListLimit` and
+`transaction-payee-lookup.spec.ts` exercise the late exact and near matches.
+
 ## 2. PATCH omission overwrites
 
 Optional update fields must be pointer types end-to-end; a plain `bool` made
@@ -156,6 +161,7 @@ survives a run that crosses midnight, and check that every case fails with
 an unpinned read, so such a case catches nothing without a later version. Named checks:
 `TestAccountRegisterReadsTheCardCreatedJustAfterOwnerMidnight`,
 `TestOwnerCurrentReferenceHTTPCreateListAndFutureExclusion`,
+`TestPayeeSuggestionsUseTheOwnersCurrentDay`,
 `TestCurrentReferenceReadsFollowOwnerDay`,
 `TestCurrentReferenceSiblingsAndComposedReadsUseOwnerDay`,
 `owner-current-reference.spec.ts`.

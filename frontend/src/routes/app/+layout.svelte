@@ -10,6 +10,8 @@
   import RefreshCw from '@lucide/svelte/icons/refresh-cw';
   import { attentionQueryKey, attentionQueryOptions } from '#lib/api/attention.ts';
   import { homeQueryKey } from '#lib/api/home.ts';
+  import { payeeDirectoryQueryKey, payeesQueryKey } from '#lib/api/payees.ts';
+  import { searchCatalogQueryKey } from '#lib/api/search.ts';
   import { provideAttention } from '#lib/attention/context.ts';
   import { attentionSummary, sourceBadge } from '#lib/attention/model.ts';
   import { getLocale } from '#lib/paraglide/runtime.js';
@@ -101,6 +103,11 @@
           void queryClient.invalidateQueries({ queryKey: attentionQueryKey });
           void queryClient.invalidateQueries({ queryKey: homeQueryKey });
           void queryClient.invalidateQueries({ queryKey: ledgerQueryKey });
+          void queryClient.invalidateQueries({ queryKey: payeeDirectoryQueryKey });
+          if (new URL(request.url).pathname.startsWith('/api/v1/payees/')) {
+            void queryClient.invalidateQueries({ queryKey: payeesQueryKey });
+            void queryClient.invalidateQueries({ queryKey: searchCatalogQueryKey });
+          }
         }
       }
     };

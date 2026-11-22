@@ -1,7 +1,7 @@
 <script lang="ts">
   import { replaceState } from '$app/navigation';
   import { page } from '$app/state';
-  import { parseTransactionFilters, writeTransactionFilters } from './transaction-url-filters.ts';
+  import { parseTransactionFilters, transactionRequestFilters, writeTransactionFilters } from './transaction-url-filters.ts';
   import { transactionTitle } from '#lib/transactions/transaction-title.ts';
   import { systemLabelText } from '#lib/transactions/system-label.ts';
   import { createInfiniteQuery, useQueryClient } from '@tanstack/svelte-query';
@@ -75,11 +75,7 @@
   const queryClient = useQueryClient();
 
   const query = createInfiniteQuery(() =>
-    accountRegisterInfiniteQueryOptions(accountID, {
-      status: filters.status,
-      afterDate: filters.afterDate,
-      beforeDate: filters.beforeDate
-    })
+    accountRegisterInfiniteQueryOptions(accountID, transactionRequestFilters(filters))
   );
 
   const rows = $derived(

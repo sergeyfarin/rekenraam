@@ -31,6 +31,46 @@ async function revisit(page: Page, assertSelection: (page: Page) => Promise<void
   }
 }
 
+test('Transactions keeps From while To is entered with the keyboard', async ({ page }) => {
+  await readyForLedger(page);
+  await page.goto('/app/ledger/transactions');
+  const from = page.getByLabel('From', { exact: true });
+  const to = page.getByLabel('To', { exact: true });
+  await from.fill('2026-06-01');
+  await expect(page).toHaveURL((url) => url.searchParams.get('after_date') === '2026-06-01');
+  await Promise.all([
+    page.waitForURL((url) => url.searchParams.get('before_date') === '0002-06-30', { timeout: 5_000 }),
+    to.pressSequentially('06302026', { delay: 100 })
+  ]);
+  await expect(to).toHaveValue('2026-06-30');
+  await expect(from).toHaveValue('2026-06-01');
+  await expect(page).toHaveURL((url) =>
+    url.searchParams.get('after_date') === '2026-06-01' && url.searchParams.get('before_date') === '2026-06-30');
+});
+
+test('Transactions keeps both bounds while moving a date range forward', async ({ page }) => {
+  await readyForLedger(page);
+  await page.goto('/app/ledger/transactions?after_date=2026-06-01&before_date=2026-06-30');
+  const from = page.getByLabel('From', { exact: true });
+  const to = page.getByLabel('To', { exact: true });
+  const requests: URL[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === '/api/v1/transactions') requests.push(url);
+  });
+  await expect(to).toHaveValue('2026-06-30');
+  await from.fill('2026-07-01');
+  await expect(page).toHaveURL((url) => url.searchParams.get('after_date') === '2026-07-01');
+  await expect(from).toHaveValue('2026-07-01');
+  await expect(to).toHaveValue('2026-06-30');
+  await expect(page.getByText('From is after To. Showing transactions without a date range.')).toBeVisible();
+  await to.fill('2026-07-31');
+  await expect.poll(() => requests.some(({ searchParams }) =>
+    searchParams.get('after_date') === '2026-07-01' && searchParams.get('before_date') === '2026-07-31')).toBe(true);
+  expect(requests.some(({ searchParams }) =>
+    searchParams.get('after_date') === '2026-07-01' && searchParams.get('before_date') === '2026-06-30')).toBe(false);
+});
+
 for (const width of [1280, 390]) {
   test.describe(`URL selections at ${width}px`, () => {
     test.use({ viewport: { width, height: 900 } });
@@ -140,6 +180,33 @@ for (const width of [1280, 390]) {
         const linkedID = screen === 'register' ? ids.get('t13') : transactions.transactions[0]?.id;
         expect(linkedID).toBeTruthy();
         await revisit(page, assertSelection, `/app/ledger/transactions?transaction_id=${linkedID}`);
+
+        const fromInput = page.getByLabel('From', { exact: true });
+        const toInput = page.getByLabel('To', { exact: true });
+        const invertedFrom = instrument ? '2026-03-01' : '2026-02-01';
+        const rangeNote = page.getByText('From is after To. Showing transactions without a date range.');
+        const edits = requests.length;
+        await fromInput.fill(invertedFrom);
+        await expect(page).toHaveURL((url) => url.searchParams.get('after_date') === invertedFrom
+          && url.searchParams.get('before_date') === to);
+        await expect(rangeNote).toBeVisible();
+        await expect(page.getByRole('row').filter({ hasText: description })).toHaveCount(1);
+        await page.reload();
+        await expect(fromInput).toHaveValue(invertedFrom);
+        await expect(toInput).toHaveValue(to);
+        await expect(rangeNote).toBeVisible();
+        await expect(page.getByRole('row').filter({ hasText: description })).toHaveCount(1);
+        await expect.poll(() => requests.slice(edits).some(({ searchParams }) =>
+          searchParams.get('status') === status
+          && searchParams.get('q') === query.get('q')
+          && searchParams.get('category_id') === query.get('category_id')
+          && searchParams.get('commodity_id') === query.get('commodity_id')
+          && !searchParams.has('after_date') && !searchParams.has('before_date'))).toBe(true);
+        expect(requests.slice(edits).some(({ searchParams }) =>
+          searchParams.get('after_date') === invertedFrom && searchParams.get('before_date') === to)).toBe(false);
+        await fromInput.fill(from);
+        await expect(rangeNote).toHaveCount(0);
+        await assertSelection(page);
 
         await page.getByLabel('From', { exact: true }).fill('');
         await page.getByLabel('To', { exact: true }).fill('');

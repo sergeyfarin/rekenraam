@@ -1,7 +1,7 @@
 <script lang="ts">
   import { replaceState } from '$app/navigation';
   import { page } from '$app/state';
-  import { parseTransactionFilters, writeTransactionFilters } from './transaction-url-filters.ts';
+  import { parseTransactionFilters, transactionRequestFilters, writeTransactionFilters } from './transaction-url-filters.ts';
   import { otherPostingDays } from './posted-on';
   import { transactionTitle } from '#lib/transactions/transaction-title.ts';
   import { systemLabelText } from '#lib/transactions/system-label.ts';
@@ -56,15 +56,10 @@
   }
   const locale = $derived(getLocale());
 
-  const query = createInfiniteQuery(() =>
-    transactionsInfiniteQueryOptions({
-      categoryID,
-      status: filters.status,
-      q: filters.q,
-      afterDate: filters.afterDate,
-      beforeDate: filters.beforeDate
-    })
-  );
+  const query = createInfiniteQuery(() => {
+    const { status, q, afterDate, beforeDate } = transactionRequestFilters(filters);
+    return transactionsInfiniteQueryOptions({ categoryID, status, q, afterDate, beforeDate });
+  });
 
   const rows = $derived(
     query.data?.pages.flatMap((p) => p.transactions ?? []) ?? []

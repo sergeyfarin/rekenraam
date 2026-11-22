@@ -56,6 +56,34 @@ PayeesResponse:
       type: array
       items:
         $ref: "../../openapi.yaml#/components/schemas/PayeeResponse"
+PayeeDirectoryResponse:
+  type: object
+  required: [payees]
+  properties:
+    payees:
+      type: array
+      items:
+        type: object
+        required: [id, name, status, transaction_count, last_used_on]
+        properties:
+          id:
+            type: integer
+            format: int64
+          name:
+            type: string
+          status:
+            $ref: "../../openapi.yaml#/components/schemas/PayeeStatus"
+          transaction_count:
+            type: integer
+            format: int64
+            minimum: 0
+            description: Number of current, non-deleted transactions in the ordinary Transactions view linked to this payee.
+          last_used_on:
+            type: [string, 'null']
+            format: date
+            description: Latest transaction date among the counted transactions, or null when unused.
+    next_cursor:
+      type: string
 PayeeRequest:
   type: object
   properties:
@@ -90,3 +118,23 @@ PayeeLifecycleRequest:
     change_reason:
       type: string
   additionalProperties: false
+
+PayeeSuggestionsResponse:
+  type: object
+  required: [payees]
+  properties:
+    payees:
+      type: array
+      maxItems: 5
+      items:
+        type: object
+        required: [id, name, exact]
+        properties:
+          id:
+            type: integer
+            format: int64
+          name:
+            type: string
+          exact:
+            type: boolean
+            description: Whether the full normalized name equals the query.
