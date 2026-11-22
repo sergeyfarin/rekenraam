@@ -164,6 +164,12 @@ rendering; also verify genuine page departure still dismisses search
 (`shared-search.spec.ts`, `search entered during Spending range repair …
 (#472)`).
 
+In Reconcile, a late Finish or Discard response replaced the session opened
+while the write was pending (#642). Refresh the affected reads after the
+write and apply the view transition only when the responding session ID is
+still active. `reconciliation-selection.spec.ts` holds both writes and checks
+the newer session's selection, the saved outcome, and checkpoint history.
+
 ## 78. A dismissal guard that sees only part of a write chain
 
 The editor's busy state covered the save but not the payee it creates first,
