@@ -14,7 +14,7 @@
   "tags_action_for": "{action}: {name}",
   "tags_name": "Labelnaam",
   "tags_save": "Naam opslaan",
-  "tags_archive_copy": "Dit label blijft bij eerdere transacties staan en verdwijnt uit de suggesties. Importregels die het gebruiken worden overgeslagen. Terugkerende transacties die het gebruiken worden geblokkeerd totdat je het label verwijdert of herstelt. Wordt een bewerking of correctie geweigerd vanwege dit label, herstel het dan en probeer het opnieuw.",
+  "tags_archive_copy": "Dit label blijft bij eerdere transacties staan en verdwijnt uit de suggesties. Importregels die het gebruiken worden overgeslagen. Terugkerende transacties die het gebruiken worden geblokkeerd totdat je het label verwijdert of herstelt. Wordt een correctie geweigerd vanwege dit label, herstel het dan en probeer het opnieuw.",
   "tags_renamed": "Hernoemd naar {name}.",
   "tags_archived": "{name} is gearchiveerd.",
   "tags_restored": "{name} is hersteld.",

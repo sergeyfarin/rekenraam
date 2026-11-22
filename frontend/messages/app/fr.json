@@ -14,7 +14,7 @@
   "tags_action_for": "{action} {name}",
   "tags_name": "Nom de l’étiquette",
   "tags_save": "Enregistrer le nom",
-  "tags_archive_copy": "Cette étiquette reste associée aux transactions passées et disparaît des suggestions. Les règles d’importation qui l’utilisent sont ignorées et les transactions récurrentes qui l’utilisent sont bloquées tant que vous ne retirez pas ou ne restaurez pas l’étiquette. Si une modification ou une correction est refusée à cause de cette étiquette, restaurez-la et réessayez.",
+  "tags_archive_copy": "Cette étiquette reste associée aux transactions passées et disparaît des suggestions. Les règles d’importation qui l’utilisent sont ignorées et les transactions récurrentes qui l’utilisent sont bloquées tant que vous ne retirez pas ou ne restaurez pas l’étiquette. Si une correction est refusée à cause de cette étiquette, restaurez-la et réessayez.",
   "tags_renamed": "Renommée en {name}.",
   "tags_archived": "L’étiquette {name} a été archivée.",
   "tags_restored": "L’étiquette {name} a été restaurée.",
