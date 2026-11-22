@@ -2171,5 +2171,11 @@
   "reconciliation_age_commodity": "{code}: {state}",
   "reconciliation_age_folded": "{account}: {state}",
   "reconcile_start_commodity_lost": "The currency this statement was for is no longer offered for this account. Choose the statement currency before starting.",
-  "reconcile_start_currency_placeholder": "Choose a currency"
+  "reconcile_start_currency_placeholder": "Choose a currency",
+  "transactions_tag_archived": "{name} (archived)",
+  "transactions_tags_archived_help": "Archived tags stay on this transaction until you clear them. Only active tags can be added.",
+  "transactions_tags_archived_not_added": "Archived tags are not added to a new transaction.",
+  "transactions_tags_archived_template_help": "Archived tags stay on this template, but new occurrences are blocked until you remove or replace them.",
+  "transactions_posting_tags": "Line tags",
+  "transactions_posting_tag_remove": "Remove tag {name}"
 }

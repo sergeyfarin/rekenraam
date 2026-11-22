@@ -254,6 +254,7 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, input Update
 		ForcedStatus:            forcedStatus,
 		ExistingLineKeys:        lineKeySet(current),
 		ExistingPostings:        existingPostingStateSet(current),
+		ExistingTagIDs:          tagIDSet(current.TagIDs),
 		AccountRuleDependencies: dependencies,
 	})
 	if err != nil {

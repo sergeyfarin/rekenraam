@@ -2171,5 +2171,11 @@
   "reconciliation_age_commodity": "{code}: {state}",
   "reconciliation_age_folded": "{account}: {state}",
   "reconcile_start_commodity_lost": "De valuta van dit afschrift wordt niet meer aangeboden voor deze rekening. Kies de valuta van het afschrift voordat je begint.",
-  "reconcile_start_currency_placeholder": "Kies een valuta"
+  "reconcile_start_currency_placeholder": "Kies een valuta",
+  "transactions_tag_archived": "{name} (gearchiveerd)",
+  "transactions_tags_archived_help": "Gearchiveerde labels blijven op deze transactie staan tot je ze uitvinkt. Alleen actieve labels kunnen worden toegevoegd.",
+  "transactions_tags_archived_not_added": "Gearchiveerde labels worden niet aan een nieuwe transactie toegevoegd.",
+  "transactions_tags_archived_template_help": "Gearchiveerde labels blijven op dit sjabloon staan, maar nieuwe herhalingen worden geblokkeerd tot je ze verwijdert of vervangt.",
+  "transactions_posting_tags": "Labels van de regel",
+  "transactions_posting_tag_remove": "Label {name} verwijderen"
 }

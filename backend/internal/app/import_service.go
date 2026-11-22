@@ -328,7 +328,7 @@ func (s *ImportService) CreateImportRule(ctx context.Context, input CreateImport
 		Name: input.Name, Priority: input.Priority, Enabled: input.Enabled,
 		MatchField: input.MatchField, ContainsText: input.ContainsText,
 		CategoryID: nullableInt64(input.CategoryID), PayeeID: nullableInt64(input.PayeeID), TagIDs: input.TagIDs,
-	})
+	}, nil)
 	if err != nil {
 		return ImportRule{}, err
 	}
@@ -392,7 +392,7 @@ func (s *ImportService) UpdateImportRule(ctx context.Context, input UpdateImport
 	if input.TagIDs != nil {
 		spec.TagIDs = *input.TagIDs
 	}
-	spec, err = s.cleanImportRuleSpec(ctx, spec)
+	spec, err = s.cleanImportRuleSpec(ctx, spec, tagIDSet(existing.TagIDs))
 	if err != nil {
 		return ImportRule{}, err
 	}
@@ -428,7 +428,11 @@ func (s *ImportService) DeleteImportRule(ctx context.Context, input DeleteImport
 	return nil
 }
 
-func (s *ImportService) cleanImportRuleSpec(ctx context.Context, spec db.ImportRuleSpec) (db.ImportRuleSpec, error) {
+// cleanImportRuleSpec validates a rule's targets. A tag in assignedTagIDs is
+// one the stored rule already names: it stays valid after the tag is archived,
+// so the rule can still be renamed, disabled or have that tag removed (#650).
+// Applying the rule skips it while any of its targets is archived.
+func (s *ImportService) cleanImportRuleSpec(ctx context.Context, spec db.ImportRuleSpec, assignedTagIDs map[int64]bool) (db.ImportRuleSpec, error) {
 	ctx, referenceErr := s.settings.referenceContext(ctx, s.now())
 	if referenceErr != nil {
 		return db.ImportRuleSpec{}, referenceErr
@@ -470,7 +474,7 @@ func (s *ImportService) cleanImportRuleSpec(ctx context.Context, spec db.ImportR
 		return db.ImportRuleSpec{}, ValidationError{Message: "import rule payee is invalid"}
 	}
 	for _, tagID := range spec.TagIDs {
-		if !state.ActiveTagIDs[tagID] {
+		if !state.ActiveTagIDs[tagID] && !assignedTagIDs[tagID] {
 			return db.ImportRuleSpec{}, ValidationError{Message: "import rule tag is invalid"}
 		}
 	}

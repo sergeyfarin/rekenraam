@@ -137,7 +137,7 @@ func (s *RecurringService) materializeOccurrenceAttempt(ctx context.Context, inp
 	occurrence := db.CreateRecurringOccurrenceParams{BookID: BookID, TemplateID: template.ID, OccurrenceDate: date, MaterializedAt: at}
 	// Reuse the full template and transaction validators at the actual date,
 	// including exact balancing (ordinary incomplete drafts need not balance).
-	spec, err := s.cleanTemplate(ctx, template.Spec, date)
+	spec, err := s.cleanTemplate(ctx, template.Spec, date, nil)
 	var draft *db.CreateTransactionParams
 	if err == nil {
 		postings := make([]PostingInput, 0, len(spec.Postings))

@@ -3,7 +3,8 @@
   import { transactionTitle } from '#lib/transactions/transaction-title.ts';
   import { systemLabelText } from '#lib/transactions/system-label.ts';
   import { onDestroy, tick, untrack, type Snippet } from 'svelte';
-  import { tagsQueryOptions } from '#lib/api/tags.ts';
+  import { tagsByIDQueryOptions, tagsQueryOptions, type TagResponse } from '#lib/api/tags.ts';
+  import { assignedTagIDs, submittableTagIDs, tagChoices } from './tag-choices.ts';
   import Plus from '@lucide/svelte/icons/plus';
   import Save from '@lucide/svelte/icons/save';
   import Trash from '@lucide/svelte/icons/trash';
@@ -138,7 +139,8 @@
     saveTemplate,
     onPendingChange,
     onInvestmentSaved,
-    preservePostings = false
+    preservePostings = false,
+    retainedTagIDs
   }: {
     mode: EditorMode;
     transaction?: TransactionResponse;
@@ -152,6 +154,10 @@
     templateFields?: Snippet;
     saveTemplate?: (payload: TransactionRequest) => Promise<void>;
     preservePostings?: boolean;
+    /** Template mode: the tags the saved template already names, which it
+     *  keeps after they are archived (#656). An edit reads them from the
+     *  transaction instead. */
+    retainedTagIDs?: readonly number[];
     onPendingChange?: (pending: boolean) => void;
     /** An investment form opened from the Investment tab saved (#506). */
     onInvestmentSaved?: (kind?: InvestmentSaveKind) => void;
@@ -171,7 +177,34 @@
   let reloadedNotice = $state(false);
 
   let tagIDs = $state<number[]>([]);
+  /** The tags the form was filled with; an archived one among them stays listed (#650). */
+  let initialTagIDs = $state.raw<number[]>([]);
+  /** Every tag the form was filled with, posting lines included, resolved by ID. */
+  let assignedIDs = $state.raw<number[]>([]);
+  // Active choices and assigned tags are separate reads (#657): archived rows
+  // never crowd the capped active list, and an assignment resolves by ID
+  // wherever it sits in the catalog.
   const tagsQuery = createQuery(() => tagsQueryOptions());
+  const assignedTagsQuery = createQuery(() => ({ ...tagsByIDQueryOptions(assignedIDs), enabled: assignedIDs.length > 0 }));
+  const assignedTags = $derived(assignedIDs.length ? assignedTagsQuery.data?.tags : []);
+  const tagsByID = $derived(new Map<number, TagResponse>([...(tagsQuery.data?.tags ?? []), ...(assignedTags ?? [])].map((tag) => [tag.id, tag])));
+  // An edit keeps the saved transaction's assignments and a template edit the
+  // saved template's; a new transaction or correction would assign an
+  // archived tag afresh, which the server refuses.
+  const retainableTagIDs = $derived(new Set(mode === 'edit' ? (transaction?.tag_ids ?? []) : mode === 'template' ? (retainedTagIDs ?? []) : []));
+  const shownTags = $derived(tagChoices(tagsQuery.data?.tags ?? [], assignedTags, initialTagIDs, retainableTagIDs));
+  const tagsPending = $derived(tagsQuery.isPending || (assignedIDs.length > 0 && assignedTagsQuery.isPending));
+  const tagsError = $derived(tagsQuery.error ?? (assignedIDs.length > 0 ? assignedTagsQuery.error : null));
+  function tagLabel(id: number): string {
+    const tag = tagsByID.get(id);
+    if (!tag) return String(id);
+    return tag.status === 'active' ? tag.name : m.transactions_tag_archived({ name: tag.name });
+  }
+  function removePostingTag(legIndex: number, tagID: number) {
+    const legs = [...splitLegs];
+    legs[legIndex] = { ...legs[legIndex], tagIDs: (legs[legIndex].tagIDs ?? []).filter((id) => id !== tagID) };
+    splitLegs = legs;
+  }
 
   // ── Queries ───────────────────────────────────────────────────────
   // Load accounts (asset/liability for the account leg; income/expense categories loaded separately)
@@ -563,7 +596,12 @@
 
   // ── Initialise from existing transaction (edit mode) ──────────────
   $effect(() => {
-    tagIDs = [...(transaction?.tag_ids ?? initialValues?.tag_ids ?? [])];
+    // Read from the source, never back from tagIDs: this effect writes it.
+    const loadedTagIDs = transaction?.tag_ids ?? initialValues?.tag_ids ?? [];
+    tagIDs = [...loadedTagIDs];
+    initialTagIDs = [...loadedTagIDs];
+    const loadedEntries: Array<{ postings?: Array<{ tag_ids?: number[] }> }> = transaction?.journal_entries ?? initialValues?.journal_entries ?? [];
+    assignedIDs = assignedTagIDs(loadedTagIDs, loadedEntries.flatMap((entry) => (entry.postings ?? []).map((posting) => posting.tag_ids)));
     payeeInteraction = 'untouched';
     payeeConfirmationName = null;
     splitPostedOnOpen = {};
@@ -961,7 +999,7 @@
   function buildPayload(): TransactionRequest {
     const payload: TransactionRequest = {
       status: mode === 'edit' ? transaction?.status : 'posted',
-      tag_ids: [...tagIDs],
+      tag_ids: submittableTagIDs(tagIDs, assignedTags, retainableTagIDs),
       transaction_date: transactionDate || undefined,
       description: description.trim() || undefined,
       note_markdown: noteMarkdown.trim() || undefined,
@@ -1247,7 +1285,7 @@
     return JSON.stringify([transactionDate, payeeSearch, description, categoryID, amountStr, accountID, simpleCommodityID,
       accountPostedOn, noteMarkdown, externalRefHint, tagIDs, sentStr, receivedStr, feeStr, feePaidBy,
       feeAccountID, conversionSide, transferToID, transferToCommodityID, leavesOn, arrivesOn,
-      splitLegs.map((leg) => [leg.accountID, leg.commodityID, leg.amountStr, leg.memo, leg.postedOn])]);
+      splitLegs.map((leg) => [leg.accountID, leg.commodityID, leg.amountStr, leg.memo, leg.postedOn, leg.tagIDs ?? []])]);
   }
   let workBaseline: string | undefined;
   function hasUnsavedWork(): boolean {
@@ -2321,6 +2359,26 @@
                 maxlength="500"
               />
             </label>
+
+            <!-- A line's own tags: shown so an archived one can be named and
+                 removed (#650); new line tags are not entered here. -->
+            {#if leg.tagIDs?.length}
+              <div class="min-w-0 sm:col-span-3">
+                <span class={labelClass} id="split-leg-tags-{i}">{m.transactions_posting_tags()}</span>
+                <ul class="mt-1.5 flex flex-wrap gap-2" aria-labelledby="split-leg-tags-{i}">
+                  {#each leg.tagIDs as tagID (tagID)}
+                    {@const label = tagLabel(tagID)}
+                    <!-- A long unbroken name wraps; Remove stays beside it on a phone. -->
+                    <li class="inline-flex min-h-10 max-w-full items-center gap-1 rounded-(--radius-control) border border-border bg-surface pl-3 text-sm text-foreground">
+                      <span class="min-w-0 wrap-anywhere py-2">{label}</span>
+                      <button type="button" class="inline-flex min-h-10 min-w-10 shrink-0 items-center justify-center rounded-(--radius-control) text-muted hover:bg-control-hover hover:text-foreground" aria-label={m.transactions_posting_tag_remove({ name: label })} disabled={busy} onclick={() => removePostingTag(i, tagID)}>
+                        <X size={14} aria-hidden="true" />
+                      </button>
+                    </li>
+                  {/each}
+                </ul>
+              </div>
+            {/if}
           </div>
         </div>
       {/each}
@@ -2347,16 +2405,23 @@
     </div>
   {/if}
 
-  <fieldset class="rounded-(--radius-control) border border-border p-3">
+  <fieldset class="min-w-0 rounded-(--radius-control) border border-border p-3">
     <legend class="px-1 text-sm font-semibold">{m.recurring_tags()}</legend>
-    {#if tagsQuery.isPending}<p class="text-sm text-muted">{m.recurring_loading()}</p>
-    {:else if tagsQuery.isError}<APIFormError error={tagsQuery.error} /><button type="button" onclick={() => tagsQuery.refetch()}>{m.recurring_refresh()}</button>
-    {:else if !tagsQuery.data?.tags.length}<p class="text-sm text-muted">{m.recurring_no_tags()}</p>
+    {#if tagsPending}<p class="text-sm text-muted">{m.recurring_loading()}</p>
+    {:else if tagsError}<APIFormError error={tagsError} /><button type="button" onclick={() => { void tagsQuery.refetch(); if (assignedIDs.length) void assignedTagsQuery.refetch(); }}>{m.recurring_refresh()}</button>
+    {:else if !shownTags.length}<p class="text-sm text-muted">{m.recurring_no_tags()}</p>
     {:else}<div class="flex flex-wrap gap-3">
-      {#each tagsQuery.data.tags as tag (tag.id)}
-        <label class="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" value={tag.id} bind:group={tagIDs} disabled={busy} />{tag.name}</label>
+      {#each shownTags as choice (choice.tag.id)}
+        {#if choice.blocked}
+          <label class="flex min-h-10 max-w-full items-center gap-2 text-sm text-muted"><input class="shrink-0" type="checkbox" checked={false} disabled /><span class="min-w-0 wrap-anywhere">{m.transactions_tag_archived({ name: choice.tag.name })}</span></label>
+        {:else}
+          <label class="flex min-h-10 max-w-full items-center gap-2 text-sm"><input class="shrink-0" type="checkbox" value={choice.tag.id} bind:group={tagIDs} disabled={busy} /><span class="min-w-0 wrap-anywhere">{choice.archived ? m.transactions_tag_archived({ name: choice.tag.name }) : choice.tag.name}</span></label>
+        {/if}
       {/each}
-    </div>{/if}
+    </div>
+    {#if shownTags.some((choice) => choice.retained)}<p class="mt-2 text-xs text-muted">{mode === 'template' ? m.transactions_tags_archived_template_help() : m.transactions_tags_archived_help()}</p>{/if}
+    {#if shownTags.some((choice) => choice.blocked)}<p class="mt-2 text-xs text-muted">{m.transactions_tags_archived_not_added()}</p>{/if}
+    {/if}
   </fieldset>
 
   <!-- ── Tier 2: Advanced section ───────────────────────────────── -->

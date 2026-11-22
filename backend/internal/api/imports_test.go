@@ -411,6 +411,52 @@ func TestImportRules_CRUDIsOrderedAndAudited(t *testing.T) {
 	assert.Equal(t, 4, auditCount)
 }
 
+// TestImportRules_ArchivedTagSurvivesRuleEdits is the #650 bug class on import
+// rules: a rule keeps the tags it already names after one is archived, so it
+// can still be renamed or disabled, while adding an archived tag is refused.
+// Import application already skips a rule with an archived target.
+func TestImportRules_ArchivedTagSurvivesRuleEdits(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, _, _, _ := bootstrapImportAPITest(t, handler)
+	retired := createTagForSession(t, handler, sessionCookie, csrfToken, `{"name":"Retired","kind":"project"}`)
+	active := createTagForSession(t, handler, sessionCookie, csrfToken, `{"name":"Active","kind":"flag"}`)
+	tagged := createImportRuleForSession(t, handler, sessionCookie, csrfToken, `{"name":"Tagged","priority":10,"match_field":"payee","contains_text":"shop","tag_ids":[`+strconvFormatInt(retired.ID)+`]}`)
+	untagged := createImportRuleForSession(t, handler, sessionCookie, csrfToken, `{"name":"Untagged","priority":20,"match_field":"payee","contains_text":"cafe","tag_ids":[`+strconvFormatInt(active.ID)+`]}`)
+	mutateTag(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/tags/"+strconvFormatInt(retired.ID)+"/archive", http.StatusOK)
+
+	patch := func(ruleID int64, body string, wantStatus int) importRuleResponse {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPatch, "/api/v1/import-rules/"+strconvFormatInt(ruleID), strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(csrfTokenHeader, csrfToken)
+		setSameOrigin(req)
+		req.AddCookie(sessionCookie)
+		res := httptest.NewRecorder()
+		handler.ServeHTTP(res, req)
+		require.Equal(t, wantStatus, res.Code, res.Body.String())
+		var rule importRuleResponse
+		if wantStatus == http.StatusOK {
+			require.NoError(t, json.NewDecoder(res.Body).Decode(&rule))
+		}
+		return rule
+	}
+
+	renamed := patch(tagged.ID, `{"name":"Tagged disabled","enabled":false}`, http.StatusOK)
+	assert.Equal(t, []int64{retired.ID}, renamed.TagIDs)
+	assert.False(t, renamed.Enabled)
+
+	widened := patch(tagged.ID, `{"tag_ids":[`+strconvFormatInt(retired.ID)+`,`+strconvFormatInt(active.ID)+`]}`, http.StatusOK)
+	assert.ElementsMatch(t, []int64{retired.ID, active.ID}, widened.TagIDs)
+
+	removed := patch(tagged.ID, `{"tag_ids":[`+strconvFormatInt(active.ID)+`]}`, http.StatusOK)
+	assert.Equal(t, []int64{active.ID}, removed.TagIDs)
+
+	patch(tagged.ID, `{"tag_ids":[`+strconvFormatInt(retired.ID)+`]}`, http.StatusBadRequest)
+	patch(untagged.ID, `{"tag_ids":[`+strconvFormatInt(active.ID)+`,`+strconvFormatInt(retired.ID)+`]}`, http.StatusBadRequest)
+}
+
 // --- Malformed / missing input ---
 
 func TestStartImport_UnrecognizedFormatRejectedNoBatchPersisted(t *testing.T) {

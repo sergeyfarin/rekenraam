@@ -8210,6 +8210,8 @@ export interface paths {
                     include_archived?: boolean;
                     /** @description Small-set tag name or kind filter. */
                     q?: string;
+                    /** @description Repeatable. Narrows the list to these tags; the other filters still apply, so pass include_archived=true to resolve archived ones. Lets a form name the tags a record carries in one bounded read, whatever their position in a large catalog. */
+                    id?: number[];
                 };
                 header?: never;
                 path?: never;
@@ -8545,7 +8547,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Archive a tag */
+        /**
+         * Archive a tag
+         * @description Archiving stops new assignments of the tag. Transactions, posting lines and import rules that already carry it keep it: an edit that restates it keeps the assignment and one that leaves it out removes it, while naming it anywhere it is not already assigned is refused.
+         */
         post: {
             parameters: {
                 query?: never;

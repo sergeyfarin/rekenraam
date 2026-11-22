@@ -311,6 +311,133 @@ func TestTransactionTagReplacementSemantics(t *testing.T) {
 	assert.ElementsMatch(t, []int64{tax.ID}, repeatedVoid.TagIDs)
 }
 
+// TestArchivedTagAssignmentsSurviveEdits pins #650: archiving a tag stops
+// new assignments but leaves the ones it already has. An edit that restates an
+// archived tag the transaction, or the same posting line, already carries
+// keeps it; leaving it out removes it; naming it anywhere it is not already
+// assigned is a fresh assignment and is refused.
+func TestArchivedTagAssignmentsSurviveEdits(t *testing.T) {
+	t.Parallel()
+
+	handler, database := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Checking", "asset", "checking", commodityID, 2)
+	groceries := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Groceries","category_type":"expense"}`)
+	retired := createTagForSession(t, handler, sessionCookie, csrfToken, `{"name":"Retired project","kind":"project"}`)
+	tax := createTagForSession(t, handler, sessionCookie, csrfToken, `{"name":"Tax","kind":"flag"}`)
+	review := createTagForSession(t, handler, sessionCookie, csrfToken, `{"name":"Review","kind":"flag"}`)
+	commodity := strconvFormatInt(commodityID)
+	ids := func(tags ...tagResponse) string {
+		parts := make([]string, len(tags))
+		for i, tag := range tags {
+			parts[i] = strconvFormatInt(tag.ID)
+		}
+		return "[" + strings.Join(parts, ",") + "]"
+	}
+
+	transaction := createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
+		"transaction_date":"2026-06-07",
+		"description":"Before",
+		"tag_ids":`+ids(retired, tax)+`,
+		"journal_entries":[{
+			"entry_date":"2026-06-07",
+			"postings":[
+				{"account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":-10000,"quantity_scale":2,"commodity_id":`+commodity+`,"tag_ids":`+ids(retired)+`},
+				{"account_id":`+strconvFormatInt(groceries.ID)+`,"quantity_value":10000,"quantity_scale":2,"commodity_id":`+commodity+`,"tag_ids":`+ids(retired)+`}
+			]
+		}]
+	}`, http.StatusCreated)
+	path := "/api/v1/transactions/" + strconvFormatInt(transaction.ID)
+	checkingLine := transaction.JournalEntries[0].Postings[0]
+	groceriesLine := transaction.JournalEntries[0].Postings[1]
+	mutateTag(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/tags/"+strconvFormatInt(retired.ID)+"/archive", http.StatusOK)
+
+	body := func(description, transactionTags, checkingTags, groceriesTags string) string {
+		return `{
+			"transaction_date":"2026-06-07",
+			"description":"` + description + `",
+			"tag_ids":` + transactionTags + `,
+			"journal_entries":[{
+				"entry_date":"2026-06-07",
+				"postings":[
+					{"line_key":"` + checkingLine.LineKey + `","account_id":` + strconvFormatInt(checking.ID) + `,"quantity_value":-10000,"quantity_scale":2,"commodity_id":` + commodity + `,"tag_ids":` + checkingTags + `},
+					{"line_key":"` + groceriesLine.LineKey + `","account_id":` + strconvFormatInt(groceries.ID) + `,"quantity_value":10000,"quantity_scale":2,"commodity_id":` + commodity + `,"tag_ids":` + groceriesTags + `}
+				]
+			}]
+		}`
+	}
+
+	t.Run("description-only edit retains archived assignments at both levels", func(t *testing.T) {
+		updated := mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPatch, path, body("After", ids(retired, tax), ids(retired), ids(retired)), http.StatusOK)
+		assert.Equal(t, "After", updated.Description)
+		assert.ElementsMatch(t, []int64{retired.ID, tax.ID}, updated.TagIDs)
+		assert.ElementsMatch(t, []int64{retired.ID}, updated.JournalEntries[0].Postings[0].TagIDs)
+		assert.ElementsMatch(t, []int64{retired.ID}, updated.JournalEntries[0].Postings[1].TagIDs)
+	})
+
+	t.Run("an edit that keeps the journal retains archived posting tags", func(t *testing.T) {
+		updated := mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPatch, path, `{
+			"transaction_date":"2026-06-07","description":"Kept journal","tag_ids":`+ids(retired, tax)+`,"keep_journal":true
+		}`, http.StatusOK)
+		assert.Equal(t, "Kept journal", updated.Description)
+		assert.ElementsMatch(t, []int64{retired.ID, tax.ID}, updated.TagIDs)
+		assert.ElementsMatch(t, []int64{retired.ID}, updated.JournalEntries[0].Postings[0].TagIDs)
+		assert.ElementsMatch(t, []int64{retired.ID}, updated.JournalEntries[0].Postings[1].TagIDs)
+	})
+
+	t.Run("changing an active tag retains the archived one", func(t *testing.T) {
+		updated := mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPatch, path, body("Active change", ids(retired, review), ids(retired, review), ids(retired)), http.StatusOK)
+		assert.ElementsMatch(t, []int64{retired.ID, review.ID}, updated.TagIDs)
+		assert.ElementsMatch(t, []int64{retired.ID, review.ID}, updated.JournalEntries[0].Postings[0].TagIDs)
+		assert.ElementsMatch(t, []int64{retired.ID}, updated.JournalEntries[0].Postings[1].TagIDs)
+	})
+
+	t.Run("an archived tag can be removed at both levels", func(t *testing.T) {
+		updated := mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPatch, path, body("Removed", ids(review), ids(review), ids(retired)), http.StatusOK)
+		assert.ElementsMatch(t, []int64{review.ID}, updated.TagIDs)
+		assert.ElementsMatch(t, []int64{review.ID}, updated.JournalEntries[0].Postings[0].TagIDs)
+		assert.ElementsMatch(t, []int64{retired.ID}, updated.JournalEntries[0].Postings[1].TagIDs)
+		assert.Equal(t, 1, countPostingTags(t, database, checkingLine.PostingLineID))
+	})
+
+	t.Run("re-adding a removed archived tag is a fresh assignment", func(t *testing.T) {
+		mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPatch, path, body("Re-add on transaction", ids(review, retired), ids(review), ids(retired)), http.StatusConflict)
+		mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPatch, path, body("Re-add on posting", ids(review), ids(review, retired), ids(retired)), http.StatusConflict)
+	})
+
+	t.Run("an archived tag cannot move to a new posting line", func(t *testing.T) {
+		mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPatch, path, `{
+			"transaction_date":"2026-06-07",
+			"tag_ids":`+ids(review)+`,
+			"journal_entries":[{
+				"entry_date":"2026-06-07",
+				"postings":[
+					{"line_key":"`+checkingLine.LineKey+`","account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":-10000,"quantity_scale":2,"commodity_id":`+commodity+`,"tag_ids":`+ids(review)+`},
+					{"account_id":`+strconvFormatInt(groceries.ID)+`,"quantity_value":10000,"quantity_scale":2,"commodity_id":`+commodity+`,"tag_ids":`+ids(retired)+`}
+				]
+			}]
+		}`, http.StatusConflict)
+	})
+
+	t.Run("a new transaction cannot carry an archived tag", func(t *testing.T) {
+		createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
+			"transaction_date":"2026-06-08",
+			"tag_ids":`+ids(retired)+`,
+			"journal_entries":[{
+				"entry_date":"2026-06-08",
+				"postings":[
+					{"account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":-500,"quantity_scale":2,"commodity_id":`+commodity+`},
+					{"account_id":`+strconvFormatInt(groceries.ID)+`,"quantity_value":500,"quantity_scale":2,"commodity_id":`+commodity+`}
+				]
+			}]
+		}`, http.StatusConflict)
+	})
+
+	stored := readTransactionForSession(t, handler, sessionCookie, transaction.ID, http.StatusOK)
+	assert.ElementsMatch(t, []int64{review.ID}, stored.TagIDs, "refused writes leave the assignments as they were")
+	assert.ElementsMatch(t, []int64{retired.ID}, stored.JournalEntries[0].Postings[1].TagIDs)
+}
+
 func TestReconciliationWorkflowAndCheckpointInvalidation(t *testing.T) {
 	t.Parallel()
 

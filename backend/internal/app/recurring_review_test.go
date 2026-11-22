@@ -458,3 +458,58 @@ func TestRecurringSummaryCountsArchivedDraftsAndBlockedSeparately(t *testing.T) 
 	require.NoError(t, err)
 	assert.Equal(t, RecurringSummary{DraftCount: 1, BlockedCount: 1, Today: "2026-08-30"}, summary)
 }
+
+// TestRecurringTemplateKeepsArchivedTagUntilRemoved pins #656: a template edit
+// keeps a tag the template already names after that tag is archived, while
+// each occurrence stays a fresh assignment that generation refuses. Removing
+// or replacing the tag is what lets the blocked occurrence be retried.
+func TestRecurringTemplateKeepsArchivedTagUntilRemoved(t *testing.T) {
+	t.Parallel()
+	f, s, input := recurringFixture(t)
+	ctx := context.Background()
+	tags := NewTagService(db.NewTagRepository(f.database))
+	newTag := func(name string) Tag {
+		tag, err := tags.CreateTag(ctx, CreateTagInput{OwnerUserID: input.OwnerUserID, OriginType: "browser_api", Operation: "tag.create", Name: name, Kind: "flag"})
+		require.NoError(t, err)
+		return tag
+	}
+	retired, active := newTag("Retired"), newTag("Active")
+	input.Patch.TagIDs = &[]int64{retired.ID}
+	template, err := s.CreateTemplate(ctx, input)
+	require.NoError(t, err)
+	_, err = tags.ArchiveTag(ctx, TagLifecycleInput{OwnerUserID: input.OwnerUserID, OriginType: "browser_api", TagID: retired.ID})
+	require.NoError(t, err)
+	update := func(patch RecurringTemplatePatch) (RecurringTemplate, error) {
+		return s.UpdateTemplate(ctx, WriteRecurringTemplateInput{OwnerUserID: input.OwnerUserID, TemplateID: template.ID, Patch: patch})
+	}
+
+	// The editor restates every field, so this is a full-validation edit.
+	restated, err := update(RecurringTemplatePatch{Name: new("Salary renamed"), Description: new("Monthly"), TagIDs: &[]int64{retired.ID}, Postings: input.Patch.Postings})
+	require.NoError(t, err)
+	assert.Equal(t, []int64{retired.ID}, restated.Spec.TagIDs)
+	_, err = update(RecurringTemplatePatch{Description: new("Rescheduled"), DayOfMonth: NullablePatch[int]{Set: true, Value: new(2)}, LeadDays: new(5)})
+	require.NoError(t, err)
+	widened, err := update(RecurringTemplatePatch{TagIDs: &[]int64{retired.ID, active.ID}})
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []int64{retired.ID, active.ID}, widened.Spec.TagIDs)
+
+	result, err := s.GenerateDue(ctx, GenerateRecurringInput{OwnerUserID: input.OwnerUserID})
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Blocked, "an occurrence would assign the archived tag afresh")
+	blocked, err := s.repository.ListRecurringOccurrences(ctx, BookID, template.ID, 10)
+	require.NoError(t, err)
+	require.Len(t, blocked, 1)
+
+	removed, err := update(RecurringTemplatePatch{TagIDs: &[]int64{active.ID}})
+	require.NoError(t, err)
+	assert.Equal(t, []int64{active.ID}, removed.Spec.TagIDs)
+	_, err = update(RecurringTemplatePatch{TagIDs: &[]int64{active.ID, retired.ID}})
+	require.ErrorIs(t, err, ErrTransactionTag, "naming a removed archived tag again is a fresh assignment")
+	input.Patch.TagIDs = &[]int64{retired.ID}
+	_, err = s.CreateTemplate(ctx, input)
+	require.ErrorIs(t, err, ErrTransactionTag)
+
+	result, err = s.RetryOccurrence(ctx, ReviewRecurringInput{OwnerUserID: input.OwnerUserID, TemplateID: template.ID, OccurrenceDate: blocked[0].OccurrenceDate})
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Generated)
+}
