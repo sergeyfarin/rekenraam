@@ -275,6 +275,7 @@
   "reconcile_start_date_label": "Date de clôture du relevé",
   "reconcile_start_balance_label": "Solde de clôture du relevé",
   "reconcile_start_balance_help": "Le solde de clôture figurant sur le relevé, précédé d'un signe moins s'il est négatif.",
+  "reconcile_start_liability_balance_help": "Saisissez un montant positif si vous devez de l’argent, ou un montant négatif si vous avez un solde créditeur.",
   "reconcile_start_submit": "Commencer le rapprochement",
   "reconcile_start_submitting": "Démarrage…",
   "reconcile_start_invalid_balance": "Saisissez un montant valide, par exemple 1234,56.",

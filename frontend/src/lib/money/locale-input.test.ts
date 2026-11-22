@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as runtime from '#lib/paraglide/runtime.js';
-import { commodityImbalance, formatEditableAmount, formatLedgerAmount, inflowPositiveAmount, parseDecimalAmount } from './amount.ts';
+import { commodityImbalance, formatEditableAmount, formatLedgerAmount, parseDecimalAmount } from './amount.ts';
 import { formatQuantity } from './format.ts';
 import { parseTradeAmounts } from '#lib/investments/form-amounts.ts';
 import { correctionTradeDraft, correctionLotDrafts } from '#lib/investments/trade-economics.ts';
@@ -64,9 +64,8 @@ describe('locale-aware editable amounts (#100)', () => {
     expect(correctionTradeDraft(source)).toMatchObject({ quantity: '90071992547409,93', net: '125,50' });
     expect(correctionLotDrafts(source)).toEqual([{ lotID: '9', quantity: '1,25' }]);
     expect(parsePriceAmount('125,50')).toEqual({ value: '12550', scale: 2 });
-    expect(parseStatementBalance('-1.234,50')).toEqual({ value: '-123450', scale: 2 });
-    expect(inflowPositiveAmount({ quantity_value: '-5', quantity_scale: 2, account_class: 'liability' })).toBe('0,05');
-    expect(inflowPositiveAmount({ quantity_value: '0', quantity_scale: 2, account_class: 'liability' })).toBe('0,00');
+    expect(parseStatementBalance('-1.234,50', 'asset')).toEqual({ value: '-123450', scale: 2 });
+    expect(parseStatementBalance('1.234,50', 'liability')).toEqual({ value: '-123450', scale: 2 });
     expect(commodityImbalance([{ commodityID: '1', amountStr: '1,50' }, { commodityID: '1', amountStr: '-1,5' }])).toBeNull();
     expect(commodityImbalance([{ commodityID: '1', amountStr: '1,50' }])).toEqual({ commodityID: '1', amount: '1,50' });
   });

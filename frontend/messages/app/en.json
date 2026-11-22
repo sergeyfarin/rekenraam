@@ -311,6 +311,7 @@
   "reconcile_start_date_label": "Statement closing date",
   "reconcile_start_balance_label": "Statement ending balance",
   "reconcile_start_balance_help": "The closing balance shown on the statement, including a minus sign for a negative balance.",
+  "reconcile_start_liability_balance_help": "Enter a positive amount if you owe money, or a negative amount if you have a credit balance.",
   "reconcile_start_submit": "Start reconciling",
   "reconcile_start_submitting": "Starting…",
   "reconcile_start_invalid_balance": "Enter a valid amount, for example 1234.56.",

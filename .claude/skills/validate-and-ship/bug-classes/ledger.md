@@ -94,6 +94,10 @@ colour beside the Ledger screens' 500 (#598). An account-scoped balance gets
 its normal value from `normalBalanceValue` (`app/ledger.go`) with the
 account's class, and a row shown beside it (a statement balance) uses the same
 field. Net, expense and valuation totals may keep the raw value. Reconciliation
-responses still do (#600). Named checks:
-`TestRegisterLiabilityBalancesAreClassNormalized`, `register-statements.test.ts`
-(`registerBalanceView`).
+normalizes session totals, candidate and selected postings, and checkpoint
+responses on the server. The start form converts account-normal input to the
+API's debit-positive sign (#600). Named checks:
+`TestRegisterLiabilityBalancesAreClassNormalized`,
+`TestReconciliationBalanceQuantitiesUseAccountNormalSign`,
+`register-statements.test.ts` (`registerBalanceView`), and
+`statement-balance.test.ts`.

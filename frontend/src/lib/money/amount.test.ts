@@ -4,7 +4,7 @@ import {
 	commodityImbalance,
 	sumByCommodity,
 	formatLedgerAmount,
-	inflowPositiveAmount,
+	accountNormalCoefficient,
 	negateCoefficient,
 	parseDecimalAmount,
 	MAX_COEFFICIENT_DIGITS
@@ -149,33 +149,16 @@ describe('negateCoefficient', () => {
 	});
 });
 
-describe('inflowPositiveAmount', () => {
-	it('leaves an asset posting debit-positive', () => {
-		expect(
-			inflowPositiveAmount({ quantity_value: '2500', quantity_scale: 2, account_class: 'asset' })
-		).toBe('25.00');
-	});
-
-	it('leaves an expense posting debit-positive', () => {
-		expect(
-			inflowPositiveAmount({ quantity_value: '-2500', quantity_scale: 2, account_class: 'expense' })
-		).toBe('-25.00');
-	});
-
-	it.each(['liability', 'income', 'equity'])('flips the sign for a %s posting', (accountClass) => {
-		expect(
-			inflowPositiveAmount({
-				quantity_value: '-2500',
-				quantity_scale: 2,
-				account_class: accountClass
-			})
-		).toBe('25.00');
-	});
-
-	it('does not sign a zero liability posting', () => {
-		expect(
-			inflowPositiveAmount({ quantity_value: '0', quantity_scale: 2, account_class: 'liability' })
-		).toBe('0.00');
+describe('accountNormalCoefficient', () => {
+	it.each([
+		['asset', '2500', '2500'],
+		['expense', '-2500', '-2500'],
+		['liability', '-2500', '2500'],
+		['income', '-2500', '2500'],
+		['equity', '-2500', '2500'],
+		['liability', '0', '0']
+	])('converts a %s posting of %s to %s', (accountClass, value, expected) => {
+		expect(accountNormalCoefficient(value, accountClass)).toBe(expected);
 	});
 });
 

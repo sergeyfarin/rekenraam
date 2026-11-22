@@ -362,7 +362,9 @@ Goal: make daily transaction entry useful.
 
 Goal: make records trustworthy over time.
 
-- Account reconciliation workflow.
+- Account reconciliation workflow. Statement entry, session totals, and
+  checkpoint history use the account's normal sign, matching the register.
+  Amounts owed on liability accounts are positive and credit balances are negative.
 - Reconciliation-safe edit/correction behavior.
 - Net worth, cashflow, and spending reports.
 - Export of core ledger data.

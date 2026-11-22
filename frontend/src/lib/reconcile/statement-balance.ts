@@ -1,14 +1,8 @@
-import { parseDecimalAmount, type ScaledAmount } from '#lib/money/amount.ts';
+import type { components } from '#lib/api/schema.js';
+import { accountNormalCoefficient, parseDecimalAmount, type ScaledAmount } from '#lib/money/amount.ts';
 
-/**
- * Parse a user-entered statement balance into a lossless debit-positive integer
- * coefficient + scale.
- *
- * A thin alias over the shared money parser (`#lib/money/amount`), kept so the
- * reconcile form reads in its own vocabulary. All parsing rules — canonical
- * coefficients, unsigned zero, thousands grouping, digit and scale ceilings —
- * live there and are tested there.
- */
-export function parseStatementBalance(input: string): ScaledAmount | null {
-	return parseDecimalAmount(input);
+/** Parse an account-normal balance and convert it to the API's debit-positive sign. */
+export function parseStatementBalance(input: string, accountClass: components['schemas']['AccountClass']): ScaledAmount | null {
+	const parsed = parseDecimalAmount(input);
+	return parsed && { ...parsed, value: accountNormalCoefficient(parsed.value, accountClass) };
 }

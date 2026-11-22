@@ -32613,6 +32613,8 @@ export interface components {
             entry_date: string;
             quantity_value: string;
             quantity_scale: number;
+            /** @description Posting coefficient in the reconciliation account's normal sign. */
+            normal_quantity_value: string;
             reconciliation_status: components["schemas"]["ReconciliationStatus"];
             payee_name?: string;
             description?: string;
@@ -32751,6 +32753,7 @@ export interface components {
             source_kind?: components["schemas"]["ReconciliationSourceKind"];
             /** Format: date */
             statement_date: string;
+            /** @description Debit-positive statement balance coefficient. For a liability, an amount owed is negative. */
             statement_balance_value: string;
             statement_balance_scale: number;
             metadata?: {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { builtinCategoryLabel } from '#lib/categories/category-labels.ts';
 import type { components } from '#lib/api/schema.js';
 import { m } from '#lib/paraglide/messages.js';
-import { resolveAccountLabel, systemRoleLabel, type PostingResponse } from './transaction-labels.ts';
+import { formatSignedAmount, resolveAccountLabel, systemRoleLabel, type PostingResponse } from './transaction-labels.ts';
 
 const posting = {
   id: 1, posting_line_id: 1, line_key: 'a', line_seq: 1, account_id: 9, account_class: 'asset', commodity_id: 1, commodity_code: 'USD',
@@ -12,6 +12,16 @@ const posting = {
 } as PostingResponse;
 
 type ReconciliationCheckpointImpact = components['schemas']['ReconciliationCheckpointImpact'];
+
+describe('formatSignedAmount', () => {
+  it.each([
+    ['-50000', '500.00'],
+    ['50000', '-500.00'],
+    ['0', '0.00']
+  ])('formats a card posting of %s as %s', (value, expected) => {
+    expect(formatSignedAmount({ quantity_value: value, quantity_scale: 2 }, 'liability', 'en')).toBe(expected);
+  });
+});
 
 describe('resolveAccountLabel', () => {
   it('labels a posting on the unnamed starter cash account as Ledger does (#597 sweep)', () => {

@@ -275,6 +275,7 @@
   "reconcile_start_date_label": "Дата окончания выписки",
   "reconcile_start_balance_label": "Конечный остаток по выписке",
   "reconcile_start_balance_help": "Конечный остаток, указанный в выписке; для отрицательного остатка поставьте знак минус.",
+  "reconcile_start_liability_balance_help": "Введите положительную сумму, если у вас есть задолженность, или отрицательную, если у вас есть переплата.",
   "reconcile_start_submit": "Начать сверку",
   "reconcile_start_submitting": "Начинаем…",
   "reconcile_start_invalid_balance": "Введите корректную сумму, например 1234,56.",

@@ -1,6 +1,7 @@
 import type { components } from '#lib/api/schema.js';
 import { m } from '#lib/paraglide/messages.js';
 import { accountLabelFromParts } from '#lib/accounts/account-labels.ts';
+import { accountNormalCoefficient } from '#lib/money/amount.ts';
 import { formatQuantity } from '#lib/money/format.ts';
 
 export type PostingResponse = components['schemas']['PostingResponse'];
@@ -69,41 +70,14 @@ export function statusTone(status: TransactionStatus): StatusBadgeTone {
   }
 }
 
-/**
- * Sign convention table (inflow positive, outflow negative from the account perspective):
- *
- * | Account class | Debit (+qty_value) | Credit (-qty_value) |
- * |---------------|-------------------|---------------------|
- * | asset         | Inflow  (+)        | Outflow (−)         |
- * | liability     | Outflow (−)        | Inflow  (+)         |
- * | income        | Outflow (−)        | Inflow  (+)         |
- * | expense       | Inflow  (+)        | Outflow (−)         |
- * | equity        | Outflow (−)        | Inflow  (+)         |
- *
- * quantity_value is the raw ledger coefficient. A positive coefficient is a debit;
- * a negative coefficient is a credit (standard double-entry convention).
- *
- * perspectiveClass controls sign inversion: asset/expense → positive debit is inflow;
- * liability/income/equity → positive debit is outflow (flip).
- */
+/** Format a debit-positive posting from the given account's perspective. */
 export function formatSignedAmount(
-  posting: PostingResponse,
+  posting: Pick<PostingResponse, 'quantity_value' | 'quantity_scale'>,
   perspectiveClass: AccountClass,
   locale: string
 ): string {
-  const base = formatQuantity(posting.quantity_value, posting.quantity_scale, locale);
-  if (!base) return '';
-
-  const isNegativeCoefficient = posting.quantity_value.startsWith('-');
-
-  // For liability/income/equity: flip the sign (positive debit = outflow = display negative).
-  const shouldFlip = perspectiveClass === 'liability' || perspectiveClass === 'income' || perspectiveClass === 'equity';
-
-  const displayNegative = shouldFlip ? !isNegativeCoefficient : isNegativeCoefficient;
-
-  // base already includes its own sign from formatQuantity — strip it and reapply.
-  const absBase = base.startsWith('-') ? base.slice(1) : base;
-  return displayNegative ? `-${absBase}` : absBase;
+  const value = accountNormalCoefficient(posting.quantity_value, perspectiveClass);
+  return formatQuantity(value, posting.quantity_scale, locale);
 }
 
 /**

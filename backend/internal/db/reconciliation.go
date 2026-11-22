@@ -28,6 +28,7 @@ type ReconciliationSessionRecord struct {
 	ID                    int64
 	BookID                int64
 	AccountID             int64
+	AccountClass          string
 	CommodityID           int64
 	Status                string
 	SourceKind            string
@@ -57,6 +58,7 @@ type ReconciliationCheckpointRecord struct {
 	ID                       int64
 	BookID                   int64
 	AccountID                int64
+	AccountClass             string
 	CommodityID              int64
 	SessionID                sql.NullInt64
 	PreviousCheckpointID     sql.NullInt64
@@ -653,13 +655,7 @@ func (r *TransactionRepository) ListReconciliationCheckpoints(ctx context.Contex
 		where = append(where, "commodity_id = ?")
 		args = append(args, commodityID)
 	}
-	rows, err := r.database.QueryContext(ctx, `
-		SELECT
-			id, book_id, account_id, commodity_id, session_id, previous_checkpoint_id,
-			status, statement_date, statement_account_sequence, statement_balance_value, statement_balance_scale,
-			created_at, created_by_user_id, invalidated_at, invalidation_reason,
-			voided_at, void_reason
-		FROM reconciliation_checkpoints
+	rows, err := r.database.QueryContext(ctx, reconciliationCheckpointSelect+`
 		WHERE `+strings.Join(where, " AND ")+`
 		ORDER BY statement_date DESC, id DESC
 	`, args...)
@@ -1129,24 +1125,47 @@ func invalidateReconciliationCheckpoints(ctx context.Context, tx *sql.Tx, params
 	return ids, nil
 }
 
+// Statements may predate the first account version. Use that version's class
+// for those statements so existing sessions and checkpoints remain readable.
+const reconciliationAccountClassSQL = `COALESCE(
+	(SELECT av.account_class FROM account_versions av
+	 WHERE av.account_id = r.account_id AND av.effective_from <= r.statement_date
+	 ORDER BY av.effective_from DESC, av.version_seq DESC LIMIT 1),
+	(SELECT av.account_class FROM account_versions av
+	 WHERE av.account_id = r.account_id
+	 ORDER BY av.effective_from, av.version_seq LIMIT 1),
+	''
+)`
+
+const reconciliationCheckpointSelect = `
+	SELECT id, book_id, account_id, ` + reconciliationAccountClassSQL + `,
+		commodity_id, session_id, previous_checkpoint_id,
+		status, statement_date, statement_account_sequence, statement_balance_value, statement_balance_scale,
+		created_at, created_by_user_id, invalidated_at, invalidation_reason,
+		voided_at, void_reason
+	FROM reconciliation_checkpoints r
+`
+
 func reconciliationSessionByID(ctx context.Context, queryer interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, bookID int64, sessionID int64) (ReconciliationSessionRecord, error) {
 	var session ReconciliationSessionRecord
 	if err := queryer.QueryRowContext(ctx, `
 		SELECT
-			id, book_id, account_id, commodity_id, status, source_kind, statement_date,
+			id, book_id, account_id, `+reconciliationAccountClassSQL+`,
+			commodity_id, status, source_kind, statement_date,
 			statement_balance_value, statement_balance_scale, starting_checkpoint_id,
 			starting_balance_value, starting_balance_scale, selected_balance_value,
 			selected_balance_scale, difference_value, difference_scale, metadata_json,
 			created_at, created_by_user_id, updated_at, updated_by_user_id,
 			finished_at, voided_at, change_reason
-		FROM reconciliation_sessions
+		FROM reconciliation_sessions r
 		WHERE book_id = ? AND id = ?
 	`, bookID, sessionID).Scan(
 		&session.ID,
 		&session.BookID,
 		&session.AccountID,
+		&session.AccountClass,
 		&session.CommodityID,
 		&session.Status,
 		&session.SourceKind,
@@ -1181,13 +1200,7 @@ func latestActiveReconciliationCheckpoint(ctx context.Context, queryer interface
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, bookID int64, accountID int64, commodityID int64) (ReconciliationCheckpointRecord, error) {
 	var checkpoint ReconciliationCheckpointRecord
-	if err := scanReconciliationCheckpoint(queryer.QueryRowContext(ctx, `
-		SELECT
-			id, book_id, account_id, commodity_id, session_id, previous_checkpoint_id,
-			status, statement_date, statement_account_sequence, statement_balance_value, statement_balance_scale,
-			created_at, created_by_user_id, invalidated_at, invalidation_reason,
-			voided_at, void_reason
-		FROM reconciliation_checkpoints
+	if err := scanReconciliationCheckpoint(queryer.QueryRowContext(ctx, reconciliationCheckpointSelect+`
 		WHERE book_id = ?
 			AND account_id = ?
 			AND commodity_id = ?
@@ -1221,13 +1234,7 @@ func reconciliationCheckpointByID(ctx context.Context, queryer interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, bookID int64, checkpointID int64) (ReconciliationCheckpointRecord, error) {
 	var checkpoint ReconciliationCheckpointRecord
-	if err := scanReconciliationCheckpoint(queryer.QueryRowContext(ctx, `
-		SELECT
-			id, book_id, account_id, commodity_id, session_id, previous_checkpoint_id,
-			status, statement_date, statement_account_sequence, statement_balance_value, statement_balance_scale,
-			created_at, created_by_user_id, invalidated_at, invalidation_reason,
-			voided_at, void_reason
-		FROM reconciliation_checkpoints
+	if err := scanReconciliationCheckpoint(queryer.QueryRowContext(ctx, reconciliationCheckpointSelect+`
 		WHERE book_id = ? AND id = ?
 	`, bookID, checkpointID), &checkpoint); err != nil {
 		return ReconciliationCheckpointRecord{}, err
@@ -1601,6 +1608,7 @@ func scanReconciliationCheckpoint(scanner interface{ Scan(dest ...any) error }, 
 		&checkpoint.ID,
 		&checkpoint.BookID,
 		&checkpoint.AccountID,
+		&checkpoint.AccountClass,
 		&checkpoint.CommodityID,
 		&checkpoint.SessionID,
 		&checkpoint.PreviousCheckpointID,

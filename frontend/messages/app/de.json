@@ -275,6 +275,7 @@
   "reconcile_start_date_label": "Abschlussdatum des Kontoauszugs",
   "reconcile_start_balance_label": "Endsaldo des Kontoauszugs",
   "reconcile_start_balance_help": "Der Endsaldo laut Kontoauszug, bei negativem Saldo mit Minuszeichen.",
+  "reconcile_start_liability_balance_help": "Geben Sie einen positiven Betrag ein, wenn Sie Geld schulden, und einen negativen Betrag, wenn Sie ein Guthaben haben.",
   "reconcile_start_submit": "Abgleich starten",
   "reconcile_start_submitting": "Wird gestartet…",
   "reconcile_start_invalid_balance": "Geben Sie einen gültigen Betrag ein, zum Beispiel 1234,56.",
