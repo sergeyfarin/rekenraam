@@ -20,7 +20,7 @@ for (const theme of ['light', 'dark'] as const) {
   test(`header button opens the centred search, traps focus and returns it in ${theme}`, async ({ page }) => {
     await readyForLedger(page);
     await page.evaluate(value => localStorage.setItem('rekenraam-theme', value), theme);
-    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto('/app/ledger');
     const button = headerButton(page);
     await expect(button).toBeVisible();
@@ -41,6 +41,14 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(page.getByRole('status').filter({ hasText: /Showing/ })).toBeVisible();
     await expect(dialog.getByRole('group', { name: 'Pages', exact: true })).toBeVisible();
     await expectNoAccessibilityViolations(page, `centred search ${theme}`);
+    const results = dialog.getByRole('listbox', { name: 'Search results', exact: true });
+    await expect.poll(() => results.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+    const payeeScope = dialog.getByRole('button', { name: 'Payees', exact: true });
+    await payeeScope.focus();
+    await page.keyboard.press('Tab');
+    await expect(dialog.getByRole('button', { name: 'Show more results', exact: true })).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(payeeScope).toBeFocused();
     await expectFocusTrapped(page, dialog, 'centred search');
 
     // Narrow to a scope chip, then Escape returns focus to the button.
@@ -55,7 +63,7 @@ for (const theme of ['light', 'dark'] as const) {
     // A backdrop click closes it too.
     await page.keyboard.press('Enter');
     await expect(dialog).toBeVisible();
-    await page.mouse.click(20, 880);
+    await page.mouse.click(20, 700);
     await expect(dialog).toHaveCount(0);
     await expect(button).toBeFocused();
   });

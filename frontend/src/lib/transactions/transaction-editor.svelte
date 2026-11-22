@@ -2160,6 +2160,7 @@
                 id={`${uid}-categories`}
                 class="absolute z-20 mt-1 max-h-52 w-full overflow-auto rounded-[var(--radius-control)] border border-border bg-surface text-sm shadow-[var(--shadow-panel)]"
                 role="listbox"
+                tabindex="-1"
                 aria-label={m.transactions_field_category()}
               >
                 {#each filteredCategories as cat, index (cat.id)}

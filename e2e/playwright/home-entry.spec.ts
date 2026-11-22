@@ -59,12 +59,22 @@ for (const theme of ['light', 'dark'] as const) {
     expect((await dialog.boundingBox())!.width).toBeLessThan(1000);
     await expect(page).toHaveURL(url => url.pathname === '/app');
     await expectNoAccessibilityViolations(page, `desktop entry dialog ${theme}`);
-    // Walk from the category field with its suggestions open: options are not
-    // Tab stops, so Tab never lands on one that closes under it (#477).
+    // The seeded categories overflow the popup. Chromium can make a scroll
+    // container a Tab stop even when each option is excluded from Tab order.
     const categoryField = dialog.getByRole('combobox', { name: 'Category', exact: true });
+    const categoryOptions = dialog.getByRole('listbox', { name: 'Category', exact: true });
+    const splitEntry = dialog.getByRole('button', { name: 'Use split entry', exact: true });
     await categoryField.focus();
     await expect(categoryField).toHaveAttribute('aria-expanded', 'true');
+    await expect.poll(() => categoryOptions.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
     await expectNoAccessibilityViolations(page, `desktop entry dialog with suggestions ${theme}`);
+    await page.keyboard.press('Tab');
+    await expect(splitEntry).toBeFocused();
+    await expect(categoryOptions).toHaveCount(0);
+    await expect(splitEntry).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(categoryField).toBeFocused();
+    await expect(categoryOptions).toBeVisible();
     await expectFocusTrapped(page, dialog, `desktop entry dialog ${theme}`);
 
     // Unsaved input survives Home refetching behind the dialog.
