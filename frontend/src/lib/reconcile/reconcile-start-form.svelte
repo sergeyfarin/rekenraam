@@ -26,6 +26,7 @@
     csrfToken,
     requestedAccountID,
     requestedCommodityID,
+    pending = $bindable(false),
     onStarted,
     onAccountChange
   }: {
@@ -37,6 +38,7 @@
     // Reconciliation card flagged, or a register statement row's commodity.
     // It applies to the requested account; otherwise the account's default.
     requestedCommodityID?: number;
+    pending?: boolean;
     onStarted: (session: ReconciliationSessionResponse) => void;
     // Lets the page show the selected account's checkpoints beside the form.
     onAccountChange?: (accountID: number | undefined, commodityID: number | undefined) => void;
@@ -83,7 +85,6 @@
   });
   let statementDate = $state('');
   let balanceStr = $state('');
-  let pending = $state(false);
   let formError = $state<unknown>(undefined);
   let invalidBalance = $state(false);
 
@@ -149,6 +150,7 @@
 
   async function handleSubmit(event: SubmitEvent) {
     event.preventDefault();
+    if (pending) return;
     invalidBalance = false;
     formError = undefined;
 

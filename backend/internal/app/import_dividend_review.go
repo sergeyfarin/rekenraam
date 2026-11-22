@@ -453,7 +453,7 @@ func (s *ImportService) prepareImportDividendRepair(ctx context.Context, c impor
 		}
 	}
 	deps := newAccountRuleDependencies()
-	cleaned, err := s.transactionService.cleanTransactionSpec(ctx, spec, cleanTransactionOptions{ForcedStatus: "posted", ExistingLineKeys: lineKeySet(*c.original), ExistingPostings: existingPostingStateSet(*c.original), AccountRuleDependencies: deps})
+	cleaned, err := s.transactionService.cleanTransactionSpec(ctx, spec, cleanTransactionOptions{ForcedStatus: "posted", ExistingLineKeys: lineKeySet(*c.original), ExistingPostings: existingPostingStateSet(*c.original), ExistingTagIDs: tagIDSet(c.original.TagIDs), AccountRuleDependencies: deps})
 	if err != nil {
 		return p, err
 	}

@@ -57,7 +57,7 @@
   const inputClass = 'mt-1 min-h-10 w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground focus:outline-accent';
 </script>
 
-<TransactionEditor mode="template" initialValues={initial} {csrfToken} saveTemplate={save} {onCancel} {onPendingChange}>
+<TransactionEditor mode="template" initialValues={initial} retainedTagIDs={untrack(() => template?.tag_ids ?? [])} {csrfToken} saveTemplate={save} {onCancel} {onPendingChange}>
   {#snippet templateFields()}
     <fieldset class="space-y-4 rounded-(--radius-control) border border-border p-4">
       <legend class="px-1 font-semibold">{m.recurring_schedule()}</legend>

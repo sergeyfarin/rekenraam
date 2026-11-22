@@ -1,5 +1,10 @@
 post:
   summary: Archive a tag
+  description: >-
+    Archiving stops new assignments of the tag. Transactions, posting lines
+    and import rules that already carry it keep it: an edit that restates it
+    keeps the assignment and one that leaves it out removes it, while naming
+    it anywhere it is not already assigned is refused.
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/TagID"
     - in: header

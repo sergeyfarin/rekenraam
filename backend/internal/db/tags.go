@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -46,7 +47,9 @@ type ListTagsParams struct {
 	Kind            string
 	IncludeArchived bool
 	Query           string
-	Limit           int
+	// IDs, when non-empty, narrows the list to those tags (#657).
+	IDs   []int64
+	Limit int
 }
 
 type CreateTagParams struct {
@@ -107,6 +110,15 @@ func (r *TagRepository) ListTags(ctx context.Context, params ListTagsParams) ([]
 	if params.Kind != "" {
 		where = append(where, "kind = ?")
 		args = append(args, params.Kind)
+	}
+
+	if len(params.IDs) > 0 {
+		encoded, err := json.Marshal(params.IDs)
+		if err != nil {
+			return nil, fmt.Errorf("encode tag ids: %w", err)
+		}
+		where = append(where, "id IN (SELECT value FROM json_each(?))")
+		args = append(args, string(encoded))
 	}
 
 	query := strings.TrimSpace(params.Query)

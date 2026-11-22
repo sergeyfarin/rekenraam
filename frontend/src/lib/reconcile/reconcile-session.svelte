@@ -1,17 +1,18 @@
 <script lang="ts">
   import { publishPanelHeight } from '#lib/components/sticky-panel.ts';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+  import { untrack } from 'svelte';
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import Panel from '#lib/components/panel.svelte';
+  import { autofocus } from '#lib/components/autofocus.ts';
   import StatePanel from '#lib/components/state-panel.svelte';
   import StatusBadge from '#lib/components/status-badge.svelte';
   import APIFormError from '#lib/components/api-form-error.svelte';
   import { formatQuantity } from '#lib/money/format.ts';
-  import { invalidateReconciliationReads } from '#lib/reconcile/invalidate.ts';
+  import { invalidateClosedSessionReads } from '#lib/reconcile/invalidate.ts';
   import {
     reconciliationSessionQueryOptions,
-    reconciliationQueryKey,
     updateReconciliationSelection,
     finishReconciliation,
     voidReconciliation,
@@ -23,15 +24,19 @@
     accountLabel,
     csrfToken,
     initialSession,
-    onFinished,
-    onVoided
+    initialReason = '',
+    initialError,
+    onClosed,
+    onCloseFailed
   }: {
     reconciliationID: number;
     accountLabel: string;
     csrfToken: string | undefined;
     initialSession: ReconciliationSessionResponse;
-    onFinished: (session: ReconciliationSessionResponse) => void;
-    onVoided: (reconciliationID: number) => void;
+    initialReason?: string;
+    initialError?: unknown;
+    onClosed: (session: ReconciliationSessionResponse) => void;
+    onCloseFailed: (session: ReconciliationSessionResponse, reason: string, error: unknown) => void;
   } = $props();
 
   const locale = $derived(getLocale());
@@ -45,15 +50,14 @@
   const session = $derived(sessionQuery.data ?? initialSession);
 
   let selectionPending = $state(false);
-  let finishPending = $state(false);
-  let voidPending = $state(false);
-  let actionError = $state<unknown>(undefined);
-  let reason = $state('');
+  let closing = $state<'finish' | 'discard' | undefined>(undefined);
+  let actionError = $state(untrack(() => initialError));
+  let reason = $state(untrack(() => initialReason));
 
   const selectedIDs = $derived(new Set(session.selected_postings.map((p) => p.posting_id)));
   const isBalanced = $derived(session.difference.quantity_value === '0');
   const canAct = $derived(
-    session.status === 'open' && !sessionQuery.isError && !selectionPending && !finishPending && !voidPending
+    session.status === 'open' && !sessionQuery.isError && !selectionPending && closing === undefined
   );
   const canFinish = $derived(canAct && isBalanced);
 
@@ -89,36 +93,28 @@
     }
   }
 
-  async function handleFinish() {
-    if (!csrfToken || !canFinish) return;
-    if (reason.trim() === '') {
+  async function closeSession(action: 'finish' | 'discard') {
+    if (!csrfToken || !(action === 'finish' ? canFinish : canAct)) return;
+    const changeReason = reason.trim();
+    if (action === 'finish' && changeReason === '') {
       actionError = new Error(m.reconcile_finish_needs_reason());
       return;
     }
-    finishPending = true;
+    const submittedSession = session;
+    const submittedReason = reason;
+    closing = action;
     actionError = undefined;
     try {
-      const finished = await finishReconciliation(reconciliationID, { change_reason: reason.trim() }, csrfToken);
-      await invalidateReconciliationReads(queryClient, finished.account_id);
-      onFinished(finished);
+      const closed = action === 'finish'
+        ? await finishReconciliation(submittedSession.id, { change_reason: changeReason }, csrfToken)
+        : await voidReconciliation(submittedSession.id, { change_reason: changeReason || 'discarded' }, csrfToken);
+      await invalidateClosedSessionReads(queryClient, closed);
+      onClosed(closed);
     } catch (error) {
       actionError = error;
+      onCloseFailed(submittedSession, submittedReason, error);
     } finally {
-      finishPending = false;
-    }
-  }
-
-  async function handleVoid() {
-    if (!csrfToken || !canAct) return;
-    voidPending = true;
-    actionError = undefined;
-    try {
-      const voided = await voidReconciliation(reconciliationID, { change_reason: reason.trim() || 'discarded' }, csrfToken);
-      await queryClient.invalidateQueries({ queryKey: reconciliationQueryKey });
-      onVoided(voided.id);
-    } catch (error) {
-      actionError = error;
-      voidPending = false;
+      closing = undefined;
     }
   }
 
@@ -146,7 +142,9 @@
     <!-- Candidate postings -->
     <div class="min-w-0">
       <div class="mb-4">
-        <h2 class="text-sm font-semibold text-foreground">{m.reconcile_session_title()}</h2>
+        <h2 class="text-sm font-semibold text-foreground" tabindex="-1" {@attach initialError === undefined ? undefined : autofocus}>
+          {m.reconcile_session_title()}
+        </h2>
         <p class="mt-1 text-sm leading-6 text-muted">{m.reconcile_session_copy()}</p>
         <p class="mt-2 text-xs text-muted">
           {m.reconcile_session_account()}: <span class="font-semibold text-foreground">{accountLabel}</span>
@@ -250,7 +248,7 @@
                 class={inputClass}
                 placeholder={m.reconcile_reason_placeholder()}
                 bind:value={reason}
-                disabled={finishPending || voidPending}
+                disabled={closing !== undefined}
               />
             </div>
 
@@ -261,9 +259,9 @@
                 type="button"
                 class="inline-flex items-center justify-center gap-2 rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={!canFinish || !csrfToken}
-                onclick={handleFinish}
+                onclick={() => closeSession('finish')}
               >
-                {finishPending ? m.reconcile_finishing() : m.reconcile_finish()}
+                {closing === 'finish' ? m.reconcile_finishing() : m.reconcile_finish()}
               </button>
               {#if !isBalanced}
                 <p class="text-xs text-muted">{m.reconcile_finish_hint()}</p>
@@ -272,9 +270,9 @@
                 type="button"
                 class="inline-flex items-center justify-center gap-2 rounded-(--radius-control) border border-border bg-control px-4 py-2.5 text-sm font-semibold text-muted transition hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={!canAct || !csrfToken}
-                onclick={handleVoid}
+                onclick={() => closeSession('discard')}
               >
-                {voidPending ? m.reconcile_voiding() : m.reconcile_void()}
+                {closing === 'discard' ? m.reconcile_voiding() : m.reconcile_void()}
               </button>
             </div>
           </div>

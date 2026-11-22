@@ -300,6 +300,13 @@
   "reconcile_start_submit": "Начать сверку",
   "reconcile_start_submitting": "Начинаем…",
   "reconcile_start_invalid_balance": "Введите корректную сумму, например 1234,56.",
+  "reconcile_start_finished": "Сверка по счёту {account} завершена (выписка от {date}).",
+  "reconcile_start_discarded": "Сверка по счёту {account} отменена (выписка от {date}).",
+  "reconcile_start_checking_result": "Проверяем результат сверки по счёту {account} (выписка от {date})…",
+  "reconcile_start_result_unknown": "Не удалось проверить результат сверки по счёту {account} (выписка от {date}).",
+  "reconcile_start_result_open": "Сверка по счёту {account} ещё открыта (выписка от {date}). Вернитесь к сверке, чтобы повторить действие.",
+  "reconcile_start_retry_status": "Проверить статус ещё раз",
+  "reconcile_start_return_to_session": "Вернуться к сверке",
   "reconcile_session_title": "Подтверждение проводок",
   "reconcile_session_copy": "Отметьте каждую проводку, которая есть в выписке. Расхождение пересчитывается на ходу.",
   "reconcile_session_account": "Счёт",
@@ -2253,5 +2260,11 @@
   "reconciliation_age_commodity": "{code}: {state}",
   "reconciliation_age_folded": "{account}: {state}",
   "reconcile_start_commodity_lost": "Валюта этой выписки больше не предлагается для этого счёта. Выберите валюту выписки перед началом.",
-  "reconcile_start_currency_placeholder": "Выберите валюту"
+  "reconcile_start_currency_placeholder": "Выберите валюту",
+  "transactions_tag_archived": "{name} (в архиве)",
+  "transactions_tags_archived_help": "Архивные метки остаются у этой транзакции, пока вы их не снимете. Добавлять можно только активные метки.",
+  "transactions_tags_archived_not_added": "Архивные метки не добавляются к новой транзакции.",
+  "transactions_tags_archived_template_help": "Архивные метки остаются в этом шаблоне, но новые повторения блокируются, пока вы их не уберёте или не замените.",
+  "transactions_posting_tags": "Метки строки",
+  "transactions_posting_tag_remove": "Убрать метку {name}"
 }

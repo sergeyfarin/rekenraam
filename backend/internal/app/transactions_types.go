@@ -455,6 +455,11 @@ type cleanTransactionOptions struct {
 	ForcedStatus     string
 	ExistingLineKeys map[string]bool
 	ExistingPostings map[string]existingPostingState
+	// ExistingTagIDs are the tags the stored transaction already carries.
+	// Restating one keeps an assignment even after its tag is archived; only
+	// a fresh assignment must name an active tag (#650). A posting line's own
+	// stored tags come from ExistingPostings.
+	ExistingTagIDs map[int64]bool
 	// AllowSubledgerManagedPostings lifts the guard that keeps generic
 	// transaction writes out of accounts the investment subledger owns (T-96).
 	// Only InvestmentService sets it, through

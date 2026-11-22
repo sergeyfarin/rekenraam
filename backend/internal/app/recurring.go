@@ -144,7 +144,7 @@ func (s *RecurringService) CreateTemplate(ctx context.Context, input WriteRecurr
 	spec := db.RecurringTemplateSpec{Enabled: true, TransactionKind: "ordinary", IntervalCount: 1, LeadDays: 5}
 	mergeRecurringPatch(&spec, input.Patch)
 	spec.GenerateFrom = max(today, strings.TrimSpace(spec.StartsOn))
-	spec, err = s.cleanTemplate(ctx, spec, today)
+	spec, err = s.cleanTemplate(ctx, spec, today, nil)
 	if err != nil {
 		return RecurringTemplate{}, err
 	}
@@ -194,7 +194,10 @@ func (s *RecurringService) UpdateTemplate(ctx context.Context, input WriteRecurr
 			spec.PayeeName = ""
 		}
 	} else {
-		spec, err = s.cleanTemplate(ctx, spec, today)
+		// A tag the template already names stays valid after it is archived,
+		// so an unrelated edit keeps it; each occurrence still assigns it afresh
+		// and generation refuses that until the owner removes it (#656).
+		spec, err = s.cleanTemplate(ctx, spec, today, tagIDSet(current.Spec.TagIDs))
 	}
 	if err != nil {
 		return RecurringTemplate{}, err
@@ -326,7 +329,10 @@ func cleanRecurringTemplateName(name string) (string, error) {
 	return name, nil
 }
 
-func (s *RecurringService) cleanTemplate(ctx context.Context, spec db.RecurringTemplateSpec, today string) (db.RecurringTemplateSpec, error) {
+// cleanTemplate validates a template. retainedTagIDs are tags the stored
+// template already names; they stay valid after being archived. Generation
+// passes none, so an occurrence never assigns an archived tag.
+func (s *RecurringService) cleanTemplate(ctx context.Context, spec db.RecurringTemplateSpec, today string, retainedTagIDs map[int64]bool) (db.RecurringTemplateSpec, error) {
 	ctx, referenceErr := s.settings.referenceContext(ctx, s.now())
 	if referenceErr != nil {
 		return db.RecurringTemplateSpec{}, referenceErr
@@ -419,7 +425,7 @@ func (s *RecurringService) cleanTemplate(ctx context.Context, spec db.RecurringT
 		PayeeID: spec.PayeeID, PayeeName: spec.PayeeName, Description: spec.Description,
 		NoteMarkdown: spec.NoteMarkdown, TagIDs: spec.TagIDs,
 		JournalEntries: []JournalEntryInput{{EntryKind: "ordinary", Postings: postings}},
-	}, cleanTransactionOptions{DefaultStatus: "posted"})
+	}, cleanTransactionOptions{DefaultStatus: "posted", ExistingTagIDs: retainedTagIDs})
 	if err != nil {
 		return spec, err
 	}

@@ -18,6 +18,7 @@ const (
 	tagIconMaxBytes      = 64
 	tagJSONMaxBytes      = 10000
 	tagListLimit         = 2000
+	tagListMaxIDs        = 200
 	tagDirectoryPageSize = 50
 	defaultTagKind       = "custom"
 	tagLifecycleArchive  = "archived tag"
@@ -58,6 +59,10 @@ type ListTagsInput struct {
 	Kind            string
 	IncludeArchived bool
 	Query           string
+	// IDs narrows the list to the named tags, so a form can resolve the tags
+	// a record carries, archived ones included, in one bounded read instead of
+	// from the capped catalog (#657). The other filters still apply.
+	IDs []int64
 }
 
 type CreateTagInput struct {
@@ -118,12 +123,22 @@ func (s *TagService) ListTags(ctx context.Context, input ListTagsInput) ([]Tag, 
 		return nil, ValidationError{Message: "tag kind is invalid"}
 	}
 
+	if len(input.IDs) > tagListMaxIDs {
+		return nil, ValidationError{Message: fmt.Sprintf("at most %d tag ids can be listed at once", tagListMaxIDs)}
+	}
+	for _, id := range input.IDs {
+		if id <= 0 {
+			return nil, ValidationError{Message: "tag id is invalid"}
+		}
+	}
+
 	records, err := s.repository.ListTags(ctx, db.ListTagsParams{
 		BookID:          BookID,
 		Status:          status,
 		Kind:            kind,
 		IncludeArchived: input.IncludeArchived,
 		Query:           strings.TrimSpace(input.Query),
+		IDs:             input.IDs,
 		Limit:           tagListLimit,
 	})
 	if err != nil {

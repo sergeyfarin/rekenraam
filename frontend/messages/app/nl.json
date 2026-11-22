@@ -300,6 +300,13 @@
   "reconcile_start_submit": "Beginnen met afstemmen",
   "reconcile_start_submitting": "Starten…",
   "reconcile_start_invalid_balance": "Vul een geldig bedrag in, bijvoorbeeld 1234,56.",
+  "reconcile_start_finished": "Afstemming voor {account} voltooid (afschrift van {date}).",
+  "reconcile_start_discarded": "Afstemming voor {account} verworpen (afschrift van {date}).",
+  "reconcile_start_checking_result": "Resultaat van de afstemming voor {account} controleren (afschrift van {date})…",
+  "reconcile_start_result_unknown": "Het resultaat van de afstemming voor {account} kon niet worden gecontroleerd (afschrift van {date}).",
+  "reconcile_start_result_open": "De afstemming voor {account} staat nog open (afschrift van {date}). Ga terug naar de afstemming om het opnieuw te proberen.",
+  "reconcile_start_retry_status": "Status opnieuw controleren",
+  "reconcile_start_return_to_session": "Terug naar afstemming",
   "reconcile_session_title": "Boekingsregels bevestigen",
   "reconcile_session_copy": "Vink elke boekingsregel aan die op het afschrift staat. Het verschil loopt vanzelf mee.",
   "reconcile_session_account": "Rekening",
@@ -2185,5 +2192,11 @@
   "reconciliation_age_commodity": "{code}: {state}",
   "reconciliation_age_folded": "{account}: {state}",
   "reconcile_start_commodity_lost": "De valuta van dit afschrift wordt niet meer aangeboden voor deze rekening. Kies de valuta van het afschrift voordat je begint.",
-  "reconcile_start_currency_placeholder": "Kies een valuta"
+  "reconcile_start_currency_placeholder": "Kies een valuta",
+  "transactions_tag_archived": "{name} (gearchiveerd)",
+  "transactions_tags_archived_help": "Gearchiveerde labels blijven op deze transactie staan tot je ze uitvinkt. Alleen actieve labels kunnen worden toegevoegd.",
+  "transactions_tags_archived_not_added": "Gearchiveerde labels worden niet aan een nieuwe transactie toegevoegd.",
+  "transactions_tags_archived_template_help": "Gearchiveerde labels blijven op dit sjabloon staan, maar nieuwe herhalingen worden geblokkeerd tot je ze verwijdert of vervangt.",
+  "transactions_posting_tags": "Labels van de regel",
+  "transactions_posting_tag_remove": "Label {name} verwijderen"
 }

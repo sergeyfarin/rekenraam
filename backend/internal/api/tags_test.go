@@ -377,3 +377,66 @@ func mutateTag(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, c
 
 	return response
 }
+
+// TestTagListByIDResolvesAssignmentsPastTheCatalogLimit pins #657: a large
+// archived catalog must neither hide active choices nor the archived tags a
+// record already carries. Active choices come from the default list, and
+// assigned tags are resolved by ID in one bounded read, whatever their status
+// or position in the directory.
+func TestTagListByIDResolvesAssignmentsPastTheCatalogLimit(t *testing.T) {
+	t.Parallel()
+
+	handler, database := newSetupTestHandler(t)
+	sessionCookie, csrfToken := createOwnerSession(t, handler)
+	createBookForSession(t, handler, sessionCookie, csrfToken, "Personal")
+	active := createTagForSession(t, handler, sessionCookie, csrfToken, `{"name":"Zz active","kind":"custom"}`)
+	assigned := createTagForSession(t, handler, sessionCookie, csrfToken, `{"name":"Zz assigned","kind":"custom"}`)
+	mutateTag(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/tags/"+strconvFormatInt(assigned.ID)+"/archive", http.StatusOK)
+	_, err := database.Exec(`
+		WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 2001)
+		INSERT INTO tags (book_id, name, kind, status, created_at, created_by_user_id, updated_at, updated_by_user_id)
+		SELECT 1, printf('Archived %04d', i), 'project', 'archived', '2026-01-01T00:00:00Z', u.id, '2026-01-01T00:00:00Z', u.id
+		FROM n, (SELECT id FROM users LIMIT 1) u
+	`)
+	require.NoError(t, err)
+
+	activeOnly := listTagsForSession(t, handler, sessionCookie, "")
+	require.Len(t, activeOnly.Tags, 1)
+	assert.Equal(t, active.ID, activeOnly.Tags[0].ID)
+
+	combined := listTagsForSession(t, handler, sessionCookie, "?include_archived=true")
+	assert.NotContains(t, tagIDs(combined.Tags), assigned.ID, "the combined catalog is capped, which is why the editor must not rely on it")
+
+	byID := listTagsForSession(t, handler, sessionCookie, "?include_archived=true&id="+strconvFormatInt(assigned.ID)+"&id="+strconvFormatInt(active.ID))
+	assert.ElementsMatch(t, []int64{assigned.ID, active.ID}, tagIDs(byID.Tags))
+	statuses := map[int64]string{}
+	for _, tag := range byID.Tags {
+		statuses[tag.ID] = tag.Status
+	}
+	assert.Equal(t, "archived", statuses[assigned.ID])
+
+	withoutArchived := listTagsForSession(t, handler, sessionCookie, "?id="+strconvFormatInt(assigned.ID))
+	assert.Empty(t, withoutArchived.Tags, "id narrows the list; it does not override the status filter")
+
+	tooMany := strings.Repeat("&id=1", 201)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tags?include_archived=true"+tooMany, nil)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	assert.Equal(t, http.StatusBadRequest, res.Code)
+	for _, bad := range []string{"0", "x", "-3"} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/tags?id="+bad, nil)
+		req.AddCookie(sessionCookie)
+		res := httptest.NewRecorder()
+		handler.ServeHTTP(res, req)
+		assert.Equal(t, http.StatusBadRequest, res.Code, bad)
+	}
+}
+
+func tagIDs(tags []tagResponse) []int64 {
+	ids := make([]int64, len(tags))
+	for i, tag := range tags {
+		ids[i] = tag.ID
+	}
+	return ids
+}

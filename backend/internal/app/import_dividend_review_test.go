@@ -260,6 +260,51 @@ func TestImportedDividendRepairPreservesUnchangedReconciliationAndRejectsStaleRe
 	require.NoError(t, snapshot.Rollback())
 }
 
+// TestImportedDividendRepairKeepsArchivedTagAssignments pins the #650 bug
+// class on the dividend repair: it restates the original's transaction and
+// posting tags, so a tag archived after the import must not block the repair.
+func TestImportedDividendRepairKeepsArchivedTagAssignments(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f, batch, rowID, transactionID, _ := legacyDividendFallback(t, "100.00")
+	tags := NewTagService(db.NewTagRepository(f.database))
+	tag, err := tags.CreateTag(ctx, CreateTagInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "tag.create", Name: "Retired broker", Kind: "project"})
+	require.NoError(t, err)
+	original, err := f.importService.transactionService.Transaction(ctx, transactionID)
+	require.NoError(t, err)
+	var cashLineID int64
+	for _, entry := range original.JournalEntries {
+		for _, posting := range entry.Postings {
+			if posting.AccountID == f.cashAccountID {
+				cashLineID = posting.PostingLineID
+			}
+		}
+	}
+	require.NotZero(t, cashLineID)
+	_, err = f.database.ExecContext(ctx, `INSERT INTO transaction_tags (book_id, transaction_id, tag_id, created_at, created_by_user_id) VALUES (?, ?, ?, '2026-04-01T00:00:00Z', ?)`, BookID, transactionID, tag.ID, f.ownerUserID)
+	require.NoError(t, err)
+	_, err = f.database.ExecContext(ctx, `INSERT INTO posting_tags (book_id, posting_line_id, tag_id, created_at, created_by_user_id) VALUES (?, ?, ?, '2026-04-01T00:00:00Z', ?)`, BookID, cashLineID, tag.ID, f.ownerUserID)
+	require.NoError(t, err)
+	_, err = tags.ArchiveTag(ctx, TagLifecycleInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", TagID: tag.ID})
+	require.NoError(t, err)
+
+	current, err := f.importService.transactionService.Transaction(ctx, transactionID)
+	require.NoError(t, err)
+	repaired, err := f.importService.ReviewImportDividend(ctx, ReviewImportDividendInput{OwnerUserID: f.ownerUserID, BatchID: batch, RowID: rowID, ExpectedTransactionVersionID: current.VersionID, Reason: "payer attribution only", Resolution: reviewedDividendResolution(f, "100.00", "0")})
+	require.NoError(t, err)
+	require.Contains(t, repaired.TagIDs, tag.ID)
+	var cashTags []int64
+	for _, entry := range repaired.JournalEntries {
+		for _, posting := range entry.Postings {
+			if posting.AccountID == f.cashAccountID {
+				require.Equal(t, cashLineID, posting.PostingLineID)
+				cashTags = posting.TagIDs
+			}
+		}
+	}
+	require.Contains(t, cashTags, tag.ID)
+}
+
 func TestImportedDividendRepairGrossTaxChangeRequiresReconciliationOverride(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

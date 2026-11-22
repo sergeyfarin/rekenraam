@@ -90,11 +90,22 @@ func listTags(logger *slog.Logger, authService *app.AuthService, tagService *app
 			return
 		}
 
+		ids := make([]int64, 0, len(r.URL.Query()["id"]))
+		for _, raw := range r.URL.Query()["id"] {
+			id, err := strconv.ParseInt(raw, 10, 64)
+			if err != nil || id <= 0 {
+				writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "id is invalid")
+				return
+			}
+			ids = append(ids, id)
+		}
+
 		tags, err := tagService.ListTags(r.Context(), app.ListTagsInput{
 			Status:          r.URL.Query().Get("status"),
 			Kind:            r.URL.Query().Get("kind"),
 			IncludeArchived: includeArchived,
 			Query:           r.URL.Query().Get("q"),
+			IDs:             ids,
 		})
 		if err != nil {
 			writeTagServiceError(w, r, logger, "list tags", err)
