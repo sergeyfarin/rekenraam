@@ -113,7 +113,13 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(categoryField).toHaveAttribute('aria-activedescendant', /category-0$/);
     await page.keyboard.press('Enter');
     await expect(dialog.getByText(category.name, { exact: true })).toBeVisible();
-    await expect(dialog.getByRole('button', { name: 'Clear selection', exact: true })).toBeFocused();
+    const clearCategory = dialog.getByRole('button', { name: 'Clear selection', exact: true });
+    await expect(clearCategory).toBeFocused();
+    await clearCategory.click();
+    await expect(categoryField).toBeFocused();
+    await categoryField.fill(category.name);
+    await categoryOptions.getByRole('option').filter({ hasText: category.name }).click();
+    await expect(clearCategory).toBeFocused();
     const created = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/transactions');
     await dialog.getByRole('button', { name: 'Save transaction', exact: true }).press('Enter');
     expect((await created).status()).toBe(201);
@@ -174,6 +180,10 @@ test.describe('on a touch phone', () => {
       await expect(addTile(page)).toBeFocused();
       await addTile(page).tap();
       await expect(dialog.getByLabel('Description', { exact: true })).toHaveValue('');
+      const category = dialog.getByRole('combobox', { name: 'Category', exact: true });
+      await category.tap();
+      await dialog.getByRole('listbox', { name: 'Category', exact: true }).getByRole('option').first().tap();
+      await expect(dialog.getByRole('button', { name: 'Clear selection', exact: true })).toBeFocused();
     });
   }
 });

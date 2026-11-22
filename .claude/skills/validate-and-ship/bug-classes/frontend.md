@@ -209,3 +209,7 @@ When the input owns focus through `aria-activedescendant`, set
 overflow in `home-entry.spec.ts` and `header-search.spec.ts`. The source guard
 `listbox-focus.test.ts` covers scrollable listbox utilities and exempts the
 instrument pickers whose option buttons participate in the Tab sequence.
+Keep focus on the input during pointer interaction with a popup that closes on
+blur (`category-scrollbar.spec.ts` exercises the native drag). When selecting
+replaces the input, move focus to the replacement control for both pointer and
+keyboard selection (`home-entry.spec.ts`).
