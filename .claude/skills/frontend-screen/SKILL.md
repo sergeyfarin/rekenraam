@@ -104,9 +104,11 @@ description: SvelteKit frontend rules for Rekenraam - static adapter constraints
   overlay — it leaves focus on the page behind it. A side panel that covers
   the page only below `lg` attaches `phoneModal` from
   `#lib/components/modal-focus.ts` (#342).
-- A combobox using `aria-activedescendant` sets `tabindex="-1"` on both a
-  scrollable listbox and its option buttons. Chromium can make the overflowing
-  popup a Tab stop by itself.
+- A combobox using `aria-activedescendant` sets `tabindex="-1"` on the popup's
+  scroll container and its option buttons. Chromium can make the overflowing
+  scroll container a Tab stop. `listbox-focus.test.ts` checks listboxes with
+  their own overflow utility. Inspect option buttons and separate scrolling
+  wrappers in review.
 
 ## i18n (every user-visible string, no exceptions)
 
