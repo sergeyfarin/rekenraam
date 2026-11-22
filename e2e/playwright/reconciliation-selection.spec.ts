@@ -251,66 +251,72 @@ for (const action of ['Finish', 'Discard'] as const) {
   });
 }
 
-test('a failed Finish after Back can verify status and return to the saved session (#647)', async ({ page }) => {
-  const { posting, finish, checkpoints, sessionPath, day } = await startBalancedSession(page);
-  const arrived = Promise.withResolvers<void>();
-  const release = Promise.withResolvers<void>();
-  const startArrived = Promise.withResolvers<void>();
-  const releaseStart = Promise.withResolvers<void>();
-  let finishRequests = 0;
-  await page.route(`**${sessionPath}/finish`, async (route) => {
-    finishRequests++;
-    if (finishRequests > 1) return route.continue();
-    arrived.resolve();
-    await release.promise;
-    await route.abort('failed');
-  });
-
-  try {
-    await finish.click();
-    await arrived.promise;
-    await page.getByRole('button', { name: 'Reconcile', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Start a reconciliation', exact: true })).toBeVisible();
-    await page.route(`**${sessionPath}`, (route) => route.abort('failed'), { times: 1 });
-    release.resolve();
-
-    await expect(page.getByRole('alert').filter({ hasText: 'Could not verify the reconciliation result' })).toBeVisible();
-    const returnToSession = page.getByRole('button', { name: 'Return to reconciliation', exact: true });
-    await expect(returnToSession).toHaveCount(0);
-    await page.getByRole('button', { name: 'Check status again', exact: true }).click();
-    await expect(page.getByRole('alert').filter({ hasText: 'The reconciliation is still open' })).toBeVisible();
-    expect(await apiJSON(page, 'GET', sessionPath)).toMatchObject({ status: 'open' });
-    expect(await checkpoints()).toEqual([]);
-    expect(finishRequests).toBe(1);
-
-    // An in-flight Start owns the next transition. When it fails, Return becomes available again.
-    await page.route('**/api/v1/accounts/*/reconciliations/start', async (route) => {
-      startArrived.resolve();
-      await releaseStart.promise;
+for (const action of ['Finish', 'Discard'] as const) {
+  test(`a failed ${action} after Back can verify status and return to the saved session (#647)`, async ({ page }) => {
+    const { posting, finish, checkpoints, sessionPath, day } = await startBalancedSession(page);
+    const discard = page.getByRole('button', { name: 'Discard', exact: true });
+    const close = action === 'Finish' ? finish : discard;
+    const endpoint = action === 'Finish' ? 'finish' : 'void';
+    const arrived = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const startArrived = Promise.withResolvers<void>();
+    const releaseStart = Promise.withResolvers<void>();
+    let actionRequests = 0;
+    await page.route(`**${sessionPath}/${endpoint}`, async (route) => {
+      actionRequests++;
+      if (actionRequests > 1) return route.continue();
+      arrived.resolve();
+      await release.promise;
       await route.abort('failed');
-    }, { times: 1 });
-    await page.getByLabel('Statement closing date', { exact: true }).fill(day);
-    await page.getByLabel('Statement ending balance', { exact: true }).fill('17.00');
-    await page.getByRole('button', { name: 'Start reconciling', exact: true }).click();
-    await startArrived.promise;
-    await expect(returnToSession).toBeDisabled();
-    releaseStart.resolve();
+    });
 
-    await returnToSession.click();
-    await expect(page.getByRole('heading', { name: 'Clear postings', exact: true })).toBeFocused();
-    await expect(posting).toBeChecked();
-    await expect(page.getByLabel('Reason', { exact: true })).toHaveValue('Checked against the statement');
-    await finish.click();
-    await expect(page.getByRole('heading', { name: 'Reconciliation complete', exact: true })).toBeVisible();
-    expect(await apiJSON(page, 'GET', sessionPath)).toMatchObject({ status: 'finished' });
-    expect(await checkpoints()).toHaveLength(1);
-    expect(finishRequests).toBe(2);
-  } finally {
-    release.resolve();
-    releaseStart.resolve();
-    await page.unrouteAll({ behavior: 'wait' });
-  }
-});
+    try {
+      await close.click();
+      await arrived.promise;
+      await page.getByRole('button', { name: 'Reconcile', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Start a reconciliation', exact: true })).toBeVisible();
+      await page.route(`**${sessionPath}`, (route) => route.abort('failed'), { times: 1 });
+      release.resolve();
+
+      await expect(page.getByRole('alert').filter({ hasText: 'Could not verify the reconciliation result' })).toBeVisible();
+      const returnToSession = page.getByRole('button', { name: 'Return to reconciliation', exact: true });
+      await expect(returnToSession).toHaveCount(0);
+      await page.getByRole('button', { name: 'Check status again', exact: true }).click();
+      await expect(page.getByRole('alert').filter({ hasText: 'The reconciliation is still open' })).toBeVisible();
+      expect(await apiJSON(page, 'GET', sessionPath)).toMatchObject({ status: 'open' });
+      expect(await checkpoints()).toEqual([]);
+      expect(actionRequests).toBe(1);
+
+      // An in-flight Start owns the next transition. When it fails, Return becomes available again.
+      await page.route('**/api/v1/accounts/*/reconciliations/start', async (route) => {
+        startArrived.resolve();
+        await releaseStart.promise;
+        await route.abort('failed');
+      }, { times: 1 });
+      await page.getByLabel('Statement closing date', { exact: true }).fill(day);
+      await page.getByLabel('Statement ending balance', { exact: true }).fill('17.00');
+      await page.getByRole('button', { name: 'Start reconciling', exact: true }).click();
+      await startArrived.promise;
+      await expect(returnToSession).toBeDisabled();
+      releaseStart.resolve();
+
+      await returnToSession.click();
+      await expect(page.getByRole('heading', { name: 'Clear postings', exact: true })).toBeFocused();
+      await expect(posting).toBeChecked();
+      await expect(page.getByLabel('Reason', { exact: true })).toHaveValue('Checked against the statement');
+      await close.click();
+      const destination = action === 'Finish' ? 'Reconciliation complete' : 'Start a reconciliation';
+      await expect(page.getByRole('heading', { name: destination, exact: true })).toBeVisible();
+      expect(await apiJSON(page, 'GET', sessionPath)).toMatchObject({ status: action === 'Finish' ? 'finished' : 'voided' });
+      expect(await checkpoints()).toHaveLength(action === 'Finish' ? 1 : 0);
+      expect(actionRequests).toBe(2);
+    } finally {
+      release.resolve();
+      releaseStart.resolve();
+      await page.unrouteAll({ behavior: 'wait' });
+    }
+  });
+}
 
 test('the start form reports a committed Finish when its response is lost (#647)', async ({ page }) => {
   const { finish, checkpoints, sessionPath, accountName } = await startBalancedSession(page);
