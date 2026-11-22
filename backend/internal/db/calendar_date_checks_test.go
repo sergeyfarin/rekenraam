@@ -43,13 +43,13 @@ func TestInstalledCalendarDateChecks(t *testing.T) {
 func requireCalendarDateCheckInventory(t *testing.T, database *sql.DB) {
 	t.Helper()
 	expected := make(map[string]int)
-	listed := make(map[string]bool)
+	listed := make([]string, 0, len(calendarDateColumns))
 	for _, column := range calendarDateColumns {
-		key := column.table + "." + column.name
-		require.False(t, listed[key], "duplicate inventory entry %s", key)
-		listed[key] = true
+		listed = append(listed, column.table+"."+column.name)
 		expected[column.table]++
 	}
+	require.ElementsMatch(t, listed, installedCalendarDateColumnNames(t, database),
+		"named calendar-date columns in the installed schema")
 
 	// Every inventoried column is also tested below with its own installed
 	// inline CHECK. Matching the count per table detects any additional CHECK,
@@ -76,6 +76,28 @@ func requireCalendarDateCheckInventory(t *testing.T, database *sql.DB) {
 	}
 	require.NoError(t, rows.Err())
 	require.Equal(t, expected, installed, "inventory of installed date CHECKs by table")
+}
+
+func installedCalendarDateColumnNames(t *testing.T, database *sql.DB) []string {
+	t.Helper()
+	// Find date columns even when their CHECK is missing or only checks shape.
+	rows, err := database.Query(`SELECT tbl.name || '.' || col.name
+		FROM sqlite_schema AS tbl CROSS JOIN pragma_table_info(tbl.name) AS col
+		WHERE tbl.type = 'table' AND upper(col.type) = 'TEXT'
+			AND (lower(col.name) GLOB '*_date' OR lower(col.name) GLOB '*_on'
+				OR lower(col.name) GLOB '*_from' OR lower(col.name) GLOB '*_to'
+				OR lower(col.name) GLOB '*period_start*' OR lower(col.name) GLOB '*_day')`)
+	require.NoError(t, err)
+	defer rows.Close()
+
+	var names []string
+	for rows.Next() {
+		var name string
+		require.NoError(t, rows.Scan(&name))
+		names = append(names, name)
+	}
+	require.NoError(t, rows.Err())
+	return names
 }
 
 func requireCalendarDateCheckValues(t *testing.T, database *sql.DB, column, check string) {
