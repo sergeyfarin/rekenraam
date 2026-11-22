@@ -4,11 +4,11 @@ SearchCatalogItem:
   properties:
     kind:
       type: string
-      enum: [account, category, instrument]
+      enum: [account, category, instrument, payee]
     id:
       type: integer
       format: int64
-      description: Account/category ID or instrument commodity ID (its page identity).
+      description: Account, category or payee ID, or instrument commodity ID (its page identity).
     name:
       type: string
     code:
@@ -18,7 +18,7 @@ SearchCatalogItem:
       description: Resolve seeded category labels in the active frontend locale.
     starter_key:
       type: [string, 'null']
-      description: The starter account key from an account's metadata; labels an unnamed starter account. Null for categories and instruments.
+      description: The starter account key from an account's metadata. Null for other kinds.
     currency_code:
       type: [string, 'null']
       description: The currency code from the starter account's metadata.

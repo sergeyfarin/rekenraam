@@ -22,6 +22,9 @@ func TestSearchCatalogAuthenticationPaginationAndLocalizationKeys(t *testing.T) 
 	account := createAccountForSession(t, handler, cookie, csrf, `{"name":"Café checking","account_class":"asset","account_kind":"checking","default_commodity_id":`+strconvFormatInt(currencyID)+`,"allows_postings":true}`)
 	f := investmentAPITestFixture{sessionCookie: cookie, csrfToken: csrf}
 	instrument := createInstrumentForSession(t, handler, f, "SEARCH")
+	payee := createPayeeForSession(t, handler, cookie, csrf, `{"name":"Search Payee"}`)
+	archived := createPayeeForSession(t, handler, cookie, csrf, `{"name":"Archived Search Payee"}`)
+	mutatePayee(t, handler, cookie, csrf, http.MethodPost, "/api/v1/payees/"+strconvFormatInt(archived.ID)+"/archive", `{}`, http.StatusOK)
 	seen := map[string]bool{}
 	cursor := ""
 	for {
@@ -39,6 +42,9 @@ func TestSearchCatalogAuthenticationPaginationAndLocalizationKeys(t *testing.T) 
 			if item.Kind == "account" {
 				assert.Equal(t, account.ID, item.ID)
 			}
+			if item.Kind == "payee" && item.ID == archived.ID {
+				assert.Equal(t, "archived", item.Status)
+			}
 		}
 		if result.NextCursor == "" {
 			break
@@ -46,8 +52,11 @@ func TestSearchCatalogAuthenticationPaginationAndLocalizationKeys(t *testing.T) 
 		require.NotEqual(t, cursor, result.NextCursor)
 		cursor = result.NextCursor
 	}
-	assert.Len(t, seen, len(categories.Categories)+2)
+	assert.Len(t, seen, len(categories.Categories)+4)
 	assert.True(t, seen["instrument:"+strconvFormatInt(instrument.CommodityID)])
+	assert.True(t, seen["payee:"+strconvFormatInt(payee.ID)])
+	assert.True(t, seen["payee:"+strconvFormatInt(archived.ID)])
+	doInvestmentRequest(t, handler, cookie, "", http.MethodGet, "/api/v1/search/catalog?cursor=payee:"+strconvFormatInt(payee.ID), nil, http.StatusOK)
 	for _, query := range []string{"limit=0", "limit=501", "limit=x", "cursor=account:-1", "cursor=category:01", "cursor=oops:1", "cursor=instrument:1:2"} {
 		doInvestmentRequest(t, handler, cookie, "", http.MethodGet, "/api/v1/search/catalog?"+query, nil, http.StatusBadRequest)
 	}

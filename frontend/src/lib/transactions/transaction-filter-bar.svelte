@@ -4,8 +4,9 @@
   import { createQuery } from '@tanstack/svelte-query';
   import { m } from '#lib/paraglide/messages.js';
   import { accountsQueryOptions } from '#lib/api/accounts.ts';
-  import { payeesQueryOptions } from '#lib/api/payees.ts';
+  import { payeesQueryOptions, payeeQueryOptions } from '#lib/api/payees.ts';
   import type { TransactionListOptions } from '#lib/api/transactions.ts';
+  import { hasInvertedTransactionRange } from './transaction-url-filters.ts';
 
   export type TransactionFilters = Pick<
     TransactionListOptions,
@@ -67,9 +68,20 @@
 
   const payeesQuery = $derived(
     show.payee
-      ? createQuery(() => payeesQueryOptions({ q: payeeSearchDebounced || undefined }))
+      ? createQuery(() => ({
+          ...payeesQueryOptions({ q: payeeSearchDebounced }),
+          enabled: filters.payeeID === undefined && !!payeeSearchDebounced
+        }))
       : null
   );
+  const selectedPayee = createQuery(() => payeeQueryOptions(show.payee ? filters.payeeID : undefined));
+  $effect(() => () => clearTimeout(payeeDebounceTimer));
+
+  function resetPayeeSearch() {
+    clearTimeout(payeeDebounceTimer);
+    payeeSearch = '';
+    payeeSearchDebounced = '';
+  }
 
   const visibleAccounts = $derived(
     accountsQuery?.data?.accounts?.filter((a) => a.status === 'active' && !isSubledgerManagedAccountKind(a.account_kind)) ?? []
@@ -163,55 +175,51 @@
   {/if}
 
   {#if show.payee}
-    <label class="block min-w-[12rem]">
+    <div class="block min-w-48 max-w-full">
       <span class="text-xs font-semibold uppercase tracking-[0.12em] text-muted"
         >{m.transactions_filter_payee()}</span
       >
-      <!-- Simple filterable select: input drives the query; select picks the value. -->
       <div class="relative mt-1.5">
-        <input
-          type="search"
-          value={payeeSearch}
-          oninput={onPayeeInput}
-          class={controlClass + ' mt-0 pr-8'}
-          placeholder={m.transactions_filter_payee_placeholder()}
-        />
-        {#if visiblePayees.length > 0 && payeeSearch}
-          <ul
-            class="absolute z-20 mt-1 w-full rounded-(--radius-control) border border-border bg-surface text-sm shadow-(--shadow-panel)"
-          >
-            <li>
-              <button
-                type="button"
-                class="w-full px-3 py-2 text-left text-muted hover:bg-row-hover"
-                onclick={() => {
-                  filters = { ...filters, payeeID: undefined };
-                  payeeSearch = '';
-                  payeeSearchDebounced = '';
-                }}
-              >
-                {m.transactions_filter_account_all()}
-              </button>
-            </li>
-            {#each visiblePayees as payee (payee.id)}
-              <li>
-                <button
-                  type="button"
-                  class="w-full px-3 py-2 text-left hover:bg-row-hover"
-                  onclick={() => {
-                    filters = { ...filters, payeeID: payee.id };
-                    payeeSearch = payee.name;
-                    payeeSearchDebounced = payee.name;
-                  }}
-                >
-                  {payee.name}
-                </button>
-              </li>
-            {/each}
-          </ul>
+        {#if filters.payeeID !== undefined}
+          <div class="flex min-h-10 items-center gap-2">
+            <span class="min-w-0 text-sm text-foreground wrap-anywhere">{selectedPayee.data?.name ?? `#${filters.payeeID}`}</span>
+            <button type="button" class="min-h-10 shrink-0 text-sm text-accent underline"
+              onclick={() => { resetPayeeSearch(); filters = { ...filters, payeeID: undefined }; }}>
+              {m.payees_clear_filter()}
+            </button>
+          </div>
+        {:else}
+          <input
+            type="search"
+            aria-label={m.transactions_filter_payee()}
+            value={payeeSearch}
+            oninput={onPayeeInput}
+            class={controlClass + ' mt-0 pr-8'}
+            placeholder={m.transactions_filter_payee_placeholder()}
+          />
+          {#if visiblePayees.length > 0 && payeeSearch.trim() === payeeSearchDebounced.trim()}
+            <ul
+              class="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-(--radius-control) border border-border bg-surface text-sm shadow-(--shadow-panel)"
+            >
+              {#each visiblePayees as payee (payee.id)}
+                <li>
+                  <button
+                    type="button"
+                    class="w-full px-3 py-2 text-left wrap-anywhere hover:bg-row-hover"
+                    onclick={() => {
+                      filters = { ...filters, payeeID: payee.id };
+                      resetPayeeSearch();
+                    }}
+                  >
+                    {payee.name}
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
         {/if}
       </div>
-    </label>
+    </div>
   {/if}
 
   {#if show.dateRange}
@@ -260,3 +268,7 @@
     </label>
   {/if}
 </div>
+
+{#if show.dateRange && hasInvertedTransactionRange(filters)}
+  <p role="status" class="mt-2 text-sm text-muted">{m.transactions_filter_date_inverted()}</p>
+{/if}

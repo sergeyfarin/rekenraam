@@ -1,4 +1,5 @@
 {
+  "transactions_filter_date_inverted": "From is after To. Showing transactions without a date range.",
   "api_error_recurring_occurrence_already_materialized": "This occurrence was already handled or changed. Reload before reviewing it again.",
   "api_error_recurring_template_unbalanced": "The recurring template must balance for each instrument.",
   "api_error_reconciliation_start_stale": "The statement this reconciliation started from is no longer current. Void it and start a new reconciliation.",
@@ -649,6 +650,9 @@
   "transactions_payee_confirm_create": "Create “{name}”",
   "transactions_payee_confirm_creating": "Creating…",
   "transactions_payee_confirm_edit": "Edit the name",
+  "transactions_payee_lookup_loading": "Searching payees…",
+  "transactions_payee_lookup_failed": "Could not search payees.",
+  "transactions_payee_lookup_too_long": "The payee name is too long.",
   "transactions_field_posting_account": "Account",
   "transactions_field_posting_amount": "Amount",
   "transactions_field_posting_commodity": "Currency",

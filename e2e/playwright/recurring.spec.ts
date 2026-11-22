@@ -239,6 +239,8 @@ test('editing a recurring template preserves payee, description and posting deta
  const dialog=page.getByRole('dialog');
  const payeeInput=dialog.getByPlaceholder('Search or enter payee name');
  await expect(payeeInput).toHaveValue(payee.name);
+ await payeeInput.focus();
+ await expect(dialog.getByRole('option',{name:payee.name,exact:true})).toBeVisible();
  await dialog.getByLabel('Description',{exact:true}).fill(`${name} edited`);
  await payeeInput.fill('Changed payee');
  await expect(payeeInput).toHaveValue('Changed payee');

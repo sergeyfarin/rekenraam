@@ -35,7 +35,7 @@ func (s *SearchService) Catalog(ctx context.Context, cursor string, limit int) (
 	var id int64
 	if cursor != "" {
 		parts := strings.Split(cursor, ":")
-		if len(parts) != 2 || (parts[0] != "account" && parts[0] != "category" && parts[0] != "instrument") {
+		if len(parts) != 2 || (parts[0] != "account" && parts[0] != "category" && parts[0] != "instrument" && parts[0] != "payee") {
 			return SearchCatalog{}, ValidationError{Message: "cursor is invalid"}
 		}
 		parsed, err := strconv.ParseInt(parts[1], 10, 64)

@@ -86,6 +86,7 @@
       case 'account': return m.accounts_title();
       case 'category': return m.categories_title();
       case 'instrument': return m.quotes_instruments();
+      case 'payee': return m.payees_title();
       case 'command': return m.search_commands();
     }
   }
@@ -214,7 +215,7 @@
 
 {#snippet results()}
   <div class="flex flex-wrap gap-1 border-b border-border p-2" aria-label={m.search_scope_label()}>
-    {#each ['all', 'account', 'category', 'instrument'] as choice}
+    {#each ['all', 'account', 'category', 'instrument', 'payee'] as choice}
       {@const value = choice as SearchScope}
       <button type="button" aria-pressed={session.scope === value} onclick={() => changeScope(value)}
         class="min-h-11 rounded-(--radius-control) px-2 text-xs text-muted hover:bg-control-hover aria-pressed:bg-surface-strong aria-pressed:text-foreground">{label(value)}</button>

@@ -97,6 +97,13 @@ regex plus `Date.parse` normalizes impossible dates. Keep ordinary/leap round
 trips and the no-forecast-request invalid-link control in
 `forecast-learning.spec.ts` green.
 
+Transactions, account registers, category activity and instrument activity
+keep individually valid From and To values while a range is inverted (#628).
+Their requests use `transactionRequestFilters` to omit the inverted pair.
+The shared filter bar explains that the list is showing transactions without
+a date range. `url-selection.spec.ts` covers keyboard entry, changing a valid
+range to an inverted one, and reloading the resulting link.
+
 ## 69. New version token attached to old form fields
 
 Imported-dividend repair captured its editable resolution once but read the

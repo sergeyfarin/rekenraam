@@ -6,6 +6,7 @@ import { accessibilityViolations, type AxeViolation } from './support/a11y';
 import { ensureBrowserSession } from './support/session';
 import { observePageRequests, waitForPageReady } from './support/page-readiness';
 import { allLocales } from './support/locales';
+import { apiJSON, csrfTokenFor } from './support/api';
 
 // Worker scope preserves one seed per book while letting Playwright schedule
 // each parallel sweep test independently instead of bundling beforeAll groups.
@@ -13,6 +14,7 @@ const test = base.extend<object, { routeBook: Map<string, number> }>({
   routeBook: [async ({ browser, backend }, use) => {
     const page = await browser.newPage({ baseURL: backend.url });
     const { ids } = await seedReferenceBook(page);
+    await apiJSON(page, 'POST', '/api/v1/payees', await csrfTokenFor(page), { name: 'Reference payee' });
     await page.close();
     await use(ids);
   }, { scope: 'worker', timeout: 180_000 }]
@@ -51,6 +53,7 @@ const routes: Route[] = [
   { name: 'account register', route: '/app/ledger/accounts/[id]/register', path: (ids) => `/app/ledger/accounts/${ids.get('checking')}/register`, data: true },
   { name: 'categories', route: '/app/ledger/categories', path: () => '/app/ledger/categories', data: true },
   { name: 'category detail', route: '/app/ledger/categories/[id]', path: (ids) => `/app/ledger/categories/${ids.get('groceries')}`, data: true },
+  { name: 'payees', route: '/app/ledger/payees', path: () => '/app/ledger/payees', data: true },
   { name: 'transactions', route: '/app/ledger/transactions', path: () => '/app/ledger/transactions', data: true },
   { name: 'reconcile', route: '/app/ledger/reconcile', path: () => '/app/ledger/reconcile', data: true },
   { name: 'import', route: '/app/ledger/import', path: () => '/app/ledger/import', data: true },

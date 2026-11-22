@@ -183,6 +183,21 @@ const subViews: SubView[] = [
       return dialog;
     }
   },
+  ...(['rename', 'archive', 'restore'] as const).map((action): SubView => ({
+    name: `payee ${action}`, group: 'dialog', path: () => '/app/ledger/payees',
+    open: async (c) => {
+      const name = action === 'restore' ? 'Sweep archived payee' : 'Sweep active payee';
+      if (action === 'restore') {
+        await c.page.getByRole('combobox', { name: c.t('payees_status') }).selectOption('archived');
+      }
+      const row = c.page.getByRole('listitem').filter({
+        has: c.page.getByRole('link', { name, exact: true })
+      });
+      await row.getByRole('button', { name: c.t('payees_action_for') })
+        .filter({ hasText: c.t(`payees_${action}`) }).click();
+      return openDialog(c.page);
+    }
+  })),
   // ── Transaction lifecycle and reconciliation dialogs ──────────────────
   {
     name: 'void reason', group: 'dialog', path: () => '/app/ledger/transactions',
@@ -608,6 +623,9 @@ function describeViolations(violations: AxeViolation[]): string {
 async function seedFixture(page: Page): Promise<Fixture> {
   const { ids, transactions } = await seedReferenceBook(page);
   const csrf = await csrfTokenFor(page);
+  await apiJSON(page, 'POST', '/api/v1/payees', csrf, { name: 'Sweep active payee' });
+  const archivedPayee = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/payees', csrf, { name: 'Sweep archived payee' });
+  await apiJSON(page, 'POST', `/api/v1/payees/${archivedPayee.id}/archive`, csrf, {});
   // The server's calendar day, not the browser's: they differ around midnight
   // when the owner's time zone is not the machine's.
   const today = (await apiJSON<{ owner_today: string }>(page, 'GET', '/api/v1/auth/session')).owner_today;

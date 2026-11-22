@@ -1,0 +1,36 @@
+get:
+  summary: Suggest active payees for transaction entry
+  security:
+    - CookieSession: []
+  description: Searches all currently active payees. An exact normalized name ranks first, followed by token, prefix and typo matches.
+  parameters:
+    - in: query
+      name: q
+      required: true
+      description: Nonblank payee name or search text, at most 200 bytes after trimming.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 200
+  responses:
+    "200":
+      description: Up to five ranked matches
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/PayeeSuggestionsResponse"
+    "400":
+      description: Invalid query
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
