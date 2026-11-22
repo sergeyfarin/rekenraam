@@ -791,8 +791,9 @@ archived, on the transaction or template and on each posting line, for the
 owner to keep or clear, and offers only active tags for new assignments. It
 reads active choices and assigned tags separately: the active list never
 includes archived rows, and assigned tags are resolved by ID
-(`GET /api/v1/tags?id=…&include_archived=true`), so neither depends on a tag's
-position in the capped catalog (#657).
+(`GET /api/v1/tags?id=…&include_archived=true`, in batches of at most 200 IDs,
+since a record may carry more), so neither depends on a tag's position in the
+capped catalog (#657).
 
 Use join tables rather than embedding tag ids on the transaction row:
 

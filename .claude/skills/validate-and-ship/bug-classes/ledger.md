@@ -118,7 +118,9 @@ triggers; diff instead. A form that filters a record's archived assignment
 out "because it would be fresh" silently removes it from the saved record: the
 recurring template editor did that until #656, so a form's notion of fresh must
 match the server's (only a new record is). Resolve assignments by ID, never from
-the capped catalog, which archived rows can crowd (#657, item 1). The
+the capped catalog, which archived rows can crowd (#657, item 1), and in
+batches no larger than the lookup accepts: a record can carry more tags than one
+request may name, and one refused lookup hid every tag control. The
 archived-account template pause (#283) is the same shape; open siblings are the archived payee on a transaction (#631), an archived
 category or payee on an import rule (#652) and archived tags on a correction
 (#653). Named checks: `TestArchivedTagAssignmentsSurviveEdits`,
@@ -126,4 +128,5 @@ category or payee on an import rule (#652) and archived tags on a correction
 `TestImportedDividendRepairKeepsArchivedTagAssignments`,
 `TestRecurringTemplateKeepsArchivedTagUntilRemoved`,
 `TestTagListByIDResolvesAssignmentsPastTheCatalogLimit`,
-`transaction-archived-tags.spec.ts`, `recurring.spec.ts`.
+`tags.test.ts` (`getTagsByID`), `transaction-archived-tags.spec.ts` (201 tags
+and a long archived line tag at 320 px), `recurring.spec.ts`.
