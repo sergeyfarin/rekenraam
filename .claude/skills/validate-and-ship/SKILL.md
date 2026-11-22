@@ -124,6 +124,7 @@ item 31"); they are not an order and are never reused. To read one entry:
 - 39 — Browser “today” and refreshes rewriting working copies
 - 74 — Account defaults mistaken for currencies actually held
 - 81 — A raw debit-positive balance in a class-normalized field
+- 87 — An archive check applied to an assignment the record already has
 
 **Investments** — `bug-classes/investments.md`
 

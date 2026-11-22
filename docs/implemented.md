@@ -490,7 +490,7 @@ rules remain unchanged. See the
 | Same-day ordering (global + per-account register) | ✅ | `transactions_move.go`, day-sequence migration. |
 | Cursor pagination + FTS5 search | ✅ | Sanitized literal FTS phrase quoting; NUL search input returns HTTP 400 `VALIDATION_FAILED` before reaching the native parser (#355). Populated-index controls cover ordinary/quoted searches and operator/SQL injection. |
 | Categories as income/expense accounts | ✅ | `routes/app/categories`; built-in keys localized. |
-| Tags & payees: CRUD, archive/restore | ✅ | |
+| Tags & payees: CRUD, archive/restore | ✅ | An archived tag stays on the transactions, posting lines and import rules that already carry it: an edit keeps it until the owner clears it, while a fresh assignment is refused ([#650](https://github.com/sergeyfarin/rekenraam/issues/650)). The editor labels it archived and offers only active tags. Named cases: API `TestArchivedTagAssignmentsSurviveEdits`, `TestImportRules_ArchivedTagSurvivesRuleEdits`, app `TestImportedDividendRepairKeepsArchivedTagAssignments`, `tag-choices.test.ts`, browser `transaction-archived-tags.spec.ts`. |
 | Transaction editor (splits, multi-commodity) | ✅ | `transaction-editor.svelte`. |
 | Global transactions page | ✅ | `routes/app/ledger/transactions`. |
 | Account register route | ✅ | `routes/app/ledger/accounts/[id]/register`. |

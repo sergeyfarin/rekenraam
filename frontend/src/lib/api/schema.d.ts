@@ -8545,7 +8545,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Archive a tag */
+        /**
+         * Archive a tag
+         * @description Archiving stops new assignments of the tag. Transactions, posting lines and import rules that already carry it keep it: an edit that restates it keeps the assignment and one that leaves it out removes it, while naming it anywhere it is not already assigned is refused.
+         */
         post: {
             parameters: {
                 query?: never;
