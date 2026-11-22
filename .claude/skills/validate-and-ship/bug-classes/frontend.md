@@ -169,6 +169,11 @@ while the write was pending (#642). Refresh the affected reads after the
 write and apply the view transition only when the responding session ID is
 still active. `reconciliation-selection.spec.ts` holds both writes and checks
 the newer session's selection, the saved outcome, and checkpoint history.
+When the owner is still on the start form they returned to, show the earlier
+statement's outcome without remounting the form (#647). A failed response
+requires a fresh read of that session before offering to resume it. Status
+retries only read. The same spec covers late success, failed status recovery,
+and a committed Finish with a lost response.
 
 ## 78. A dismissal guard that sees only part of a write chain
 
