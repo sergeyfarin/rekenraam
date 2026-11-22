@@ -15,12 +15,26 @@ export function tagsQueryOptions(includeArchived = false) {
   };
 }
 
-export async function getTags(includeArchived = false): Promise<TagsResponse> {
+/**
+ * The named tags, archived ones included, in one bounded read (#657): how a
+ * form resolves the tags a record carries without relying on the capped
+ * catalog. `ids` should be sorted so equal sets share a cache entry.
+ */
+export function tagsByIDQueryOptions(ids: readonly number[]) {
+  return {
+    queryKey: [...tagsQueryKey, { ids }] as const,
+    queryFn: () => getTags(true, ids),
+    staleTime: 10_000
+  };
+}
+
+export async function getTags(includeArchived = false, ids?: readonly number[]): Promise<TagsResponse> {
   try {
     const { data, error, response } = await apiClient.GET('/api/v1/tags', {
       params: {
         query: {
-          include_archived: includeArchived || undefined
+          include_archived: includeArchived || undefined,
+          id: ids?.length ? [...ids] : undefined
         }
       }
     });

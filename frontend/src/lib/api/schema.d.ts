@@ -8210,6 +8210,8 @@ export interface paths {
                     include_archived?: boolean;
                     /** @description Small-set tag name or kind filter. */
                     q?: string;
+                    /** @description Repeatable. Narrows the list to these tags; the other filters still apply, so pass include_archived=true to resolve archived ones. Lets a form name the tags a record carries in one bounded read, whatever their position in a large catalog. */
+                    id?: number[];
                 };
                 header?: never;
                 path?: never;

@@ -23,6 +23,19 @@ get:
       schema:
         type: string
       description: Small-set tag name or kind filter.
+    - in: query
+      name: id
+      description: >-
+        Repeatable. Narrows the list to these tags; the other filters still
+        apply, so pass include_archived=true to resolve archived ones. Lets a
+        form name the tags a record carries in one bounded read, whatever
+        their position in a large catalog.
+      schema:
+        type: array
+        maxItems: 200
+        items: { type: integer, format: int64, minimum: 1 }
+      style: form
+      explode: true
   responses:
     "403":
       description: Personal-access token does not grant this scope
