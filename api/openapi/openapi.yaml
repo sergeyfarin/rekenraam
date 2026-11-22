@@ -195,6 +195,8 @@ paths:
     $ref: "./paths/payee-archive.yaml"
   /api/v1/payees/{payee_id}/restore:
     $ref: "./paths/payee-restore.yaml"
+  /api/v1/payees/suggestions:
+    $ref: "./paths/payee-suggestions.yaml"
   /api/v1/transactions:
     $ref: "./paths/transactions.yaml"
   /api/v1/transactions/deleted:
@@ -1021,6 +1023,8 @@ components:
       $ref: "./components/schemas/payees.yaml#/PayeeRequest"
     PayeeLifecycleRequest:
       $ref: "./components/schemas/payees.yaml#/PayeeLifecycleRequest"
+    PayeeSuggestionsResponse:
+      $ref: "./components/schemas/payees.yaml#/PayeeSuggestionsResponse"
     TransactionStatus:
       $ref: "./components/schemas/transactions.yaml#/TransactionStatus"
     TransactionNeedsReview:
