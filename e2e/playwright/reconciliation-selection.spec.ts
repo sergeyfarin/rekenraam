@@ -1,14 +1,16 @@
 import { expect, test, type Page } from './support/fixtures';
 import { apiJSON } from './support/api';
-import { todayISO } from './support/dates';
+import { daysFromTodayISO, todayISO } from './support/dates';
 import { createCashAccount, readyForLedger } from './support/ledger';
 
-async function startBalancedSession(page: Page) {
+async function openReconciliation(page: Page) {
   const { csrfToken, currencyID } = await readyForLedger(page);
-  const day = todayISO();
-  const suffix = Date.now();
+  const now = new Date();
+  const day = todayISO(now);
+  const earlierDay = daysFromTodayISO(-1, now);
+  const suffix = now.getTime();
   const description = `Statement deposit ${suffix}`;
-  const account = await createCashAccount(page, csrfToken, `Selection cash ${suffix}`, currencyID, day);
+  const account = await createCashAccount(page, csrfToken, `Selection cash ${suffix}`, currencyID, earlierDay);
   const income = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/categories', csrfToken, {
     name: `Selection income ${suffix}`, category_type: 'income'
   });
@@ -21,21 +23,31 @@ async function startBalancedSession(page: Page) {
   });
 
   await page.goto(`/app/ledger/reconcile?account=${account.id}`);
-  await page.getByLabel('Statement closing date', { exact: true }).fill(day);
-  await page.getByLabel('Statement ending balance', { exact: true }).fill('50.00');
-  const started = page.waitForResponse(`**/api/v1/accounts/${account.id}/reconciliations/start`);
-  await page.getByRole('button', { name: 'Start reconciling', exact: true }).click();
-  const { id } = await (await started).json();
+  async function start(statementDate = day, endingBalance = '50.00') {
+    await page.getByLabel('Statement closing date', { exact: true }).fill(statementDate);
+    await page.getByLabel('Statement ending balance', { exact: true }).fill(endingBalance);
+    const started = page.waitForResponse(`**/api/v1/accounts/${account.id}/reconciliations/start`);
+    await page.getByRole('button', { name: 'Start reconciling', exact: true }).click();
+    const response = await started;
+    expect(response.ok()).toBe(true);
+    const { id } = await response.json();
+    return `/api/v1/reconciliations/${id}`;
+  }
   const posting = page.getByRole('checkbox', { name: description, exact: true });
   const finish = page.getByRole('button', { name: 'Finish reconciliation', exact: true });
   const difference = page.getByText('Difference', { exact: true }).locator('..');
+  const checkpoints = async () =>
+    (await apiJSON<{ checkpoints: unknown[] }>(page, 'GET', `/api/v1/accounts/${account.id}/reconciliation-checkpoints`)).checkpoints;
+  return { start, posting, finish, difference, checkpoints, earlierDay };
+}
+
+async function startBalancedSession(page: Page) {
+  const { start, posting, finish, difference, checkpoints } = await openReconciliation(page);
+  const sessionPath = await start();
   await posting.check();
   await expect(finish).toBeEnabled();
   await page.getByLabel('Reason', { exact: true }).fill('Checked against the statement');
-
-  const checkpoints = async () =>
-    (await apiJSON<{ checkpoints: unknown[] }>(page, 'GET', `/api/v1/accounts/${account.id}/reconciliation-checkpoints`)).checkpoints;
-  return { posting, finish, difference, checkpoints, sessionPath: `/api/v1/reconciliations/${id}` };
+  return { posting, finish, difference, checkpoints, sessionPath };
 }
 
 test('a pending reconciliation selection cannot finish a checkpoint (#633)', async ({ page }) => {
@@ -122,5 +134,70 @@ for (const committed of [false, true]) {
     if (committed) await expect(finish).toBeDisabled();
     else await expect(finish).toBeEnabled();
     expect(await checkpoints()).toEqual([]);
+  });
+}
+
+for (const action of ['Finish', 'Discard'] as const) {
+  test(`a delayed ${action} keeps the newer reconciliation and its selection open (#642)`, async ({ page }) => {
+    const { start, posting, finish, checkpoints, earlierDay } = await openReconciliation(page);
+    // The earlier statement ends before the deposit selected in the newer one.
+    const earlierSession = await start(earlierDay, '0.00');
+    const reason = page.getByLabel('Reason', { exact: true });
+    const discard = page.getByRole('button', { name: 'Discard', exact: true });
+    const noCheckpoints = page.getByText('This account has not been reconciled yet.', { exact: true });
+    await reason.fill('Verified the earlier statement');
+
+    const actionURL = `**${earlierSession}/${action === 'Finish' ? 'finish' : 'void'}`;
+    const arrived = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    await page.route(actionURL, async (route) => {
+      arrived.resolve();
+      await release.promise;
+      await route.continue();
+    });
+
+    let newerSession: string;
+    try {
+      await (action === 'Finish' ? finish : discard).click();
+      await arrived.promise;
+      await page.getByRole('button', { name: 'Reconcile', exact: true }).click();
+      newerSession = await start();
+      await posting.check();
+      await expect(finish).toBeEnabled();
+      await reason.fill('Working on the newer statement');
+      await expect(noCheckpoints).toBeVisible();
+
+      const result = page.waitForResponse(actionURL);
+      const refreshed = page.waitForResponse((response) =>
+        response.request().method() === 'GET' && new URL(response.url()).pathname === newerSession
+      );
+      release.resolve();
+      expect((await result).ok()).toBe(true);
+      expect(await (await refreshed).json()).toMatchObject({
+        status: 'open', selected_postings: [expect.objectContaining({ posting_id: expect.any(Number) })]
+      });
+    } finally {
+      release.resolve();
+      await page.unrouteAll({ behavior: 'wait' });
+    }
+
+    expect(await apiJSON(page, 'GET', earlierSession)).toMatchObject({
+      status: action === 'Finish' ? 'finished' : 'voided'
+    });
+    if (action === 'Finish') {
+      await expect(page.getByRole('cell', { name: earlierDay, exact: true })).toBeVisible();
+      await expect(noCheckpoints).toBeHidden();
+      expect(await checkpoints()).toEqual([
+        expect.objectContaining({ statement_date: earlierDay, status: 'active' })
+      ]);
+    } else {
+      expect(await checkpoints()).toEqual([]);
+    }
+    await expect(posting).toBeChecked();
+    await expect(reason).toHaveValue('Working on the newer statement');
+
+    await discard.click();
+    await expect(page.getByRole('heading', { name: 'Start a reconciliation', exact: true })).toBeVisible();
+    expect(await apiJSON(page, 'GET', newerSession)).toMatchObject({ status: 'voided' });
   });
 }

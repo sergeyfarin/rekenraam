@@ -57,10 +57,12 @@
   }
 
   function handleFinished(session: ReconciliationSessionResponse) {
+    if (view.type !== 'session' || view.session.id !== session.id) return;
     view = { type: 'finished', session };
   }
 
-  function handleVoided() {
+  function handleVoided(reconciliationID: number) {
+    if (view.type !== 'session' || view.session.id !== reconciliationID) return;
     view = { type: 'start' };
   }
 

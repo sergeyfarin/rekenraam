@@ -31,7 +31,7 @@
     csrfToken: string | undefined;
     initialSession: ReconciliationSessionResponse;
     onFinished: (session: ReconciliationSessionResponse) => void;
-    onVoided: () => void;
+    onVoided: (reconciliationID: number) => void;
   } = $props();
 
   const locale = $derived(getLocale());
@@ -113,9 +113,9 @@
     voidPending = true;
     actionError = undefined;
     try {
-      await voidReconciliation(reconciliationID, { change_reason: reason.trim() || 'discarded' }, csrfToken);
+      const voided = await voidReconciliation(reconciliationID, { change_reason: reason.trim() || 'discarded' }, csrfToken);
       await queryClient.invalidateQueries({ queryKey: reconciliationQueryKey });
-      onVoided();
+      onVoided(voided.id);
     } catch (error) {
       actionError = error;
       voidPending = false;
