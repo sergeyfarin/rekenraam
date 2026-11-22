@@ -14,7 +14,7 @@
   "tags_action_for": "{action}: {name}",
   "tags_name": "Name des Schlagworts",
   "tags_save": "Namen speichern",
-  "tags_archive_copy": "Das Schlagwort bleibt bei früheren Transaktionen erhalten und verschwindet aus den Vorschlägen. Importregeln mit diesem Schlagwort werden übersprungen. Wiederkehrende Transaktionen mit dem Schlagwort werden blockiert, bis Sie es entfernen oder wiederherstellen. Wenn eine Korrektur wegen dieses Schlagworts abgelehnt wird, stellen Sie es wieder her und versuchen Sie es erneut.",
+  "tags_archive_copy": "Das Schlagwort bleibt bei früheren Transaktionen erhalten und verschwindet aus den Vorschlägen. Importregeln mit diesem Schlagwort werden übersprungen. Wiederkehrende Transaktionen mit dem Schlagwort werden blockiert. Entfernen Sie es aus der Vorlage oder stellen Sie es wieder her. Versuchen Sie die blockierten Transaktionen dann unter „Wiederkehrend“ erneut. Wenn eine Korrektur wegen dieses Schlagworts abgelehnt wird, stellen Sie es wieder her und versuchen Sie es erneut.",
   "tags_renamed": "Umbenannt in {name}.",
   "tags_archived": "{name} wurde archiviert.",
   "tags_restored": "{name} wurde wiederhergestellt.",

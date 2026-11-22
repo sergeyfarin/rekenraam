@@ -59,6 +59,7 @@ test('find, rename, archive and restore a tag from Categories on a phone', async
   await expect(tagLink('Harbour holiday')).toBeVisible();
 
   await main.getByRole('button', { name: 'Archive Harbour holiday' }).click();
+  await expect(dialog.getByText('After you remove the tag from the template or restore it, retry those occurrences in Recurring.')).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
   await dialog.getByRole('button', { name: 'Archive', exact: true }).click();
   await expect(main.getByText('No tags match these filters.')).toBeVisible();
