@@ -1,7 +1,7 @@
 <script lang="ts">
   import { replaceState } from '$app/navigation';
   import { page } from '$app/state';
-  import { parseTransactionFilters, writeTransactionFilters } from '#lib/transactions/transaction-url-filters.ts';
+  import { parseTransactionFilters, transactionRequestFilters, writeTransactionFilters } from '#lib/transactions/transaction-url-filters.ts';
   import { createInfiniteQuery } from '@tanstack/svelte-query';
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
@@ -42,15 +42,10 @@
   }
   const locale = $derived(getLocale());
 
-  const query = createInfiniteQuery(() =>
-    transactionsInfiniteQueryOptions({
-      commodityID,
-      status: filters.status,
-      q: filters.q,
-      afterDate: filters.afterDate,
-      beforeDate: filters.beforeDate
-    })
-  );
+  const query = createInfiniteQuery(() => {
+    const { status, q, afterDate, beforeDate } = transactionRequestFilters(filters);
+    return transactionsInfiniteQueryOptions({ commodityID, status, q, afterDate, beforeDate });
+  });
 
   const rows = $derived(query.data?.pages.flatMap((p) => p.transactions ?? []) ?? []);
 

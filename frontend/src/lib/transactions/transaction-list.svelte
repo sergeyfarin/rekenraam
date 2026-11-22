@@ -28,7 +28,7 @@
   import { ReorderMode } from './reorder-mode.svelte.ts';
   import { placePosition, sameDayNeighbor, type ReorderDirection } from './reorder';
   import type { TransactionFilters } from './transaction-filter-bar.svelte';
-  import { hasInvertedTransactionRange, transactionRequestFilters, type TransactionQueryFilters } from './transaction-url-filters';
+  import { transactionRequestFilters, type TransactionQueryFilters } from './transaction-url-filters.ts';
   import type { Column } from './transaction-table-types';
 
   import type { TransactionWorkspaceActions } from './transaction-workspace.svelte';
@@ -135,9 +135,6 @@
       bind:filters={() => activeFilters, updateBar}
       show={{ status: !lockStatus, kind: true, account: true, payee: true, search: true, dateRange: true, needsReview: true }}
     />
-    {#if hasInvertedTransactionRange(activeFilters)}
-      <p role="status" class="mt-2 text-sm text-muted">{m.transactions_filter_date_inverted()}</p>
-    {/if}
   </Panel>
 
   <div class="flex justify-end">

@@ -181,6 +181,33 @@ for (const width of [1280, 390]) {
         expect(linkedID).toBeTruthy();
         await revisit(page, assertSelection, `/app/ledger/transactions?transaction_id=${linkedID}`);
 
+        const fromInput = page.getByLabel('From', { exact: true });
+        const toInput = page.getByLabel('To', { exact: true });
+        const invertedFrom = instrument ? '2026-03-01' : '2026-02-01';
+        const rangeNote = page.getByText('From is after To. Showing transactions without a date range.');
+        const edits = requests.length;
+        await fromInput.fill(invertedFrom);
+        await expect(page).toHaveURL((url) => url.searchParams.get('after_date') === invertedFrom
+          && url.searchParams.get('before_date') === to);
+        await expect(rangeNote).toBeVisible();
+        await expect(page.getByRole('row').filter({ hasText: description })).toHaveCount(1);
+        await page.reload();
+        await expect(fromInput).toHaveValue(invertedFrom);
+        await expect(toInput).toHaveValue(to);
+        await expect(rangeNote).toBeVisible();
+        await expect(page.getByRole('row').filter({ hasText: description })).toHaveCount(1);
+        await expect.poll(() => requests.slice(edits).some(({ searchParams }) =>
+          searchParams.get('status') === status
+          && searchParams.get('q') === query.get('q')
+          && searchParams.get('category_id') === query.get('category_id')
+          && searchParams.get('commodity_id') === query.get('commodity_id')
+          && !searchParams.has('after_date') && !searchParams.has('before_date'))).toBe(true);
+        expect(requests.slice(edits).some(({ searchParams }) =>
+          searchParams.get('after_date') === invertedFrom && searchParams.get('before_date') === to)).toBe(false);
+        await fromInput.fill(from);
+        await expect(rangeNote).toHaveCount(0);
+        await assertSelection(page);
+
         await page.getByLabel('From', { exact: true }).fill('');
         await page.getByLabel('To', { exact: true }).fill('');
         if (screen !== 'register') {

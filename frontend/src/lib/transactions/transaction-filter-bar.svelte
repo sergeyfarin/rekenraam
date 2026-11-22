@@ -6,6 +6,7 @@
   import { accountsQueryOptions } from '#lib/api/accounts.ts';
   import { payeesQueryOptions, payeeQueryOptions } from '#lib/api/payees.ts';
   import type { TransactionListOptions } from '#lib/api/transactions.ts';
+  import { hasInvertedTransactionRange } from './transaction-url-filters.ts';
 
   export type TransactionFilters = Pick<
     TransactionListOptions,
@@ -267,3 +268,7 @@
     </label>
   {/if}
 </div>
+
+{#if show.dateRange && hasInvertedTransactionRange(filters)}
+  <p role="status" class="mt-2 text-sm text-muted">{m.transactions_filter_date_inverted()}</p>
+{/if}
