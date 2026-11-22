@@ -71,7 +71,11 @@ type UpdateTagParams struct {
 	RequestID     string
 	OriginType    string
 	Operation     string
-	Spec          TagSpec
+	Name          *string
+	Kind          *string
+	Color         *string
+	Icon          *string
+	MetadataJSON  *string
 	UpdatedAt     string
 }
 
@@ -258,7 +262,14 @@ func (r *TagRepository) UpdateTag(ctx context.Context, params UpdateTagParams) (
 	if current.Status == "archived" {
 		return TagRecord{}, ErrTagArchived
 	}
-	if err := ensureActiveTagNameAvailable(ctx, tx, params.BookID, params.Spec.Kind, params.Spec.Name, params.TagID); err != nil {
+	name, kind := current.Name, current.Kind
+	if params.Name != nil {
+		name = *params.Name
+	}
+	if params.Kind != nil {
+		kind = *params.Kind
+	}
+	if err := ensureActiveTagNameAvailable(ctx, tx, params.BookID, kind, name, params.TagID); err != nil {
 		return TagRecord{}, err
 	}
 
@@ -280,14 +291,14 @@ func (r *TagRepository) UpdateTag(ctx context.Context, params UpdateTagParams) (
 		UPDATE tags
 		SET name = ?,
 			kind = ?,
-			color = NULLIF(?, ''),
-			icon = NULLIF(?, ''),
-			metadata_json = ?,
+			color = NULLIF(COALESCE(?, color), ''),
+			icon = NULLIF(COALESCE(?, icon), ''),
+			metadata_json = COALESCE(?, metadata_json),
 			updated_at = ?,
 			updated_by_user_id = ?,
 			updated_audit_event_id = ?
 		WHERE book_id = ? AND id = ?
-	`, params.Spec.Name, params.Spec.Kind, params.Spec.Color, params.Spec.Icon, params.Spec.MetadataJSON, params.UpdatedAt, params.ActorUserID, auditEventID, params.BookID, params.TagID); err != nil {
+	`, name, kind, params.Color, params.Icon, params.MetadataJSON, params.UpdatedAt, params.ActorUserID, auditEventID, params.BookID, params.TagID); err != nil {
 		return TagRecord{}, fmt.Errorf("update tag: %w", err)
 	}
 

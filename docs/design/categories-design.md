@@ -115,6 +115,13 @@ may have multiple tags later, such as `Vacation Summer 2026`, `Alex`, and
 `reimbursable`. Tag kind is mutable: changing a tag from `project` to `custom`,
 for example, changes the grouping for every existing reference to that tag.
 
+Ledger › Categories › Tags lets the owner search active and archived tags,
+rename active tags, and archive or restore tags. Renaming retains the tag's
+kind, styling and metadata. Archiving removes the tag from suggestions and
+keeps its existing transaction and posting assignments. A tag's count and
+link cover the same Transactions view: a match at either level counts once,
+including voided transactions and excluding drafts and soft-deleted records.
+
 ## Protected Built-In Categories
 
 - Other Expense

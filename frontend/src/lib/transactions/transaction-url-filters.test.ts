@@ -60,6 +60,16 @@ describe('parseTransactionFilters', () => {
 });
 
 describe('writeTransactionFilters', () => {
+  it('keeps the tag drill-down while changing other filters and clears it explicitly', () => {
+    const current = params('tag_id=3&account_id=4&highlight=12');
+    const filters = parseTransactionFilters(current);
+    expect(filters.tagID).toBe(3);
+    const next = writeTransactionFilters(current, { ...filters, q: 'ferry' });
+    expect(next.get('tag_id')).toBe('3');
+    const cleared = writeTransactionFilters(next, { ...parseTransactionFilters(next), tagID: undefined });
+    expect(cleared.toString()).toBe('account_id=4&highlight=12&q=ferry');
+  });
+
   it('round-trips a parsed link', () => {
     const query = 'after_date=2026-06-01&before_date=2026-06-30&category_id=7&date_basis=entry';
     const filters = parseTransactionFilters(params(query));

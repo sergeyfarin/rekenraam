@@ -76,7 +76,7 @@ patch:
     content:
       application/json:
         schema:
-          $ref: "../openapi.yaml#/components/schemas/TagRequest"
+          $ref: "../openapi.yaml#/components/schemas/TagPatchRequest"
   responses:
     "413":
       $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"

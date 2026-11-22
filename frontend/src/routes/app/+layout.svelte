@@ -10,6 +10,7 @@
   import RefreshCw from '@lucide/svelte/icons/refresh-cw';
   import { attentionQueryKey, attentionQueryOptions } from '#lib/api/attention.ts';
   import { homeQueryKey } from '#lib/api/home.ts';
+  import { tagDirectoryQueryKey, tagsQueryKey } from '#lib/api/tags.ts';
   import { payeeDirectoryQueryKey, payeesQueryKey } from '#lib/api/payees.ts';
   import { searchCatalogQueryKey } from '#lib/api/search.ts';
   import { provideAttention } from '#lib/attention/context.ts';
@@ -104,7 +105,12 @@
           void queryClient.invalidateQueries({ queryKey: homeQueryKey });
           void queryClient.invalidateQueries({ queryKey: ledgerQueryKey });
           void queryClient.invalidateQueries({ queryKey: payeeDirectoryQueryKey });
-          if (new URL(request.url).pathname.startsWith('/api/v1/payees/')) {
+          void queryClient.invalidateQueries({ queryKey: tagDirectoryQueryKey });
+          const path = new URL(request.url).pathname;
+          if (path === '/api/v1/tags' || path.startsWith('/api/v1/tags/')) {
+            void queryClient.invalidateQueries({ queryKey: tagsQueryKey });
+          }
+          if (path.startsWith('/api/v1/payees/')) {
             void queryClient.invalidateQueries({ queryKey: payeesQueryKey });
             void queryClient.invalidateQueries({ queryKey: searchCatalogQueryKey });
           }

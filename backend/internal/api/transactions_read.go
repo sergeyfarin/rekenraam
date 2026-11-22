@@ -150,6 +150,10 @@ func readTransactionListInput(w http.ResponseWriter, r *http.Request) (app.ListT
 	if !ok {
 		return app.ListTransactionsInput{}, false
 	}
+	tagID, ok := parseOptionalPositiveInt64(w, query.Get("tag_id"), "tag id")
+	if !ok {
+		return app.ListTransactionsInput{}, false
+	}
 	limit := 0
 	if query.Get("limit") != "" {
 		parsed, err := strconv.Atoi(query.Get("limit"))
@@ -165,6 +169,7 @@ func readTransactionListInput(w http.ResponseWriter, r *http.Request) (app.ListT
 		CategoryID:   categoryID,
 		CommodityID:  commodityID,
 		PayeeID:      payeeID,
+		TagID:        tagID,
 		Status:       query.Get("status"),
 		Kind:         query.Get("kind"),
 		NeedsReview:  query.Get("needs_review") == "true",

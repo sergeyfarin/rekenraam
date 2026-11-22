@@ -20,6 +20,7 @@ export type TransactionListOptions = {
   /** Matches postings or dividend/withholding operation facts for this instrument, including corrections. */
   commodityID?: number;
   payeeID?: number;
+  tagID?: number;
   q?: string;
   status?: 'draft' | 'posted' | 'voided';
   kind?: 'ordinary' | 'transfer' | 'investment' | 'opening_balance' | 'adjustment';
@@ -133,6 +134,7 @@ export async function getTransactions(options: TransactionListOptions = {}): Pro
           category_type: options.categoryType,
           date_basis: options.dateBasis,
           payee_id: options.payeeID,
+          tag_id: options.tagID,
           q: options.q || undefined,
           status: options.status,
           kind: options.kind,
@@ -159,7 +161,7 @@ export async function getTransactions(options: TransactionListOptions = {}): Pro
   }
 }
 
-export async function getAccountRegister(accountID: number, options: Omit<TransactionListOptions, 'accountID' | 'payeeID' | 'q' | 'kind'> = {}): Promise<AccountRegisterResponse> {
+export async function getAccountRegister(accountID: number, options: Omit<TransactionListOptions, 'accountID' | 'payeeID' | 'tagID' | 'q' | 'kind'> = {}): Promise<AccountRegisterResponse> {
   try {
     const { data, error, response } = await apiClient.GET('/api/v1/accounts/{account_id}/register', {
       params: {

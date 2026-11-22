@@ -198,6 +198,30 @@ const subViews: SubView[] = [
       return openDialog(c.page);
     }
   })),
+  {
+    name: 'tags directory', group: 'panel', path: () => '/app/ledger/categories?view=tags',
+    open: async (c) => {
+      const view = c.page.getByRole('main');
+      await expect(view.getByRole('link', { name: 'Sweep active tag', exact: true })).toBeVisible();
+      return view;
+    },
+    close: null
+  },
+  ...(['rename', 'archive', 'restore'] as const).map((action): SubView => ({
+    name: `tag ${action}`, group: 'dialog', path: () => '/app/ledger/categories?view=tags',
+    open: async (c) => {
+      const name = action === 'restore' ? 'Sweep archived tag' : 'Sweep active tag';
+      if (action === 'restore') {
+        await c.page.getByRole('combobox', { name: c.t('transactions_filter_status') }).selectOption('archived');
+      }
+      const row = c.page.getByRole('listitem').filter({
+        has: c.page.getByRole('link', { name, exact: true })
+      });
+      await row.getByRole('button', { name: c.t('tags_action_for') })
+        .filter({ hasText: c.t(`tags_${action}`) }).click();
+      return openDialog(c.page);
+    }
+  })),
   // ── Transaction lifecycle and reconciliation dialogs ──────────────────
   {
     name: 'void reason', group: 'dialog', path: () => '/app/ledger/transactions',
@@ -624,6 +648,9 @@ async function seedFixture(page: Page): Promise<Fixture> {
   const { ids, transactions } = await seedReferenceBook(page);
   const csrf = await csrfTokenFor(page);
   await apiJSON(page, 'POST', '/api/v1/payees', csrf, { name: 'Sweep active payee' });
+  await apiJSON(page, 'POST', '/api/v1/tags', csrf, { name: 'Sweep active tag' });
+  const archivedTag = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/tags', csrf, { name: 'Sweep archived tag' });
+  await apiJSON(page, 'POST', `/api/v1/tags/${archivedTag.id}/archive`, csrf);
   const archivedPayee = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/payees', csrf, { name: 'Sweep archived payee' });
   await apiJSON(page, 'POST', `/api/v1/payees/${archivedPayee.id}/archive`, csrf, {});
   // The server's calendar day, not the browser's: they differ around midnight

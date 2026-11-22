@@ -235,7 +235,7 @@ test('Import another file leaves a batch whose re-read keeps failing (#567 revie
   await expect(page.getByText('Upload a file', { exact: true })).toBeVisible();
   await expect(retry).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Commit to ledger' })).toHaveCount(0);
-  expect(new URL(page.url()).searchParams.get('batch_id')).toBeNull();
+  await expect.poll(() => new URL(page.url()).searchParams.get('batch_id')).toBeNull();
   await page.unroute(`**/api/v1/imports/${batch}?*`);
   const kept = await apiJSON<{ rows: unknown[] }>(page, 'GET', `/api/v1/imports/${batch}`);
   expect(kept.rows).toHaveLength(2);

@@ -16,6 +16,7 @@ export type TransactionQueryFilters = Pick<
   | 'accountID'
   | 'categoryID'
   | 'payeeID'
+  | 'tagID'
   | 'q'
   | 'needsReview'
   | 'afterDate'
@@ -26,6 +27,10 @@ export type TransactionQueryFilters = Pick<
 
 export function payeeTransactionsHref(payeeID: number): string {
   return `/app/ledger/transactions?payee_id=${payeeID}`;
+}
+
+export function tagTransactionsHref(tagID: number): string {
+  return `/app/ledger/transactions?tag_id=${tagID}`;
 }
 
 const STATUSES = ['draft', 'posted', 'voided'] as const;
@@ -55,6 +60,7 @@ export function parseTransactionFilters(params: ReadonlyURLSearchParams): Transa
     accountID: positiveInt(params.get('account_id')),
     categoryID: positiveInt(params.get('category_id')),
     payeeID: positiveInt(params.get('payee_id')),
+    tagID: positiveInt(params.get('tag_id')),
     q: params.get('q') || undefined,
     needsReview: params.get('needs_review') === 'true' || undefined,
     afterDate: isoDate(params.get('after_date')),
@@ -93,6 +99,7 @@ export function writeTransactionFilters(
   set('account_id', filters.accountID);
   set('category_id', filters.categoryID);
   set('payee_id', filters.payeeID);
+  set('tag_id', filters.tagID);
   set('q', filters.q);
   set('needs_review', filters.needsReview ? 'true' : undefined);
   set('after_date', filters.afterDate);

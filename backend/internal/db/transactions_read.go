@@ -50,6 +50,10 @@ func (r *TransactionRepository) ListTransactions(ctx context.Context, params Lis
 		where = append(where, "tv.payee_id = ?")
 		args = append(args, params.PayeeID)
 	}
+	if params.TagID > 0 {
+		where = append(where, "t.id IN ("+taggedTransactionIDs("?")+")")
+		args = append(args, params.TagID, params.TagID)
+	}
 	// On the entry-date basis the account and commodity filters move into
 	// matchingEntryClause, which pins them to the entry that matches the range.
 	if params.AccountID > 0 && !params.EntryDateBasis {

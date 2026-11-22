@@ -2,9 +2,11 @@ package app
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,14 +14,15 @@ import (
 )
 
 const (
-	tagNameMaxBytes     = 120
-	tagIconMaxBytes     = 64
-	tagJSONMaxBytes     = 10000
-	tagListLimit        = 2000
-	tagListMaxIDs       = 200
-	defaultTagKind      = "custom"
-	tagLifecycleArchive = "archived tag"
-	tagLifecycleRestore = "restored tag"
+	tagNameMaxBytes      = 120
+	tagIconMaxBytes      = 64
+	tagJSONMaxBytes      = 10000
+	tagListLimit         = 2000
+	tagListMaxIDs        = 200
+	tagDirectoryPageSize = 50
+	defaultTagKind       = "custom"
+	tagLifecycleArchive  = "archived tag"
+	tagLifecycleRestore  = "restored tag"
 )
 
 var (
@@ -82,11 +85,11 @@ type UpdateTagInput struct {
 	OriginType    string
 	Operation     string
 	TagID         int64
-	Name          string
-	Kind          string
-	Color         string
-	Icon          string
-	MetadataJSON  string
+	Name          *string
+	Kind          *string
+	Color         *string
+	Icon          *string
+	MetadataJSON  *string
 }
 
 type TagLifecycleInput struct {
@@ -145,6 +148,46 @@ func (s *TagService) ListTags(ctx context.Context, input ListTagsInput) ([]Tag, 
 	return toTags(records), nil
 }
 
+type TagDirectory struct {
+	Rows       []db.TagDirectoryRow
+	NextCursor string
+}
+
+func (s *TagService) TagDirectory(ctx context.Context, status, query, cursor string) (TagDirectory, error) {
+	switch status {
+	case "":
+		status = "active"
+	case "active", "archived", "all":
+	default:
+		return TagDirectory{}, ValidationError{Message: "tag status is invalid"}
+	}
+
+	params := db.TagDirectoryParams{
+		BookID: BookID, Status: status, Query: strings.TrimSpace(query), Limit: tagDirectoryPageSize + 1,
+	}
+	if cursor != "" {
+		decoded, decodeErr := base64.RawURLEncoding.DecodeString(cursor)
+		id, name, ok := strings.Cut(string(decoded), ":")
+		afterID, parseErr := strconv.ParseInt(id, 10, 64)
+		if decodeErr != nil || !ok || parseErr != nil || afterID <= 0 || name == "" {
+			return TagDirectory{}, ValidationError{Message: "tag cursor is invalid"}
+		}
+		params.AfterID, params.AfterName = afterID, name
+	}
+
+	rows, err := s.repository.TagDirectory(ctx, params)
+	if err != nil {
+		return TagDirectory{}, err
+	}
+	result := TagDirectory{Rows: rows}
+	if len(rows) > tagDirectoryPageSize {
+		result.Rows = rows[:tagDirectoryPageSize]
+		last := result.Rows[len(result.Rows)-1]
+		result.NextCursor = base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%d:%s", last.ID, last.Name)))
+	}
+	return result, nil
+}
+
 func (s *TagService) Tag(ctx context.Context, tagID int64) (Tag, error) {
 	if tagID <= 0 {
 		return Tag{}, ValidationError{Message: "tag id is required"}
@@ -167,7 +210,7 @@ func (s *TagService) CreateTag(ctx context.Context, input CreateTagInput) (Tag, 
 	}
 
 	spec, err := tagSpec(tagSpecInput{
-		Name:         input.Name,
+		Name:         &input.Name,
 		Kind:         input.Kind,
 		Color:        input.Color,
 		Icon:         input.Icon,
@@ -205,10 +248,10 @@ func (s *TagService) UpdateTag(ctx context.Context, input UpdateTagInput) (Tag, 
 
 	spec, err := tagSpec(tagSpecInput{
 		Name:         input.Name,
-		Kind:         input.Kind,
-		Color:        input.Color,
-		Icon:         input.Icon,
-		MetadataJSON: input.MetadataJSON,
+		Kind:         valueOr(input.Kind, ""),
+		Color:        valueOr(input.Color, ""),
+		Icon:         valueOr(input.Icon, ""),
+		MetadataJSON: valueOr(input.MetadataJSON, ""),
 	})
 	if err != nil {
 		return Tag{}, err
@@ -223,7 +266,11 @@ func (s *TagService) UpdateTag(ctx context.Context, input UpdateTagInput) (Tag, 
 		RequestID:     input.RequestID,
 		OriginType:    input.OriginType,
 		Operation:     input.Operation,
-		Spec:          spec,
+		Name:          normalizedTagField(input.Name, spec.Name),
+		Kind:          normalizedTagField(input.Kind, spec.Kind),
+		Color:         normalizedTagField(input.Color, spec.Color),
+		Icon:          normalizedTagField(input.Icon, spec.Icon),
+		MetadataJSON:  normalizedTagField(input.MetadataJSON, spec.MetadataJSON),
 		UpdatedAt:     now,
 	})
 	if err != nil {
@@ -269,8 +316,15 @@ func (s *TagService) changeTagStatus(ctx context.Context, input TagLifecycleInpu
 	return toTag(record), nil
 }
 
+func normalizedTagField(input *string, normalized string) *string {
+	if input == nil {
+		return nil
+	}
+	return &normalized
+}
+
 type tagSpecInput struct {
-	Name         string
+	Name         *string
 	Kind         string
 	Color        string
 	Icon         string
@@ -278,15 +332,18 @@ type tagSpecInput struct {
 }
 
 func tagSpec(input tagSpecInput) (db.TagSpec, error) {
-	name := strings.TrimSpace(input.Name)
-	if name == "" {
-		return db.TagSpec{}, ValidationError{Message: "tag name is required"}
-	}
-	if len(name) > tagNameMaxBytes {
-		return db.TagSpec{}, ValidationError{Message: fmt.Sprintf("tag name must be at most %d bytes", tagNameMaxBytes)}
-	}
-	if hasControlCharacter(name) {
-		return db.TagSpec{}, ValidationError{Message: "tag name must not contain control characters"}
+	var name string
+	if input.Name != nil {
+		name = strings.TrimSpace(*input.Name)
+		if name == "" {
+			return db.TagSpec{}, ValidationError{Message: "tag name is required"}
+		}
+		if len(name) > tagNameMaxBytes {
+			return db.TagSpec{}, ValidationError{Message: fmt.Sprintf("tag name must be at most %d bytes", tagNameMaxBytes)}
+		}
+		if hasControlCharacter(name) {
+			return db.TagSpec{}, ValidationError{Message: "tag name must not contain control characters"}
+		}
 	}
 
 	kind := strings.TrimSpace(input.Kind)

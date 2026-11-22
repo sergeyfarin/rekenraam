@@ -8193,6 +8193,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tags/directory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List tags with their transaction usage */
+        get: {
+            parameters: {
+                query?: {
+                    status?: "active" | "archived" | "all";
+                    /** @description Literal substring (ASCII case-insensitive) of the tag name. */
+                    q?: string;
+                    /** @description Continue with the same search and status using the previous response's cursor. */
+                    cursor?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Tags ordered by name and ID, up to 50 per page. */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TagDirectoryResponse"];
+                    };
+                };
+                /** @description Invalid query */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tags": {
         parameters: {
             query?: never;
@@ -8459,7 +8529,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["TagRequest"];
+                    "application/json": components["schemas"]["TagPatchRequest"];
                 };
             };
             responses: {
@@ -9308,6 +9378,8 @@ export interface paths {
                     /** @description Filter to transactions with a posting in this commodity or a cash-dividend operation fact naming it as the paying instrument. Includes linked correction journals, gross income and withholding. */
                     commodity_id?: number;
                     payee_id?: number;
+                    /** @description Match the tag on the transaction or any current posting. Archived tags can be used for filtering. */
+                    tag_id?: number;
                     /** @description Literal free-text phrase; FTS operators are not interpreted. NUL (U+0000) is rejected with HTTP 400 VALIDATION_FAILED. */
                     q?: string;
                     status?: components["schemas"]["TransactionStatus"];
@@ -29995,8 +30067,33 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        TagDirectoryResponse: {
+            tags: {
+                /** Format: int64 */
+                id: number;
+                name: string;
+                kind: components["schemas"]["TagKind"];
+                status: components["schemas"]["TagStatus"];
+                /** @description Non-deleted and non-draft transactions with the tag on the transaction or a current posting. Each transaction is counted once. */
+                transaction_count: number;
+            }[];
+            next_cursor: string | null;
+        };
         TagsResponse: {
             tags: components["schemas"]["TagResponse"][];
+        };
+        /** @description Omitted fields retain their stored values. */
+        TagPatchRequest: {
+            name?: string;
+            kind?: components["schemas"]["TagKind"];
+            /** @description An empty string clears the color. */
+            color?: string;
+            /** @description An empty string clears the icon. */
+            icon?: string;
+            /** @description Send an empty object to clear metadata. */
+            metadata?: {
+                [key: string]: unknown;
+            };
         };
         TagRequest: {
             name: string;
