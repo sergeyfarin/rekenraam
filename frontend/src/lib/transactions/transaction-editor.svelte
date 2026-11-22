@@ -245,12 +245,8 @@
       await tick();
       document.getElementById(`${uid}-category-${categoryActive}`)?.scrollIntoView({ block: 'nearest' });
     }
-    else if (result.kind === 'choose') {
-      // The field becomes the chosen label and its clear button; keep focus there.
-      selectCategory(filteredCategories[result.index]);
-      await tick();
-      document.getElementById(`${uid}-category-clear`)?.focus();
-    } else { categoryDropdownOpen = false; categoryActive = -1; }
+    else if (result.kind === 'choose') await selectCategory(filteredCategories[result.index]);
+    else { categoryDropdownOpen = false; categoryActive = -1; }
   }
 
   const payeeLookup = $derived(payeeLookupRequest(payeeSearch, initialPayeeName, payeeInteraction));
@@ -1388,12 +1384,15 @@
 
   // ── Helpers ───────────────────────────────────────────────────────
 
-  function selectCategory(cat: CategoryResponse) {
+  async function selectCategory(cat: CategoryResponse) {
     categoryID = cat.id;
     categoryLabel = categoryDisplayName(cat);
     categorySearch = '';
     categoryDropdownOpen = false;
     categoryActive = -1;
+    // Selecting replaces the input with the chosen label and its clear button.
+    await tick();
+    document.getElementById(`${uid}-category-clear`)?.focus();
   }
 
   function clearCategory() {
@@ -2149,18 +2148,21 @@
               oninput={() => { categoryDropdownOpen = true; categoryActive = -1; }}
               onkeydown={categoryKeydown}
               onfocus={() => { categoryDropdownOpen = true; }}
-              onblur={() => setTimeout(() => { categoryDropdownOpen = false; categoryActive = -1; }, 150)}
+              onblur={() => { categoryDropdownOpen = false; categoryActive = -1; }}
               class={inputClass + ' mt-0'}
               placeholder={m.transactions_field_category_placeholder()}
               autocomplete="off"
               disabled={isVoided && mode === 'edit'}
             />
             {#if categoryDropdownOpen && filteredCategories.length > 0}
+              <!-- Keep focus on the input while pressing the popup, including its native scrollbar. -->
               <ul
                 id={`${uid}-categories`}
                 class="absolute z-20 mt-1 max-h-52 w-full overflow-auto rounded-[var(--radius-control)] border border-border bg-surface text-sm shadow-[var(--shadow-panel)]"
                 role="listbox"
+                tabindex="-1"
                 aria-label={m.transactions_field_category()}
+                onmousedown={event => event.preventDefault()}
               >
                 {#each filteredCategories as cat, index (cat.id)}
                   <li role="none">
@@ -2169,7 +2171,7 @@
                       id={`${uid}-category-${index}`}
                       tabindex="-1"
                       class="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-row-hover aria-selected:bg-row-hover"
-                      onmousedown={() => selectCategory(cat)}
+                      onclick={() => selectCategory(cat)}
                       role="option"
                       aria-selected={index === categoryActive}
                     >

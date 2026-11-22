@@ -229,7 +229,7 @@
   </div>
   {#if catalog.isError}<p role="alert" class="px-3 text-sm text-danger">{getAPIClientErrorMessage(catalog.error)}</p>{/if}
   {#if navigationError}<p role="alert" class="px-3 text-sm text-danger">{m.search_navigation_error()}</p>{/if}
-  <div id={listID} role="listbox" aria-label={m.search_results()} class="max-h-[55dvh] overflow-y-auto p-1">
+  <div id={listID} role="listbox" tabindex="-1" aria-label={m.search_results()} class="max-h-[55dvh] overflow-y-auto p-1">
     {#each groups as group (group.group)}
       {#if group.items.length}
         <div role="group" aria-labelledby={`${uid}-group-${group.group}`}>
