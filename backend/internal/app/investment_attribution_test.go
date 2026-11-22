@@ -186,8 +186,13 @@ func TestSelfCheckWarningsRemainVisibleAlongsideFailureAndUnavailable(t *testing
 func TestPaymentAttributionDoesNotReclassifyBrokenFactsAsWarnings(t *testing.T) {
 	t.Parallel()
 	for name, damage := range map[string]string{
-		"missing facts":     `DROP TRIGGER investment_payment_in_lieu_facts_no_delete; DELETE FROM investment_payment_in_lieu_facts`,
-		"malformed date":    `DROP TRIGGER investment_payment_in_lieu_facts_no_update; UPDATE investment_payment_in_lieu_facts SET ex_date = '2026-02-31'`,
+		"missing facts": `DROP TRIGGER investment_payment_in_lieu_facts_no_delete; DELETE FROM investment_payment_in_lieu_facts`,
+		"malformed date": `
+			DROP TRIGGER investment_payment_in_lieu_facts_no_update;
+			PRAGMA ignore_check_constraints = ON;
+			UPDATE investment_payment_in_lieu_facts SET ex_date = '2026-02-31';
+			PRAGMA ignore_check_constraints = OFF;
+		`,
 		"wrong object kind": `DROP TRIGGER investment_payment_in_lieu_facts_no_update; UPDATE investment_payment_in_lieu_facts SET commodity_id = (SELECT id FROM commodities WHERE kind = 'currency' LIMIT 1)`,
 	} {
 		t.Run(name, func(t *testing.T) {

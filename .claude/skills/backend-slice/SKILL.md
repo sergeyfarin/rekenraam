@@ -97,6 +97,8 @@ enum in the same change. Never return raw Go error strings to the client.
   retryable server error (`RESOURCE_BUSY`), never a partial apply.
 - Mutations that must be atomic go in **one** DB transaction, including their
   `audit_events` row and any enqueued background work.
+- Calendar-date CHECKs use `CASE WHEN length(col) = 10 THEN date(col, '+0 days') END IS col`
+  to enforce the canonical text and preserve SQL `NULL` for optional dates.
 
 ## Migrations
 

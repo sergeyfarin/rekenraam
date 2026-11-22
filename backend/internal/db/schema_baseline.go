@@ -11,7 +11,7 @@ import (
 // forward migration sequence. Old development databases also used version 1.
 // Future forward migrations retain this value; it changes only at an explicitly
 // declared, incompatible pre-release rewrite, never for an installed release.
-const BaselineIdentity = 20261118
+const BaselineIdentity = 20261122
 
 // ErrIncompatibleBaseline refuses an incompatible development file or backup.
 var ErrIncompatibleBaseline = errors.New("incompatible pre-release baseline: export with the original build, then reset only the disposable development database; see docs/developer-workflow.md")

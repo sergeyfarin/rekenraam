@@ -141,9 +141,15 @@ func columnCheckExpression(t *testing.T, database *sql.DB, table, column string)
 	rest := definition[location[1]:]
 	start := strings.Index(rest, "CHECK (")
 	require.False(t, start < 0 || strings.Contains(rest[:start], ",\n"), "%s.%s has no column CHECK", table, column)
+	return sqliteCheckBody(t, rest, start+len("CHECK "))
+}
+
+// sqliteCheckBody reads the expression inside a CHECK's opening parenthesis.
+func sqliteCheckBody(t *testing.T, definition string, opening int) string {
+	t.Helper()
 	depth, quoted := 0, false
-	for index := start + len("CHECK "); index < len(rest); index++ {
-		switch rest[index] {
+	for index := opening; index < len(definition); index++ {
+		switch definition[index] {
 		case '\'':
 			quoted = !quoted
 		case '(':
@@ -154,12 +160,12 @@ func columnCheckExpression(t *testing.T, database *sql.DB, table, column string)
 			if !quoted {
 				depth--
 				if depth == 0 {
-					return rest[start+len("CHECK (") : index]
+					return definition[opening+1 : index]
 				}
 			}
 		}
 	}
-	require.FailNow(t, "unbalanced CHECK", "%s.%s", table, column)
+	require.FailNow(t, "unbalanced CHECK", "%s", definition[opening:])
 	return ""
 }
 
