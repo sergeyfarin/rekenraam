@@ -36,16 +36,13 @@
 
   const locale = $derived(getLocale());
 
+  const sessionOptions = $derived(reconciliationSessionQueryOptions(reconciliationID));
   const sessionQuery = createQuery(() => ({
-    ...reconciliationSessionQueryOptions(reconciliationID),
+    ...sessionOptions,
     initialData: initialSession
   }));
   const queryClient = useQueryClient();
-
-  // Server-authoritative snapshot: the latest mutation response wins; otherwise the
-  // query (seeded with initialData) provides it. Never compute the difference locally.
-  let mutated = $state.raw<ReconciliationSessionResponse | undefined>(undefined);
-  const session = $derived(mutated ?? sessionQuery.data ?? initialSession);
+  const session = $derived(sessionQuery.data ?? initialSession);
 
   let selectionPending = $state(false);
   let finishPending = $state(false);
@@ -55,6 +52,10 @@
 
   const selectedIDs = $derived(new Set(session.selected_postings.map((p) => p.posting_id)));
   const isBalanced = $derived(session.difference.quantity_value === '0');
+  const canAct = $derived(
+    session.status === 'open' && !sessionQuery.isError && !selectionPending && !finishPending && !voidPending
+  );
+  const canFinish = $derived(canAct && isBalanced);
 
   function selectionAfterToggle(togglePostingID: number, nowSelected: boolean): number[] {
     // Despite the field name, the API matches these against candidate posting_id.
@@ -64,25 +65,32 @@
     return session.candidates.filter((c) => next.has(c.posting_id)).map((c) => c.posting_id);
   }
 
-  async function toggle(postingID: number, nowSelected: boolean) {
-    if (!csrfToken || selectionPending) return;
+  async function toggle(postingID: number, checkbox: HTMLInputElement) {
+    if (!csrfToken || !canAct) return;
     selectionPending = true;
     actionError = undefined;
+    const { queryKey } = sessionOptions;
     try {
-      mutated = await updateReconciliationSelection(
+      const saved = await updateReconciliationSelection(
         reconciliationID,
-        { posting_version_ids: selectionAfterToggle(postingID, nowSelected) },
+        { posting_version_ids: selectionAfterToggle(postingID, checkbox.checked) },
         csrfToken
       );
+      await queryClient.cancelQueries({ queryKey, exact: true });
+      queryClient.setQueryData(queryKey, saved);
     } catch (error) {
       actionError = error;
+      // The server may have committed the selection before the response failed.
+      await sessionQuery.refetch();
     } finally {
+      // A native toggle can change the checkbox even when the saved value stays the same.
+      checkbox.checked = selectedIDs.has(postingID);
       selectionPending = false;
     }
   }
 
   async function handleFinish() {
-    if (!csrfToken || !isBalanced) return;
+    if (!csrfToken || !canFinish) return;
     if (reason.trim() === '') {
       actionError = new Error(m.reconcile_finish_needs_reason());
       return;
@@ -101,7 +109,7 @@
   }
 
   async function handleVoid() {
-    if (!csrfToken) return;
+    if (!csrfToken || !canAct) return;
     voidPending = true;
     actionError = undefined;
     try {
@@ -169,9 +177,9 @@
                         type="checkbox"
                         class="h-4 w-4 accent-accent"
                         {checked}
-                        disabled={selectionPending || !csrfToken}
+                        disabled={!canAct || !csrfToken}
                         aria-label={detailFor(posting.payee_name, posting.description)}
-                        onchange={(e) => toggle(posting.posting_id, e.currentTarget.checked)}
+                        onchange={(e) => toggle(posting.posting_id, e.currentTarget)}
                       />
                     </td>
                     <td class="px-3 py-3 whitespace-nowrap text-muted">{posting.entry_date}</td>
@@ -252,7 +260,7 @@
               <button
                 type="button"
                 class="inline-flex items-center justify-center gap-2 rounded-(--radius-control) bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={!isBalanced || finishPending || voidPending || !csrfToken}
+                disabled={!canFinish || !csrfToken}
                 onclick={handleFinish}
               >
                 {finishPending ? m.reconcile_finishing() : m.reconcile_finish()}
@@ -263,7 +271,7 @@
               <button
                 type="button"
                 class="inline-flex items-center justify-center gap-2 rounded-(--radius-control) border border-border bg-control px-4 py-2.5 text-sm font-semibold text-muted transition hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={finishPending || voidPending || !csrfToken}
+                disabled={!canAct || !csrfToken}
                 onclick={handleVoid}
               >
                 {voidPending ? m.reconcile_voiding() : m.reconcile_void()}

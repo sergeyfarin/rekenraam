@@ -213,3 +213,13 @@ Keep focus on the input during pointer interaction with a popup that closes on
 blur (`category-scrollbar.spec.ts` exercises the native drag). When selecting
 replaces the input, move focus to the replacement control for both pointer and
 keyboard selection (`home-entry.spec.ts`).
+
+## 86. A final action enabled by an older saved selection
+
+Reconcile could write a checkpoint while a posting deselection was still
+being saved (#633). Use the same readiness check in the button and its
+handler, and keep conflicting actions disabled through the write. A lost
+response can follow a commit, so read the session again after a failed save
+and bring the native checkbox back in sync before enabling Finish. The real
+app cases in `reconciliation-selection.spec.ts` hold the PATCH, check that no
+checkpoint is written, and cover failures before and after the server commits.
