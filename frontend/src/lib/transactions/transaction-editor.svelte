@@ -4,6 +4,7 @@
   import { systemLabelText } from '#lib/transactions/system-label.ts';
   import { onDestroy, tick, untrack, type Snippet } from 'svelte';
   import { tagsQueryOptions } from '#lib/api/tags.ts';
+  import { submittableTagIDs, tagChoices } from './tag-choices.ts';
   import Plus from '@lucide/svelte/icons/plus';
   import Save from '@lucide/svelte/icons/save';
   import Trash from '@lucide/svelte/icons/trash';
@@ -171,7 +172,15 @@
   let reloadedNotice = $state(false);
 
   let tagIDs = $state<number[]>([]);
-  const tagsQuery = createQuery(() => tagsQueryOptions());
+  /** The tags the form was filled with; an archived one among them stays listed (#650). */
+  let initialTagIDs = $state.raw<number[]>([]);
+  // Archived tags included, so an archived assignment can be named and cleared.
+  const tagsQuery = createQuery(() => tagsQueryOptions(true));
+  // Only an edit keeps the saved transaction's assignments; a new transaction,
+  // correction or template would assign an archived tag afresh, which the
+  // server refuses.
+  const retainableTagIDs = $derived(new Set(mode === 'edit' ? (transaction?.tag_ids ?? []) : []));
+  const shownTags = $derived(tagChoices(tagsQuery.data?.tags ?? [], initialTagIDs, retainableTagIDs));
 
   // ── Queries ───────────────────────────────────────────────────────
   // Load accounts (asset/liability for the account leg; income/expense categories loaded separately)
@@ -563,7 +572,10 @@
 
   // ── Initialise from existing transaction (edit mode) ──────────────
   $effect(() => {
-    tagIDs = [...(transaction?.tag_ids ?? initialValues?.tag_ids ?? [])];
+    // Read from the source, never back from tagIDs: this effect writes it.
+    const loadedTagIDs = transaction?.tag_ids ?? initialValues?.tag_ids ?? [];
+    tagIDs = [...loadedTagIDs];
+    initialTagIDs = [...loadedTagIDs];
     payeeInteraction = 'untouched';
     payeeConfirmationName = null;
     splitPostedOnOpen = {};
@@ -961,7 +973,7 @@
   function buildPayload(): TransactionRequest {
     const payload: TransactionRequest = {
       status: mode === 'edit' ? transaction?.status : 'posted',
-      tag_ids: [...tagIDs],
+      tag_ids: submittableTagIDs(tagIDs, tagsQuery.data?.tags, retainableTagIDs),
       transaction_date: transactionDate || undefined,
       description: description.trim() || undefined,
       note_markdown: noteMarkdown.trim() || undefined,
@@ -2351,12 +2363,19 @@
     <legend class="px-1 text-sm font-semibold">{m.recurring_tags()}</legend>
     {#if tagsQuery.isPending}<p class="text-sm text-muted">{m.recurring_loading()}</p>
     {:else if tagsQuery.isError}<APIFormError error={tagsQuery.error} /><button type="button" onclick={() => tagsQuery.refetch()}>{m.recurring_refresh()}</button>
-    {:else if !tagsQuery.data?.tags.length}<p class="text-sm text-muted">{m.recurring_no_tags()}</p>
+    {:else if !shownTags.length}<p class="text-sm text-muted">{m.recurring_no_tags()}</p>
     {:else}<div class="flex flex-wrap gap-3">
-      {#each tagsQuery.data.tags as tag (tag.id)}
-        <label class="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" value={tag.id} bind:group={tagIDs} disabled={busy} />{tag.name}</label>
+      {#each shownTags as choice (choice.tag.id)}
+        {#if choice.blocked}
+          <label class="flex min-h-10 items-center gap-2 text-sm text-muted"><input type="checkbox" checked={false} disabled />{m.transactions_tag_archived({ name: choice.tag.name })}</label>
+        {:else}
+          <label class="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" value={choice.tag.id} bind:group={tagIDs} disabled={busy} />{choice.archived ? m.transactions_tag_archived({ name: choice.tag.name }) : choice.tag.name}</label>
+        {/if}
       {/each}
-    </div>{/if}
+    </div>
+    {#if shownTags.some((choice) => choice.retained)}<p class="mt-2 text-xs text-muted">{m.transactions_tags_archived_help()}</p>{/if}
+    {#if shownTags.some((choice) => choice.blocked)}<p class="mt-2 text-xs text-muted">{m.transactions_tags_archived_not_added()}</p>{/if}
+    {/if}
   </fieldset>
 
   <!-- ── Tier 2: Advanced section ───────────────────────────────── -->

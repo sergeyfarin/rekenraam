@@ -1,8 +1,8 @@
 {
   "counts": {
-    "es": 183,
-    "fr": 183,
-    "de": 183
+    "es": 186,
+    "fr": 186,
+    "de": 186
   },
   "keys": {
     "es": [
@@ -188,7 +188,10 @@
       "transactions_entry_discard_title",
       "transactions_payee_lookup_failed",
       "transactions_payee_lookup_loading",
-      "transactions_payee_lookup_too_long"
+      "transactions_payee_lookup_too_long",
+      "transactions_tag_archived",
+      "transactions_tags_archived_help",
+      "transactions_tags_archived_not_added"
     ],
     "fr": [
       "allocation_actual",
@@ -373,7 +376,10 @@
       "transactions_entry_discard_title",
       "transactions_payee_lookup_failed",
       "transactions_payee_lookup_loading",
-      "transactions_payee_lookup_too_long"
+      "transactions_payee_lookup_too_long",
+      "transactions_tag_archived",
+      "transactions_tags_archived_help",
+      "transactions_tags_archived_not_added"
     ],
     "de": [
       "allocation_actual",
@@ -558,7 +564,10 @@
       "transactions_entry_discard_title",
       "transactions_payee_lookup_failed",
       "transactions_payee_lookup_loading",
-      "transactions_payee_lookup_too_long"
+      "transactions_payee_lookup_too_long",
+      "transactions_tag_archived",
+      "transactions_tags_archived_help",
+      "transactions_tags_archived_not_added"
     ]
   }
 }

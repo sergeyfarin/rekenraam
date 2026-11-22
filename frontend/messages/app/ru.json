@@ -2239,5 +2239,8 @@
   "reconciliation_age_commodity": "{code}: {state}",
   "reconciliation_age_folded": "{account}: {state}",
   "reconcile_start_commodity_lost": "Валюта этой выписки больше не предлагается для этого счёта. Выберите валюту выписки перед началом.",
-  "reconcile_start_currency_placeholder": "Выберите валюту"
+  "reconcile_start_currency_placeholder": "Выберите валюту",
+  "transactions_tag_archived": "{name} (в архиве)",
+  "transactions_tags_archived_help": "Архивные метки остаются у этой транзакции, пока вы их не снимете. Добавлять можно только активные метки.",
+  "transactions_tags_archived_not_added": "Архивные метки не добавляются к новой транзакции."
 }
