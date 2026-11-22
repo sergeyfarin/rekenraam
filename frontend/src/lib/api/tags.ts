@@ -15,17 +15,36 @@ export function tagsQueryOptions(includeArchived = false) {
   };
 }
 
+/** The most tag IDs one list request may name (`maxItems` of `id` on `GET /api/v1/tags`). */
+export const tagLookupBatchSize = 200;
+
+/** Splits IDs into request-sized batches, keeping their order. */
+export function tagIDBatches(ids: readonly number[], size = tagLookupBatchSize): number[][] {
+  const batches: number[][] = [];
+  for (let start = 0; start < ids.length; start += size) batches.push(ids.slice(start, start + size));
+  return batches;
+}
+
 /**
- * The named tags, archived ones included, in one bounded read (#657): how a
- * form resolves the tags a record carries without relying on the capped
- * catalog. `ids` should be sorted so equal sets share a cache entry.
+ * The named tags, archived ones included, resolved by ID (#657): how a form
+ * names the tags a record carries without relying on the capped catalog. A
+ * record may carry more tags than one request may name, so the IDs go in
+ * bounded batches and the results are merged. `ids` should be sorted so equal
+ * sets share a cache entry.
  */
 export function tagsByIDQueryOptions(ids: readonly number[]) {
   return {
     queryKey: [...tagsQueryKey, { ids }] as const,
-    queryFn: () => getTags(true, ids),
+    queryFn: () => getTagsByID(ids),
     staleTime: 10_000
   };
+}
+
+export async function getTagsByID(ids: readonly number[]): Promise<TagsResponse> {
+  const pages = await Promise.all(tagIDBatches(ids).map((batch) => getTags(true, batch)));
+  const byID = new Map<number, TagResponse>();
+  for (const page of pages) for (const tag of page.tags) byID.set(tag.id, tag);
+  return { tags: [...byID.values()] };
 }
 
 export async function getTags(includeArchived = false, ids?: readonly number[]): Promise<TagsResponse> {
