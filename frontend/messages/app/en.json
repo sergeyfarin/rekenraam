@@ -14,7 +14,7 @@
   "tags_action_for": "{action} {name}",
   "tags_name": "Tag name",
   "tags_save": "Save name",
-  "tags_archive_copy": "This tag stays on past transactions and disappears from suggestions. Import rules that use it are skipped, and recurring transactions that use it are blocked until you remove or restore the tag.",
+  "tags_archive_copy": "This tag stays on past transactions and disappears from suggestions. Import rules that use it are skipped, and recurring transactions that use it are blocked until you remove or restore the tag. If an edit or correction is refused because of this tag, restore it and try again.",
   "tags_renamed": "Renamed to {name}.",
   "tags_archived": "Archived {name}.",
   "tags_restored": "Restored {name}.",
