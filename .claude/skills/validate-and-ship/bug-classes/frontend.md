@@ -197,3 +197,13 @@ key, the #311 pattern), never a client copy. Named checks:
 `transfer-entry.spec.ts` (preservation gates),
 `transaction-edit-preservation.spec.ts`,
 `TestTransactionEditKeepsOmittedMetadataExactly`.
+
+## 85. A final action enabled by an older saved selection
+
+Reconcile could write a checkpoint while a posting deselection was still
+being saved (#633). Use the same readiness check in the button and its
+handler, and keep conflicting actions disabled through the write. A lost
+response can follow a commit, so read the session again after a failed save
+and bring the native checkbox back in sync before enabling Finish. The real
+app cases in `reconciliation-selection.spec.ts` hold the PATCH, check that no
+checkpoint is written, and cover failures before and after the server commits.

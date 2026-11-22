@@ -176,6 +176,7 @@ item 31"); they are not an order and are never reused. To read one entry:
 - 77 — Navigation completion clearing a newer interaction
 - 78 — A dismissal guard that sees only part of a write chain
 - 79 — An editor that restates more than the owner changed
+- 85 — A final action enabled by an older saved selection
 
 **Browser journeys and test fixtures** — `bug-classes/e2e.md`
 
