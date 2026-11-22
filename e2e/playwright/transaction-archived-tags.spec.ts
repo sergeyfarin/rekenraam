@@ -95,3 +95,61 @@ test('an edit keeps an archived tag the transaction carries until the owner clea
   expect(stored.tag_ids).toEqual([second.id]);
   expect(categoryTags(stored)).toEqual([]);
 });
+
+test.describe('on a 320 px phone', () => {
+  test.use({ viewport: { width: 320, height: 800 } });
+
+  // #657/#650 review: more assigned tags than one lookup may name must still
+  // resolve, and a long unbroken archived name must wrap with Remove in reach.
+  test('a transaction with 201 tags and a long archived line tag keeps every tag control usable', async ({ page }) => {
+    const { csrfToken, currencyID } = await readyForLedger(page);
+    const suffix = Date.now();
+    const description = `Many tags ${suffix}`;
+    const account = await createCashAccount(page, csrfToken, `Many tags wallet ${suffix}`, currencyID);
+    const category = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/categories', csrfToken, {
+      name: `Many tags meals ${suffix}`, category_type: 'expense'
+    });
+    const tag = (name: string) => apiJSON<{ id: number; name: string }>(page, 'POST', '/api/v1/tags', csrfToken, { name, kind: 'flag' });
+    const assigned: Array<{ id: number; name: string }> = [];
+    for (let start = 0; start < 200; start += 25) {
+      assigned.push(...(await Promise.all(Array.from({ length: 25 }, (_, offset) => tag(`Bulk ${suffix} ${String(start + offset).padStart(3, '0')}`)))));
+    }
+    const longName = `L${suffix}`.padEnd(118, 'x');
+    const long = await tag(longName);
+    const spare = await tag(`Spare ${suffix}`);
+    const today = todayISO();
+    const created = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/transactions', csrfToken, {
+      transaction_date: today, status: 'posted', description, tag_ids: [...assigned.map((t) => t.id), long.id],
+      journal_entries: [{ entry_date: today, postings: [
+        { account_id: account.id, commodity_id: currencyID, quantity_value: '-500', quantity_scale: 2 },
+        { account_id: category.id, commodity_id: currencyID, quantity_value: '500', quantity_scale: 2, tag_ids: [long.id] }
+      ] }]
+    });
+    await apiJSON(page, 'POST', `/api/v1/tags/${long.id}/archive`, csrfToken);
+
+    await page.goto('/app/ledger/transactions');
+    await page.getByRole('row').filter({ hasText: description }).getByRole('button', { name: 'Edit', exact: true }).click();
+    const edit = page.getByRole('complementary', { name: 'Actions' });
+    await expect(edit.getByRole('heading', { name: 'Edit transaction' })).toBeVisible();
+
+    // Active choices and every assigned tag resolve despite the 201 assignments.
+    await expect(edit.getByRole('checkbox', { name: spare.name, exact: true })).not.toBeChecked();
+    await expect(edit.getByRole('checkbox', { name: assigned[199].name, exact: true })).toBeChecked();
+    await expect(edit.getByRole('checkbox', { name: `${longName} (archived)`, exact: true })).toBeChecked();
+
+    // The long archived line tag wraps and its Remove button stays on screen.
+    const remove = edit.getByRole('button', { name: `Remove tag ${longName} (archived)` });
+    await remove.scrollIntoViewIfNeeded();
+    const box = await remove.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x + box!.width).toBeLessThanOrEqual(320);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+    await remove.click();
+    const before = (await apiJSON<{ version_id: number }>(page, 'GET', `/api/v1/transactions/${created.id}`)).version_id;
+    await edit.getByRole('button', { name: 'Save transaction' }).click();
+    await expect.poll(async () => (await apiJSON<{ version_id: number }>(page, 'GET', `/api/v1/transactions/${created.id}`)).version_id).not.toBe(before);
+    const stored = await apiJSON<{ tag_ids: number[]; journal_entries: Array<{ postings: Array<{ account_id: number; tag_ids: number[] }> }> }>(page, 'GET', `/api/v1/transactions/${created.id}`);
+    expect(stored.tag_ids).toHaveLength(201);
+    expect(stored.journal_entries.flatMap((entry) => entry.postings).find((posting) => posting.account_id === category.id)?.tag_ids).toEqual([]);
+  });
+});

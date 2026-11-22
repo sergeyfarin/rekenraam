@@ -2363,14 +2363,15 @@
             <!-- A line's own tags: shown so an archived one can be named and
                  removed (#650); new line tags are not entered here. -->
             {#if leg.tagIDs?.length}
-              <div class="sm:col-span-3">
+              <div class="min-w-0 sm:col-span-3">
                 <span class={labelClass} id="split-leg-tags-{i}">{m.transactions_posting_tags()}</span>
                 <ul class="mt-1.5 flex flex-wrap gap-2" aria-labelledby="split-leg-tags-{i}">
                   {#each leg.tagIDs as tagID (tagID)}
                     {@const label = tagLabel(tagID)}
-                    <li class="inline-flex min-h-10 items-center gap-1 rounded-(--radius-control) border border-border bg-surface pl-3 text-sm text-foreground">
-                      {label}
-                      <button type="button" class="inline-flex min-h-10 min-w-10 items-center justify-center rounded-(--radius-control) text-muted hover:bg-control-hover hover:text-foreground" aria-label={m.transactions_posting_tag_remove({ name: label })} disabled={busy} onclick={() => removePostingTag(i, tagID)}>
+                    <!-- A long unbroken name wraps; Remove stays beside it on a phone. -->
+                    <li class="inline-flex min-h-10 max-w-full items-center gap-1 rounded-(--radius-control) border border-border bg-surface pl-3 text-sm text-foreground">
+                      <span class="min-w-0 wrap-anywhere py-2">{label}</span>
+                      <button type="button" class="inline-flex min-h-10 min-w-10 shrink-0 items-center justify-center rounded-(--radius-control) text-muted hover:bg-control-hover hover:text-foreground" aria-label={m.transactions_posting_tag_remove({ name: label })} disabled={busy} onclick={() => removePostingTag(i, tagID)}>
                         <X size={14} aria-hidden="true" />
                       </button>
                     </li>
@@ -2404,7 +2405,7 @@
     </div>
   {/if}
 
-  <fieldset class="rounded-(--radius-control) border border-border p-3">
+  <fieldset class="min-w-0 rounded-(--radius-control) border border-border p-3">
     <legend class="px-1 text-sm font-semibold">{m.recurring_tags()}</legend>
     {#if tagsPending}<p class="text-sm text-muted">{m.recurring_loading()}</p>
     {:else if tagsError}<APIFormError error={tagsError} /><button type="button" onclick={() => { void tagsQuery.refetch(); if (assignedIDs.length) void assignedTagsQuery.refetch(); }}>{m.recurring_refresh()}</button>
@@ -2412,9 +2413,9 @@
     {:else}<div class="flex flex-wrap gap-3">
       {#each shownTags as choice (choice.tag.id)}
         {#if choice.blocked}
-          <label class="flex min-h-10 items-center gap-2 text-sm text-muted"><input type="checkbox" checked={false} disabled />{m.transactions_tag_archived({ name: choice.tag.name })}</label>
+          <label class="flex min-h-10 max-w-full items-center gap-2 text-sm text-muted"><input class="shrink-0" type="checkbox" checked={false} disabled /><span class="min-w-0 wrap-anywhere">{m.transactions_tag_archived({ name: choice.tag.name })}</span></label>
         {:else}
-          <label class="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" value={choice.tag.id} bind:group={tagIDs} disabled={busy} />{choice.archived ? m.transactions_tag_archived({ name: choice.tag.name }) : choice.tag.name}</label>
+          <label class="flex min-h-10 max-w-full items-center gap-2 text-sm"><input class="shrink-0" type="checkbox" value={choice.tag.id} bind:group={tagIDs} disabled={busy} /><span class="min-w-0 wrap-anywhere">{choice.archived ? m.transactions_tag_archived({ name: choice.tag.name }) : choice.tag.name}</span></label>
         {/if}
       {/each}
     </div>
