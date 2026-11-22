@@ -1,14 +1,17 @@
 <script lang="ts">
   import { accountLabelByID } from '#lib/accounts/account-labels.ts';
   import { page } from '$app/state';
-  import { createQuery } from '@tanstack/svelte-query';
+  import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+  import { onDestroy } from 'svelte';
   import ArrowLeft from '@lucide/svelte/icons/arrow-left';
   import { m } from '#lib/paraglide/messages.js';
   import Panel from '#lib/components/panel.svelte';
   import { authSessionQueryOptions } from '#lib/api/auth.ts';
   import { accountsQueryOptions } from '#lib/api/accounts.ts';
-  import type { ReconciliationSessionResponse } from '#lib/api/reconciliation.ts';
+  import { reconciliationSessionQueryOptions, type ReconciliationSessionResponse } from '#lib/api/reconciliation.ts';
+  import { invalidateClosedSessionReads } from '#lib/reconcile/invalidate.ts';
   import ReconcileStartForm from '#lib/reconcile/reconcile-start-form.svelte';
+  import ReconcileStartOutcome, { type CloseFailure, type StartOutcome } from '#lib/reconcile/reconcile-start-outcome.svelte';
   import ReconcileSession from '#lib/reconcile/reconcile-session.svelte';
   import ReconcileCheckpoints from '#lib/reconcile/reconcile-checkpoints.svelte';
   import { parseReconcileRequest } from '#lib/reconcile/reconcile-link.ts';
@@ -29,11 +32,16 @@
 
   // ── View state machine ────────────────────────────────────────────
   type View =
-    | { type: 'start' }
-    | { type: 'session'; session: ReconciliationSessionResponse }
+    | { type: 'start'; fromSessionID?: number }
+    | { type: 'session'; session: ReconciliationSessionResponse; initialReason?: string; initialError?: unknown }
     | { type: 'finished'; session: ReconciliationSessionResponse };
 
+  const queryClient = useQueryClient();
   let view = $state<View>({ type: 'start' });
+  let startOutcome = $state.raw<StartOutcome | undefined>(undefined);
+  let startPending = $state(false);
+  let mounted = true;
+  onDestroy(() => { mounted = false; });
 
   // The account picked in the start form, so its checkpoints can be shown
   // (and voided, #248) before a new reconciliation starts.
@@ -53,29 +61,72 @@
   }
 
   function handleStarted(session: ReconciliationSessionResponse) {
+    startOutcome = undefined;
     view = { type: 'session', session };
   }
 
-  function handleFinished(session: ReconciliationSessionResponse) {
-    if (view.type !== 'session' || view.session.id !== session.id) return;
-    view = { type: 'finished', session };
+  function isStartFor(sessionID: number) {
+    return mounted && view.type === 'start' && view.fromSessionID === sessionID;
   }
 
-  function handleVoided(reconciliationID: number) {
-    if (view.type !== 'session' || view.session.id !== reconciliationID) return;
-    view = { type: 'start' };
+  function handleClosed(session: ReconciliationSessionResponse) {
+    if (isStartFor(session.id)) {
+      startOutcome = { state: 'closed', session };
+    } else if (view.type === 'session' && view.session.id === session.id) {
+      view = session.status === 'finished' ? { type: 'finished', session } : { type: 'start' };
+    }
+  }
+
+  async function checkStartOutcome(failure: CloseFailure) {
+    const sessionID = failure.session.id;
+    if (!isStartFor(sessionID)) return;
+    startOutcome = { ...failure, state: 'checking' };
+    const options = reconciliationSessionQueryOptions(sessionID);
+
+    let saved: ReconciliationSessionResponse;
+    try {
+      // Read after the failed response. A cached or already-running read may predate the write.
+      await queryClient.cancelQueries({ queryKey: options.queryKey, exact: true });
+      saved = await queryClient.fetchQuery({ ...options, staleTime: 0, retry: false });
+    } catch {
+      if (isStartFor(sessionID)) startOutcome = { ...failure, state: 'unknown' };
+      return;
+    }
+
+    if (saved.status === 'open') {
+      if (isStartFor(sessionID)) startOutcome = { ...failure, session: saved, state: 'open' };
+    } else {
+      await invalidateClosedSessionReads(queryClient, saved);
+      handleClosed(saved);
+    }
+  }
+
+  function retryStatus() {
+    if (startOutcome?.state === 'unknown') void checkStartOutcome(startOutcome);
+  }
+
+  function returnToSession() {
+    if (startPending || startOutcome?.state !== 'open' || !isStartFor(startOutcome.session.id)) return;
+    const { session, reason, error } = startOutcome;
+    startOutcome = undefined;
+    view = { type: 'session', session, initialReason: reason, initialError: error };
   }
 
   function backToStart() {
-    view = { type: 'start' };
+    view = { type: 'start', fromSessionID: view.type === 'session' ? view.session.id : undefined };
   }
 </script>
 
 {#if view.type === 'start'}
   <div class="lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-6 xl:grid-cols-[minmax(0,1fr)_26rem]">
     <div class="min-w-0">
+      {#if startOutcome}
+        <div class="mb-4">
+          <ReconcileStartOutcome outcome={startOutcome} accountLabel={accountLabel(startOutcome.session.account_id)} {startPending} onRetry={retryStatus} onReturn={returnToSession} />
+        </div>
+      {/if}
       <Panel>
-        <ReconcileStartForm {csrfToken} {requestedAccountID} {requestedCommodityID} onStarted={handleStarted} onAccountChange={handleAccountChange} />
+        <ReconcileStartForm {csrfToken} {requestedAccountID} {requestedCommodityID} bind:pending={startPending} onStarted={handleStarted} onAccountChange={handleAccountChange} />
       </Panel>
     </div>
     {#if startSelection}
@@ -105,8 +156,10 @@
     accountLabel={accountLabel(view.session.account_id)}
     {csrfToken}
     initialSession={view.session}
-    onFinished={handleFinished}
-    onVoided={handleVoided}
+    initialReason={view.initialReason}
+    initialError={view.initialError}
+    onClosed={handleClosed}
+    onCloseFailed={(session, reason, error) => { void checkStartOutcome({ session, reason, error }); }}
   />
 
   {#if activeAccountID !== undefined}

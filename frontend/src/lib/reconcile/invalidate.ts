@@ -1,5 +1,5 @@
 import type { QueryClient } from '@tanstack/svelte-query';
-import { reconciliationQueryKey } from '#lib/api/reconciliation.ts';
+import { reconciliationQueryKey, type ReconciliationSessionResponse } from '#lib/api/reconciliation.ts';
 import { accountRegisterQueryKey, transactionsQueryKey, type AccountRegisterInfiniteData } from '#lib/api/transactions.ts';
 
 /**
@@ -30,6 +30,12 @@ export async function invalidateReconciliationReads(
 ): Promise<void> {
   await cancelReconciliationReads(queryClient, accountID);
   await Promise.all(reconciliationWriteReadKeys(accountID).map((queryKey) => queryClient.invalidateQueries({ queryKey })));
+}
+
+export function invalidateClosedSessionReads(queryClient: QueryClient, session: ReconciliationSessionResponse): Promise<void> {
+  return session.status === 'finished'
+    ? invalidateReconciliationReads(queryClient, session.account_id)
+    : queryClient.invalidateQueries({ queryKey: reconciliationQueryKey });
 }
 
 /**
