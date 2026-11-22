@@ -235,3 +235,16 @@ A composed read pins before calling any child that could resolve the day
 independently. Home pins once per composition attempt, so the briefing and
 reconciliation agree across midnight and a retry after a book change can
 take the new day (#606, `TestHomeWidgetsShareThePinnedOwnerDay`).
+
+## 84. Date-shaped text mistaken for a calendar date in SQLite CHECKs
+
+Shape checks admitted impossible dates into storage, where text comparisons
+could place a version in the wrong effective window (#584). In a SQLite
+CHECK, `date(col) IS NOT NULL` also admits overflow that SQLite normalizes,
+and `date(col) = col` lets an unparseable input yield NULL and pass. Use
+`CASE WHEN length(col) = 10 THEN date(col, '+0 days') END IS col`. The length
+guard excludes special values such as `now`, and `IS` compares the result to
+the full stored value while allowing SQL NULL for nullable columns.
+`TestPayeeVersionsRequireCalendarExactDates` exercises raw version writes.
+`TestRecurringTemplateEndDateIsOptionalAndOrdered` covers a nullable date
+with a separate ordering invariant.

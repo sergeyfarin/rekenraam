@@ -9,6 +9,8 @@
 -- every seeded lot already names both; financial rows and IDs are unchanged.
 -- Reviewed for #573's single-book triggers (2026-11-18): the one book is id 1
 -- and only its default currency is updated later, so it loads unchanged.
+-- Reviewed for #584's calendar-date CHECKs (2026-11-22): the fixture passes
+-- the rewritten baseline without changes to its dates or financial rows.
 --
 -- It is frozen on purpose. Regenerating it against a later schema would defeat
 -- the test: the point is to migrate data written by the OLD app, which future

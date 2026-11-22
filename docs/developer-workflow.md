@@ -1007,22 +1007,23 @@ backups upgrade in place; nothing needs a reset.
 rewritten so that `books.id` is held at 1 by the `books_single_id_insert` and
 `books_id_no_update` triggers instead of `CHECK (id = 1)`, and the baseline
 identity becomes **20261118**. The head stays at the same forward number.
-Before pulling this change, export anything worth keeping with the previous
-build while it still runs, then move the database aside and start fresh with
-the procedure above. This build refuses a `20261026` database at startup and a
-`20261026` backup at restore, so neither step works after updating.
 
-The baseline records generation **20261118** in SQLite's `PRAGMA user_version`,
+**#584 (2026-11-22) — BREAKING DEV DATABASE.** The baseline uses calendar-exact
+checks in place of the 44 date-shape checks. This build uses baseline identity
+**20261122** and Goose head **14**. Export anything worth keeping with the
+previous build before updating, then move the disposable development database
+aside and start fresh with the procedure above.
+
+The baseline records its generation in SQLite's `PRAGMA user_version`,
 separately from Goose's forward migration number. Startup refuses older
-candidate files (including old version-1 files and #405's `20261026`) with `incompatible pre-release
-baseline`, before running migrations. Populated unversioned files also refuse;
-`recover-owner` still backs them up before refusing admission without resetting
-credentials. Restore refuses backups from that
-baseline before preserving or replacing the destination. `verify-backup`
-reports the mismatch and exits `3`, distinct from an unusable file (`1`). Export with the original build before updating, then
-reset only disposable development data using the procedure above. A genuinely
-newer forward-schema backup with the same baseline still has its separate
-"newer schema" refusal. Never use restore across this boundary.
+candidate files, including generations `20261026` and `20261118`, with
+`incompatible pre-release baseline` before running migrations. Startup also
+refuses populated unversioned files. `recover-owner` backs them up before
+refusing admission, leaving credentials intact. Restore refuses backups from
+older baselines before preserving or replacing the destination. `verify-backup`
+reports the mismatch and exits `3`. An unusable file exits `1`. A newer
+forward-schema backup with the current baseline still gets the separate
+"newer schema" refusal.
 
 The e2e database resets itself on every self-managed run and needs no manual reset.
 

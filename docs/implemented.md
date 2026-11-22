@@ -22,13 +22,17 @@ ADR 0013 permits an explicitly declared redesign before any installed release;
 each rewrite updates the checksum, fixtures and upgrade/equivalence tests.
 After the first installed release, schema changes use forward migrations.
 
-Forward migration `0002` (#417) makes the head **2** on the same baseline.
+#584 rewrites the baseline to identity `20261122`. SQLite validates the full
+calendar date in all 44 columns previously guarded by date-shape checks.
+Development databases on earlier generations require the documented reset.
 
 #573 rewrites the baseline to identity `20261118`: `books.id` loses its
 `CHECK (id = 1)` and two triggers keep the same rule (an inserted id other than
 1 and any change of the id are refused), so a later scope change can drop them
 in an ordinary transactional migration instead of rebuilding a table 82
 foreign keys reference. Development databases on `20261026` must be reset.
+
+Forward migration `0002` (#417) advanced the #405 baseline's head to **2**.
 
 #405 consolidates the previous candidate's 0001–0027 into head **1**, with
 baseline identity `20261026`. It removes two unused provider-lookup tables,
