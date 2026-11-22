@@ -59,12 +59,22 @@ for (const theme of ['light', 'dark'] as const) {
     expect((await dialog.boundingBox())!.width).toBeLessThan(1000);
     await expect(page).toHaveURL(url => url.pathname === '/app');
     await expectNoAccessibilityViolations(page, `desktop entry dialog ${theme}`);
-    // Walk from the category field with its suggestions open: options are not
-    // Tab stops, so Tab never lands on one that closes under it (#477).
+    // The seeded categories overflow the popup. Chromium can make a scroll
+    // container a Tab stop even when each option is excluded from Tab order.
     const categoryField = dialog.getByRole('combobox', { name: 'Category', exact: true });
+    const categoryOptions = dialog.getByRole('listbox', { name: 'Category', exact: true });
+    const splitEntry = dialog.getByRole('button', { name: 'Use split entry', exact: true });
     await categoryField.focus();
     await expect(categoryField).toHaveAttribute('aria-expanded', 'true');
+    await expect.poll(() => categoryOptions.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
     await expectNoAccessibilityViolations(page, `desktop entry dialog with suggestions ${theme}`);
+    await page.keyboard.press('Tab');
+    await expect(splitEntry).toBeFocused();
+    await expect(categoryOptions).toHaveCount(0);
+    await expect(splitEntry).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(categoryField).toBeFocused();
+    await expect(categoryOptions).toBeVisible();
     await expectFocusTrapped(page, dialog, `desktop entry dialog ${theme}`);
 
     // Unsaved input survives Home refetching behind the dialog.
@@ -103,7 +113,13 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(categoryField).toHaveAttribute('aria-activedescendant', /category-0$/);
     await page.keyboard.press('Enter');
     await expect(dialog.getByText(category.name, { exact: true })).toBeVisible();
-    await expect(dialog.getByRole('button', { name: 'Clear selection', exact: true })).toBeFocused();
+    const clearCategory = dialog.getByRole('button', { name: 'Clear selection', exact: true });
+    await expect(clearCategory).toBeFocused();
+    await clearCategory.click();
+    await expect(categoryField).toBeFocused();
+    await categoryField.fill(category.name);
+    await categoryOptions.getByRole('option').filter({ hasText: category.name }).click();
+    await expect(clearCategory).toBeFocused();
     const created = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/transactions');
     await dialog.getByRole('button', { name: 'Save transaction', exact: true }).press('Enter');
     expect((await created).status()).toBe(201);
@@ -164,6 +180,10 @@ test.describe('on a touch phone', () => {
       await expect(addTile(page)).toBeFocused();
       await addTile(page).tap();
       await expect(dialog.getByLabel('Description', { exact: true })).toHaveValue('');
+      const category = dialog.getByRole('combobox', { name: 'Category', exact: true });
+      await category.tap();
+      await dialog.getByRole('listbox', { name: 'Category', exact: true }).getByRole('option').first().tap();
+      await expect(dialog.getByRole('button', { name: 'Clear selection', exact: true })).toBeFocused();
     });
   }
 });

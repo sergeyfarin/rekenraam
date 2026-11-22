@@ -198,7 +198,23 @@ key, the #311 pattern), never a client copy. Named checks:
 `transaction-edit-preservation.spec.ts`,
 `TestTransactionEditKeepsOmittedMetadataExactly`.
 
-## 85. A final action enabled by an older saved selection
+## 85. A scrollable combobox popup that becomes a Tab stop
+
+The Category option buttons already had `tabindex="-1"`, but Chromium still
+tabbed to the overflowing listbox. The input's blur timeout removed the popup
+and focus fell to the document body during the Home entry journey (PR #634).
+Shared Search also had an extra Tab stop when its results overflowed.
+When the input owns focus through `aria-activedescendant`, set
+`tabindex="-1"` on the scroller and on the option buttons. Exercise real
+overflow in `home-entry.spec.ts` and `header-search.spec.ts`. The source guard
+`listbox-focus.test.ts` covers scrollable listbox utilities and exempts the
+instrument pickers whose option buttons participate in the Tab sequence.
+Keep focus on the input during pointer interaction with a popup that closes on
+blur (`category-scrollbar.spec.ts` exercises the native drag). When selecting
+replaces the input, move focus to the replacement control for both pointer and
+keyboard selection (`home-entry.spec.ts`).
+
+## 86. A final action enabled by an older saved selection
 
 Reconcile could write a checkpoint while a posting deselection was still
 being saved (#633). Use the same readiness check in the button and its
