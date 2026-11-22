@@ -1,8 +1,8 @@
 {
   "counts": {
-    "es": 186,
-    "fr": 186,
-    "de": 186
+    "es": 189,
+    "fr": 189,
+    "de": 189
   },
   "keys": {
     "es": [
@@ -189,9 +189,12 @@
       "transactions_payee_lookup_failed",
       "transactions_payee_lookup_loading",
       "transactions_payee_lookup_too_long",
+      "transactions_posting_tag_remove",
+      "transactions_posting_tags",
       "transactions_tag_archived",
       "transactions_tags_archived_help",
-      "transactions_tags_archived_not_added"
+      "transactions_tags_archived_not_added",
+      "transactions_tags_archived_template_help"
     ],
     "fr": [
       "allocation_actual",
@@ -377,9 +380,12 @@
       "transactions_payee_lookup_failed",
       "transactions_payee_lookup_loading",
       "transactions_payee_lookup_too_long",
+      "transactions_posting_tag_remove",
+      "transactions_posting_tags",
       "transactions_tag_archived",
       "transactions_tags_archived_help",
-      "transactions_tags_archived_not_added"
+      "transactions_tags_archived_not_added",
+      "transactions_tags_archived_template_help"
     ],
     "de": [
       "allocation_actual",
@@ -565,9 +571,12 @@
       "transactions_payee_lookup_failed",
       "transactions_payee_lookup_loading",
       "transactions_payee_lookup_too_long",
+      "transactions_posting_tag_remove",
+      "transactions_posting_tags",
       "transactions_tag_archived",
       "transactions_tags_archived_help",
-      "transactions_tags_archived_not_added"
+      "transactions_tags_archived_not_added",
+      "transactions_tags_archived_template_help"
     ]
   }
 }

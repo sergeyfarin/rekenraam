@@ -255,3 +255,39 @@ test('editing a recurring template preserves payee, description and posting deta
  expect(after.postings).toEqual(before.postings);
  } finally { await archive(page,template.id); }
 });
+
+// #656: a template keeps a tag it already names after the tag is archived, so
+// an unrelated edit does not change what future occurrences carry; the owner
+// sees it labelled and removes it explicitly.
+test('a template edit keeps an archived tag until the owner removes it',async({page})=>{
+ const {csrfToken,currencyID}=await readyForLedger(page);
+ const name=`Archived tag template ${Date.now()}`;
+ const account=await createCashAccount(page,csrfToken,name,currencyID);
+ const tag=await apiJSON<{id:number;name:string}>(page,'POST','/api/v1/tags',csrfToken,{name:`Retired ${Date.now()}`},[201]);
+ const template=await seedDue(page,name,account.id,currencyID,false);
+ const read=()=>apiJSON<{name:string;tag_ids:number[]}>(page,'GET',`/api/v1/recurring/templates/${template.id}`);
+ try {
+ await apiJSON(page,'PATCH',`/api/v1/recurring/templates/${template.id}`,csrfToken,{tag_ids:[tag.id]});
+ await apiJSON(page,'POST',`/api/v1/tags/${tag.id}/archive`,await csrfTokenFor(page));
+ await page.goto('/app/planning/recurring');
+ await page.getByRole('button',{name:'Templates',exact:true}).click();
+ const edit=async(label:string)=>{
+  await page.getByRole('article',{name:label,exact:true}).getByRole('button',{name:'Edit template'}).click();
+  return page.getByRole('dialog');
+ };
+ let dialog=await edit(name);
+ const archived=dialog.getByRole('checkbox',{name:`${tag.name} (archived)`,exact:true});
+ await expect(archived).toBeChecked();
+ await expect(dialog.getByText('new occurrences are blocked until you remove or replace them')).toBeVisible();
+ await dialog.getByLabel('Template name').fill(`${name} renamed`);
+ await dialog.getByRole('button',{name:'Save template',exact:true}).click();
+ await expect(dialog).not.toBeVisible();
+ expect(await read()).toMatchObject({name:`${name} renamed`,tag_ids:[tag.id]});
+
+ dialog=await edit(`${name} renamed`);
+ await dialog.getByRole('checkbox',{name:`${tag.name} (archived)`,exact:true}).uncheck();
+ await dialog.getByRole('button',{name:'Save template',exact:true}).click();
+ await expect(dialog).not.toBeVisible();
+ expect((await read()).tag_ids).toEqual([]);
+ } finally { await archive(page,template.id); }
+});

@@ -10,8 +10,9 @@ type Stored = {
 };
 
 // #650: archiving a tag stops new assignments but keeps the ones it has. The
-// editor shows an archived assignment, labelled, so an unrelated edit keeps it
-// and the owner can clear it; it never offers the archived tag anywhere else.
+// editor shows an archived assignment, labelled, on the transaction and on its
+// posting line, so an unrelated edit keeps it and the owner can clear it; it
+// never offers the archived tag anywhere else.
 test('an edit keeps an archived tag the transaction carries until the owner clears it', async ({ page }) => {
   const { csrfToken, currencyID } = await readyForLedger(page);
   const suffix = Date.now();
@@ -83,4 +84,14 @@ test('an edit keeps an archived tag the transaction carries until the owner clea
   await open();
   await expect(edit.getByRole('checkbox', { name: second.name, exact: true })).toBeChecked();
   await expect(edit.getByRole('checkbox', { name: archivedLabel })).toHaveCount(0);
+
+  // The posting line still carries it; the line lists it and it can be removed there too.
+  const removeLineTag = edit.getByRole('button', { name: `Remove tag ${archivedLabel}` });
+  await expect(removeLineTag).toBeVisible();
+  await removeLineTag.click();
+  await expect(removeLineTag).toHaveCount(0);
+  await save();
+  stored = await read();
+  expect(stored.tag_ids).toEqual([second.id]);
+  expect(categoryTags(stored)).toEqual([]);
 });

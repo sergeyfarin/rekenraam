@@ -2174,5 +2174,8 @@
   "reconcile_start_currency_placeholder": "Kies een valuta",
   "transactions_tag_archived": "{name} (gearchiveerd)",
   "transactions_tags_archived_help": "Gearchiveerde labels blijven op deze transactie staan tot je ze uitvinkt. Alleen actieve labels kunnen worden toegevoegd.",
-  "transactions_tags_archived_not_added": "Gearchiveerde labels worden niet aan een nieuwe transactie toegevoegd."
+  "transactions_tags_archived_not_added": "Gearchiveerde labels worden niet aan een nieuwe transactie toegevoegd.",
+  "transactions_tags_archived_template_help": "Gearchiveerde labels blijven op dit sjabloon staan, maar nieuwe herhalingen worden geblokkeerd tot je ze verwijdert of vervangt.",
+  "transactions_posting_tags": "Labels van de regel",
+  "transactions_posting_tag_remove": "Label {name} verwijderen"
 }

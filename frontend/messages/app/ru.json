@@ -2242,5 +2242,8 @@
   "reconcile_start_currency_placeholder": "Выберите валюту",
   "transactions_tag_archived": "{name} (в архиве)",
   "transactions_tags_archived_help": "Архивные метки остаются у этой транзакции, пока вы их не снимете. Добавлять можно только активные метки.",
-  "transactions_tags_archived_not_added": "Архивные метки не добавляются к новой транзакции."
+  "transactions_tags_archived_not_added": "Архивные метки не добавляются к новой транзакции.",
+  "transactions_tags_archived_template_help": "Архивные метки остаются в этом шаблоне, но новые повторения блокируются, пока вы их не уберёте или не замените.",
+  "transactions_posting_tags": "Метки строки",
+  "transactions_posting_tag_remove": "Убрать метку {name}"
 }
