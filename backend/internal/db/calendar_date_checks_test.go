@@ -83,7 +83,7 @@ func installedCalendarDateColumnNames(t *testing.T, database *sql.DB) []string {
 	// Find date columns even when their CHECK is missing or only checks shape.
 	rows, err := database.Query(`SELECT tbl.name || '.' || col.name
 		FROM sqlite_schema AS tbl CROSS JOIN pragma_table_info(tbl.name) AS col
-		WHERE tbl.type = 'table' AND upper(col.type) = 'TEXT'
+		WHERE tbl.type = 'table'
 			AND (lower(col.name) GLOB '*_date' OR lower(col.name) GLOB '*_on'
 				OR lower(col.name) GLOB '*_from' OR lower(col.name) GLOB '*_to'
 				OR lower(col.name) GLOB '*period_start*' OR lower(col.name) GLOB '*_day')`)

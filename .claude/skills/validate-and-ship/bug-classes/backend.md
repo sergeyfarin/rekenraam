@@ -251,9 +251,9 @@ and `date(col) = col` lets an unparseable input yield NULL and pass. Use
 `CASE WHEN length(col) = 10 THEN date(col, '+0 days') END IS col`. The length
 guard excludes special values such as `now`, and `IS` compares the result to
 the full stored value while allowing SQL NULL for nullable columns.
-`TestInstalledCalendarDateChecks` matches named TEXT calendar-date columns
-to the inventory even if their CHECK is missing or only checks shape. It
-exercises each installed calendar-date CHECK in UTF-8, UTF-16le and UTF-16be.
+`TestInstalledCalendarDateChecks` matches named calendar-date columns to the
+inventory regardless of declared type or CHECK, then exercises each installed
+calendar-date CHECK in UTF-8, UTF-16le and UTF-16be.
 `TestPayeeVersionsRequireCalendarExactDates` exercises raw version writes,
 `TestRecurringTemplateEndDateIsOptionalAndOrdered` covers a nullable date
 with an ordering invariant, and `TestBudgetTargetsRequireRealMonthStarts`
