@@ -38,7 +38,10 @@
 
   const queryClient = useQueryClient();
   let view = $state<View>({ type: 'start' });
-  let startOutcome = $state.raw<StartOutcome | undefined>(undefined);
+  // The latest close result for the session on screen, or for the one the
+  // owner left with Back. A failed Finish or Discard may have committed, so its
+  // saved status is read again before either view offers another write.
+  let closeOutcome = $state.raw<StartOutcome | undefined>(undefined);
   let startPending = $state(false);
   let mounted = true;
   onDestroy(() => { mounted = false; });
@@ -61,7 +64,7 @@
   }
 
   function handleStarted(session: ReconciliationSessionResponse) {
-    startOutcome = undefined;
+    closeOutcome = undefined;
     view = { type: 'session', session };
   }
 
@@ -69,18 +72,24 @@
     return mounted && view.type === 'start' && view.fromSessionID === sessionID;
   }
 
+  function isSessionFor(sessionID: number) {
+    return mounted && view.type === 'session' && view.session.id === sessionID;
+  }
+
   function handleClosed(session: ReconciliationSessionResponse) {
     if (isStartFor(session.id)) {
-      startOutcome = { state: 'closed', session };
-    } else if (view.type === 'session' && view.session.id === session.id) {
+      closeOutcome = { state: 'closed', session };
+    } else if (isSessionFor(session.id)) {
+      closeOutcome = undefined;
       view = session.status === 'finished' ? { type: 'finished', session } : { type: 'start' };
     }
   }
 
-  async function checkStartOutcome(failure: CloseFailure) {
+  async function checkCloseOutcome(failure: CloseFailure) {
     const sessionID = failure.session.id;
-    if (!isStartFor(sessionID)) return;
-    startOutcome = { ...failure, state: 'checking' };
+    const shown = () => isStartFor(sessionID) || isSessionFor(sessionID);
+    if (!shown()) return;
+    closeOutcome = { ...failure, state: 'checking' };
     const options = reconciliationSessionQueryOptions(sessionID);
 
     let saved: ReconciliationSessionResponse;
@@ -89,12 +98,14 @@
       await queryClient.cancelQueries({ queryKey: options.queryKey, exact: true });
       saved = await queryClient.fetchQuery({ ...options, staleTime: 0, retry: false });
     } catch {
-      if (isStartFor(sessionID)) startOutcome = { ...failure, state: 'unknown' };
+      if (shown()) closeOutcome = { ...failure, state: 'unknown' };
       return;
     }
 
     if (saved.status === 'open') {
-      if (isStartFor(sessionID)) startOutcome = { ...failure, session: saved, state: 'open' };
+      // The open session keeps its selection, reason and error and can retry.
+      if (isStartFor(sessionID)) closeOutcome = { ...failure, session: saved, state: 'open' };
+      else if (isSessionFor(sessionID)) closeOutcome = undefined;
     } else {
       await invalidateClosedSessionReads(queryClient, saved);
       handleClosed(saved);
@@ -102,13 +113,21 @@
   }
 
   function retryStatus() {
-    if (startOutcome?.state === 'unknown') void checkStartOutcome(startOutcome);
+    if (closeOutcome?.state === 'unknown') void checkCloseOutcome(closeOutcome);
   }
 
+  // While a session's saved result is unknown, the session blocks its writes.
+  const sessionCheck = $derived(
+    view.type === 'session' && closeOutcome?.session.id === view.session.id &&
+      (closeOutcome.state === 'checking' || closeOutcome.state === 'unknown')
+      ? closeOutcome.state
+      : undefined
+  );
+
   function returnToSession() {
-    if (startPending || startOutcome?.state !== 'open' || !isStartFor(startOutcome.session.id)) return;
-    const { session, reason, error } = startOutcome;
-    startOutcome = undefined;
+    if (startPending || closeOutcome?.state !== 'open' || !isStartFor(closeOutcome.session.id)) return;
+    const { session, reason, error } = closeOutcome;
+    closeOutcome = undefined;
     view = { type: 'session', session, initialReason: reason, initialError: error };
   }
 
@@ -120,9 +139,9 @@
 {#if view.type === 'start'}
   <div class="lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-6 xl:grid-cols-[minmax(0,1fr)_26rem]">
     <div class="min-w-0">
-      {#if startOutcome}
+      {#if closeOutcome}
         <div class="mb-4">
-          <ReconcileStartOutcome outcome={startOutcome} accountLabel={accountLabel(startOutcome.session.account_id)} {startPending} onRetry={retryStatus} onReturn={returnToSession} />
+          <ReconcileStartOutcome outcome={closeOutcome} accountLabel={accountLabel(closeOutcome.session.account_id)} {startPending} onRetry={retryStatus} onReturn={returnToSession} />
         </div>
       {/if}
       <Panel>
@@ -158,8 +177,10 @@
     initialSession={view.session}
     initialReason={view.initialReason}
     initialError={view.initialError}
+    closeCheck={sessionCheck}
     onClosed={handleClosed}
-    onCloseFailed={(session, reason, error) => { void checkStartOutcome({ session, reason, error }); }}
+    onCloseFailed={(session, reason, error) => { void checkCloseOutcome({ session, reason, error }); }}
+    onRetryCloseCheck={retryStatus}
   />
 
   {#if activeAccountID !== undefined}

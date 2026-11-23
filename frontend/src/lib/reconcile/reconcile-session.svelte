@@ -10,6 +10,7 @@
   import StatusBadge from '#lib/components/status-badge.svelte';
   import APIFormError from '#lib/components/api-form-error.svelte';
   import { formatQuantity } from '#lib/money/format.ts';
+  import { formatCalendarDate } from '#lib/dates/calendar-date.ts';
   import { invalidateClosedSessionReads } from '#lib/reconcile/invalidate.ts';
   import {
     reconciliationSessionQueryOptions,
@@ -26,8 +27,10 @@
     initialSession,
     initialReason = '',
     initialError,
+    closeCheck,
     onClosed,
-    onCloseFailed
+    onCloseFailed,
+    onRetryCloseCheck
   }: {
     reconciliationID: number;
     accountLabel: string;
@@ -35,8 +38,11 @@
     initialSession: ReconciliationSessionResponse;
     initialReason?: string;
     initialError?: unknown;
+    /** A failed Finish or Discard whose saved result is still being read, or could not be. */
+    closeCheck?: 'checking' | 'unknown';
     onClosed: (session: ReconciliationSessionResponse) => void;
     onCloseFailed: (session: ReconciliationSessionResponse, reason: string, error: unknown) => void;
+    onRetryCloseCheck: () => void;
   } = $props();
 
   const locale = $derived(getLocale());
@@ -56,8 +62,10 @@
 
   const selectedIDs = $derived(new Set(session.selected_postings.map((p) => p.posting_id)));
   const isBalanced = $derived(session.difference.quantity_value === '0');
+  // A failed close may have committed (#644): no write until its saved result is known.
   const canAct = $derived(
-    session.status === 'open' && !sessionQuery.isError && !selectionPending && closing === undefined
+    session.status === 'open' && !sessionQuery.isError && !selectionPending && closing === undefined &&
+      closeCheck === undefined
   );
   const canFinish = $derived(canAct && isBalanced);
 
@@ -118,6 +126,8 @@
     }
   }
 
+  const statement = $derived({ account: accountLabel, date: formatCalendarDate(session.statement_date, locale) });
+
   function detailFor(payee?: string, description?: string): string {
     return [payee, description].filter(Boolean).join(' — ') || '—';
   }
@@ -127,7 +137,8 @@
   const labelClass = 'block text-xs font-semibold uppercase tracking-[0.12em] text-muted';
 </script>
 
-{#if sessionQuery.isError}
+<!-- A failed status read during a close check keeps the session in view; its own retry reads the status. -->
+{#if sessionQuery.isError && closeCheck === undefined}
   <StatePanel title={m.reconcile_session_error_title()} copy={m.reconcile_session_error_copy()}>
     <button
       type="button"
@@ -248,11 +259,25 @@
                 class={inputClass}
                 placeholder={m.reconcile_reason_placeholder()}
                 bind:value={reason}
-                disabled={closing !== undefined}
+                disabled={closing !== undefined || closeCheck !== undefined}
               />
             </div>
 
             <APIFormError error={actionError} id="reconcile-action-error" />
+            {#if closeCheck === 'checking'}
+              <p role="status" class="text-sm text-muted">{m.reconcile_start_checking_result(statement)}</p>
+            {:else if closeCheck === 'unknown'}
+              <div>
+                <p role="alert" class="text-sm text-danger">{m.reconcile_start_result_unknown(statement)}</p>
+                <button
+                  type="button"
+                  class="mt-2 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
+                  onclick={onRetryCloseCheck}
+                >
+                  {m.reconcile_start_retry_status()}
+                </button>
+              </div>
+            {/if}
 
             <div class="flex flex-col gap-2">
               <button
