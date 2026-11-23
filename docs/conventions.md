@@ -575,11 +575,13 @@ exchange, cash-and-stock merger, spin-off, internal and external transfers) and
 - A retry repeats the earlier request exactly. A form rebuilds its body on
   every Save, and the rebuilt body can differ: it can lack the checkpoint
   override the owner confirmed, or link a payee that the lost save created.
-  So the key keeps the save whose outcome is unknown (no answer, or a 5xx),
-  identified by the owner's entry rather than the body. While that entry is
-  unchanged, `requestKey.send(entry, save)` sends that save again: body,
-  guards and key. A refusal with a code clears it, except
-  `IDEMPOTENCY_KEY_REUSED`.
+  So the key keeps every save whose outcome is unknown (no answer, or a 5xx),
+  each identified by the owner's entry rather than the body. While the entry
+  matches one of them, `requestKey.send(entry, save)` sends that save again:
+  body, guards and key. Each stays until its own outcome is known: a refusal
+  with a code settles only that entry's save, and a success settles all. An
+  edited save that also fails therefore leaves the original confirmed save to
+  replay when the owner restores the entry.
 - The key is stored by the audit event the write inserts, in the write's own
   transaction (`request_keys`, migration 0015). A refused or rolled-back write
   stores nothing, so the key can be sent again with a corrected body.
@@ -602,7 +604,9 @@ exchange, cash-and-stock merger, spin-off, internal and external transfers) and
   entry, `commitReview.submit` goes straight to the write, which resends it.
   Likewise the dividend form skips its review and the transaction editor
   skips its payee question. A changed entry, or a refusal with a code, asks for the impact
-  again. Preview-then-record forms resend their reviewed preview unchanged.
+  again. Preview-then-record forms resend their reviewed preview unchanged
+  while it is open; after the activity is closed and reopened they must
+  preview again, and recovering that save is #677.
 - Two requests racing with one key cannot both write: the in-transaction claim
   finds the committed key and rolls the second write back, and the response
   becomes the replay.
