@@ -12,13 +12,18 @@ import { openInvestmentActivity } from './support/investment-entry';
 
 const networkError = 'The server could not be reached. Check the connection and try again.';
 
-/** Forwards every POST to path, and drops the first response after the server answered it. */
+/**
+ * Forwards every POST to path and drops the first successful response after
+ * the server committed it. Earlier refusals (a reconciliation guard asking
+ * for confirmation) reach the page; `answered` lists the committed ones on.
+ */
 async function loseFirstResponse(page: Page, path: string) {
   const answered: Array<{ status: number; replayed: string | undefined; key: string | null }> = [];
   await page.route(`**${path}`, async (route) => {
     if (route.request().method() !== 'POST') return route.continue();
     const key = await route.request().headerValue('Idempotency-Key');
     const response = await route.fetch();
+    if (answered.length === 0 && !response.ok()) return route.fulfill({ response });
     answered.push({ status: response.status(), replayed: response.headers()['idempotent-replayed'], key });
     if (answered.length === 1) return route.abort('failed');
     return route.fulfill({ response });
@@ -114,9 +119,17 @@ test('a buy, a sell and a dividend saved again after a lost response are each re
   await form.locator('#buy-unit-price').fill('10');
   await form.getByRole('button', { name: 'Record buy', exact: true }).click();
   await expect(form.getByText(networkError)).toBeVisible();
+  // Review of PR #669: close Buy and open it again inside the same entry.
+  // The working copy comes back, and with it the key and the lost save.
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.locator('#buy-quantity')).toBeHidden();
+  await openInvestmentActivity(page, 'Buy');
+  form = page.locator('form').filter({ has: page.locator('#buy-quantity') });
+  await expect(form.locator('#buy-quantity')).toHaveValue('4');
   await form.getByRole('button', { name: 'Record buy', exact: true }).click();
   await expect(page.locator('#buy-quantity')).toBeHidden();
   expect(answered.map((answer) => [answer.status, answer.replayed])).toEqual([[201, undefined], [201, 'true']]);
+  expect(answered[1].key).toBe(answered[0].key);
   expect(await transactionCount(page, s.cash.id)).toBe(1);
   expect(await lots()).toBe(1);
   await page.unrouteAll({ behavior: 'wait' });
@@ -159,4 +172,82 @@ test('a buy, a sell and a dividend saved again after a lost response are each re
   await expect(page.locator('#div-amount')).toBeHidden();
   expect(answered.map((answer) => [answer.status, answer.replayed])).toEqual([[201, undefined], [201, 'true']]);
   expect(await transactionCount(page, s.cash.id)).toBe(3);
+});
+
+/** A cash account with one posting reconciled through a statement three days ago. */
+async function reconciledAccount(page: Page) {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const suffix = Date.now();
+  const opened = daysFromTodayISO(-20);
+  const account = await createCashAccount(page, csrfToken, `Confirmed lost ${suffix}`, currencyID, opened);
+  const income = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/accounts', csrfToken, {
+    name: `Confirmed lost income ${suffix}`, account_class: 'income', account_kind: 'income', default_commodity_id: currencyID,
+    allows_postings: true, opened_on: opened, effective_from: opened
+  });
+  const seeded = daysFromTodayISO(-10);
+  await apiJSON(page, 'POST', '/api/v1/transactions', csrfToken, {
+    transaction_date: seeded, status: 'posted',
+    journal_entries: [{ entry_date: seeded, postings: [
+      { account_id: account.id, commodity_id: currencyID, quantity_value: '10000', quantity_scale: 2 },
+      { account_id: income.id, commodity_id: currencyID, quantity_value: '-10000', quantity_scale: 2 }
+    ] }]
+  });
+  const session = await apiJSON<{ id: number; candidates: Array<{ posting_id: number }> }>(page, 'POST', `/api/v1/accounts/${account.id}/reconciliations/start`, csrfToken, {
+    commodity_id: currencyID, source_kind: 'statement', statement_date: daysFromTodayISO(-3), statement_balance_value: '10000', statement_balance_scale: 2
+  });
+  await apiJSON(page, 'PATCH', `/api/v1/reconciliations/${session.id}`, csrfToken, { posting_version_ids: session.candidates.map((candidate) => candidate.posting_id) });
+  await apiJSON(page, 'POST', `/api/v1/reconciliations/${session.id}/finish`, csrfToken, { change_reason: 'statement verified' });
+  return { account, income, suffix };
+}
+
+// Review of PR #669: the save after a confirmed override rebuilt its body
+// without the confirmed checkpoints, was refused as another request, and the
+// next Save posted the transaction twice.
+test('a transaction confirmed over a reconciled period and saved again after a lost response is recorded once', async ({ page }) => {
+  const { account, suffix } = await reconciledAccount(page);
+  const description = `Confirmed lost ${suffix}`;
+  const answered = await loseFirstResponse(page, '/api/v1/transactions');
+
+  await page.goto('/app/ledger/transactions');
+  await page.getByRole('button', { name: 'New transaction', exact: true }).click();
+  const form = page.getByRole('region', { name: 'New transaction', exact: true });
+  await form.getByLabel('Date').fill(daysFromTodayISO(-5));
+  await form.getByLabel('Description').fill(description);
+  await form.getByLabel('Account').selectOption({ label: account.name });
+  await form.getByLabel('Amount').fill('4.50');
+  await form.getByPlaceholder('Search categories').click();
+  await form.locator('ul[role="listbox"] button[role="option"]').first().click();
+  await form.getByRole('button', { name: 'Save transaction', exact: true }).click();
+  const warning = page.getByRole('alertdialog', { name: 'This change affects a reconciled period' });
+  await warning.getByRole('button', { name: 'Proceed and invalidate', exact: true }).click();
+  await expect(form.getByText(networkError)).toBeVisible();
+  await form.getByRole('button', { name: 'Save transaction', exact: true }).click();
+  await expectSavedTransaction(page, description);
+
+  expect(answered.map((answer) => [answer.status, answer.replayed])).toEqual([[201, undefined], [201, 'true']]);
+  expect(await transactionCount(page, account.id)).toBe(2);
+  // A third Save cannot post it again either: the entry is saved and closed.
+  await expect(form.getByRole('button', { name: 'Save transaction', exact: true })).toHaveCount(0);
+});
+
+test('a dividend confirmed over a reconciled period and saved again after a lost response is recorded once', async ({ page }) => {
+  const { account, income } = await reconciledAccount(page);
+  const answered = await loseFirstResponse(page, '/api/v1/investments/dividend');
+
+  await page.goto('/app/investments');
+  await openInvestmentActivity(page, 'dividend');
+  const form = page.locator('form').filter({ has: page.locator('#div-amount') });
+  await form.locator('#div-date').fill(daysFromTodayISO(-5));
+  await form.locator('#div-cash-account').selectOption(String(account.id));
+  await form.locator('#div-income-account').selectOption(String(income.id));
+  await form.locator('#div-amount').fill('3.25');
+  const record = form.getByRole('button', { name: 'Record dividend', exact: true });
+  await record.click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Proceed and invalidate', exact: true }).click();
+  await expect(form.getByText(networkError)).toBeVisible();
+  await record.click();
+  await expect(page.locator('#div-amount')).toBeHidden();
+
+  expect(answered.map((answer) => [answer.status, answer.replayed])).toEqual([[201, undefined], [201, 'true']]);
+  expect(await transactionCount(page, account.id)).toBe(2);
 });
