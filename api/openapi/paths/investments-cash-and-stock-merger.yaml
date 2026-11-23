@@ -22,6 +22,7 @@ post:
     Fractions the issuer settles in cash are a separate cash in lieu linked to
     this transaction.
   parameters:
+    - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
     - in: header
       name: X-CSRF-Token
       required: true
@@ -69,6 +70,7 @@ post:
         operation impossible), INVESTMENT_POSITION_SIDE_CONFLICT (an open short
         of the old instrument), gain changes not acknowledged, or
         reconciliation override required
+        IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything.
       content:
         application/json:
           schema:

@@ -161,7 +161,7 @@ func openWith(ctx context.Context, cfg config.Config, logger *slog.Logger, deps 
 		Pricing: pricingService, Investment: investmentService, Import: importService,
 		ImportConnection: importConnectionService, Export: exportService,
 		Backup: backupService, SelfCheck: selfCheckService, Forecast: forecastService,
-		Budget: budgetService,
+		Budget: budgetService, RequestKey: app.NewRequestKeyService(db.NewRequestKeyRepository(database)),
 	}, api.HandlerOptions{
 		TrustProxyHeaders: cfg.TrustProxyHeaders,
 		TrustedProxyCIDRs: cfg.TrustedProxyCIDRs,

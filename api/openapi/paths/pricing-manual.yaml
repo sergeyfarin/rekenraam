@@ -49,7 +49,9 @@ post:
         X-Request-ID:
           $ref: ../openapi.yaml#/components/headers/XRequestID
     '409':
-      description: Observation retired, dependency graph changed or cascade exceeds depth bound
+      description: >-
+        Observation retired, dependency graph changed or cascade exceeds depth bound.
+        IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything.
       content:
         application/json:
           schema:
@@ -82,6 +84,7 @@ post:
         schema:
           $ref: ../openapi.yaml#/components/schemas/ManualPriceRequest
   parameters:
+    - $ref: ../openapi.yaml#/components/parameters/IdempotencyKey
     - in: header
       name: X-CSRF-Token
       required: true

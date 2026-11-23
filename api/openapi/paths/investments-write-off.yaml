@@ -13,6 +13,7 @@ post:
     realized gains and losses are computed reporting values in this ledger and
     appear in `GET /investments/gains`.
   parameters:
+    - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
     - in: header
       name: X-CSRF-Token
       required: true
@@ -65,7 +66,9 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Insufficient lots to cover the written-off quantity
+      description: >-
+        Insufficient lots to cover the written-off quantity.
+        IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything.
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"

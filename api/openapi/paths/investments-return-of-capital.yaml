@@ -12,6 +12,7 @@ post:
     is INVESTMENT_CAPITAL_RETURN_NO_HOLDINGS. A later history change that
     changes the effects appends a revision of them (T-148).
   parameters:
+    - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
     - in: header
       name: X-CSRF-Token
       required: true
@@ -50,7 +51,9 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Reconciliation override or gain acknowledgement required, no holdings, or out of order
+      description: >-
+        Reconciliation override or gain acknowledgement required, no holdings, or out of order.
+        IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything.
       content:
         application/json:
           schema:

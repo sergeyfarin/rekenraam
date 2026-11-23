@@ -9448,6 +9448,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Request key for a create (#660). A client generates one key per entry and sends the same key with every retry of it, so a create whose response was lost is not recorded twice. The server stores the key in the same database transaction as the record it creates. A repeat with the same key and the same request (route and JSON body; key order and whitespace do not matter) writes nothing and returns the stored status and body with the header Idempotent-Replayed: true. The same key with a different route or body returns 409 IDEMPOTENCY_KEY_REUSED. A key whose write committed but whose response was never stored returns 409 IDEMPOTENCY_KEY_RESULT_UNAVAILABLE. A request that failed stored nothing, so the key can be sent again with a corrected body. Keys are kept for at least seven days. Omitted, every request creates a new record. Sending the header to an operation that does not declare it is refused with 400 VALIDATION_FAILED. */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                     "X-CSRF-Token": string;
                 };
                 path?: never;
@@ -9495,7 +9497,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Conflict */
+                /** @description Conflict. IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything. */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -14194,6 +14196,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Request key for a create (#660). A client generates one key per entry and sends the same key with every retry of it, so a create whose response was lost is not recorded twice. The server stores the key in the same database transaction as the record it creates. A repeat with the same key and the same request (route and JSON body; key order and whitespace do not matter) writes nothing and returns the stored status and body with the header Idempotent-Replayed: true. The same key with a different route or body returns 409 IDEMPOTENCY_KEY_REUSED. A key whose write committed but whose response was never stored returns 409 IDEMPOTENCY_KEY_RESULT_UNAVAILABLE. A request that failed stored nothing, so the key can be sent again with a corrected body. Keys are kept for at least seven days. Omitted, every request creates a new record. Sending the header to an operation that does not declare it is refused with 400 VALIDATION_FAILED. */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                     "X-CSRF-Token": string;
                 };
                 path?: never;
@@ -14255,7 +14259,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Observation retired, dependency graph changed or cascade exceeds depth bound */
+                /** @description Observation retired, dependency graph changed or cascade exceeds depth bound. IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything. */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -16668,6 +16672,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Request key for a create (#660). A client generates one key per entry and sends the same key with every retry of it, so a create whose response was lost is not recorded twice. The server stores the key in the same database transaction as the record it creates. A repeat with the same key and the same request (route and JSON body; key order and whitespace do not matter) writes nothing and returns the stored status and body with the header Idempotent-Replayed: true. The same key with a different route or body returns 409 IDEMPOTENCY_KEY_REUSED. A key whose write committed but whose response was never stored returns 409 IDEMPOTENCY_KEY_RESULT_UNAVAILABLE. A request that failed stored nothing, so the key can be sent again with a corrected body. Keys are kept for at least seven days. Omitted, every request creates a new record. Sending the header to an operation that does not declare it is refused with 400 VALIDATION_FAILED. */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                     /** @description Session-bound CSRF token for authenticated mutating requests. */
                     "X-CSRF-Token": string;
                 };
@@ -16720,7 +16726,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description The buy conflicts with current state: reconciliation override required (CONFLICT), dependent disposal or transfer cannot replay (INVESTMENT_BUY_DEPENDENCY), committed disposal gains change without an acknowledgement (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED), or the acknowledgement names a different change set (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE). Nothing is written; re-run the reconciliation-impact preview and review again. */
+                /** @description The buy conflicts with current state: reconciliation override required (CONFLICT), dependent disposal or transfer cannot replay (INVESTMENT_BUY_DEPENDENCY), committed disposal gains change without an acknowledgement (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED), or the acknowledgement names a different change set (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE). Nothing is written; re-run the reconciliation-impact preview and review again. IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything. */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -16763,6 +16769,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Request key for a create (#660). A client generates one key per entry and sends the same key with every retry of it, so a create whose response was lost is not recorded twice. The server stores the key in the same database transaction as the record it creates. A repeat with the same key and the same request (route and JSON body; key order and whitespace do not matter) writes nothing and returns the stored status and body with the header Idempotent-Replayed: true. The same key with a different route or body returns 409 IDEMPOTENCY_KEY_REUSED. A key whose write committed but whose response was never stored returns 409 IDEMPOTENCY_KEY_RESULT_UNAVAILABLE. A request that failed stored nothing, so the key can be sent again with a corrected body. Keys are kept for at least seven days. Omitted, every request creates a new record. Sending the header to an operation that does not declare it is refused with 400 VALIDATION_FAILED. */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                     /** @description Session-bound CSRF token for authenticated mutating requests. */
                     "X-CSRF-Token": string;
                 };
@@ -16815,7 +16823,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Insufficient lots to fill the sell order */
+                /** @description Insufficient lots to fill the sell order. IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything. */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -17563,6 +17571,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Request key for a create (#660). A client generates one key per entry and sends the same key with every retry of it, so a create whose response was lost is not recorded twice. The server stores the key in the same database transaction as the record it creates. A repeat with the same key and the same request (route and JSON body; key order and whitespace do not matter) writes nothing and returns the stored status and body with the header Idempotent-Replayed: true. The same key with a different route or body returns 409 IDEMPOTENCY_KEY_REUSED. A key whose write committed but whose response was never stored returns 409 IDEMPOTENCY_KEY_RESULT_UNAVAILABLE. A request that failed stored nothing, so the key can be sent again with a corrected body. Keys are kept for at least seven days. Omitted, every request creates a new record. Sending the header to an operation that does not declare it is refused with 400 VALIDATION_FAILED. */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                     /** @description Session-bound CSRF token for authenticated mutating requests. */
                     "X-CSRF-Token": string;
                 };
@@ -17615,7 +17625,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Out-of-order entry, position side conflict, or reconciliation override required */
+                /** @description Out-of-order entry, position side conflict, or reconciliation override required. IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything. */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -17736,6 +17746,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Request key for a create (#660). A client generates one key per entry and sends the same key with every retry of it, so a create whose response was lost is not recorded twice. The server stores the key in the same database transaction as the record it creates. A repeat with the same key and the same request (route and JSON body; key order and whitespace do not matter) writes nothing and returns the stored status and body with the header Idempotent-Replayed: true. The same key with a different route or body returns 409 IDEMPOTENCY_KEY_REUSED. A key whose write committed but whose response was never stored returns 409 IDEMPOTENCY_KEY_RESULT_UNAVAILABLE. A request that failed stored nothing, so the key can be sent again with a corrected body. Keys are kept for at least seven days. Omitted, every request creates a new record. Sending the header to an operation that does not declare it is refused with 400 VALIDATION_FAILED. */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                     /** @description Session-bound CSRF token for authenticated mutating requests. */
                     "X-CSRF-Token": string;
                 };
@@ -17788,7 +17800,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Insufficient short lots, out-of-order entry, or reconciliation override required */
+                /** @description Insufficient short lots, out-of-order entry, or reconciliation override required. IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything. */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -18001,6 +18013,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Request key for a create (#660). A client generates one key per entry and sends the same key with every retry of it, so a create whose response was lost is not recorded twice. The server stores the key in the same database transaction as the record it creates. A repeat with the same key and the same request (route and JSON body; key order and whitespace do not matter) writes nothing and returns the stored status and body with the header Idempotent-Replayed: true. The same key with a different route or body returns 409 IDEMPOTENCY_KEY_REUSED. A key whose write committed but whose response was never stored returns 409 IDEMPOTENCY_KEY_RESULT_UNAVAILABLE. A request that failed stored nothing, so the key can be sent again with a corrected body. Keys are kept for at least seven days. Omitted, every request creates a new record. Sending the header to an operation that does not declare it is refused with 400 VALIDATION_FAILED. */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                     "X-CSRF-Token": string;
                 };
                 path?: never;
@@ -18048,7 +18062,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Reconciliation override required or dated event conflicts with later disposal */
+                /** @description Reconciliation override required or dated event conflicts with later disposal. IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything. */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -18163,6 +18177,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Request key for a create (#660). A client generates one key per entry and sends the same key with every retry of it, so a create whose response was lost is not recorded twice. The server stores the key in the same database transaction as the record it creates. A repeat with the same key and the same request (route and JSON body; key order and whitespace do not matter) writes nothing and returns the stored status and body with the header Idempotent-Replayed: true. The same key with a different route or body returns 409 IDEMPOTENCY_KEY_REUSED. A key whose write committed but whose response was never stored returns 409 IDEMPOTENCY_KEY_RESULT_UNAVAILABLE. A request that failed stored nothing, so the key can be sent again with a corrected body. Keys are kept for at least seven days. Omitted, every request creates a new record. Sending the header to an operation that does not declare it is refused with 400 VALIDATION_FAILED. */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                     "X-CSRF-Token": string;
                 };
                 path?: never;
@@ -18210,7 +18226,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Reconciliation override or gain acknowledgement required, the allocation does not match the source method (INVESTMENT_TRANSFER_POOL_REQUIRED / INVESTMENT_TRANSFER_POOL_UNAVAILABLE), or a later decision the dated transfer makes impossible (INVESTMENT_SALE_DEPENDENCY) */
+                /** @description Reconciliation override or gain acknowledgement required, the allocation does not match the source method (INVESTMENT_TRANSFER_POOL_REQUIRED / INVESTMENT_TRANSFER_POOL_UNAVAILABLE), or a later decision the dated transfer makes impossible (INVESTMENT_SALE_DEPENDENCY) IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything. */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -18405,6 +18421,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Request key for a create (#660). A client generates one key per entry and sends the same key with every retry of it, so a create whose response was lost is not recorded twice. The server stores the key in the same database transaction as the record it creates. A repeat with the same key and the same request (route and JSON body; key order and whitespace do not matter) writes nothing and returns the stored status and body with the header Idempotent-Replayed: true. The same key with a different route or body returns 409 IDEMPOTENCY_KEY_REUSED. A key whose write committed but whose response was never stored returns 409 IDEMPOTENCY_KEY_RESULT_UNAVAILABLE. A request that failed stored nothing, so the key can be sent again with a corrected body. Keys are kept for at least seven days. Omitted, every request creates a new record. Sending the header to an operation that does not declare it is refused with 400 VALIDATION_FAILED. */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                     "X-CSRF-Token": string;
                 };
                 path?: never;
@@ -18452,7 +18470,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Reconciliation override or gain acknowledgement required, the allocation does not match the source method (INVESTMENT_TRANSFER_POOL_REQUIRED / INVESTMENT_TRANSFER_POOL_UNAVAILABLE), or a dated lot dependency conflicts */
+                /** @description Reconciliation override or gain acknowledgement required, the allocation does not match the source method (INVESTMENT_TRANSFER_POOL_REQUIRED / INVESTMENT_TRANSFER_POOL_UNAVAILABLE), or a dated lot dependency conflicts IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything. */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -19185,6 +19203,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Request key for a create (#660). A client generates one key per entry and sends the same key with every retry of it, so a create whose response was lost is not recorded twice. The server stores the key in the same database transaction as the record it creates. A repeat with the same key and the same request (route and JSON body; key order and whitespace do not matter) writes nothing and returns the stored status and body with the header Idempotent-Replayed: true. The same key with a different route or body returns 409 IDEMPOTENCY_KEY_REUSED. A key whose write committed but whose response was never stored returns 409 IDEMPOTENCY_KEY_RESULT_UNAVAILABLE. A request that failed stored nothing, so the key can be sent again with a corrected body. Keys are kept for at least seven days. Omitted, every request creates a new record. Sending the header to an operation that does not declare it is refused with 400 VALIDATION_FAILED. */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                     "X-CSRF-Token": string;
                 };
                 path?: never;
@@ -19232,7 +19252,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Reconciliation override or gain acknowledgement required, settled operation unavailable, insufficient lots or out of order */
+                /** @description Reconciliation override or gain acknowledgement required, settled operation unavailable, insufficient lots or out of order. IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything. */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -19356,6 +19376,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Request key for a create (#660). A client generates one key per entry and sends the same key with every retry of it, so a create whose response was lost is not recorded twice. The server stores the key in the same database transaction as the record it creates. A repeat with the same key and the same request (route and JSON body; key order and whitespace do not matter) writes nothing and returns the stored status and body with the header Idempotent-Replayed: true. The same key with a different route or body returns 409 IDEMPOTENCY_KEY_REUSED. A key whose write committed but whose response was never stored returns 409 IDEMPOTENCY_KEY_RESULT_UNAVAILABLE. A request that failed stored nothing, so the key can be sent again with a corrected body. Keys are kept for at least seven days. Omitted, every request creates a new record. Sending the header to an operation that does not declare it is refused with 400 VALIDATION_FAILED. */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                     "X-CSRF-Token": string;
                 };
                 path?: never;
@@ -19403,7 +19425,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Reconciliation override or gain acknowledgement required, no holdings, or out of order */
+                /** @description Reconciliation override or gain acknowledgement required, no holdings, or out of order. IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything. */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -19591,6 +19613,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Request key for a create (#660). A client generates one key per entry and sends the same key with every retry of it, so a create whose response was lost is not recorded twice. The server stores the key in the same database transaction as the record it creates. A repeat with the same key and the same request (route and JSON body; key order and whitespace do not matter) writes nothing and returns the stored status and body with the header Idempotent-Replayed: true. The same key with a different route or body returns 409 IDEMPOTENCY_KEY_REUSED. A key whose write committed but whose response was never stored returns 409 IDEMPOTENCY_KEY_RESULT_UNAVAILABLE. A request that failed stored nothing, so the key can be sent again with a corrected body. Keys are kept for at least seven days. Omitted, every request creates a new record. Sending the header to an operation that does not declare it is refused with 400 VALIDATION_FAILED. */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                     "X-CSRF-Token": string;
                 };
                 path?: never;
@@ -19638,7 +19662,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description INVESTMENT_SPLIT_CHANGED (preview again), INVESTMENT_SPLIT_DEPENDENCY (a later operation becomes impossible), reconciliation override or gain-impact acknowledgement required or stale */
+                /** @description INVESTMENT_SPLIT_CHANGED (preview again), INVESTMENT_SPLIT_DEPENDENCY (a later operation becomes impossible), reconciliation override or gain-impact acknowledgement required or stale IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything. */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -19780,6 +19804,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Request key for a create (#660). A client generates one key per entry and sends the same key with every retry of it, so a create whose response was lost is not recorded twice. The server stores the key in the same database transaction as the record it creates. A repeat with the same key and the same request (route and JSON body; key order and whitespace do not matter) writes nothing and returns the stored status and body with the header Idempotent-Replayed: true. The same key with a different route or body returns 409 IDEMPOTENCY_KEY_REUSED. A key whose write committed but whose response was never stored returns 409 IDEMPOTENCY_KEY_RESULT_UNAVAILABLE. A request that failed stored nothing, so the key can be sent again with a corrected body. Keys are kept for at least seven days. Omitted, every request creates a new record. Sending the header to an operation that does not declare it is refused with 400 VALIDATION_FAILED. */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                     "X-CSRF-Token": string;
                 };
                 path?: never;
@@ -19827,7 +19853,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description INVESTMENT_EXCHANGE_NO_HOLDINGS, INVESTMENT_EXCHANGE_CHANGED (preview again), INVESTMENT_TRANSFER_DEPENDENCY (a later operation the backdated exchange makes impossible), INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED/STALE, INVESTMENT_POSITION_SIDE_CONFLICT (an open short of the old instrument), or reconciliation override required */
+                /** @description INVESTMENT_EXCHANGE_NO_HOLDINGS, INVESTMENT_EXCHANGE_CHANGED (preview again), INVESTMENT_TRANSFER_DEPENDENCY (a later operation the backdated exchange makes impossible), INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED/STALE, INVESTMENT_POSITION_SIDE_CONFLICT (an open short of the old instrument), or reconciliation override required IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything. */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -19969,6 +19995,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Request key for a create (#660). A client generates one key per entry and sends the same key with every retry of it, so a create whose response was lost is not recorded twice. The server stores the key in the same database transaction as the record it creates. A repeat with the same key and the same request (route and JSON body; key order and whitespace do not matter) writes nothing and returns the stored status and body with the header Idempotent-Replayed: true. The same key with a different route or body returns 409 IDEMPOTENCY_KEY_REUSED. A key whose write committed but whose response was never stored returns 409 IDEMPOTENCY_KEY_RESULT_UNAVAILABLE. A request that failed stored nothing, so the key can be sent again with a corrected body. Keys are kept for at least seven days. Omitted, every request creates a new record. Sending the header to an operation that does not declare it is refused with 400 VALIDATION_FAILED. */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                     "X-CSRF-Token": string;
                 };
                 path?: never;
@@ -20016,7 +20044,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description INVESTMENT_EXCHANGE_NO_HOLDINGS, INVESTMENT_EXCHANGE_CHANGED (preview again), INVESTMENT_TRANSFER_DEPENDENCY (a backdated merger leaves a later operation impossible), INVESTMENT_POSITION_SIDE_CONFLICT (an open short of the old instrument), gain changes not acknowledged, or reconciliation override required */
+                /** @description INVESTMENT_EXCHANGE_NO_HOLDINGS, INVESTMENT_EXCHANGE_CHANGED (preview again), INVESTMENT_TRANSFER_DEPENDENCY (a backdated merger leaves a later operation impossible), INVESTMENT_POSITION_SIDE_CONFLICT (an open short of the old instrument), gain changes not acknowledged, or reconciliation override required IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything. */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -20158,6 +20186,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Request key for a create (#660). A client generates one key per entry and sends the same key with every retry of it, so a create whose response was lost is not recorded twice. The server stores the key in the same database transaction as the record it creates. A repeat with the same key and the same request (route and JSON body; key order and whitespace do not matter) writes nothing and returns the stored status and body with the header Idempotent-Replayed: true. The same key with a different route or body returns 409 IDEMPOTENCY_KEY_REUSED. A key whose write committed but whose response was never stored returns 409 IDEMPOTENCY_KEY_RESULT_UNAVAILABLE. A request that failed stored nothing, so the key can be sent again with a corrected body. Keys are kept for at least seven days. Omitted, every request creates a new record. Sending the header to an operation that does not declare it is refused with 400 VALIDATION_FAILED. */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                     "X-CSRF-Token": string;
                 };
                 path?: never;
@@ -20205,7 +20235,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description INVESTMENT_SPIN_OFF_NO_HOLDINGS, INVESTMENT_SPIN_OFF_CHANGED (preview again), INVESTMENT_TRANSFER_DEPENDENCY (a later operation the backdated spin-off makes impossible), INVESTMENT_POSITION_SIDE_CONFLICT (an open short of the parent), reconciliation override required, or gain changes not acknowledged */
+                /** @description INVESTMENT_SPIN_OFF_NO_HOLDINGS, INVESTMENT_SPIN_OFF_CHANGED (preview again), INVESTMENT_TRANSFER_DEPENDENCY (a later operation the backdated spin-off makes impossible), INVESTMENT_POSITION_SIDE_CONFLICT (an open short of the parent), reconciliation override required, or gain changes not acknowledged IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything. */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -25686,6 +25716,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Request key for a create (#660). A client generates one key per entry and sends the same key with every retry of it, so a create whose response was lost is not recorded twice. The server stores the key in the same database transaction as the record it creates. A repeat with the same key and the same request (route and JSON body; key order and whitespace do not matter) writes nothing and returns the stored status and body with the header Idempotent-Replayed: true. The same key with a different route or body returns 409 IDEMPOTENCY_KEY_REUSED. A key whose write committed but whose response was never stored returns 409 IDEMPOTENCY_KEY_RESULT_UNAVAILABLE. A request that failed stored nothing, so the key can be sent again with a corrected body. Keys are kept for at least seven days. Omitted, every request creates a new record. Sending the header to an operation that does not declare it is refused with 400 VALIDATION_FAILED. */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                     /** @description Session-bound CSRF token for authenticated mutating requests. */
                     "X-CSRF-Token": string;
                 };
@@ -25738,7 +25770,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Insufficient lots to cover the written-off quantity */
+                /** @description Insufficient lots to cover the written-off quantity. IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything. */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -25954,6 +25986,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Request key for a create (#660). A client generates one key per entry and sends the same key with every retry of it, so a create whose response was lost is not recorded twice. The server stores the key in the same database transaction as the record it creates. A repeat with the same key and the same request (route and JSON body; key order and whitespace do not matter) writes nothing and returns the stored status and body with the header Idempotent-Replayed: true. The same key with a different route or body returns 409 IDEMPOTENCY_KEY_REUSED. A key whose write committed but whose response was never stored returns 409 IDEMPOTENCY_KEY_RESULT_UNAVAILABLE. A request that failed stored nothing, so the key can be sent again with a corrected body. Keys are kept for at least seven days. Omitted, every request creates a new record. Sending the header to an operation that does not declare it is refused with 400 VALIDATION_FAILED. */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                     /** @description Session-bound CSRF token for authenticated mutating requests. */
                     "X-CSRF-Token": string;
                 };
@@ -26006,6 +26040,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                409: components["responses"]["IdempotencyKeyConflict"];
                 413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
@@ -26042,6 +26077,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Request key for a create (#660). A client generates one key per entry and sends the same key with every retry of it, so a create whose response was lost is not recorded twice. The server stores the key in the same database transaction as the record it creates. A repeat with the same key and the same request (route and JSON body; key order and whitespace do not matter) writes nothing and returns the stored status and body with the header Idempotent-Replayed: true. The same key with a different route or body returns 409 IDEMPOTENCY_KEY_REUSED. A key whose write committed but whose response was never stored returns 409 IDEMPOTENCY_KEY_RESULT_UNAVAILABLE. A request that failed stored nothing, so the key can be sent again with a corrected body. Keys are kept for at least seven days. Omitted, every request creates a new record. Sending the header to an operation that does not declare it is refused with 400 VALIDATION_FAILED. */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                     /** @description Session-bound CSRF token for authenticated mutating requests. */
                     "X-CSRF-Token": string;
                 };
@@ -26094,7 +26131,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Acquisition replay conflict or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE) */
+                /** @description Acquisition replay conflict or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE). IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything. */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -26375,6 +26412,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Request key for a create (#660). A client generates one key per entry and sends the same key with every retry of it, so a create whose response was lost is not recorded twice. The server stores the key in the same database transaction as the record it creates. A repeat with the same key and the same request (route and JSON body; key order and whitespace do not matter) writes nothing and returns the stored status and body with the header Idempotent-Replayed: true. The same key with a different route or body returns 409 IDEMPOTENCY_KEY_REUSED. A key whose write committed but whose response was never stored returns 409 IDEMPOTENCY_KEY_RESULT_UNAVAILABLE. A request that failed stored nothing, so the key can be sent again with a corrected body. Keys are kept for at least seven days. Omitted, every request creates a new record. Sending the header to an operation that does not declare it is refused with 400 VALIDATION_FAILED. */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                     /** @description Session-bound CSRF token for authenticated mutating requests. */
                     "X-CSRF-Token": string;
                 };
@@ -26427,7 +26466,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Reconciliation override required */
+                /** @description Reconciliation override required. IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything. */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -36532,7 +36571,7 @@ export interface components {
         };
         ErrorBody: {
             /** @enum {string} */
-            code: "VALIDATION_FAILED" | "DECODE_ERROR" | "REQUEST_TOO_LARGE" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "PRICE_IMPACT_STALE" | "CONFLICT" | "REFERENCE_VERSION_BACKDATED" | "REFERENCE_VERSION_BEFORE_FIRST" | "REFERENCE_DATED_CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "MFA_AUTHENTICATOR_UNAVAILABLE" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "FORECAST_TOO_LARGE" | "FORECAST_BASIS_CHANGED" | "INVESTMENT_WORKFLOW_REQUIRED" | "INVESTMENT_INSTRUMENT_VERSION_BACKDATED" | "INVESTMENT_EVENT_OUT_OF_ORDER" | "INVESTMENT_POSITION_SIDE_CONFLICT" | "INVESTMENT_SHORT_DEPENDENCY" | "INVESTMENT_TRANSFER_POOL_REQUIRED" | "INVESTMENT_TRANSFER_POOL_UNAVAILABLE" | "INVESTMENT_SALE_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SALE" | "INVESTMENT_SALE_CHANGED" | "INVESTMENT_SALE_DEPENDENCY" | "INVESTMENT_BUY_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_BUY" | "INVESTMENT_BUY_CHANGED" | "INVESTMENT_BUY_DEPENDENCY" | "INVESTMENT_DIVIDEND_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_DIVIDEND" | "INVESTMENT_DIVIDEND_CHANGED" | "INVESTMENT_PAYMENT_IN_LIEU_ALREADY_CORRECTED" | "INVESTMENT_PAYMENT_IN_LIEU_CHANGED" | "INVESTMENT_WRITE_OFF_ALREADY_CORRECTED" | "INVESTMENT_TRANSFER_ALREADY_CORRECTED" | "INVESTMENT_TRANSFER_CHANGED" | "INVESTMENT_TRANSFER_DEPENDENCY" | "INVESTMENT_IMPORTED_TRANSFER" | "INVESTMENT_TRANSFER_BASIS_RESOLVED" | "INVESTMENT_TRANSFER_BASIS_NOT_UNKNOWN" | "INVESTMENT_TRANSFER_BASIS_NOT_RESOLVED" | "INVESTMENT_BASIS_RESOLUTION_ALREADY_CORRECTED" | "INVESTMENT_BASIS_RESOLUTION_CHANGED" | "INVESTMENT_WRITE_OFF_CHANGED" | "INVESTMENT_REINVESTMENT_ALREADY_CORRECTED" | "INVESTMENT_REINVESTMENT_CHANGED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE" | "INVESTMENT_SPLIT_NO_HOLDINGS" | "INVESTMENT_CAPITAL_RETURN_DEPENDENCY" | "INVESTMENT_CAPITAL_RETURN_NO_HOLDINGS" | "INVESTMENT_CASH_IN_LIEU_SPLIT_UNAVAILABLE" | "INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPLIT_CHANGED" | "INVESTMENT_SPLIT_DEPENDENCY" | "INVESTMENT_SPLIT_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SPLIT" | "INVESTMENT_EXCHANGE_NO_HOLDINGS" | "INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE" | "INVESTMENT_EXCHANGE_CHANGED" | "INVESTMENT_EXCHANGE_ALREADY_CORRECTED" | "INVESTMENT_SPIN_OFF_NO_HOLDINGS" | "INVESTMENT_SPIN_OFF_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPIN_OFF_CHANGED" | "INVESTMENT_SPIN_OFF_ALREADY_CORRECTED" | "INVESTMENT_MERGER_ALREADY_CORRECTED" | "IMPORT_SPLIT_LINK_UNAVAILABLE" | "IMPORT_SHORT_LINK_UNAVAILABLE" | "IMPORT_SHORT_LINK_CHANGED" | "IMPORT_SHORT_LINK_MISMATCH" | "IMPORT_LINK_STALE" | "IMPORT_UPLOAD_TOO_LARGE" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "TRANSACTION_VERSION_STALE" | "RECONCILIATION_IMPACT_STALE" | "POSTING_ACCOUNT_VERSION_STALE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECONCILIATION_START_STALE" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
+            code: "VALIDATION_FAILED" | "DECODE_ERROR" | "REQUEST_TOO_LARGE" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "PRICE_IMPACT_STALE" | "CONFLICT" | "REFERENCE_VERSION_BACKDATED" | "REFERENCE_VERSION_BEFORE_FIRST" | "REFERENCE_DATED_CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "MFA_AUTHENTICATOR_UNAVAILABLE" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "FORECAST_TOO_LARGE" | "FORECAST_BASIS_CHANGED" | "INVESTMENT_WORKFLOW_REQUIRED" | "INVESTMENT_INSTRUMENT_VERSION_BACKDATED" | "INVESTMENT_EVENT_OUT_OF_ORDER" | "INVESTMENT_POSITION_SIDE_CONFLICT" | "INVESTMENT_SHORT_DEPENDENCY" | "INVESTMENT_TRANSFER_POOL_REQUIRED" | "INVESTMENT_TRANSFER_POOL_UNAVAILABLE" | "INVESTMENT_SALE_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SALE" | "INVESTMENT_SALE_CHANGED" | "INVESTMENT_SALE_DEPENDENCY" | "INVESTMENT_BUY_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_BUY" | "INVESTMENT_BUY_CHANGED" | "INVESTMENT_BUY_DEPENDENCY" | "INVESTMENT_DIVIDEND_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_DIVIDEND" | "INVESTMENT_DIVIDEND_CHANGED" | "INVESTMENT_PAYMENT_IN_LIEU_ALREADY_CORRECTED" | "INVESTMENT_PAYMENT_IN_LIEU_CHANGED" | "INVESTMENT_WRITE_OFF_ALREADY_CORRECTED" | "INVESTMENT_TRANSFER_ALREADY_CORRECTED" | "INVESTMENT_TRANSFER_CHANGED" | "INVESTMENT_TRANSFER_DEPENDENCY" | "INVESTMENT_IMPORTED_TRANSFER" | "INVESTMENT_TRANSFER_BASIS_RESOLVED" | "INVESTMENT_TRANSFER_BASIS_NOT_UNKNOWN" | "INVESTMENT_TRANSFER_BASIS_NOT_RESOLVED" | "INVESTMENT_BASIS_RESOLUTION_ALREADY_CORRECTED" | "INVESTMENT_BASIS_RESOLUTION_CHANGED" | "INVESTMENT_WRITE_OFF_CHANGED" | "INVESTMENT_REINVESTMENT_ALREADY_CORRECTED" | "INVESTMENT_REINVESTMENT_CHANGED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE" | "INVESTMENT_SPLIT_NO_HOLDINGS" | "INVESTMENT_CAPITAL_RETURN_DEPENDENCY" | "INVESTMENT_CAPITAL_RETURN_NO_HOLDINGS" | "INVESTMENT_CASH_IN_LIEU_SPLIT_UNAVAILABLE" | "INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPLIT_CHANGED" | "INVESTMENT_SPLIT_DEPENDENCY" | "INVESTMENT_SPLIT_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SPLIT" | "INVESTMENT_EXCHANGE_NO_HOLDINGS" | "INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE" | "INVESTMENT_EXCHANGE_CHANGED" | "INVESTMENT_EXCHANGE_ALREADY_CORRECTED" | "INVESTMENT_SPIN_OFF_NO_HOLDINGS" | "INVESTMENT_SPIN_OFF_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPIN_OFF_CHANGED" | "INVESTMENT_SPIN_OFF_ALREADY_CORRECTED" | "INVESTMENT_MERGER_ALREADY_CORRECTED" | "IMPORT_SPLIT_LINK_UNAVAILABLE" | "IMPORT_SHORT_LINK_UNAVAILABLE" | "IMPORT_SHORT_LINK_CHANGED" | "IMPORT_SHORT_LINK_MISMATCH" | "IMPORT_LINK_STALE" | "IMPORT_UPLOAD_TOO_LARGE" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "TRANSACTION_VERSION_STALE" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_RESULT_UNAVAILABLE" | "RECONCILIATION_IMPACT_STALE" | "POSTING_ACCOUNT_VERSION_STALE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECONCILIATION_START_STALE" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
             message: string;
             /** @description On a reconciliation guard refusal of a generic ledger write (CONFLICT "reconciliation override is required", or RECONCILIATION_IMPACT_STALE): the checkpoints the write would invalidate right now. A reorder, which has no preview, binds its override to this set (#296). */
             checkpoint_ids?: number[];
@@ -36590,6 +36629,16 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
+        /** @description IDEMPOTENCY_KEY_REUSED — the Idempotency-Key was already used for a different request. IDEMPOTENCY_KEY_RESULT_UNAVAILABLE — a request with this key was recorded, but its result is not stored. Neither writes anything. */
+        IdempotencyKeyConflict: {
+            headers: {
+                "X-Request-ID": components["headers"]["XRequestID"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
         /** @description REQUEST_TOO_LARGE — the JSON request body exceeds 1 MiB (1,048,576 bytes), including trailing whitespace. No application mutation is performed. */
         JSONBodyTooLarge: {
             headers: {
@@ -36610,6 +36659,8 @@ export interface components {
         };
     };
     parameters: {
+        /** @description Request key for a create (#660). A client generates one key per entry and sends the same key with every retry of it, so a create whose response was lost is not recorded twice. The server stores the key in the same database transaction as the record it creates. A repeat with the same key and the same request (route and JSON body; key order and whitespace do not matter) writes nothing and returns the stored status and body with the header Idempotent-Replayed: true. The same key with a different route or body returns 409 IDEMPOTENCY_KEY_REUSED. A key whose write committed but whose response was never stored returns 409 IDEMPOTENCY_KEY_RESULT_UNAVAILABLE. A request that failed stored nothing, so the key can be sent again with a corrected body. Keys are kept for at least seven days. Omitted, every request creates a new record. Sending the header to an operation that does not declare it is refused with 400 VALIDATION_FAILED. */
+        IdempotencyKey: string;
         InstitutionID: number;
         AccountID: number;
         TagID: number;

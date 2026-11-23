@@ -82,6 +82,12 @@ func insertAuditEvent(ctx context.Context, tx *sql.Tx, params AuditEventParams) 
 		return 0, fmt.Errorf("read audit event id: %w", err)
 	}
 
+	// Every financial write inserts its audit event in its own transaction,
+	// so a create's request key is stored here and commits with it (#660).
+	if err := claimRequestKeyTx(ctx, tx, auditEventID, occurredAt); err != nil {
+		return 0, err
+	}
+
 	return auditEventID, nil
 }
 

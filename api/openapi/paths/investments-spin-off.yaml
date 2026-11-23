@@ -15,6 +15,7 @@ post:
     replay, a later decision it changes is revised (requiring the preview's
     gain_impact_acknowledgement) or named, and a refusal writes nothing.
   parameters:
+    - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
     - in: header
       name: X-CSRF-Token
       required: true
@@ -58,6 +59,7 @@ post:
         INVESTMENT_TRANSFER_DEPENDENCY (a later operation the backdated spin-off makes impossible),
         INVESTMENT_POSITION_SIDE_CONFLICT (an open short of the parent),
         reconciliation override required, or gain changes not acknowledged
+        IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything.
       content:
         application/json:
           schema:

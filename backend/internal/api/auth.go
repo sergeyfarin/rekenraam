@@ -438,7 +438,7 @@ func requireAuthenticatedMutation(logger *slog.Logger, authService *app.AuthServ
 			ctx = context.WithValue(ctx, authenticatedSessionIDKey{}, status.SessionID)
 		}
 
-		next.ServeHTTP(w, r.WithContext(ctx))
+		serveWithRequestKey(logger, w, r.WithContext(ctx), next)
 	}
 }
 

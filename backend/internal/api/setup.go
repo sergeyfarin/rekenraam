@@ -168,6 +168,10 @@ func requestSessionCookieName(r *http.Request, options HandlerOptions) string {
 	return sessionCookieName
 }
 
+// maxJSONBodyBytes caps every JSON request body, including trailing
+// whitespace; the request key middleware reads under the same cap.
+const maxJSONBodyBytes = 1 << 20
+
 // errRequestTooLarge is returned by the decode helpers when the body exceeds 1 MB.
 var errRequestTooLarge = errors.New("request body too large")
 
@@ -190,7 +194,7 @@ func decodeJSONBody(r *http.Request, destination any) error {
 		return app.ValidationError{Message: "content type must be application/json"}
 	}
 
-	r.Body = http.MaxBytesReader(nil, r.Body, 1<<20)
+	r.Body = http.MaxBytesReader(nil, r.Body, maxJSONBodyBytes)
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 
@@ -216,7 +220,7 @@ func decodeOptionalJSONBody(r *http.Request, destination any) error {
 		return nil
 	}
 
-	r.Body = http.MaxBytesReader(nil, r.Body, 1<<20)
+	r.Body = http.MaxBytesReader(nil, r.Body, maxJSONBodyBytes)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {

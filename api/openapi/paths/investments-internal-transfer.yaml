@@ -10,6 +10,7 @@ post:
     (INVESTMENT_SALE_DEPENDENCY), and changed later gains need the preview's
     gain_impact_acknowledgement.
   parameters:
+    - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
     - in: header
       name: X-CSRF-Token
       required: true
@@ -53,6 +54,7 @@ post:
         does not match the source method (INVESTMENT_TRANSFER_POOL_REQUIRED /
         INVESTMENT_TRANSFER_POOL_UNAVAILABLE), or a later decision the dated
         transfer makes impossible (INVESTMENT_SALE_DEPENDENCY)
+        IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything.
       content:
         application/json:
           schema:
