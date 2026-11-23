@@ -11,6 +11,7 @@
   import { afterStatementVoided } from '#lib/reconcile/invalidate.ts';
   import { coveredByLaterActiveCheckpoint } from '#lib/reconcile/checkpoint-chain.ts';
   import {
+    getReconciliationCheckpoints,
     reconciliationCheckpointsQueryOptions,
     voidReconciliationCheckpoint,
     type ReconciliationCheckpointResponse
@@ -130,10 +131,9 @@
   }
 
   async function savedCheckpoint(checkpointID: number) {
-    const options = reconciliationCheckpointsQueryOptions(accountID, commodityID);
-    // A cached or already-running read may predate the write.
-    await queryClient.cancelQueries({ queryKey: options.queryKey, exact: true });
-    const saved = await queryClient.fetchQuery({ ...options, staleTime: 0, retry: false });
+    // A request of its own: a cancelled cache fetch resolves with the cached
+    // list from before the write (#644 review).
+    const saved = await getReconciliationCheckpoints(accountID, commodityID);
     return saved.checkpoints.find((checkpoint) => checkpoint.id === checkpointID);
   }
 </script>

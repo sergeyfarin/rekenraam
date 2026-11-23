@@ -435,3 +435,64 @@ for (const action of ['Finish', 'Discard'] as const) {
     expect(actionRequests).toBe(2);
   });
 }
+
+test('an earlier Finish refresh does not cancel a newer Discard recovery (#644 review)', async ({ page }) => {
+  const { start, checkpoints, earlierDay } = await openReconciliation(page);
+  const finish = page.getByRole('button', { name: 'Finish reconciliation', exact: true });
+  const discard = page.getByRole('button', { name: 'Discard', exact: true });
+  const earlierSession = await start(earlierDay, '0.00');
+  await page.getByLabel('Reason', { exact: true }).fill('Verified the earlier statement');
+  const earlierRead = Promise.withResolvers<void>();
+  const releaseEarlierRead = Promise.withResolvers<void>();
+  const newerRead = Promise.withResolvers<void>();
+  const releaseNewerRead = Promise.withResolvers<void>();
+  let discardRequests = 0;
+  // Both writes commit and lose their responses.
+  await page.route(`**${earlierSession}/finish`, async (route) => {
+    expect((await route.fetch()).ok()).toBe(true);
+    await route.abort('failed');
+  });
+  await page.route(`**${earlierSession}`, async (route) => {
+    earlierRead.resolve();
+    await releaseEarlierRead.promise;
+    await route.continue();
+  }, { times: 1 });
+
+  try {
+    await finish.click();
+    await earlierRead.promise;
+    await page.getByRole('button', { name: 'Reconcile', exact: true }).click();
+    const newerSession = await start();
+    await page.route(`**${newerSession}/void`, async (route) => {
+      discardRequests++;
+      expect((await route.fetch()).ok()).toBe(true);
+      await route.abort('failed');
+    });
+    await page.route(`**${newerSession}`, async (route) => {
+      newerRead.resolve();
+      await releaseNewerRead.promise;
+      await route.continue();
+    }, { times: 1 });
+    await discard.click();
+    await newerRead.promise;
+
+    // The earlier Finish's refresh cancels the account's reconciliation reads.
+    const refreshed = page.waitForResponse((response) =>
+      response.request().method() === 'GET' && new URL(response.url()).pathname === `${newerSession}`
+    );
+    releaseEarlierRead.resolve();
+    await refreshed;
+    await expect(page.getByRole('status').filter({ hasText: 'Checking the reconciliation result' })).toBeVisible();
+    releaseNewerRead.resolve();
+
+    await expect(page.getByRole('heading', { name: 'Start a reconciliation', exact: true })).toBeVisible();
+    expect(await apiJSON(page, 'GET', newerSession)).toMatchObject({ status: 'voided' });
+  } finally {
+    releaseEarlierRead.resolve();
+    releaseNewerRead.resolve();
+    await page.unrouteAll({ behavior: 'wait' });
+  }
+  expect(await apiJSON(page, 'GET', earlierSession)).toMatchObject({ status: 'finished' });
+  expect(await checkpoints()).toEqual([expect.objectContaining({ statement_date: earlierDay, status: 'active' })]);
+  expect(discardRequests).toBe(1);
+});

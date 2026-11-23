@@ -8,7 +8,7 @@
   import Panel from '#lib/components/panel.svelte';
   import { authSessionQueryOptions } from '#lib/api/auth.ts';
   import { accountsQueryOptions } from '#lib/api/accounts.ts';
-  import { reconciliationSessionQueryOptions, type ReconciliationSessionResponse } from '#lib/api/reconciliation.ts';
+  import { getReconciliationSession, reconciliationSessionQueryOptions, type ReconciliationSessionResponse } from '#lib/api/reconciliation.ts';
   import { invalidateClosedSessionReads } from '#lib/reconcile/invalidate.ts';
   import ReconcileStartForm from '#lib/reconcile/reconcile-start-form.svelte';
   import ReconcileStartOutcome, { type CloseFailure, type StartOutcome } from '#lib/reconcile/reconcile-start-outcome.svelte';
@@ -90,17 +90,20 @@
     const shown = () => isStartFor(sessionID) || isSessionFor(sessionID);
     if (!shown()) return;
     closeOutcome = { ...failure, state: 'checking' };
-    const options = reconciliationSessionQueryOptions(sessionID);
 
     let saved: ReconciliationSessionResponse;
     try {
-      // Read after the failed response. A cached or already-running read may predate the write.
-      await queryClient.cancelQueries({ queryKey: options.queryKey, exact: true });
-      saved = await queryClient.fetchQuery({ ...options, staleTime: 0, retry: false });
+      // A request of its own, not the cache's fetch: another session's refresh
+      // cancels the cache's reads, and a cancelled fetch resolves with the
+      // cached state from before this write (#644 review).
+      saved = await getReconciliationSession(sessionID);
     } catch {
       if (shown()) closeOutcome = { ...failure, state: 'unknown' };
       return;
     }
+    const { queryKey } = reconciliationSessionQueryOptions(sessionID);
+    await queryClient.cancelQueries({ queryKey, exact: true });
+    queryClient.setQueryData(queryKey, saved);
 
     if (saved.status === 'open') {
       // The open session keeps its selection, reason and error and can retry.
