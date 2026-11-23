@@ -178,10 +178,13 @@ description: SvelteKit frontend rules for Rekenraam - static adapter constraints
 - `minisearch` only for small in-memory sets (dropdowns, autocomplete); full
   transaction search is a backend FTS5 `search` param.
 - A form that creates a transaction, investment operation or manual price
-  holds one `RequestKey` (`#lib/api/request-key.ts`) and sends the save
-  through `requestKey.send((key) => create(..., key))` (#660): every retry of
-  one entry repeats the key, a successful save starts a new one. A new create
-  call site on such a route does the same.
+  holds one `RequestKey` (`#lib/api/request-key.ts`; `useRequestKey(activity)`
+  inside a New transaction entry, so a reopened activity keeps it) and saves
+  through `requestKey.send(entry, (key) => create(..., key))` (#660). `entry`
+  is what the owner entered, not the final body. While it is unchanged after a
+  save with an unknown outcome, the earlier save is sent again exactly. Skip
+  any pre-write step (impact review, payee question) when
+  `requestKey.isUnresolved(entry)`. A new create call site does the same.
 - Investment checkpoint/gain review reuses a lifecycle controller (#400):
   `previewReview` (`#lib/investments/preview-review.ts`) for preview-then-record
   forms, `commitReview` (`commit-review.ts`, `protocol: 'gains'` or

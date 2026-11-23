@@ -567,25 +567,41 @@ exchange, cash-and-stock merger, spin-off, internal and external transfers) and
 - The request carries an `Idempotency-Key` header: 1–128 printable ASCII
   characters, optional on the wire. A form holds one key per entry
   (`RequestKey` in `#lib/api/request-key.ts`), sends it with every retry and
-  replaces it after a successful save, so two deliberate entries with identical
-  content are two records. Every browser create on a covered route sends one.
+  replaces it only after a successful save, so two deliberate entries with
+  identical content are two records. Every browser create on a covered route
+  sends one. Inside a New transaction entry an activity's key lives on the
+  entry with its working copy (`useRequestKey`), so closing and reopening the
+  activity keeps it.
+- A retry repeats the earlier request exactly. A form rebuilds its body on
+  every Save, and the rebuilt body can differ: it can lack the checkpoint
+  override the owner confirmed, or link a payee that the lost save created.
+  So the key keeps the save whose outcome is unknown (no answer, or a 5xx),
+  identified by the owner's entry rather than the body. While that entry is
+  unchanged, `requestKey.send(entry, save)` sends that save again: body,
+  guards and key. A refusal with a code clears it, except
+  `IDEMPOTENCY_KEY_REUSED`.
 - The key is stored by the audit event the write inserts, in the write's own
   transaction (`request_keys`, migration 0015). A refused or rolled-back write
   stores nothing, so the key can be sent again with a corrected body.
-- A repeat with the same key and the same request (route and JSON body; key
-  order and whitespace do not matter) is answered before the service runs,
+- A keyed body must be exactly one JSON value in which no object names a
+  member twice, compared case-insensitively as `encoding/json` matches field
+  names; otherwise 400. The fingerprint is the route and the exact body bytes,
+  so equal fingerprints always decode to the same request.
+- A repeat with the same key and the same request (route and byte-identical
+  body) is answered before the service runs,
   with the stored status and body and `Idempotent-Replayed: true`. It writes
   nothing, even when the write would now be refused (a sale of units the first
   sale already disposed). The same key with another route or body returns 409
-  `IDEMPOTENCY_KEY_REUSED`; the form then starts a new key, so saving again
-  records the changed entry deliberately. A key whose write committed but whose
+  `IDEMPOTENCY_KEY_REUSED`. The form keeps its key, so no later save of that
+  entry can record it a second time; a separate record is a new entry. A key whose write committed but whose
   response was never stored returns 409 `IDEMPOTENCY_KEY_RESULT_UNAVAILABLE`.
 - A form must reach the keyed write on a retry. A review-at-commit form
   (`commitReview`) asks for the write's impact before saving, and that impact
   can be refused once the lost write has committed (a sale's units are gone).
-  So after a write whose outcome is unknown (no answer, or a 5xx),
-  `commitReview.submit` resends the unchanged entry as it was sent, guards and
-  key included. A changed entry, or a refusal with a code, asks for the impact
+  So when the entry's request key holds an unresolved save for the unchanged
+  entry, `commitReview.submit` goes straight to the write, which resends it.
+  Likewise the dividend form skips its review and the transaction editor
+  skips its payee question. A changed entry, or a refusal with a code, asks for the impact
   again. Preview-then-record forms resend their reviewed preview unchanged.
 - Two requests racing with one key cannot both write: the in-transaction claim
   finds the committed key and rolls the second write back, and the response
