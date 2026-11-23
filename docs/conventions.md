@@ -580,6 +580,13 @@ exchange, cash-and-stock merger, spin-off, internal and external transfers) and
   `IDEMPOTENCY_KEY_REUSED`; the form then starts a new key, so saving again
   records the changed entry deliberately. A key whose write committed but whose
   response was never stored returns 409 `IDEMPOTENCY_KEY_RESULT_UNAVAILABLE`.
+- A form must reach the keyed write on a retry. A review-at-commit form
+  (`commitReview`) asks for the write's impact before saving, and that impact
+  can be refused once the lost write has committed (a sale's units are gone).
+  So after a write whose outcome is unknown (no answer, or a 5xx),
+  `commitReview.submit` resends the unchanged entry as it was sent, guards and
+  key included. A changed entry, or a refusal with a code, asks for the impact
+  again. Preview-then-record forms resend their reviewed preview unchanged.
 - Two requests racing with one key cannot both write: the in-transaction claim
   finds the committed key and rolls the second write back, and the response
   becomes the replay.
