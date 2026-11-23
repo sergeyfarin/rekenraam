@@ -85,6 +85,12 @@ are generated, never hand-written.
   CSRF token — the middleware enforces this; don't route around it.
 - Optional-on-update fields in PATCH requests must be nullable/omittable and
   map to pointer types in Go so omission preserves the existing value.
+- Financial creates (transactions, investment operations, manual prices)
+  accept an `Idempotency-Key` header (#660): registration wraps the handler in
+  `withRequestKey`, OpenAPI declares the `IdempotencyKey` parameter and
+  documents its 409 codes, and `TestRequestKeyRoutesMatchTheContract` keeps
+  both lists equal. The key is stored by the write's audit event in its own
+  transaction; see `docs/conventions.md` → *Create Request Keys*.
 
 ## Validation
 

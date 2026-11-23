@@ -555,6 +555,45 @@ has actual installations, its migration files are immutable.
 - Transaction list endpoints must support a `search` query parameter backed by **SQLite FTS5** on the backend. Do not implement client-side full-text search over server-fetched pages.
 - API code must treat `SQLITE_BUSY` as possible even with `busy_timeout`. If the timeout is exhausted, return a retryable server error instead of hiding or partially applying the operation.
 
+### Create Request Keys
+
+A create whose response is lost can be retried without recording the entry
+twice (#660). The rule covers `POST /api/v1/transactions`, every investment
+operation create (buy, sell, short sale and cover, write-off, payment in lieu,
+cash and reinvested dividends, return of capital, cash in lieu, split, share
+exchange, cash-and-stock merger, spin-off, internal and external transfers) and
+`POST /api/v1/pricing/manual`.
+
+- The request carries an `Idempotency-Key` header: 1–128 printable ASCII
+  characters, optional on the wire. A form holds one key per entry
+  (`RequestKey` in `#lib/api/request-key.ts`), sends it with every retry and
+  replaces it after a successful save, so two deliberate entries with identical
+  content are two records. Every browser create on a covered route sends one.
+- The key is stored by the audit event the write inserts, in the write's own
+  transaction (`request_keys`, migration 0015). A refused or rolled-back write
+  stores nothing, so the key can be sent again with a corrected body.
+- A repeat with the same key and the same request (route and JSON body; key
+  order and whitespace do not matter) is answered before the service runs,
+  with the stored status and body and `Idempotent-Replayed: true`. It writes
+  nothing, even when the write would now be refused (a sale of units the first
+  sale already disposed). The same key with another route or body returns 409
+  `IDEMPOTENCY_KEY_REUSED`; the form then starts a new key, so saving again
+  records the changed entry deliberately. A key whose write committed but whose
+  response was never stored returns 409 `IDEMPOTENCY_KEY_RESULT_UNAVAILABLE`.
+- Two requests racing with one key cannot both write: the in-transaction claim
+  finds the committed key and rolls the second write back, and the response
+  becomes the replay.
+- The key is checked after authentication, so a stored result is only replayed
+  to the signed-in owner. A route that does not accept keys refuses the header
+  with 400 rather than ignoring it.
+- Keys are request bookkeeping, not financial records: rows older than seven
+  days are pruned when a new key is claimed.
+- A new create route opts in by wrapping its registration in `withRequestKey`
+  and declaring the `IdempotencyKey` parameter in OpenAPI;
+  `TestRequestKeyRoutesMatchTheContract` keeps the two lists equal. Reference
+  data creates (accounts, institutions, import rules, recurring templates,
+  tokens, holding accounts, source assignments) do not use keys yet.
+
 ## Authentication And Session Security
 
 - Personal-access tokens follow [ADR 0018](adrs/0018-personal-access-token-boundary.md)
