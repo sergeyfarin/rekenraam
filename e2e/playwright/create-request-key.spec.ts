@@ -104,9 +104,9 @@ test('a buy, a sell and a dividend saved again after a lost response are each re
   // Buy.
   let answered = await loseFirstResponse(page, '/api/v1/investments/buy');
   await openInvestmentActivity(page, 'Buy');
-  let form = page.getByRole('dialog').filter({ has: page.locator('#buy-quantity') });
-  await form.getByLabel('Date', { exact: true }).fill(tradeDate);
-  await form.getByLabel('Instrument').fill(s.instrument);
+  let form = page.locator('form').filter({ has: page.locator('#buy-quantity') });
+  await form.locator('#buy-date').fill(tradeDate);
+  await form.locator('#buy-instrument').fill(s.instrument);
   await page.getByRole('option').filter({ hasText: s.instrument }).click();
   await form.locator('#buy-holding-account').selectOption(String(s.holding.id));
   await form.locator('#buy-quantity').fill('4');
@@ -115,7 +115,7 @@ test('a buy, a sell and a dividend saved again after a lost response are each re
   await form.getByRole('button', { name: 'Record buy', exact: true }).click();
   await expect(form.getByText(networkError)).toBeVisible();
   await form.getByRole('button', { name: 'Record buy', exact: true }).click();
-  await expect(form).toBeHidden();
+  await expect(page.locator('#buy-quantity')).toBeHidden();
   expect(answered.map((answer) => [answer.status, answer.replayed])).toEqual([[201, undefined], [201, 'true']]);
   expect(await transactionCount(page, s.cash.id)).toBe(1);
   expect(await lots()).toBe(1);
@@ -125,9 +125,9 @@ test('a buy, a sell and a dividend saved again after a lost response are each re
   // only the stored result can answer the second save.
   answered = await loseFirstResponse(page, '/api/v1/investments/sell');
   await openInvestmentActivity(page, 'Sell');
-  form = page.getByRole('dialog').filter({ has: page.locator('#sell-quantity') });
-  await form.getByLabel('Date', { exact: true }).fill(daysFromTodayISO(-1));
-  await form.getByLabel('Instrument').fill(s.instrument);
+  form = page.locator('form').filter({ has: page.locator('#sell-quantity') });
+  await form.locator('#sell-date').fill(daysFromTodayISO(-1));
+  await form.locator('#sell-instrument').fill(s.instrument);
   await page.getByRole('option').filter({ hasText: s.instrument }).click();
   await form.locator('#sell-holding-account').selectOption(String(s.holding.id));
   await form.locator('#sell-quantity').fill('4');
@@ -139,7 +139,7 @@ test('a buy, a sell and a dividend saved again after a lost response are each re
   await expect(form.getByText(networkError)).toBeVisible();
   await expect(confirm).toBeEnabled();
   await confirm.click();
-  await expect(form).toBeHidden();
+  await expect(page.locator('#sell-quantity')).toBeHidden();
   expect(answered.map((answer) => [answer.status, answer.replayed])).toEqual([[201, undefined], [201, 'true']]);
   expect(await transactionCount(page, s.cash.id)).toBe(2);
   await page.unrouteAll({ behavior: 'wait' });
@@ -147,8 +147,8 @@ test('a buy, a sell and a dividend saved again after a lost response are each re
   // Cash dividend.
   answered = await loseFirstResponse(page, '/api/v1/investments/dividend');
   await openInvestmentActivity(page, 'dividend');
-  form = page.getByRole('dialog').filter({ has: page.locator('#div-amount') });
-  await form.getByLabel('Date', { exact: true }).fill(tradeDate);
+  form = page.locator('form').filter({ has: page.locator('#div-amount') });
+  await form.locator('#div-date').fill(tradeDate);
   await form.locator('#div-cash-account').selectOption(String(s.cash.id));
   await form.locator('#div-income-account').selectOption(String(s.income.id));
   await form.locator('#div-amount').fill('3.25');
@@ -156,7 +156,7 @@ test('a buy, a sell and a dividend saved again after a lost response are each re
   await record.click();
   await expect(form.getByText(networkError)).toBeVisible();
   await record.click();
-  await expect(form).toBeHidden();
+  await expect(page.locator('#div-amount')).toBeHidden();
   expect(answered.map((answer) => [answer.status, answer.replayed])).toEqual([[201, undefined], [201, 'true']]);
   expect(await transactionCount(page, s.cash.id)).toBe(3);
 });
