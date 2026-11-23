@@ -79,6 +79,10 @@ func serveWithRequestKey(logger *slog.Logger, w http.ResponseWriter, r *http.Req
 		body = read
 		r.Body = io.NopCloser(bytes.NewReader(body))
 	}
+	if err := app.ValidateRequestKeyBody(body); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+		return
+	}
 	requestHash := app.RequestHash(r.Pattern, body)
 
 	if answered := answerFromStoredKey(logger, w, r, service, key, requestHash); answered {

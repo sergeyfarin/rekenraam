@@ -710,10 +710,14 @@ components:
         and sends the same key with every retry of it, so a create whose
         response was lost is not recorded twice. The server stores the key in
         the same database transaction as the record it creates. A repeat with
-        the same key and the same request (route and JSON body; key order and
-        whitespace do not matter) writes nothing and returns the stored status
-        and body with the header Idempotent-Replayed: true. The same key with a
-        different route or body returns 409 IDEMPOTENCY_KEY_REUSED. A key whose
+        the same key and the same request (the same route and byte-identical
+        body) writes nothing and returns the stored status and body with the
+        header Idempotent-Replayed: true. The same key with a different route
+        or body, including the same JSON reordered or reformatted, returns 409
+        IDEMPOTENCY_KEY_REUSED. A keyed body must be exactly one JSON value in
+        which no object names a member twice, compared case-insensitively as
+        the endpoint decoder matches field names; otherwise 400
+        VALIDATION_FAILED before anything is read or written. A key whose
         write committed but whose response was never stored returns 409
         IDEMPOTENCY_KEY_RESULT_UNAVAILABLE. A request that failed stored
         nothing, so the key can be sent again with a corrected body. Keys are

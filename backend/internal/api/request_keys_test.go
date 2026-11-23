@@ -103,7 +103,10 @@ func TestCreateTransactionWithADifferentKeyCreatesASecondRecord(t *testing.T) {
 	assert.NotEqual(t, b.ID, c.ID)
 }
 
-func TestCreateTransactionRepeatIgnoresKeyOrderAndWhitespace(t *testing.T) {
+// Equal fingerprints must mean the endpoint decodes the same request, so a
+// repeat is the same bytes; reordered or reformatted JSON is refused, never
+// replayed and never written.
+func TestCreateTransactionRepeatMustSendTheSameBytes(t *testing.T) {
 	t.Parallel()
 	handler, database := newSetupTestHandler(t)
 	f := bootstrapInvestmentAPITest(t, handler)
@@ -114,9 +117,42 @@ func TestCreateTransactionRepeatIgnoresKeyOrderAndWhitespace(t *testing.T) {
 	reordered := fmt.Sprintf(`{ "journal_entries" : %s , "description":"Reordered", "transaction_date":"2026-02-01" }`, mustJSON(t, decoded["journal_entries"]))
 
 	sendKeyed(t, handler, f.sessionCookie, f.csrfToken, "/api/v1/transactions", body, "entry-1", http.StatusCreated)
-	repeat := sendKeyed(t, handler, f.sessionCookie, f.csrfToken, "/api/v1/transactions", reordered, "entry-1", http.StatusCreated)
+	repeat := sendKeyed(t, handler, f.sessionCookie, f.csrfToken, "/api/v1/transactions", reordered, "entry-1", http.StatusConflict)
 
-	assert.Equal(t, "true", repeat.Header().Get(idempotentReplayedHeader))
+	assert.Equal(t, "IDEMPOTENCY_KEY_REUSED", errorCodeOf(t, repeat))
+	assert.Equal(t, before+1, countRows(t, database, countTransactions))
+}
+
+// Review of PR #669: encoding/json matches field names case-insensitively
+// and keeps the last of two matches, so two spellings of one field in either
+// order would save different values; and a body with trailing garbage that
+// the endpoint refuses must never replay a stored success.
+func TestRequestKeyRefusesAmbiguousOrMalformedBodies(t *testing.T) {
+	t.Parallel()
+	handler, database := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	before := countRows(t, database, countTransactions)
+	body := requestKeyTransactionBody(f, "Unambiguous")
+
+	for name, ambiguous := range map[string]string{
+		"two spellings of one field": strings.Replace(body, `"description":"Unambiguous"`, `"description":"First","Description":"Second"`, 1),
+		"the other order":            strings.Replace(body, `"description":"Unambiguous"`, `"Description":"Second","description":"First"`, 1),
+		"inside a posting":           strings.Replace(body, `"quantity_scale":2,`, `"quantity_scale":2,"Quantity_Scale":2,`, 1),
+	} {
+		res := sendKeyed(t, handler, f.sessionCookie, f.csrfToken, "/api/v1/transactions", ambiguous, "ambiguous", http.StatusBadRequest)
+		assert.Equal(t, "VALIDATION_FAILED", errorCodeOf(t, res), name)
+	}
+	assert.Zero(t, countRows(t, database, `SELECT count(*) FROM request_keys`))
+
+	sendKeyed(t, handler, f.sessionCookie, f.csrfToken, "/api/v1/transactions", body, "entry-1", http.StatusCreated)
+	for name, malformed := range map[string]string{
+		"an extra closing bracket": body + "}",
+		"a second value":           body + " {}",
+	} {
+		res := sendKeyed(t, handler, f.sessionCookie, f.csrfToken, "/api/v1/transactions", malformed, "entry-1", http.StatusBadRequest)
+		assert.Equal(t, "VALIDATION_FAILED", errorCodeOf(t, res), name)
+		assert.Empty(t, res.Header().Get(idempotentReplayedHeader), name)
+	}
 	assert.Equal(t, before+1, countRows(t, database, countTransactions))
 }
 

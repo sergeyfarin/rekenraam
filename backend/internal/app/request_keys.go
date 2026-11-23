@@ -1,12 +1,14 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"rekenraam/backend/internal/db"
@@ -53,25 +55,73 @@ func ValidateRequestKey(key string) error {
 	return nil
 }
 
-// RequestHash identifies what a request asked for: its route and its JSON body
-// with key order and whitespace removed. Numbers are kept as written, never
-// read as floats. A body that is not JSON is hashed as sent; the handler
-// refuses it before anything is written.
+// RequestHash identifies what a request asked for: its route and its exact
+// body bytes. Equal hashes mean equal bytes, so the endpoint's decoder reads
+// the same request; a body that differs only in key order or whitespace is
+// another request, refused as IDEMPOTENCY_KEY_REUSED rather than replayed.
+// A browser retry sends the same bytes.
 func RequestHash(route string, body []byte) string {
-	canonical := body
-	decoder := json.NewDecoder(strings.NewReader(string(body)))
-	decoder.UseNumber()
-	var value any
-	if err := decoder.Decode(&value); err == nil && !decoder.More() {
-		if encoded, err := json.Marshal(value); err == nil {
-			canonical = encoded
-		}
-	}
 	sum := sha256.New()
 	sum.Write([]byte(route))
 	sum.Write([]byte{0})
-	sum.Write(canonical)
+	sum.Write(body)
 	return hex.EncodeToString(sum.Sum(nil))
+}
+
+// ValidateRequestKeyBody accepts a keyed request's body only when it is
+// exactly one JSON value and no object in it names a member twice, compared
+// the way the endpoint decoder matches field names (case-insensitively).
+// Encoding/json keeps the last of two such members, so their order would
+// change what is saved while the request still looked like an earlier one.
+func ValidateRequestKeyBody(body []byte) error {
+	if !json.Valid(body) {
+		return ValidationError{Message: "a request with an Idempotency-Key must carry exactly one JSON value"}
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	type frame struct {
+		object    bool
+		expectKey bool
+		keys      []string
+	}
+	var stack []*frame
+	for {
+		token, err := decoder.Token()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return ValidationError{Message: "a request with an Idempotency-Key must carry exactly one JSON value"}
+		}
+		var top *frame
+		if len(stack) > 0 {
+			top = stack[len(stack)-1]
+		}
+		if key, isString := token.(string); isString && top != nil && top.object && top.expectKey {
+			for _, seen := range top.keys {
+				if strings.EqualFold(seen, key) {
+					return ValidationError{Message: fmt.Sprintf("a request with an Idempotency-Key must name each field once; %q appears twice", key)}
+				}
+			}
+			top.keys = append(top.keys, key)
+			top.expectKey = false
+			continue
+		}
+		switch token {
+		case json.Delim('{'):
+			stack = append(stack, &frame{object: true, expectKey: true})
+			continue
+		case json.Delim('['):
+			stack = append(stack, &frame{})
+			continue
+		case json.Delim('}'), json.Delim(']'):
+			stack = stack[:len(stack)-1]
+		}
+		// A value ended: an enclosing object expects its next key.
+		if len(stack) > 0 && stack[len(stack)-1].object {
+			stack[len(stack)-1].expectKey = true
+		}
+	}
 }
 
 // NewClaim prepares the claim a write stores with its record.
