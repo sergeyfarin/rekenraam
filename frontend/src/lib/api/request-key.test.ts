@@ -67,6 +67,36 @@ describe('request key (#660)', () => {
     expect(new Set(sent.map(([, key]) => key)).size).toBe(1);
   });
 
+  // Review of PR #669, round 2: the confirmed save committed and lost its
+  // response, the owner changed the amount, and that edited save failed with
+  // a 503. Restoring the amount must still replay the confirmed save.
+  it('keeps the original unresolved save when an edited save also fails without an answer', async () => {
+    const requestKey = new RequestKey();
+    const sent: Array<[string, string]> = [];
+    await expect(requestKey.send({ amount: '4.50' }, lostOnce('confirmed', sent))).rejects.toBeInstanceOf(APIClientError);
+    await expect(requestKey.send({ amount: '5.00' }, async (key) => {
+      sent.push(['edited', key]);
+      throw new APIClientError({ status: 503, code: 'RESOURCE_BUSY' });
+    })).rejects.toBeInstanceOf(APIClientError);
+    expect(requestKey.isUnresolved({ amount: '4.50' })).toBe(true);
+    expect(requestKey.isUnresolved({ amount: '5.00' })).toBe(true);
+    await requestKey.send({ amount: '4.50' }, async (key) => { sent.push(['rebuilt', key]); });
+    expect(sent.map(([what]) => what)).toEqual(['confirmed', 'edited', 'confirmed']);
+    expect(new Set(sent.map(([, key]) => key)).size).toBe(1);
+    // Saved: every unresolved save is settled, and the next entry is new.
+    expect(requestKey.isUnresolved({ amount: '5.00' })).toBe(false);
+  });
+
+  it('settles only the refused save, keeping the others', async () => {
+    const requestKey = new RequestKey();
+    await expect(requestKey.send({ n: 1 }, async () => { throw lost(); })).rejects.toBeInstanceOf(APIClientError);
+    await expect(requestKey.send({ n: 2 }, async () => {
+      throw new APIClientError({ status: 409, code: 'IDEMPOTENCY_KEY_REUSED' });
+    })).rejects.toBeInstanceOf(APIClientError);
+    expect(requestKey.isUnresolved({ n: 1 })).toBe(true);
+    expect(requestKey.isUnresolved({ n: 2 })).toBe(false);
+  });
+
   it('forgets the earlier save once it is refused, which wrote nothing', async () => {
     const requestKey = new RequestKey();
     let calls = 0;

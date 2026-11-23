@@ -10,57 +10,53 @@ import { APIClientError } from '#lib/api/client.ts';
  * A retry must also repeat the request byte for byte, or the server refuses
  * it as a different one. A form rebuilds its body on every Save and may build
  * it differently the second time: without the checkpoint override the owner
- * confirmed, or with a payee the lost save created. So the key keeps the save
- * whose outcome is unknown (no answer, or a server failure), identified by
- * the owner's entry rather than the body, and while that entry is unchanged
- * it sends that save again instead of the rebuilt one.
+ * confirmed, or with a payee the lost save created. So the key keeps each
+ * save whose outcome is unknown (no answer, or a server failure), identified
+ * by the owner's entry rather than the body, and while the entry matches one
+ * of them it sends that save again instead of the rebuilt one. Under one key
+ * at most one of them committed, and none is forgotten until its own outcome
+ * is known or the entry is saved: an edited save that also fails leaves the
+ * original confirmed save to replay when the owner restores the entry.
  *
  * Inside a New transaction entry the key lives with the activity's working
  * copy (`useRequestKey`), so closing and reopening an activity keeps it.
  */
 export class RequestKey {
   #value = newRequestKey();
-  #unresolved: { entry: string; save: (requestKey: string) => Promise<unknown> } | null = null;
+  readonly #unresolved = new Map<string, (requestKey: string) => Promise<unknown>>();
 
   get value(): string {
     return this.#value;
   }
 
-  /** Whether the last save of this unchanged entry has an unknown outcome. */
+  /** Whether a save of exactly this entry has an unknown outcome. */
   isUnresolved(entry: unknown): boolean {
-    return this.#unresolved?.entry === entryIdentity(entry);
+    return this.#unresolved.has(entryIdentity(entry));
   }
 
   /**
-   * Saves the entry with this key: the earlier save again when the entry is
-   * unchanged since a save with an unknown outcome, otherwise `save`. Success
-   * starts a new entry. A refusal with a code stored nothing, so the key is
-   * kept for the corrected save, including IDEMPOTENCY_KEY_REUSED: the owner
-   * changed an entry whose earlier save was recorded, and is told so rather
-   * than handed a key that would record it twice.
+   * Saves the entry with this key: an earlier save of the same entry whose
+   * outcome is unknown is sent again as it was, otherwise `save`. Success
+   * starts a new entry. A refusal with a code settles only this entry's save:
+   * it wrote nothing, and the other unresolved saves keep theirs. The key is
+   * kept, including on IDEMPOTENCY_KEY_REUSED: the owner changed an entry
+   * whose earlier save was recorded, and is told so rather than handed a key
+   * that would record it twice.
    */
   async send<T>(entry: unknown, save: (requestKey: string) => Promise<T>): Promise<T> {
     const identity = entryIdentity(entry);
-    const attempt = this.#unresolved?.entry === identity
-      ? (this.#unresolved.save as (requestKey: string) => Promise<T>)
-      : save;
+    const attempt = (this.#unresolved.get(identity) as ((requestKey: string) => Promise<T>) | undefined) ?? save;
     try {
       const result = await attempt(this.#value);
-      this.#unresolved = null;
+      this.#unresolved.clear();
       this.#value = newRequestKey();
       return result;
     } catch (error) {
-      if (saveOutcomeUnknown(error)) this.#unresolved = { entry: identity, save: attempt };
-      // Reused: the earlier save committed under this key and the changed
-      // entry is refused. Keep that save, so restoring the entry replays it.
-      else if (!isRequestKeyReused(error)) this.#unresolved = null;
+      if (saveOutcomeUnknown(error)) this.#unresolved.set(identity, attempt);
+      else this.#unresolved.delete(identity);
       throw error;
     }
   }
-}
-
-export function isRequestKeyReused(error: unknown): boolean {
-  return error instanceof APIClientError && error.code === 'IDEMPOTENCY_KEY_REUSED';
 }
 
 /**
