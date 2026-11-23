@@ -228,8 +228,8 @@ importers:
         specifier: 3.12.4
         version: 3.12.4
       '@lucide/svelte':
-        specifier: 1.73.0
-        version: 1.73.0(svelte@5.57.3)
+        specifier: 1.77.0
+        version: 1.77.0(svelte@5.57.3)
       '@sveltejs/adapter-static':
         specifier: 4.0.1
         version: 4.0.1(@sveltejs/kit@3.2.0(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.3)(vite@8.3.8(@types/node@26.6.6)(jiti@2.7.0)))(svelte@5.57.3)(typescript@6.0.3)(vite@8.3.8(@types/node@26.6.6)(jiti@2.7.0)))
@@ -468,8 +468,8 @@ packages:
   '@lix-js/sdk@0.20.1':
     resolution: {integrity: sha512-oscOFP8Cr1My6Wh2KVYC9+aJ1mHs+d7vnD+7PPJaA4L+Y1FR37Sm99SrFGfvUizaj/XtRi2GlDF2IOFt9iXMNQ==}
 
-  '@lucide/svelte@1.73.0':
-    resolution: {integrity: sha512-Rz1uA9aTJ7HA/j2Hf9Dm2OVM8NtkzHnNeIQvVWoUkpf1ZD/7dR9cB4ftjbOiWAeJrKkEAVvTDrcVtITFdx6KAA==}
+  '@lucide/svelte@1.77.0':
+    resolution: {integrity: sha512-gXjmQ4VK3Mh/M11Nn/XCeln3XZByR4MxX5o+NMfr/Wg9MQs+BffvXTnW+0WvmjV1u58TXJhXvgJZHrMASUnqow==}
     peerDependencies:
       svelte: ^5
 
@@ -1890,7 +1890,7 @@ snapshots:
       binaryen: 130.0.0
       fflate: 0.8.3
 
-  '@lucide/svelte@1.73.0(svelte@5.57.3)':
+  '@lucide/svelte@1.77.0(svelte@5.57.3)':
     dependencies:
       svelte: 5.57.3
 
