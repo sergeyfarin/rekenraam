@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from './support/fixtures';
 import { apiJSON } from './support/api';
 import { createCashAccount, expectSavedTransaction, readyForLedger } from './support/ledger';
@@ -11,6 +12,7 @@ import { openInvestmentActivity } from './support/investment-entry';
 // and counts the records through the API.
 
 const networkError = 'The server could not be reached. Check the connection and try again.';
+const busyError = JSON.parse(readFileSync(new URL('../../frontend/messages/settings/en.json', import.meta.url), 'utf8')).api_error_resource_busy as string;
 
 /**
  * Forwards every POST to path and drops the first successful response after
@@ -228,6 +230,58 @@ test('a transaction confirmed over a reconciled period and saved again after a l
   expect(await transactionCount(page, account.id)).toBe(2);
   // A third Save cannot post it again either: the entry is saved and closed.
   await expect(form.getByRole('button', { name: 'Save transaction', exact: true })).toHaveCount(0);
+});
+
+// Review of PR #669, round 2: an edited save that also failed replaced the
+// confirmed save the key could replay, so restoring the entry was refused as
+// another request.
+test('a confirmed transaction stays replayable after an edited retry fails too', async ({ page }) => {
+  const { account, suffix } = await reconciledAccount(page);
+  const description = `Confirmed edited ${suffix}`;
+  const answered: Array<{ status: number; replayed: string | undefined; amount: string }> = [];
+  let committed = 0;
+  await page.route('**/api/v1/transactions', async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    const amount = JSON.stringify(route.request().postDataJSON()?.journal_entries ?? '');
+    if (committed === 1 && answered.length === 1) {
+      // The edited save meets a busy server: nothing is written.
+      answered.push({ status: 503, replayed: undefined, amount });
+      return route.fulfill({ status: 503, contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'RESOURCE_BUSY', message: 'database is busy; retry the request' } }) });
+    }
+    const response = await route.fetch();
+    if (!response.ok()) return route.fulfill({ response });
+    committed += 1;
+    answered.push({ status: response.status(), replayed: response.headers()['idempotent-replayed'], amount });
+    if (committed === 1) return route.abort('failed');
+    return route.fulfill({ response });
+  });
+
+  await page.goto('/app/ledger/transactions');
+  await page.getByRole('button', { name: 'New transaction', exact: true }).click();
+  const form = page.getByRole('region', { name: 'New transaction', exact: true });
+  await form.getByLabel('Date').fill(daysFromTodayISO(-5));
+  await form.getByLabel('Description').fill(description);
+  await form.getByLabel('Account').selectOption({ label: account.name });
+  await form.getByLabel('Amount').fill('4.50');
+  await form.getByPlaceholder('Search categories').click();
+  await form.locator('ul[role="listbox"] button[role="option"]').first().click();
+  const save = form.getByRole('button', { name: 'Save transaction', exact: true });
+  await save.click();
+  await page.getByRole('alertdialog', { name: 'This change affects a reconciled period' })
+    .getByRole('button', { name: 'Proceed and invalidate', exact: true }).click();
+  await expect(form.getByText(networkError)).toBeVisible();
+
+  await form.getByLabel('Amount').fill('5.00');
+  await save.click();
+  await expect(form.getByText(busyError)).toBeVisible();
+  await form.getByLabel('Amount').fill('4.50');
+  await save.click();
+  await expectSavedTransaction(page, description);
+
+  expect(answered.map((answer) => [answer.status, answer.replayed])).toEqual([[201, undefined], [503, undefined], [201, 'true']]);
+  expect(answered[2].amount).toBe(answered[0].amount);
+  expect(await transactionCount(page, account.id)).toBe(2);
 });
 
 test('a dividend confirmed over a reconciled period and saved again after a lost response is recorded once', async ({ page }) => {
