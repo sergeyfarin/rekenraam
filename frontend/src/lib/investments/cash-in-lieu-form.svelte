@@ -19,6 +19,10 @@
   import { TranslatedFormError } from '#lib/form-errors.ts';
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
+  import { RequestKey } from '#lib/api/request-key.ts';
+
+  // One key for every retry of this entry; a new one once it is saved (#660).
+  const requestKey = new RequestKey();
 
   let { csrfToken, onSaved, onCancel, split, correction }: {
     csrfToken: string; onSaved: () => void; onCancel: () => void;
@@ -104,7 +108,7 @@
       const acknowledgement=gainAcknowledgement(gainImpact);
       const guards={...checkpointOverride(reviewed),gain_impact_acknowledgement:acknowledgement || undefined};
       if (initial) await replaceCashInLieu(initial.transaction_id,{reason:reason.trim(),replacement:preview.payload,...guards},csrfToken);
-      else await recordCashInLieu({...preview.payload,...guards},csrfToken);
+      else { const payload=preview.payload; await requestKey.send((key) => recordCashInLieu({...payload,...guards},csrfToken, key)); }
       await invalidateInvestmentReads(queryClient);onSaved();
     } catch(error) {
       if (isStaleImpactRefusal(error) && preview) {

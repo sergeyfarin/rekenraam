@@ -25,6 +25,10 @@
   import { m } from '#lib/paraglide/messages.js';
   import { untrack } from 'svelte';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
+  import { RequestKey } from '#lib/api/request-key.ts';
+
+  // One key for every retry of this entry; a new one once it is saved (#660).
+  const requestKey = new RequestKey();
 
   let { csrfToken, onSaved, onCancel, prefill }: {
     csrfToken: string;
@@ -100,7 +104,7 @@
 
 
   async function submit(payload: ExternalTransferInRequest, guards: ReviewGuards) {
-    await recordExternalTransferIn({ ...payload, ...guards }, csrfToken);
+    await requestKey.send((key) => recordExternalTransferIn({ ...payload, ...guards }, csrfToken, key));
     await invalidateInvestmentReads(queryClient);
     onSaved();
   }

@@ -45,6 +45,10 @@
   import { usePrefilledInstrument } from '#lib/investments/investment-prefill.svelte.ts';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
   import { isSettlementAccount } from '#lib/investments/settlement-accounts.ts';
+  import { RequestKey } from '#lib/api/request-key.ts';
+
+  // One key for every retry of this entry; a new one once it is saved (#660).
+  const requestKey = new RequestKey();
 
   const ownerToday = useOwnerToday();
 
@@ -298,7 +302,7 @@
         };
 
         if (await reviewCash(payload)) return;
-        await recordDividend(payload, csrfToken);
+        await requestKey.send((key) => recordDividend(payload, csrfToken, key));
       } else {
         if (!selectedInstrument || !quantity) return;
         // Both coefficients cross JSON as strings. Quantity allows 38 digits;
@@ -318,7 +322,7 @@
 
         lastReinvestment = payload;
         if (await reviewReinvestment(payload, false)) return;
-        await recordReinvestedDividend(payload, csrfToken);
+        await requestKey.send((key) => recordReinvestedDividend(payload, csrfToken, key));
       }
 
       await refreshAfterSave();
@@ -368,7 +372,7 @@
     try {
       if (target.mode === 'cash') {
         try {
-          await recordDividend({ ...target.payload, ...checkpointOverride(impacts) }, csrfToken);
+          await requestKey.send((key) => recordDividend({ ...target.payload, ...checkpointOverride(impacts) }, csrfToken, key));
         } catch (err) {
           // A statement finished since the review: show the current set (#304).
           if (isStaleImpactRefusal(err) && (await reviewCash(target.payload))) return;
@@ -377,11 +381,11 @@
       } else {
         const acknowledgement = gainAcknowledgement(gainImpact);
         lastReinvestment = target.payload;
-        await recordReinvestedDividend({
+        await requestKey.send((key) => recordReinvestedDividend({
           ...target.payload,
           ...checkpointOverride(impacts),
           ...(acknowledgement ? { gain_impact_acknowledgement: acknowledgement } : {})
-        }, csrfToken);
+        }, csrfToken, key));
       }
 
       await refreshAfterSave();

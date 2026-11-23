@@ -49,6 +49,11 @@
 
   import { usePrefilledInstrument } from '#lib/investments/investment-prefill.svelte.ts';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
+  import { RequestKey } from '#lib/api/request-key.ts';
+
+  // One key for every retry of this entry; a new one once it is saved (#660).
+  const requestKey = new RequestKey();
+
   const ownerToday = useOwnerToday();
 
   let {
@@ -425,7 +430,7 @@
       }, csrfToken);
     } else {
       // A sale dated behind a later one replays it (T-117); echo the accepted gains.
-      await recordSell({ ...payload, ...guards }, csrfToken);
+      await requestKey.send((key) => recordSell({ ...payload, ...guards }, csrfToken, key));
     }
 
     await invalidateInvestmentReads(queryClient);
