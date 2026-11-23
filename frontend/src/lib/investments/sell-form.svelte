@@ -15,7 +15,7 @@
   import { parseTradeAmounts, type AmountFieldError } from '#lib/investments/form-amounts.ts';
   import TradeEconomicsFields from '#lib/investments/trade-economics-fields.svelte';
   import TradeUnitPrice from '#lib/investments/trade-unit-price.svelte';
-  import { useEntryActivity, useMoneyCurrency, useTradePair } from '#lib/transactions/entry-context.svelte.ts';
+  import { useEntryActivity, useMoneyCurrency, useTradePair, useRequestKey } from '#lib/transactions/entry-context.svelte.ts';
   import {
     correctionLotDrafts, correctionTradeDraft, exactTradeFields, parseCorrectionLotChoices,
     type CorrectionLotDraft, type TradeChargeDraft
@@ -49,11 +49,6 @@
 
   import { usePrefilledInstrument } from '#lib/investments/investment-prefill.svelte.ts';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
-  import { RequestKey } from '#lib/api/request-key.ts';
-
-  // One key for every retry of this entry; a new one once it is saved (#660).
-  const requestKey = new RequestKey();
-
   const ownerToday = useOwnerToday();
 
   let {
@@ -152,6 +147,8 @@
     instrument: () => commodityID,
     pending: () => pending
   });
+  // The activity's request key, kept with its working copy (#660).
+  const requestKey = useRequestKey('sell');
   const opening = useTradePair('sell', !!initialCorrection, workingCopy,
     () => ({ quantity: quantityStr, unitPrice: unitPriceStr, currencyID: money.currencyID }));
   if (opening) {
@@ -405,6 +402,7 @@
   // a stale or missing gain acknowledgement re-previews the current set.
   const impactReview = commitReview({
     protocol: 'gains',
+    requestKey,
     get review() { return reconciliationModal; },
     impact: ({ payload, reason: correctionReason }: TradeSubject) => correction
       ? previewSaleReplacementReconciliation(correction.transaction_id, {
@@ -429,7 +427,7 @@
       }, csrfToken);
     } else {
       // A sale dated behind a later one replays it (T-117); echo the accepted gains.
-      await requestKey.send((key) => recordSell({ ...payload, ...guards }, csrfToken, key));
+      await requestKey.send({ payload, reason: correctionReason }, (key) => recordSell({ ...payload, ...guards }, csrfToken, key));
     }
 
     await invalidateInvestmentReads(queryClient);

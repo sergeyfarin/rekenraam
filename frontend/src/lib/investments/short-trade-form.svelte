@@ -18,7 +18,7 @@
   import { parseTradeAmounts, type AmountFieldError } from '#lib/investments/form-amounts.ts';
   import TradeEconomicsFields from '#lib/investments/trade-economics-fields.svelte';
   import TradeUnitPrice from '#lib/investments/trade-unit-price.svelte';
-  import { useEntryActivity, useMoneyCurrency, useTradePair } from '#lib/transactions/entry-context.svelte.ts';
+  import { useEntryActivity, useMoneyCurrency, useTradePair, useRequestKey } from '#lib/transactions/entry-context.svelte.ts';
   import { correctionTradeDraft, exactTradeFields, type TradeChargeDraft } from '#lib/investments/trade-economics.ts';
   import type { AccountResponse } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
@@ -51,11 +51,6 @@
   import { usePrefilledInstrument } from '#lib/investments/investment-prefill.svelte.ts';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
   import { latestRequest } from '#lib/investments/latest-request.ts';
-  import { RequestKey } from '#lib/api/request-key.ts';
-
-  // One key for every retry of this entry; a new one once it is saved (#660).
-  const requestKey = new RequestKey();
-
   const ownerToday = useOwnerToday();
 
   let {
@@ -161,6 +156,8 @@
     instrument: () => commodityID,
     pending: () => pending
   });
+  // The activity's request key, kept with its working copy (#660).
+  const requestKey = useRequestKey(activity);
   const opening = useTradePair(activity, !!initialCorrection, workingCopy,
     () => ({ quantity: quantityStr, unitPrice: unitPriceStr, currencyID: money.currencyID }));
   if (opening) {
@@ -330,6 +327,7 @@
 
   const impactReview = commitReview({
     protocol: 'gains',
+    requestKey,
     get review() { return reconciliationModal; },
     impact: (payload: InvestmentTradeRequest) => correction
       ? cover
@@ -354,9 +352,9 @@
         await replaceShortSale(correction.transaction_id, request, csrfToken);
       }
     } else if (cover) {
-      await requestKey.send((key) => recordShortCover(body, csrfToken, key));
+      await requestKey.send(payload, (key) => recordShortCover(body, csrfToken, key));
     } else {
-      await requestKey.send((key) => recordShortSale(body, csrfToken, key));
+      await requestKey.send(payload, (key) => recordShortSale(body, csrfToken, key));
     }
     await invalidateInvestmentReads(queryClient);
     onSaved();

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { APIClientError } from '#lib/api/client.ts';
+import { RequestKey } from '#lib/api/request-key.ts';
 import type { GainImpact } from '#lib/api/investments.ts';
 import { commitReview, type CommitImpact, type CommitReviewState } from './commit-review';
 import type { ReviewGuards } from './preview-review';
@@ -167,43 +168,67 @@ describe('commitReview', () => {
 
   describe('a write whose outcome is unknown (#660)', () => {
     const none = async () => ({ affected_checkpoints: [], gain_impact: null });
-    const lost = async () => { throw new APIClientError({ status: 0 }); };
+
+    /** A keyed create: the form's write goes through the entry's request key. */
+    function keyed(impacts: (() => Promise<CommitImpact>)[], responses: Array<'lost' | 'ok' | 'conflict'>) {
+      const requestKey = new RequestKey();
+      const state = { review: null as CommitReviewState<Subject> | null, asked: [] as Subject[], sent: [] as { subject: Subject; guards: ReviewGuards; key: string }[] };
+      const controller = commitReview<Subject, CommitImpact>({
+        protocol: 'gains',
+        requestKey,
+        get review() { return state.review; },
+        async impact(subject) {
+          state.asked.push(subject);
+          const next = impacts.shift();
+          if (!next) throw new Error('unexpected impact request');
+          return next();
+        },
+        async write(subject, guards) {
+          await requestKey.send(subject, async (key) => {
+            state.sent.push({ subject, guards, key });
+            const response = responses.shift();
+            if (response === 'lost') throw new APIClientError({ status: 0 });
+            if (response === 'conflict') throw new APIClientError({ status: 409, code: 'CONFLICT' });
+          });
+        },
+        setReview(review) { state.review = review; },
+        setPending() {},
+        setError() {}
+      });
+      return { state, controller };
+    }
 
     it('sends the unchanged write again without asking for its impact', async () => {
       // The first sale committed and its response was lost: its impact would
       // now be refused, because the units are gone.
-      const { state, controller } = harness('gains', { impacts: [none], writes: [lost] });
+      const { state, controller } = keyed([none], ['lost', 'ok']);
       await expect(controller.submit({ n: 1 })).rejects.toBeInstanceOf(APIClientError);
       await controller.submit({ n: 1 });
       expect(state.asked).toEqual([{ n: 1 }]);
-      expect(state.written).toEqual([{ subject: { n: 1 }, guards: {} }, { subject: { n: 1 }, guards: {} }]);
+      expect(state.sent).toHaveLength(2);
+      expect(state.sent[1]).toEqual(state.sent[0]);
     });
 
     it('resends the guards the confirmed review gave', async () => {
-      const { state, controller } = harness('gains', {
-        impacts: [async () => ({ affected_checkpoints: [checkpoint(7)], gain_impact: gains('ack-1') })],
-        writes: [async () => { throw new APIClientError({ status: 502 }); }]
-      });
+      const { state, controller } = keyed(
+        [async () => ({ affected_checkpoints: [checkpoint(7)], gain_impact: gains('ack-1') })], ['lost', 'ok']);
       expect(await controller.open({ n: 1 }, false)).toBe(true);
       await controller.confirm();
       await controller.submit({ n: 1 });
       expect(state.asked).toHaveLength(1);
-      expect(state.written[1]).toEqual(state.written[0]);
-      expect(state.written[1].guards).not.toEqual({});
+      expect(state.sent[1]).toEqual(state.sent[0]);
+      expect(state.sent[1].guards).not.toEqual({});
     });
 
     it('asks for the impact again once the owner changed the entry', async () => {
-      const { state, controller } = harness('gains', { impacts: [none, none], writes: [lost] });
+      const { state, controller } = keyed([none, none], ['lost', 'ok']);
       await expect(controller.submit({ n: 1 })).rejects.toBeInstanceOf(APIClientError);
       await controller.submit({ n: 2 });
       expect(state.asked).toEqual([{ n: 1 }, { n: 2 }]);
     });
 
     it('asks for the impact again after a refusal, which wrote nothing', async () => {
-      const { state, controller } = harness('gains', {
-        impacts: [none, none],
-        writes: [async () => { throw new APIClientError({ status: 409, code: 'CONFLICT' }); }]
-      });
+      const { state, controller } = keyed([none, none], ['conflict', 'ok']);
       await expect(controller.submit({ n: 1 })).rejects.toBeInstanceOf(APIClientError);
       await controller.submit({ n: 1 });
       expect(state.asked).toEqual([{ n: 1 }, { n: 1 }]);

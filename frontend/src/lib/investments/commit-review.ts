@@ -1,4 +1,4 @@
-import { APIClientError } from '#lib/api/client.ts';
+import type { RequestKey } from '#lib/api/request-key.ts';
 import type { GainImpact, ReconciliationImpactResponse } from '#lib/api/investments.ts';
 import { hasGainChanges, impactNeedsReview, isStaleImpactRefusal } from '#lib/investments/gain-impact.ts';
 import { reviewGuards, type ReviewGuards } from '#lib/investments/preview-review.ts';
@@ -36,6 +36,12 @@ export type CommitReviewHost<S, I extends CommitImpact> = {
   readonly review: CommitReviewState<S> | null;
   /** The impact the write would have now, simulated and rolled back. */
   impact(subject: S): Promise<I>;
+  /**
+   * The entry's request key, when the write is a keyed create sent through
+   * `requestKey.send(subject, …)`. Its unresolved write is sent again as it
+   * was, without asking for the impact first.
+   */
+  readonly requestKey?: RequestKey;
   /** Records once with exactly the reviewed guards; may invalidate and close. */
   write(subject: S, guards: ReviewGuards): Promise<void>;
   setReview(review: CommitReviewState<S> | null): void;
@@ -43,35 +49,7 @@ export type CommitReviewHost<S, I extends CommitImpact> = {
   setError(error: unknown): void;
 };
 
-/**
- * A write whose outcome is unknown: no answer arrived (a network error), or
- * the server failed after it may have committed. A refusal with a code is
- * known: nothing was written.
- */
-export function writeOutcomeUnknown(error: unknown): boolean {
-  if (!(error instanceof APIClientError)) return true;
-  return error.status === 0 || error.status >= 500;
-}
-
 export function commitReview<S, I extends CommitImpact>(host: CommitReviewHost<S, I>) {
-  // The last write whose outcome is unknown (#660). Its impact may already be
-  // part of the ledger, so asking for it again can refuse the very write
-  // that succeeded (a sale whose units it disposed of). An unchanged retry
-  // sends that write again, guards and request key included, and the server
-  // answers with the stored result; if nothing was written, the server's
-  // own guards still refuse what needs a review, and recover() opens it.
-  let unresolved: { subject: S; guards: ReviewGuards; identity: string } | null = null;
-
-  async function attempt(subject: S, guards: ReviewGuards) {
-    try {
-      await host.write(subject, guards);
-      unresolved = null;
-    } catch (error) {
-      unresolved = writeOutcomeUnknown(error) ? { subject, guards, identity: JSON.stringify(subject) } : null;
-      throw error;
-    }
-  }
-
   /** Opens a review when the write needs a decision; false when it needs none. */
   async function open(subject: S, refreshed: boolean): Promise<boolean> {
     const impact = await host.impact(subject);
@@ -99,12 +77,16 @@ export function commitReview<S, I extends CommitImpact>(host: CommitReviewHost<S
      * a review opens first. Throws what the write throws; pass it to recover.
      */
     async submit(subject: S): Promise<void> {
-      if (unresolved && unresolved.identity === JSON.stringify(subject)) {
-        await attempt(unresolved.subject, unresolved.guards);
+      // The write's impact may already be in the ledger: a lost sale's
+      // impact is refused because its units are gone. An unchanged entry
+      // whose last write has an unknown outcome goes straight to the write,
+      // which sends that write again through the request key (#660).
+      if (host.requestKey?.isUnresolved(subject)) {
+        await host.write(subject, {});
         return;
       }
       if (await open(subject, false)) return;
-      await attempt(subject, {});
+      await host.write(subject, {});
     },
     /** Records with exactly the checkpoints and gain set the review showed. */
     async confirm() {
@@ -114,7 +96,7 @@ export function commitReview<S, I extends CommitImpact>(host: CommitReviewHost<S
       host.setPending(true);
       host.setError(undefined);
       try {
-        await attempt(current.subject, reviewGuards(current.impacts, current.gainImpact));
+        await host.write(current.subject, reviewGuards(current.impacts, current.gainImpact));
       } catch (error) {
         await recover(error, current.subject);
       } finally {

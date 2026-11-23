@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { APIClientError } from '#lib/api/client.ts';
-import { RequestKey, newRequestKey } from '#lib/api/request-key.ts';
+import { RequestKey, newRequestKey, saveOutcomeUnknown } from '#lib/api/request-key.ts';
+
+const lost = () => new APIClientError({ status: 0 });
 
 describe('request key (#660)', () => {
   it('is 32 lowercase hex characters, new each time', () => {
@@ -9,38 +11,72 @@ describe('request key (#660)', () => {
     expect(newRequestKey()).not.toBe(key);
   });
 
-  it('sends the same key with every retry of one entry until it is saved', async () => {
-    const requestKey = new RequestKey();
-    const sent: string[] = [];
-    const lost = async (key: string) => {
-      sent.push(key);
-      throw new APIClientError({ status: 0 });
+  it('knows which failures leave the outcome unknown', () => {
+    expect(saveOutcomeUnknown(lost())).toBe(true);
+    expect(saveOutcomeUnknown(new APIClientError({ status: 502 }))).toBe(true);
+    expect(saveOutcomeUnknown(new TypeError('fetch failed'))).toBe(true);
+    expect(saveOutcomeUnknown(new APIClientError({ status: 409, code: 'CONFLICT' }))).toBe(false);
+  });
+
+  /** A save whose first response is lost; the server answers the repeat. */
+  function lostOnce(label: string, sent: Array<[string, string]>) {
+    let calls = 0;
+    return async (key: string) => {
+      sent.push([label, key]);
+      calls += 1;
+      if (calls === 1) throw lost();
     };
-    await expect(requestKey.send(lost)).rejects.toBeInstanceOf(APIClientError);
-    await expect(requestKey.send(lost)).rejects.toBeInstanceOf(APIClientError);
-    await requestKey.send(async (key) => sent.push(key));
-    expect(new Set(sent).size).toBe(1);
+  }
 
+  it('sends the same key with every retry of one entry until it is saved, then a new one', async () => {
+    const requestKey = new RequestKey();
+    const sent: Array<[string, string]> = [];
+    await expect(requestKey.send({ n: 1 }, lostOnce('first', sent))).rejects.toBeInstanceOf(APIClientError);
+    await requestKey.send({ n: 1 }, lostOnce('rebuilt', sent));
     // Saved: the next entry, even with identical content, gets a new key.
-    await requestKey.send(async (key) => sent.push(key));
-    expect(sent[3]).not.toBe(sent[0]);
+    await requestKey.send({ n: 1 }, async (key) => { sent.push(['next', key]); });
+    expect(sent[1][1]).toBe(sent[0][1]);
+    expect(sent[2][1]).not.toBe(sent[0][1]);
   });
 
-  it('keeps the key after a refusal, which stored nothing', async () => {
+  it('resends the exact earlier save while the entry is unchanged', async () => {
+    // The owner confirmed a checkpoint override; the save committed and its
+    // response was lost. Save again rebuilds the body without the override.
     const requestKey = new RequestKey();
-    const before = requestKey.value;
-    await expect(requestKey.send(async () => {
-      throw new APIClientError({ status: 400, code: 'VALIDATION_FAILED' });
-    })).rejects.toBeInstanceOf(APIClientError);
-    expect(requestKey.value).toBe(before);
+    const sent: Array<[string, string]> = [];
+    await expect(requestKey.send({ n: 1 }, lostOnce('with override', sent))).rejects.toBeInstanceOf(APIClientError);
+    expect(requestKey.isUnresolved({ n: 1 })).toBe(true);
+    await requestKey.send({ n: 1 }, lostOnce('rebuilt', sent));
+    expect(sent.map(([what]) => what)).toEqual(['with override', 'with override']);
+    expect(requestKey.isUnresolved({ n: 1 })).toBe(false);
   });
 
-  it('starts a new key once told an earlier save of the entry was recorded with other content', async () => {
+  it('sends the new save once the owner changed the entry, under the same key', async () => {
     const requestKey = new RequestKey();
-    const before = requestKey.value;
-    await expect(requestKey.send(async () => {
+    const sent: Array<[string, string]> = [];
+    await expect(requestKey.send({ n: 1 }, lostOnce('first', sent))).rejects.toBeInstanceOf(APIClientError);
+    expect(requestKey.isUnresolved({ n: 2 })).toBe(false);
+    await expect(requestKey.send({ n: 2 }, async (key) => {
+      sent.push(['changed', key]);
       throw new APIClientError({ status: 409, code: 'IDEMPOTENCY_KEY_REUSED' });
     })).rejects.toBeInstanceOf(APIClientError);
-    expect(requestKey.value).not.toBe(before);
+    // Reused is a refusal: the key stays, so no later save can record the
+    // entry a second time, and restoring the entry replays the first save.
+    await requestKey.send({ n: 1 }, async (key) => { sent.push(['rebuilt', key]); });
+    expect(sent.map(([what]) => what)).toEqual(['first', 'changed', 'first']);
+    expect(new Set(sent.map(([, key]) => key)).size).toBe(1);
+  });
+
+  it('forgets the earlier save once it is refused, which wrote nothing', async () => {
+    const requestKey = new RequestKey();
+    let calls = 0;
+    const save = async () => {
+      calls += 1;
+      throw calls === 1 ? lost() : new APIClientError({ status: 400, code: 'VALIDATION_FAILED' });
+    };
+    await expect(requestKey.send({ n: 1 }, save)).rejects.toBeInstanceOf(APIClientError);
+    await expect(requestKey.send({ n: 1 }, async () => { throw new Error('not sent'); })).rejects.toBeInstanceOf(APIClientError);
+    expect(calls).toBe(2);
+    expect(requestKey.isUnresolved({ n: 1 })).toBe(false);
   });
 });

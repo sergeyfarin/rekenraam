@@ -845,6 +845,14 @@
       }
     }
 
+    // An unchanged new entry whose last save has an unknown outcome is sent
+    // again as it was (#660): its payee question was settled for that save,
+    // and the lost save may have created the payee it now would link.
+    if (mode === 'create' && requestKey.isUnresolved(buildPayload())) {
+      await savePayee();
+      return;
+    }
+
     if (payeeDecision.kind === 'block') return;
     if (payeeDecision.kind === 'confirm') {
       payeeConfirmationName = payeeLookupTerm;
@@ -985,7 +993,7 @@
     } else if (mode === 'edit' && transaction) {
       saved = await updateTransaction(transaction.id, finalPayload, csrfToken!);
     } else {
-      saved = await requestKey.send((key) => createTransaction(finalPayload, csrfToken!, key));
+      saved = await requestKey.send(payload, (key) => createTransaction(finalPayload, csrfToken!, key));
     }
 
     leaving = true;

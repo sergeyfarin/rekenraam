@@ -1,4 +1,5 @@
 import { getContext, setContext, untrack } from 'svelte';
+import { RequestKey } from '#lib/api/request-key.ts';
 import type { InvestmentActivity } from '#lib/investments/activities.ts';
 import { EntryWorkingCopies, moneyCurrencyStep, restoreTradeCopy, type SharedEntrySelections, type TradeCopy, type WorkingCopyValues } from './entry-working-copies.ts';
 
@@ -27,6 +28,21 @@ export class EntryContext {
   /** An investment save is in flight: account, tab and activity are locked. */
   saving = $state(false);
   readonly copies = new EntryWorkingCopies();
+  readonly #requestKeys = new Map<InvestmentActivity, RequestKey>();
+
+  /**
+   * The activity's request key (#660), kept with its working copy: closing
+   * and reopening the activity inside this entry keeps the key and any save
+   * whose outcome is unknown, so saving the restored entry again replays it.
+   */
+  requestKey(activity: InvestmentActivity): RequestKey {
+    let requestKey = this.#requestKeys.get(activity);
+    if (!requestKey) {
+      requestKey = new RequestKey();
+      this.#requestKeys.set(activity, requestKey);
+    }
+    return requestKey;
+  }
   /**
    * True while the owner's own input event is being handled, including the
    * effects it causes (bindings, derived totals). A change outside it (a
@@ -63,6 +79,14 @@ export function provideEntryContext(context: EntryContext): void {
 
 export function entryContext(): EntryContext | undefined {
   return getContext<EntryContext | undefined>(key);
+}
+
+/**
+ * An investment form's request key (#660): the open entry's key for the
+ * activity, or the form's own outside an entry. Call during initialisation.
+ */
+export function useRequestKey(activity: InvestmentActivity): RequestKey {
+  return entryContext()?.requestKey(activity) ?? new RequestKey();
 }
 
 /** Calls `write` when `read` changes after the form opened, never for its opening value. */

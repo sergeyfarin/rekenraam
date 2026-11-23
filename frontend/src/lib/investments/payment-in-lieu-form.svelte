@@ -1,6 +1,6 @@
 <script lang="ts">
   import { accountDisplayName, accountLabelByID } from '#lib/accounts/account-labels.ts';
-  import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
+  import { useEntryActivity, useRequestKey } from '#lib/transactions/entry-context.svelte.ts';
   import { useSettlementCandidates } from '#lib/investments/settlement-candidates.svelte.ts';
   import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
   import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
@@ -29,11 +29,6 @@
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
   import { invalidateInvestmentReads } from './invalidate';
   import { isSettlementAccount } from './settlement-accounts.ts';
-  import { RequestKey } from '#lib/api/request-key.ts';
-
-  // One key for every retry of this entry; a new one once it is saved (#660).
-  const requestKey = new RequestKey();
-
   // Cash is required; optional attribution is editable through the same
   // audited replacement as amount/account corrections. A correction may also
   // change the payment date, cash account and, with the account, currency (#395).
@@ -89,6 +84,8 @@
     instrument: () => Number(commodityID) || undefined,
     pending: () => pending
   });
+  // The activity's request key, kept with its working copy (#660).
+  const requestKey = useRequestKey('payment-in-lieu');
   if (workingCopy) untrack(() => {
     exDate = workingCopy.exDate ?? exDate;
     expenseAccountID = workingCopy.expenseAccountID ?? expenseAccountID;
@@ -173,7 +170,7 @@
       await replacePaymentInLieu(initial.transactionID,
         { reason: reason.trim(), replacement: payload, ...guards }, csrfToken);
     } else {
-      await requestKey.send((key) => recordPaymentInLieu({ ...payload, ...guards }, csrfToken, key));
+      await requestKey.send(payload, (key) => recordPaymentInLieu({ ...payload, ...guards }, csrfToken, key));
     }
     await invalidateInvestmentReads(queryClient);
     onSaved();
@@ -183,6 +180,7 @@
   // Checkpoint-only: this flow never acquires a gain requirement (#400).
   const impactReview = commitReview({
     protocol: 'checkpoints',
+    requestKey,
     get review() { return review; },
     impact: (payload: PaymentInLieuRequest) => initial
       ? previewPaymentInLieuReplacementReconciliation(initial.transactionID, { reason: reason.trim(), replacement: payload })

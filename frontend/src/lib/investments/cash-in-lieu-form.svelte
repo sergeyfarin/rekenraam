@@ -108,7 +108,7 @@
       const acknowledgement=gainAcknowledgement(gainImpact);
       const guards={...checkpointOverride(reviewed),gain_impact_acknowledgement:acknowledgement || undefined};
       if (initial) await replaceCashInLieu(initial.transaction_id,{reason:reason.trim(),replacement:preview.payload,...guards},csrfToken);
-      else { const payload=preview.payload; await requestKey.send((key) => recordCashInLieu({...payload,...guards},csrfToken, key)); }
+      else { const payload=preview.payload; await requestKey.send(payload, (key) => recordCashInLieu({...payload,...guards},csrfToken, key)); }
       await invalidateInvestmentReads(queryClient);onSaved();
     } catch(error) {
       if (isStaleImpactRefusal(error) && preview) {

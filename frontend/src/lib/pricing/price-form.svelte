@@ -85,7 +85,7 @@
         if (mode === 'correct' && target && impact) {
           const { base_commodity_id: _base, quote_commodity_id: _quote, valuation_date: _date, adjustment_basis: _basis, ...correction } = input;
           await correctPrice(target.id, { ...correction, expected_impact: impact.token }, csrf);
-        } else if (mode === 'create') await requestKey.send((key) => createManualPrice(input, csrf, key));
+        } else if (mode === 'create') await requestKey.send(input, (key) => createManualPrice(input, csrf, key));
         else throw new TranslatedFormError(m.pricing_stale_review());
       }
       await invalidatePriceReads(queryClient);

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { accountLabelByID } from '#lib/accounts/account-labels.ts';
   import { receivingHolding } from '#lib/investments/receiving-holding.ts';
-  import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
+  import { useEntryActivity, useRequestKey } from '#lib/transactions/entry-context.svelte.ts';
   import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
   import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
   import { autofocus } from '#lib/components/autofocus.ts';
@@ -34,11 +34,6 @@
   import { usePrefilledPosition } from '#lib/investments/investment-prefill.svelte.ts';
   import { restoredPositionKey } from '#lib/investments/investment-prefill.ts';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
-  import { RequestKey } from '#lib/api/request-key.ts';
-
-  // One key for every retry of this entry; a new one once it is saved (#660).
-  const requestKey = new RequestKey();
-
   const ownerToday = useOwnerToday();
 
   // Spin-off entry (#180): the parent holding keeps its units, a new
@@ -106,6 +101,8 @@
     instrument: () => selectedHolding?.commodityID,
     pending: () => pending
   });
+  // The activity's request key, kept with its working copy (#660).
+  const requestKey = useRequestKey('spin-off');
   if (workingCopy) untrack(() => {
     newCommodityID = workingCopy.newCommodityID ?? newCommodityID;
     chosenDestination = workingCopy.chosenDestination ?? chosenDestination;
@@ -247,7 +244,7 @@
     if (correction) {
       await replaceSpinOff(correction.transactionID, { ...replacementRequest(current.payload), ...confirmations }, csrfToken);
     } else {
-      await requestKey.send((key) => recordSpinOff({ ...current.payload, ...confirmations }, csrfToken, key));
+      await requestKey.send(current.payload, (key) => recordSpinOff({ ...current.payload, ...confirmations }, csrfToken, key));
     }
     await invalidateInvestmentReads(queryClient);
     onSaved();

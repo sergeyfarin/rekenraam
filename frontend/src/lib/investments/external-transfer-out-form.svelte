@@ -2,7 +2,7 @@
   import { accountDisplayName } from '#lib/accounts/account-labels.ts';
   import UnavailableAllocations from '#lib/investments/unavailable-allocations.svelte';
   import { unavailableAllocations, withoutAllocations } from '#lib/investments/lot-allocations.ts';
-  import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
+  import { useEntryActivity, useRequestKey } from '#lib/transactions/entry-context.svelte.ts';
   import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
   import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
   import { autofocus } from '#lib/components/autofocus.ts';
@@ -34,11 +34,6 @@
   import { usePrefilledPosition } from '#lib/investments/investment-prefill.svelte.ts';
   import { restoredPositionKey } from '#lib/investments/investment-prefill.ts';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
-  import { RequestKey } from '#lib/api/request-key.ts';
-
-  // One key for every retry of this entry; a new one once it is saved (#660).
-  const requestKey = new RequestKey();
-
   const ownerToday = useOwnerToday();
 
   // An outbound in-kind transfer (T-142): the same lot or pooled-quantity
@@ -88,6 +83,8 @@
     currency: () => sourcePosition?.cost_commodity_id,
     pending: () => pending
   });
+  // The activity's request key, kept with its working copy (#660).
+  const requestKey = useRequestKey('external-transfer-out');
   if (workingCopy) untrack(() => {
     quantities = workingCopy.quantities ?? quantities;
     pooledQuantity = workingCopy.pooledQuantity ?? pooledQuantity;
@@ -225,7 +222,7 @@
   }
 
   async function record(current: NonNullable<typeof preview>, confirmations: ReviewGuards) {
-    await requestKey.send((key) => recordExternalTransferOut({
+    await requestKey.send(current.payload, (key) => recordExternalTransferOut({
       ...current.payload,
       ...confirmations
     }, csrfToken, key));
