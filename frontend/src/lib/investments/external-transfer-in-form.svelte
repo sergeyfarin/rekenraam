@@ -145,8 +145,7 @@
     pending = true;
     formError = undefined;
     try {
-      if (await impactReview.open(payload, false)) return;
-      await submit(payload, {});
+      await impactReview.submit(payload);
     } catch (error) {
       await impactReview.recover(error, payload);
     } finally {

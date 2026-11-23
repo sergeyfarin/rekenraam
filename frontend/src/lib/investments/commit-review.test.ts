@@ -164,4 +164,49 @@ describe('commitReview', () => {
     expect(state.written).toEqual([]);
     expect(state.pending).toBe(false);
   });
+
+  describe('a write whose outcome is unknown (#660)', () => {
+    const none = async () => ({ affected_checkpoints: [], gain_impact: null });
+    const lost = async () => { throw new APIClientError({ status: 0 }); };
+
+    it('sends the unchanged write again without asking for its impact', async () => {
+      // The first sale committed and its response was lost: its impact would
+      // now be refused, because the units are gone.
+      const { state, controller } = harness('gains', { impacts: [none], writes: [lost] });
+      await expect(controller.submit({ n: 1 })).rejects.toBeInstanceOf(APIClientError);
+      await controller.submit({ n: 1 });
+      expect(state.asked).toEqual([{ n: 1 }]);
+      expect(state.written).toEqual([{ subject: { n: 1 }, guards: {} }, { subject: { n: 1 }, guards: {} }]);
+    });
+
+    it('resends the guards the confirmed review gave', async () => {
+      const { state, controller } = harness('gains', {
+        impacts: [async () => ({ affected_checkpoints: [checkpoint(7)], gain_impact: gains('ack-1') })],
+        writes: [async () => { throw new APIClientError({ status: 502 }); }]
+      });
+      expect(await controller.open({ n: 1 }, false)).toBe(true);
+      await controller.confirm();
+      await controller.submit({ n: 1 });
+      expect(state.asked).toHaveLength(1);
+      expect(state.written[1]).toEqual(state.written[0]);
+      expect(state.written[1].guards).not.toEqual({});
+    });
+
+    it('asks for the impact again once the owner changed the entry', async () => {
+      const { state, controller } = harness('gains', { impacts: [none, none], writes: [lost] });
+      await expect(controller.submit({ n: 1 })).rejects.toBeInstanceOf(APIClientError);
+      await controller.submit({ n: 2 });
+      expect(state.asked).toEqual([{ n: 1 }, { n: 2 }]);
+    });
+
+    it('asks for the impact again after a refusal, which wrote nothing', async () => {
+      const { state, controller } = harness('gains', {
+        impacts: [none, none],
+        writes: [async () => { throw new APIClientError({ status: 409, code: 'CONFLICT' }); }]
+      });
+      await expect(controller.submit({ n: 1 })).rejects.toBeInstanceOf(APIClientError);
+      await controller.submit({ n: 1 });
+      expect(state.asked).toEqual([{ n: 1 }, { n: 1 }]);
+    });
+  });
 });

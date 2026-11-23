@@ -1,3 +1,4 @@
+import { APIClientError } from '#lib/api/client.ts';
 import type { GainImpact, ReconciliationImpactResponse } from '#lib/api/investments.ts';
 import { hasGainChanges, impactNeedsReview, isStaleImpactRefusal } from '#lib/investments/gain-impact.ts';
 import { reviewGuards, type ReviewGuards } from '#lib/investments/preview-review.ts';
@@ -42,7 +43,35 @@ export type CommitReviewHost<S, I extends CommitImpact> = {
   setError(error: unknown): void;
 };
 
+/**
+ * A write whose outcome is unknown: no answer arrived (a network error), or
+ * the server failed after it may have committed. A refusal with a code is
+ * known: nothing was written.
+ */
+export function writeOutcomeUnknown(error: unknown): boolean {
+  if (!(error instanceof APIClientError)) return true;
+  return error.status === 0 || error.status >= 500;
+}
+
 export function commitReview<S, I extends CommitImpact>(host: CommitReviewHost<S, I>) {
+  // The last write whose outcome is unknown (#660). Its impact may already be
+  // part of the ledger, so asking for it again can refuse the very write
+  // that succeeded (a sale whose units it disposed of). An unchanged retry
+  // sends that write again, guards and request key included, and the server
+  // answers with the stored result; if nothing was written, the server's
+  // own guards still refuse what needs a review, and recover() opens it.
+  let unresolved: { subject: S; guards: ReviewGuards; identity: string } | null = null;
+
+  async function attempt(subject: S, guards: ReviewGuards) {
+    try {
+      await host.write(subject, guards);
+      unresolved = null;
+    } catch (error) {
+      unresolved = writeOutcomeUnknown(error) ? { subject, guards, identity: JSON.stringify(subject) } : null;
+      throw error;
+    }
+  }
+
   /** Opens a review when the write needs a decision; false when it needs none. */
   async function open(subject: S, refreshed: boolean): Promise<boolean> {
     const impact = await host.impact(subject);
@@ -64,6 +93,19 @@ export function commitReview<S, I extends CommitImpact>(host: CommitReviewHost<S
   return {
     open,
     recover,
+    /**
+     * Saves the subject: an unchanged retry of a write with an unknown
+     * outcome is sent again as it was; otherwise the impact decides whether
+     * a review opens first. Throws what the write throws; pass it to recover.
+     */
+    async submit(subject: S): Promise<void> {
+      if (unresolved && unresolved.identity === JSON.stringify(subject)) {
+        await attempt(unresolved.subject, unresolved.guards);
+        return;
+      }
+      if (await open(subject, false)) return;
+      await attempt(subject, {});
+    },
     /** Records with exactly the checkpoints and gain set the review showed. */
     async confirm() {
       const current = host.review;
@@ -72,7 +114,7 @@ export function commitReview<S, I extends CommitImpact>(host: CommitReviewHost<S
       host.setPending(true);
       host.setError(undefined);
       try {
-        await host.write(current.subject, reviewGuards(current.impacts, current.gainImpact));
+        await attempt(current.subject, reviewGuards(current.impacts, current.gainImpact));
       } catch (error) {
         await recover(error, current.subject);
       } finally {

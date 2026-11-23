@@ -393,8 +393,7 @@
 
     const subject = { payload, reason: reason.trim() };
     try {
-      if (await impactReview.open(subject, false)) return;
-      await submitSell(subject, {});
+      await impactReview.submit(subject);
     } catch (err) {
       await impactReview.recover(err, subject);
     } finally {

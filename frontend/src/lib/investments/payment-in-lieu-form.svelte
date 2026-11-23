@@ -160,8 +160,7 @@
     pending = true;
     formError = undefined;
     try {
-      if (await impactReview.open(payload, false)) return;
-      await commit(payload, {});
+      await impactReview.submit(payload);
     } catch (error) {
       formError = error;
     } finally {

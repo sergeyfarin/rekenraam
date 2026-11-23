@@ -315,8 +315,7 @@
     pending = true;
     formError = undefined;
     try {
-      if (await impactReview.open(built.payload, false)) return;
-      await submit(built.payload, {});
+      await impactReview.submit(built.payload);
     } catch (err) {
       await impactReview.recover(err, built.payload);
     } finally {
