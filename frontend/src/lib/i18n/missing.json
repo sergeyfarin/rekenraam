@@ -1,8 +1,8 @@
 {
   "counts": {
-    "es": 189,
-    "fr": 189,
-    "de": 189
+    "es": 191,
+    "fr": 191,
+    "de": 191
   },
   "keys": {
     "es": [
@@ -73,6 +73,8 @@
       "allocation_unavailable",
       "allocation_valuation_window",
       "allocation_value",
+      "api_error_idempotency_key_result_unavailable",
+      "api_error_idempotency_key_reused",
       "home_reconciliation_fact",
       "home_reconciliation_more",
       "home_reconciliation_open",
@@ -264,6 +266,8 @@
       "allocation_unavailable",
       "allocation_valuation_window",
       "allocation_value",
+      "api_error_idempotency_key_result_unavailable",
+      "api_error_idempotency_key_reused",
       "home_reconciliation_fact",
       "home_reconciliation_more",
       "home_reconciliation_open",
@@ -455,6 +459,8 @@
       "allocation_unavailable",
       "allocation_valuation_window",
       "allocation_value",
+      "api_error_idempotency_key_result_unavailable",
+      "api_error_idempotency_key_reused",
       "home_reconciliation_fact",
       "home_reconciliation_more",
       "home_reconciliation_open",

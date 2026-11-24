@@ -2,7 +2,7 @@
   import { accountLabelByID } from '#lib/accounts/account-labels.ts';
   import UnavailableAllocations from '#lib/investments/unavailable-allocations.svelte';
   import { unavailableAllocations, withoutAllocations } from '#lib/investments/lot-allocations.ts';
-  import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
+  import { useEntryActivity, useRequestKey } from '#lib/transactions/entry-context.svelte.ts';
   import { useOwnerToday } from '#lib/dates/owner-date-context.ts';
   import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
   import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
@@ -41,7 +41,6 @@
   import { usePrefilledPosition } from '#lib/investments/investment-prefill.svelte.ts';
   import { restoredPositionKey } from '#lib/investments/investment-prefill.ts';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
-
   let { csrfToken, onSaved, onCancel, prefill }: {
     csrfToken: string; onSaved: () => void; onCancel: () => void; prefill?: InvestmentPrefill;
   } = $props();
@@ -78,6 +77,8 @@
     currency: () => holding?.cost_commodity_id,
     pending: () => pending
   });
+  // The activity's request key, kept with its working copy (#660).
+  const requestKey = useRequestKey('write-off');
   if (workingCopy) untrack(() => {
     quantity = workingCopy.quantity ?? quantity;
     method = workingCopy.method ?? method;
@@ -183,10 +184,10 @@
     formError = undefined;
     const payload = preview.payload;
     try {
-      await recordWriteOff({ ...payload,
+      await requestKey.send(payload, (key) => recordWriteOff({ ...payload,
         ...checkpointOverride(reviewed),
         gain_impact_acknowledgement: gainAcknowledgement(gainImpact) || undefined
-      }, csrfToken);
+      }, csrfToken, key));
       await invalidateInvestmentReads(queryClient);
       onSaved();
     } catch (error) {

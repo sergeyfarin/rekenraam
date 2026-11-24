@@ -101,6 +101,7 @@ func newImportConnectionsTestHandlerWith(t *testing.T, prober app.ConnectionProb
 		Category:         categoryService,
 		Payee:            payeeService,
 		Transaction:      transactionService,
+		RequestKey:       app.NewRequestKeyService(db.NewRequestKeyRepository(database)),
 		Pricing:          pricingService,
 		Investment:       investmentService,
 		Import:           importService,

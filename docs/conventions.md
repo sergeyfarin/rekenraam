@@ -555,6 +555,75 @@ has actual installations, its migration files are immutable.
 - Transaction list endpoints must support a `search` query parameter backed by **SQLite FTS5** on the backend. Do not implement client-side full-text search over server-fetched pages.
 - API code must treat `SQLITE_BUSY` as possible even with `busy_timeout`. If the timeout is exhausted, return a retryable server error instead of hiding or partially applying the operation.
 
+### Create Request Keys
+
+A create whose response is lost can be retried without recording the entry
+twice (#660). The rule covers `POST /api/v1/transactions`, every investment
+operation create (buy, sell, short sale and cover, write-off, payment in lieu,
+cash and reinvested dividends, return of capital, cash in lieu, split, share
+exchange, cash-and-stock merger, spin-off, internal and external transfers) and
+`POST /api/v1/pricing/manual`.
+
+- The request carries an `Idempotency-Key` header: 1–128 printable ASCII
+  characters, optional on the wire. A form holds one key per entry
+  (`RequestKey` in `#lib/api/request-key.ts`), sends it with every retry and
+  replaces it only after a successful save, so two deliberate entries with
+  identical content are two records. Every browser create on a covered route
+  sends one. Inside a New transaction entry an activity's key lives on the
+  entry with its working copy (`useRequestKey`), so closing and reopening the
+  activity keeps it.
+- A retry repeats the earlier request exactly. A form rebuilds its body on
+  every Save, and the rebuilt body can differ: it can lack the checkpoint
+  override the owner confirmed, or link a payee that the lost save created.
+  So the key keeps every save whose outcome is unknown (no answer, or a 5xx),
+  each identified by the owner's entry rather than the body. While the entry
+  matches one of them, `requestKey.send(entry, save)` sends that save again:
+  body, guards and key. Each stays until its own outcome is known: a refusal
+  with a code settles only that entry's save, and a success settles all. An
+  edited save that also fails therefore leaves the original confirmed save to
+  replay when the owner restores the entry.
+- The key is stored by the audit event the write inserts, in the write's own
+  transaction (`request_keys`, migration 0015). A refused or rolled-back write
+  stores nothing, so the key can be sent again with a corrected body.
+- A keyed body must be exactly one JSON value in which no object names a
+  member twice, compared case-insensitively as `encoding/json` matches field
+  names; otherwise 400. The fingerprint is the route and the exact body bytes,
+  so equal fingerprints always decode to the same request.
+- A repeat with the same key and the same request (route and byte-identical
+  body) is answered before the service runs,
+  with the stored status and body and `Idempotent-Replayed: true`. It writes
+  nothing, even when the write would now be refused (a sale of units the first
+  sale already disposed). The same key with another route or body returns 409
+  `IDEMPOTENCY_KEY_REUSED`. The form keeps its key, so no later save of that
+  entry can record it a second time; a separate record is a new entry. A key whose write committed but whose
+  response is not stored yet (the committing request is still finishing, or
+  storing failed) returns 409 `IDEMPOTENCY_KEY_RESULT_UNAVAILABLE` for the
+  same request. The form keeps that save unresolved, like a lost response, so
+  the next Save sends the same bytes and replays the result once it is stored.
+- A form must reach the keyed write on a retry. A review-at-commit form
+  (`commitReview`) asks for the write's impact before saving, and that impact
+  can be refused once the lost write has committed (a sale's units are gone).
+  So when the entry's request key holds an unresolved save for the unchanged
+  entry, `commitReview.submit` goes straight to the write, which resends it.
+  Likewise the dividend form skips its review and the transaction editor
+  skips its payee question. A changed entry, or a refusal with a code, asks for the impact
+  again. Preview-then-record forms resend their reviewed preview unchanged
+  while it is open; after the activity is closed and reopened they must
+  preview again, and recovering that save is #677.
+- Two requests racing with one key cannot both write: the in-transaction claim
+  finds the committed key and rolls the second write back, and the response
+  becomes the replay.
+- The key is checked after authentication, so a stored result is only replayed
+  to the signed-in owner. A route that does not accept keys refuses the header
+  with 400 rather than ignoring it.
+- Keys are request bookkeeping, not financial records: rows older than seven
+  days are pruned when a new key is claimed.
+- A new create route opts in by wrapping its registration in `withRequestKey`
+  and declaring the `IdempotencyKey` parameter in OpenAPI;
+  `TestRequestKeyRoutesMatchTheContract` keeps the two lists equal. Reference
+  data creates (accounts, institutions, import rules, recurring templates,
+  tokens, holding accounts, source assignments) do not use keys yet.
+
 ## Authentication And Session Security
 
 - Personal-access tokens follow [ADR 0018](adrs/0018-personal-access-token-boundary.md)

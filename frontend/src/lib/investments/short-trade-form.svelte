@@ -18,7 +18,7 @@
   import { parseTradeAmounts, type AmountFieldError } from '#lib/investments/form-amounts.ts';
   import TradeEconomicsFields from '#lib/investments/trade-economics-fields.svelte';
   import TradeUnitPrice from '#lib/investments/trade-unit-price.svelte';
-  import { useEntryActivity, useMoneyCurrency, useTradePair } from '#lib/transactions/entry-context.svelte.ts';
+  import { useEntryActivity, useMoneyCurrency, useTradePair, useRequestKey } from '#lib/transactions/entry-context.svelte.ts';
   import { correctionTradeDraft, exactTradeFields, type TradeChargeDraft } from '#lib/investments/trade-economics.ts';
   import type { AccountResponse } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
@@ -51,7 +51,6 @@
   import { usePrefilledInstrument } from '#lib/investments/investment-prefill.svelte.ts';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
   import { latestRequest } from '#lib/investments/latest-request.ts';
-
   const ownerToday = useOwnerToday();
 
   let {
@@ -157,6 +156,8 @@
     instrument: () => commodityID,
     pending: () => pending
   });
+  // The activity's request key, kept with its working copy (#660).
+  const requestKey = useRequestKey(activity);
   const opening = useTradePair(activity, !!initialCorrection, workingCopy,
     () => ({ quantity: quantityStr, unitPrice: unitPriceStr, currencyID: money.currencyID }));
   if (opening) {
@@ -311,8 +312,7 @@
     pending = true;
     formError = undefined;
     try {
-      if (await impactReview.open(built.payload, false)) return;
-      await submit(built.payload, {});
+      await impactReview.submit(built.payload);
     } catch (err) {
       await impactReview.recover(err, built.payload);
     } finally {
@@ -327,6 +327,7 @@
 
   const impactReview = commitReview({
     protocol: 'gains',
+    requestKey,
     get review() { return reconciliationModal; },
     impact: (payload: InvestmentTradeRequest) => correction
       ? cover
@@ -351,9 +352,9 @@
         await replaceShortSale(correction.transaction_id, request, csrfToken);
       }
     } else if (cover) {
-      await recordShortCover(body, csrfToken);
+      await requestKey.send(payload, (key) => recordShortCover(body, csrfToken, key));
     } else {
-      await recordShortSale(body, csrfToken);
+      await requestKey.send(payload, (key) => recordShortSale(body, csrfToken, key));
     }
     await invalidateInvestmentReads(queryClient);
     onSaved();

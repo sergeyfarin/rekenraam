@@ -49,8 +49,8 @@ export function getPriceHistory(base: number, quote: number, includeVoided: bool
 export function getPriceImpact(id: number): Promise<PriceImpact> {
   return pricingRequest(apiClient.GET('/api/v1/pricing/prices/{price_id}/impact', { params: { path: { price_id: id } } }));
 }
-export function createManualPrice(input: ManualPriceRequest, csrfToken: string): Promise<PriceObservation> {
-  return pricingRequest(apiClient.POST('/api/v1/pricing/manual', { params: { header: { 'X-CSRF-Token': csrfToken } }, body: input }));
+export function createManualPrice(input: ManualPriceRequest, csrfToken: string, requestKey: string): Promise<PriceObservation> {
+  return pricingRequest(apiClient.POST('/api/v1/pricing/manual', { params: { header: { 'X-CSRF-Token': csrfToken, 'Idempotency-Key': requestKey } }, body: input }));
 }
 export function correctPrice(id: number, input: CorrectPriceRequest, csrfToken: string) {
   return pricingRequest(apiClient.POST('/api/v1/pricing/prices/{price_id}/correct', { params: { path: { price_id: id }, header: { 'X-CSRF-Token': csrfToken } }, body: input }));

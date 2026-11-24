@@ -1225,7 +1225,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 
 	version, err := EmbeddedMigrationVersion()
 	require.NoError(t, err)
-	assert.Equal(t, int64(14), version, "the latest forward migration seeds the Massive split source")
+	assert.Equal(t, int64(15), version, "the latest forward migration adds create request keys (#660)")
 
 	ctx := context.Background()
 	database, err := Open(ctx, SQLiteFileURL(filepath.Join(t.TempDir(), "schema.sqlite")))
@@ -1254,8 +1254,8 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 		objectCounts[kind]++
 	}
 	assert.Equal(t, map[string]int{
-		"index":   111,
-		"table":   120,
+		"index":   112,
+		"table":   121,
 		"trigger": 181,
 		"view":    17,
 	}, objectCounts, "the migrated head must retain every schema object")

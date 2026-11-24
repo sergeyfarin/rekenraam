@@ -216,12 +216,13 @@ export async function getTransaction(transactionID: number): Promise<Transaction
   }
 }
 
-export async function createTransaction(input: TransactionRequest, csrfToken: string): Promise<TransactionResponse> {
+export async function createTransaction(input: TransactionRequest, csrfToken: string, requestKey: string): Promise<TransactionResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/transactions', {
       params: {
         header: {
-          'X-CSRF-Token': csrfToken
+          'X-CSRF-Token': csrfToken,
+          'Idempotency-Key': requestKey
         }
       },
       body: input

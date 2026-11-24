@@ -1,3 +1,4 @@
+import type { RequestKey } from '#lib/api/request-key.ts';
 import type { GainImpact, ReconciliationImpactResponse } from '#lib/api/investments.ts';
 import { hasGainChanges, impactNeedsReview, isStaleImpactRefusal } from '#lib/investments/gain-impact.ts';
 import { reviewGuards, type ReviewGuards } from '#lib/investments/preview-review.ts';
@@ -35,6 +36,12 @@ export type CommitReviewHost<S, I extends CommitImpact> = {
   readonly review: CommitReviewState<S> | null;
   /** The impact the write would have now, simulated and rolled back. */
   impact(subject: S): Promise<I>;
+  /**
+   * The entry's request key, when the write is a keyed create sent through
+   * `requestKey.send(subject, …)`. Its unresolved write is sent again as it
+   * was, without asking for the impact first.
+   */
+  readonly requestKey?: RequestKey;
   /** Records once with exactly the reviewed guards; may invalidate and close. */
   write(subject: S, guards: ReviewGuards): Promise<void>;
   setReview(review: CommitReviewState<S> | null): void;
@@ -64,6 +71,23 @@ export function commitReview<S, I extends CommitImpact>(host: CommitReviewHost<S
   return {
     open,
     recover,
+    /**
+     * Saves the subject: an unchanged retry of a write with an unknown
+     * outcome is sent again as it was; otherwise the impact decides whether
+     * a review opens first. Throws what the write throws; pass it to recover.
+     */
+    async submit(subject: S): Promise<void> {
+      // The write's impact may already be in the ledger: a lost sale's
+      // impact is refused because its units are gone. An unchanged entry
+      // whose last write has an unknown outcome goes straight to the write,
+      // which sends that write again through the request key (#660).
+      if (host.requestKey?.isUnresolved(subject)) {
+        await host.write(subject, {});
+        return;
+      }
+      if (await open(subject, false)) return;
+      await host.write(subject, {});
+    },
     /** Records with exactly the checkpoints and gain set the review showed. */
     async confirm() {
       const current = host.review;

@@ -28,6 +28,7 @@ type Services struct {
 	Category         *app.CategoryService
 	Payee            *app.PayeeService
 	Transaction      *app.TransactionService
+	RequestKey       *app.RequestKeyService
 	Recurring        *app.RecurringService
 	Pricing          *app.PricingService
 	Investment       *app.InvestmentService

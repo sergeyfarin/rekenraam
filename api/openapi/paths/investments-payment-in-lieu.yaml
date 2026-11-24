@@ -7,6 +7,7 @@ post:
     repairable attribution. Historical support and chronology are advisory
     diagnostics, independent of cash authorization. It never changes a lot.
   parameters:
+    - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
     - in: header
       name: X-CSRF-Token
       required: true
@@ -59,7 +60,9 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Reconciliation override required
+      description: >-
+        Reconciliation override required.
+        IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything.
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"

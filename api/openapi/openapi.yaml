@@ -649,6 +649,19 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
+    IdempotencyKeyConflict:
+      description: >-
+        IDEMPOTENCY_KEY_REUSED — the Idempotency-Key was already used for a
+        different request. IDEMPOTENCY_KEY_RESULT_UNAVAILABLE — a request with
+        this key was recorded, but its result is not stored. Neither writes
+        anything.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
     JSONBodyTooLarge:
       description: >-
         REQUEST_TOO_LARGE — the JSON request body exceeds 1 MiB (1,048,576 bytes),
@@ -688,6 +701,34 @@ components:
         type: string
         format: uuid
   parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: false
+      description: >-
+        Request key for a create (#660). A client generates one key per entry
+        and sends the same key with every retry of it, so a create whose
+        response was lost is not recorded twice. The server stores the key in
+        the same database transaction as the record it creates. A repeat with
+        the same key and the same request (the same route and byte-identical
+        body) writes nothing and returns the stored status and body with the
+        header Idempotent-Replayed: true. The same key with a different route
+        or body, including the same JSON reordered or reformatted, returns 409
+        IDEMPOTENCY_KEY_REUSED. A keyed body must be exactly one JSON value in
+        which no object names a member twice, compared case-insensitively as
+        the endpoint decoder matches field names; otherwise 400
+        VALIDATION_FAILED before anything is read or written. A key whose
+        write committed but whose response was never stored returns 409
+        IDEMPOTENCY_KEY_RESULT_UNAVAILABLE. A request that failed stored
+        nothing, so the key can be sent again with a corrected body. Keys are
+        kept for at least seven days. Omitted, every request creates a new
+        record. Sending the header to an operation that does not declare it is
+        refused with 400 VALIDATION_FAILED.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+        pattern: "^[!-~]+$"
     InstitutionID:
       in: path
       name: institution_id

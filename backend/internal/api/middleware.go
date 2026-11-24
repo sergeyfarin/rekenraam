@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"rekenraam/backend/internal/app"
 	"rekenraam/backend/internal/db"
 )
 
@@ -67,6 +69,11 @@ func writeServiceInternalError(w http.ResponseWriter, r *http.Request, logger *s
 	}
 	if db.IsSQLiteBusy(err) {
 		writeAPIError(w, http.StatusServiceUnavailable, "RESOURCE_BUSY", "database is busy; retry the request")
+		return
+	}
+	if errors.Is(err, app.ErrRequestKeyRepeated) {
+		// serveWithRequestKey replaces this with the stored result (#660).
+		writeAPIError(w, http.StatusConflict, requestKeyUnavailableCode, "a request with this Idempotency-Key was already recorded")
 		return
 	}
 	logger.ErrorContext(r.Context(), action, slog.Any("err", err))

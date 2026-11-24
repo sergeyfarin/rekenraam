@@ -1,6 +1,6 @@
 <script lang="ts">
   import { accountLabelByID } from '#lib/accounts/account-labels.ts';
-  import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
+  import { useEntryActivity, useRequestKey } from '#lib/transactions/entry-context.svelte.ts';
   import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
   import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
   import { autofocus } from '#lib/components/autofocus.ts';
@@ -33,7 +33,6 @@
   import { usePrefilledPosition } from '#lib/investments/investment-prefill.svelte.ts';
   import { restoredPositionKey } from '#lib/investments/investment-prefill.ts';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
-
   const ownerToday = useOwnerToday();
 
   // With correction set, the form replaces that posted split (T-129): the
@@ -88,6 +87,8 @@
     instrument: () => selectedHolding?.commodityID,
     pending: () => pending
   });
+  // The activity's request key, kept with its working copy (#660).
+  const requestKey = useRequestKey('split');
   if (workingCopy) untrack(() => {
     newUnits = workingCopy.newUnits ?? newUnits;
     oldUnits = workingCopy.oldUnits ?? oldUnits;
@@ -212,7 +213,7 @@
     if (correction) {
       await (correction.operationID ? replaceSplitOperation(correction.operationID, { ...replacementRequest(current.payload), ...confirmations }, csrfToken) : replaceSplit(correction.transactionID!, { ...replacementRequest(current.payload), ...confirmations }, csrfToken));
     } else {
-      await recordInvestmentSplit({ ...current.payload, ...confirmations }, csrfToken);
+      await requestKey.send(current.payload, (key) => recordInvestmentSplit({ ...current.payload, ...confirmations }, csrfToken, key));
     }
     await invalidateInvestmentReads(queryClient);
     onSaved();

@@ -228,6 +228,13 @@ keyboard selection (`home-entry.spec.ts`).
 
 ## 86. A final action enabled by an older saved selection
 
+Creates that duplicate on retry (#660) are guarded by request keys
+(`docs/conventions.md` → *Create Request Keys*): a retry resends the exact
+unresolved save under the same key, including after a 5xx on an edited save
+or `IDEMPOTENCY_KEY_RESULT_UNAVAILABLE` (committed, result not stored yet). Open instance: a preview-first investment
+create reopened after a lost response must preview again, and that preview
+refuses what the lost save already moved (#677).
+
 Reconcile could write a checkpoint while a posting deselection was still
 being saved (#633). Use the same readiness check in the button and its
 handler, and keep conflicting actions disabled through the write. A lost

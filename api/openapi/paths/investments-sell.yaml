@@ -1,6 +1,7 @@
 post:
   summary: Record an investment sell (disposes lots, computes realized gain)
   parameters:
+    - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
     - in: header
       name: X-CSRF-Token
       required: true
@@ -53,7 +54,9 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Insufficient lots to fill the sell order
+      description: >-
+        Insufficient lots to fill the sell order.
+        IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything.
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"

@@ -8,6 +8,7 @@ post:
     refused as out of order. A holding cannot be long and short of one
     instrument over overlapping dates.
   parameters:
+    - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
     - in: header
       name: X-CSRF-Token
       required: true
@@ -60,7 +61,9 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Out-of-order entry, position side conflict, or reconciliation override required
+      description: >-
+        Out-of-order entry, position side conflict, or reconciliation override required.
+        IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything.
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"

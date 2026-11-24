@@ -166,6 +166,8 @@
   "api_error_investment_reinvestment_changed": "Dit herbelegde dividend is gewijzigd terwijl u het bekeek. Open de transactie opnieuw en probeer het nog eens.",
   "api_error_transaction_draft_not_user_creatable": "Conceptboekingen kunnen alleen door een automatische workflow worden aangemaakt. Sla handmatige boekingen direct op in het grootboek.",
   "api_error_transaction_version_stale": "Deze boeking is in een ander tabblad of venster gewijzigd terwijl u hem bewerkte. Laad hem opnieuw en pas hem nogmaals aan.",
+  "api_error_idempotency_key_reused": "Een eerdere opslag van deze invoer is al vastgelegd met andere gegevens, dus deze opslag is niet vastgelegd. Controleer de lijst; begin een nieuwe invoer om nog een boeking vast te leggen.",
+  "api_error_idempotency_key_result_unavailable": "Een eerdere opslag van deze invoer is vastgelegd, maar het resultaat is nog niet beschikbaar. Sla over een ogenblik opnieuw op om het te zien. Blijft het onbeschikbaar, vernieuw dan de lijst: de invoer is al opgeslagen, dus voer deze niet opnieuw in.",
   "api_error_reconciliation_impact_stale": "De afgeronde afstemmingen die deze wijziging ongeldig zou maken, zijn veranderd nadat u ze hebt bekeken. Bekijk de lijst opnieuw voordat u bevestigt.",
   "api_error_posting_account_version_stale": "Een rekening in deze boeking is gewijzigd terwijl u hem invoerde. Laad hem opnieuw en voer hem nogmaals in.",
   "api_error_network": "De server is niet bereikbaar. Controleer de verbinding en probeer het opnieuw.",

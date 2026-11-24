@@ -2,7 +2,7 @@
   import { accountDisplayName } from '#lib/accounts/account-labels.ts';
   import UnavailableAllocations from '#lib/investments/unavailable-allocations.svelte';
   import { unavailableAllocations, withoutAllocations } from '#lib/investments/lot-allocations.ts';
-  import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
+  import { useEntryActivity, useRequestKey } from '#lib/transactions/entry-context.svelte.ts';
   import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
   import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
   import { autofocus } from '#lib/components/autofocus.ts';
@@ -34,7 +34,6 @@
   import { usePrefilledPosition } from '#lib/investments/investment-prefill.svelte.ts';
   import { restoredPositionKey } from '#lib/investments/investment-prefill.ts';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
-
   const ownerToday = useOwnerToday();
 
   let { csrfToken, onSaved, onCancel, prefill }: {
@@ -84,6 +83,8 @@
     currency: () => sourcePosition?.cost_commodity_id,
     pending: () => pending
   });
+  // The activity's request key, kept with its working copy (#660).
+  const requestKey = useRequestKey('internal-transfer');
   if (workingCopy) untrack(() => {
     destinationAccountID = workingCopy.destinationAccountID ?? destinationAccountID;
     quantities = workingCopy.quantities ?? quantities;
@@ -219,10 +220,10 @@
   }
 
   async function record(current: NonNullable<typeof preview>, confirmations: ReviewGuards) {
-    await recordInternalTransfer({
+    await requestKey.send(current.payload, (key) => recordInternalTransfer({
       ...current.payload,
       ...confirmations
-    }, csrfToken);
+    }, csrfToken, key));
     await invalidateInvestmentReads(queryClient);
     onSaved();
   }

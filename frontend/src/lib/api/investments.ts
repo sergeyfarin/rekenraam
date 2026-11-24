@@ -301,11 +301,11 @@ export async function getDividendDefaults(): Promise<DividendDefaultsResponse> {
 
 export async function recordBuy(
   input: InvestmentTradeRequest,
-  csrfToken: string
+  csrfToken: string, requestKey: string
 ): Promise<InvestmentTradeResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/buy', {
-      params: { header: { 'X-CSRF-Token': csrfToken } },
+      params: { header: { 'X-CSRF-Token': csrfToken, 'Idempotency-Key': requestKey } },
       body: input
     });
 
@@ -341,11 +341,11 @@ export async function externalTransferInReconciliationImpact(
 
 export async function recordExternalTransferIn(
   input: ExternalTransferInRequest,
-  csrfToken: string
+  csrfToken: string, requestKey: string
 ): Promise<ExternalTransferInResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/transfers/external/in', {
-      params: { header: { 'X-CSRF-Token': csrfToken } },
+      params: { header: { 'X-CSRF-Token': csrfToken, 'Idempotency-Key': requestKey } },
       body: input
     });
     if (data !== undefined) return data;
@@ -375,11 +375,11 @@ export async function previewInternalTransfer(
 
 export async function recordInternalTransfer(
   input: InternalTransferRequest,
-  csrfToken: string
+  csrfToken: string, requestKey: string
 ): Promise<InternalTransferResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/transfers/internal', {
-      params: { header: { 'X-CSRF-Token': csrfToken } },
+      params: { header: { 'X-CSRF-Token': csrfToken, 'Idempotency-Key': requestKey } },
       body: input
     });
     if (data !== undefined) return data;
@@ -409,11 +409,11 @@ export async function previewExternalTransferOut(
 
 export async function recordExternalTransferOut(
   input: ExternalTransferOutRequest,
-  csrfToken: string
+  csrfToken: string, requestKey: string
 ): Promise<ExternalTransferOutResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/transfers/external/out', {
-      params: { header: { 'X-CSRF-Token': csrfToken } },
+      params: { header: { 'X-CSRF-Token': csrfToken, 'Idempotency-Key': requestKey } },
       body: input
     });
     if (data !== undefined) return data;
@@ -439,11 +439,11 @@ export async function previewInvestmentSplit(
 
 export async function recordInvestmentSplit(
   input: InvestmentSplitRequest,
-  csrfToken: string
+  csrfToken: string, requestKey: string
 ): Promise<InvestmentSplitResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/splits', {
-      params: { header: { 'X-CSRF-Token': csrfToken } },
+      params: { header: { 'X-CSRF-Token': csrfToken, 'Idempotency-Key': requestKey } },
       body: input
     });
     if (data !== undefined) return data;
@@ -478,10 +478,10 @@ export async function previewSpinOff(input: SpinOffRequest): Promise<SpinOffPrev
   }
 }
 
-export async function recordSpinOff(input: SpinOffRequest, csrfToken: string): Promise<SpinOffResponse> {
+export async function recordSpinOff(input: SpinOffRequest, csrfToken: string, requestKey: string): Promise<SpinOffResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/spin-offs', {
-      params: { header: { 'X-CSRF-Token': csrfToken } },
+      params: { header: { 'X-CSRF-Token': csrfToken, 'Idempotency-Key': requestKey } },
       body: input
     });
     if (data !== undefined) return data;
@@ -492,10 +492,10 @@ export async function recordSpinOff(input: SpinOffRequest, csrfToken: string): P
   }
 }
 
-export async function recordShareExchange(input: ShareExchangeRequest, csrfToken: string): Promise<ShareExchangeResponse> {
+export async function recordShareExchange(input: ShareExchangeRequest, csrfToken: string, requestKey: string): Promise<ShareExchangeResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/share-exchanges', {
-      params: { header: { 'X-CSRF-Token': csrfToken } },
+      params: { header: { 'X-CSRF-Token': csrfToken, 'Idempotency-Key': requestKey } },
       body: input
     });
     if (data !== undefined) return data;
@@ -530,11 +530,11 @@ export async function previewSell(
 
 export async function recordSell(
   input: InvestmentTradeRequest,
-  csrfToken: string
+  csrfToken: string, requestKey: string
 ): Promise<InvestmentTradeResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/sell', {
-      params: { header: { 'X-CSRF-Token': csrfToken } },
+      params: { header: { 'X-CSRF-Token': csrfToken, 'Idempotency-Key': requestKey } },
       body: input
     });
 
@@ -556,11 +556,11 @@ export async function recordSell(
 // a short lot; a cover pays like a buy and consumes short lots only.
 export async function recordShortSale(
   input: InvestmentTradeRequest,
-  csrfToken: string
+  csrfToken: string, requestKey: string
 ): Promise<InvestmentTradeResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/short-sale', {
-      params: { header: { 'X-CSRF-Token': csrfToken } },
+      params: { header: { 'X-CSRF-Token': csrfToken, 'Idempotency-Key': requestKey } },
       body: input
     });
     if (data !== undefined) return data;
@@ -589,11 +589,11 @@ export async function shortSaleReconciliationImpact(
 
 export async function recordShortCover(
   input: InvestmentTradeRequest,
-  csrfToken: string
+  csrfToken: string, requestKey: string
 ): Promise<InvestmentTradeResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/short-cover', {
-      params: { header: { 'X-CSRF-Token': csrfToken } },
+      params: { header: { 'X-CSRF-Token': csrfToken, 'Idempotency-Key': requestKey } },
       body: input
     });
     if (data !== undefined) return data;
@@ -929,11 +929,11 @@ export async function previewWriteOff(
 
 export async function recordWriteOff(
   input: InvestmentWriteOffRequest,
-  csrfToken: string
+  csrfToken: string, requestKey: string
 ): Promise<InvestmentTradeResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/write-off', {
-      params: { header: { 'X-CSRF-Token': csrfToken } },
+      params: { header: { 'X-CSRF-Token': csrfToken, 'Idempotency-Key': requestKey } },
       body: input
     });
 
@@ -953,11 +953,11 @@ export async function recordWriteOff(
 
 export async function recordDividend(
   input: DividendRequest,
-  csrfToken: string
+  csrfToken: string, requestKey: string
 ): Promise<TransactionResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/dividend', {
-      params: { header: { 'X-CSRF-Token': csrfToken } },
+      params: { header: { 'X-CSRF-Token': csrfToken, 'Idempotency-Key': requestKey } },
       body: input
     });
 
@@ -977,11 +977,11 @@ export async function recordDividend(
 
 export async function recordReinvestedDividend(
   input: ReinvestedDividendRequest,
-  csrfToken: string
+  csrfToken: string, requestKey: string
 ): Promise<InvestmentTradeResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/reinvested-dividend', {
-      params: { header: { 'X-CSRF-Token': csrfToken } },
+      params: { header: { 'X-CSRF-Token': csrfToken, 'Idempotency-Key': requestKey } },
       body: input
     });
 
@@ -1664,11 +1664,11 @@ export async function previewCashStockMerger(input: CashStockMergerRequest): Pro
   }
 }
 
-export async function recordCashStockMerger(input: CashStockMergerRequest, csrfToken: string): Promise<CashStockMergerResponse> {
+export async function recordCashStockMerger(input: CashStockMergerRequest, csrfToken: string, requestKey: string): Promise<CashStockMergerResponse> {
   try {
     const { data, error, response } = await apiClient.POST(
       '/api/v1/investments/cash-and-stock-mergers',
-      { params: { header: { 'X-CSRF-Token': csrfToken } }, body: input }
+      { params: { header: { 'X-CSRF-Token': csrfToken, 'Idempotency-Key': requestKey } }, body: input }
     );
     if (data !== undefined) return data;
     throw toAPIClientError(response, error);
@@ -1818,10 +1818,10 @@ export async function previewCapitalReturn(input: CapitalReturnRequest): Promise
   }
 }
 
-export async function recordCapitalReturn(input: CapitalReturnRequest, csrfToken: string): Promise<CapitalReturnResponse> {
+export async function recordCapitalReturn(input: CapitalReturnRequest, csrfToken: string, requestKey: string): Promise<CapitalReturnResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/return-of-capital', {
-      params: { header: { 'X-CSRF-Token': csrfToken } }, body: input
+      params: { header: { 'X-CSRF-Token': csrfToken, 'Idempotency-Key': requestKey } }, body: input
     });
     if (data !== undefined) return data;
     throw toAPIClientError(response, error);
@@ -2129,9 +2129,9 @@ export async function previewCashInLieu(input: CashInLieuRequest): Promise<CashI
   }
 }
 
-export async function recordCashInLieu(input: CashInLieuRequest, csrfToken: string): Promise<InvestmentTradeResponse> {
+export async function recordCashInLieu(input: CashInLieuRequest, csrfToken: string, requestKey: string): Promise<InvestmentTradeResponse> {
   try {
-    const { data, error, response } = await apiClient.POST('/api/v1/investments/cash-in-lieu', { params: { header: { 'X-CSRF-Token': csrfToken } }, body: input });
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/cash-in-lieu', { params: { header: { 'X-CSRF-Token': csrfToken, 'Idempotency-Key': requestKey } }, body: input });
     if (data !== undefined) return data;
     throw toAPIClientError(response, error);
   } catch (error) {
@@ -2497,10 +2497,10 @@ export function instrumentIncomeCoverageQueryOptions(commodityID: number) {
 
 // A short holder's payment in lieu of a dividend and its corrections (#255).
 
-export async function recordPaymentInLieu(input: PaymentInLieuRequest, csrfToken: string): Promise<TransactionResponse> {
+export async function recordPaymentInLieu(input: PaymentInLieuRequest, csrfToken: string, requestKey: string): Promise<TransactionResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/payment-in-lieu', {
-      params: { header: { 'X-CSRF-Token': csrfToken } }, body: input
+      params: { header: { 'X-CSRF-Token': csrfToken, 'Idempotency-Key': requestKey } }, body: input
     });
     if (data !== undefined) return data;
     throw toAPIClientError(response, error);

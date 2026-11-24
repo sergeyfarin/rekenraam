@@ -6,6 +6,7 @@ post:
     amount_value as tax magnitude and no income or security-unit posting.
     Both shapes retain their paying instrument as an immutable operation fact.
   parameters:
+    - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
     - in: header
       name: X-CSRF-Token
       required: true
@@ -57,6 +58,8 @@ post:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      $ref: "../openapi.yaml#/components/responses/IdempotencyKeyConflict"
     "500":
       description: Internal server error
       headers:

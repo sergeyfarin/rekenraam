@@ -82,6 +82,7 @@ func newAuthHandlerForDatabaseWithOptions(database *sql.DB, options HandlerOptio
 		Category:    categoryService,
 		Payee:       payeeService,
 		Transaction: transactionService,
+		RequestKey:  app.NewRequestKeyService(db.NewRequestKeyRepository(database)),
 		Pricing:     pricingService,
 		Investment:  investmentService,
 		Import:      importService,

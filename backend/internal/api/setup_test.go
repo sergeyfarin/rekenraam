@@ -408,6 +408,7 @@ func newTestInstanceOnDatabase(t *testing.T, database *sql.DB, databaseURL strin
 		Category:    categoryService,
 		Payee:       payeeService,
 		Transaction: transactionService,
+		RequestKey:  app.NewRequestKeyService(db.NewRequestKeyRepository(database)),
 		Recurring:   app.NewRecurringService(db.NewRecurringRepository(database), transactionService, settingsService),
 		Pricing:     pricingService,
 		Investment:  investmentService,

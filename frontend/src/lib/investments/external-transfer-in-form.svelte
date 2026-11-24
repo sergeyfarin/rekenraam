@@ -1,6 +1,6 @@
 <script lang="ts">
   import { accountDisplayName, accountLabelByID } from '#lib/accounts/account-labels.ts';
-  import { useEntryActivity } from '#lib/transactions/entry-context.svelte.ts';
+  import { useEntryActivity, useRequestKey } from '#lib/transactions/entry-context.svelte.ts';
   import { useOwnerToday } from '#lib/dates/owner-date-context.ts';
   import { isInvestmentHoldingAccount } from '#lib/investments/settlement-accounts.ts';
   import { investmentEntryAccountsQueryOptions } from '#lib/api/investment-entry.ts';
@@ -25,7 +25,6 @@
   import { m } from '#lib/paraglide/messages.js';
   import { untrack } from 'svelte';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
-
   let { csrfToken, onSaved, onCancel, prefill }: {
     csrfToken: string;
     onSaved: () => void;
@@ -67,6 +66,8 @@
     currency: () => Number(costCommodityID) || undefined,
     pending: () => pending
   });
+  // The activity's request key, kept with its working copy (#660).
+  const requestKey = useRequestKey('external-transfer-in');
   if (workingCopy) untrack(() => {
     quantityStr = workingCopy.quantityStr ?? quantityStr;
     carriedBasisStr = workingCopy.carriedBasisStr ?? carriedBasisStr;
@@ -100,7 +101,7 @@
 
 
   async function submit(payload: ExternalTransferInRequest, guards: ReviewGuards) {
-    await recordExternalTransferIn({ ...payload, ...guards }, csrfToken);
+    await requestKey.send(payload, (key) => recordExternalTransferIn({ ...payload, ...guards }, csrfToken, key));
     await invalidateInvestmentReads(queryClient);
     onSaved();
   }
@@ -141,8 +142,7 @@
     pending = true;
     formError = undefined;
     try {
-      if (await impactReview.open(payload, false)) return;
-      await submit(payload, {});
+      await impactReview.submit(payload);
     } catch (error) {
       await impactReview.recover(error, payload);
     } finally {
@@ -153,6 +153,7 @@
   // A stale or missing gain acknowledgement re-previews the current set.
   const impactReview = commitReview({
     protocol: 'gains',
+    requestKey,
     get review() { return reconciliationModal; },
     impact: externalTransferInReconciliationImpact,
     write: submit,
