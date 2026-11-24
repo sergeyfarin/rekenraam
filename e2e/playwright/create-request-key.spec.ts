@@ -12,7 +12,9 @@ import { openInvestmentActivity } from './support/investment-entry';
 // and counts the records through the API.
 
 const networkError = 'The server could not be reached. Check the connection and try again.';
-const busyError = JSON.parse(readFileSync(new URL('../../frontend/messages/settings/en.json', import.meta.url), 'utf8')).api_error_resource_busy as string;
+const englishMessages = JSON.parse(readFileSync(new URL('../../frontend/messages/settings/en.json', import.meta.url), 'utf8')) as Record<string, string>;
+const busyError = englishMessages.api_error_resource_busy;
+const resultUnavailableError = englishMessages.api_error_idempotency_key_result_unavailable;
 
 /**
  * Forwards every POST to path and drops the first successful response after
@@ -281,6 +283,61 @@ test('a confirmed transaction stays replayable after an edited retry fails too',
 
   expect(answered.map((answer) => [answer.status, answer.replayed])).toEqual([[201, undefined], [503, undefined], [201, 'true']]);
   expect(answered[2].amount).toBe(answered[0].amount);
+  expect(await transactionCount(page, account.id)).toBe(2);
+});
+
+// Review of PR #669, round 3: the write committed, and the retry arrived
+// before the server stored its result. The 409 dropped the confirmed save, so
+// the next Save rebuilt the body without the checkpoints and was refused as
+// another request; the saved transaction was never shown.
+test('a confirmed transaction whose result is not stored yet replays once it is', async ({ page }) => {
+  const { account, suffix } = await reconciledAccount(page);
+  const description = `Confirmed pending ${suffix}`;
+  const answered: Array<{ status: number; replayed: string | undefined; body: string; key: string | null }> = [];
+  let committed = 0;
+  await page.route('**/api/v1/transactions', async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    const body = route.request().postData() ?? '';
+    const key = await route.request().headerValue('Idempotency-Key');
+    if (committed === 1 && answered.length === 1) {
+      // The retry arrives while the committing request has not stored its
+      // response yet: the server answers without writing.
+      answered.push({ status: 409, replayed: undefined, body, key });
+      return route.fulfill({ status: 409, contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'IDEMPOTENCY_KEY_RESULT_UNAVAILABLE', message: 'a request with this Idempotency-Key was already recorded, but its result is not available' } }) });
+    }
+    const response = await route.fetch();
+    if (!response.ok()) return route.fulfill({ response });
+    committed += 1;
+    answered.push({ status: response.status(), replayed: response.headers()['idempotent-replayed'], body, key });
+    if (committed === 1) return route.abort('failed');
+    return route.fulfill({ response });
+  });
+
+  await page.goto('/app/ledger/transactions');
+  await page.getByRole('button', { name: 'New transaction', exact: true }).click();
+  const form = page.getByRole('region', { name: 'New transaction', exact: true });
+  await form.getByLabel('Date').fill(daysFromTodayISO(-5));
+  await form.getByLabel('Description').fill(description);
+  await form.getByLabel('Account').selectOption({ label: account.name });
+  await form.getByLabel('Amount').fill('4.50');
+  await form.getByPlaceholder('Search categories').click();
+  await form.locator('ul[role="listbox"] button[role="option"]').first().click();
+  const save = form.getByRole('button', { name: 'Save transaction', exact: true });
+  await save.click();
+  await page.getByRole('alertdialog', { name: 'This change affects a reconciled period' })
+    .getByRole('button', { name: 'Proceed and invalidate', exact: true }).click();
+  await expect(form.getByText(networkError)).toBeVisible();
+
+  await save.click();
+  await expect(form.getByText(resultUnavailableError)).toBeVisible();
+  await save.click();
+  await expectSavedTransaction(page, description);
+
+  expect(answered.map((answer) => [answer.status, answer.replayed])).toEqual([[201, undefined], [409, undefined], [201, 'true']]);
+  expect(answered[0].body).toContain('reconciliation_override_checkpoint_ids');
+  expect(answered.map((answer) => answer.body)).toEqual([answered[0].body, answered[0].body, answered[0].body]);
+  expect(new Set(answered.map((answer) => answer.key)).size).toBe(1);
   expect(await transactionCount(page, account.id)).toBe(2);
 });
 
