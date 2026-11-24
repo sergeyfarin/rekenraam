@@ -1,0 +1,22 @@
+type AccountLike = { id: number; status?: string };
+
+/**
+ * The account a stored dividend default may fill a field with (#664 review).
+ * A default is a stored automation target, so like the server it is applied
+ * only while its account is not archived today (`today` is the owner-day
+ * account list). It must also be an option the dated picker offers, or the
+ * field would look blank while holding an ID. Returns '' when it may not.
+ * Choosing an account by hand still offers every account eligible on the date.
+ */
+export function defaultAccountToApply(id: number | null | undefined, offered: readonly AccountLike[], today: readonly AccountLike[]): string {
+  if (id === null || id === undefined) return '';
+  if (!offered.some((account) => account.id === id)) return '';
+  const current = today.find((account) => account.id === id);
+  if (current === undefined || current.status === 'archived') return '';
+  return String(id);
+}
+
+/** A held selection that is not one of the offered options; '' is no selection. */
+export function heldButUnavailable(id: string, offered: readonly AccountLike[]): boolean {
+  return id !== '' && !offered.some((account) => String(account.id) === id);
+}
