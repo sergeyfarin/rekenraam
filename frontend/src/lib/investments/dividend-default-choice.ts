@@ -30,3 +30,29 @@ export function defaultStillApplies(id: string, today: readonly AccountLike[]): 
   const current = today.find((account) => String(account.id) === id);
   return current !== undefined && current.status !== 'archived';
 }
+
+type DefaultLike = {
+  id: number;
+  commodity_id?: number | null;
+  status: string;
+  effective_from: string;
+  effective_to?: string | null;
+};
+
+/**
+ * The stored dividend default that applies to a commodity on a date, by the
+ * server's own precedence (ResolveDividendDefault): active, in effect on the
+ * date, the commodity's own before the global one, then the latest effective
+ * date, then the newest. A backdated entry thus shows the default the server
+ * will check, not today's (#664 review).
+ */
+export function applicableDividendDefault<T extends DefaultLike>(defaults: readonly T[], commodityID: number, date: string): T | undefined {
+  return defaults
+    .filter((d) => d.status === 'active' && (d.commodity_id === commodityID || d.commodity_id === undefined || d.commodity_id === null))
+    .filter((d) => d.effective_from <= date && (!d.effective_to || d.effective_to >= date))
+    .sort((a, b) =>
+      Number(a.commodity_id !== commodityID) - Number(b.commodity_id !== commodityID) ||
+      b.effective_from.localeCompare(a.effective_from) ||
+      b.id - a.id
+    )[0];
+}

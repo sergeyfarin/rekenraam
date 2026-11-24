@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultAccountToApply, defaultStillApplies, heldButUnavailable } from './dividend-default-choice.ts';
+import { applicableDividendDefault, defaultAccountToApply, defaultStillApplies, heldButUnavailable } from './dividend-default-choice.ts';
 
 describe('dividend default choice (#664 review)', () => {
   const offered = [{ id: 7, status: 'active' }, { id: 8, status: 'active' }];
@@ -31,5 +31,21 @@ describe('dividend default choice (#664 review)', () => {
     expect(defaultStillApplies('7', [{ id: 7, status: 'active' }])).toBe(true);
     expect(defaultStillApplies('7', [{ id: 7, status: 'archived' }])).toBe(false);
     expect(defaultStillApplies('7', [])).toBe(false);
+  });
+
+  it('resolves the default in effect on the entry date by the server\'s precedence', () => {
+    const defaults = [
+      { id: 1, commodity_id: null, status: 'active', effective_from: '2026-01-01' },
+      { id: 2, commodity_id: 5, status: 'active', effective_from: '2026-01-01', effective_to: '2026-02-28' },
+      { id: 3, commodity_id: 5, status: 'active', effective_from: '2026-03-01' },
+      { id: 4, commodity_id: 5, status: 'archived', effective_from: '2026-03-05' },
+      { id: 5, commodity_id: 6, status: 'active', effective_from: '2026-01-01' }
+    ];
+    expect(applicableDividendDefault(defaults, 5, '2026-02-15')?.id).toBe(2);
+    expect(applicableDividendDefault(defaults, 5, '2026-03-10')?.id).toBe(3);
+    expect(applicableDividendDefault(defaults, 7, '2026-03-10')?.id).toBe(1);
+    expect(applicableDividendDefault(defaults, 5, '2025-12-31')).toBeUndefined();
+    const sameDay = [...defaults, { id: 9, commodity_id: 5, status: 'active', effective_from: '2026-03-01' }];
+    expect(applicableDividendDefault(sameDay, 5, '2026-03-02')?.id).toBe(9);
   });
 });

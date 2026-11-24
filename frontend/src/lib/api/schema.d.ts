@@ -26040,6 +26040,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description IDEMPOTENCY_KEY_REUSED or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE, as for every keyed create; or DIVIDEND_DEFAULT_CHANGED when an account marked income_account_from_default or withholding_account_from_default is no longer the one the stored default applies on the dividend's date (changed, or its account archived today), checked again when the write commits (#664). None writes anything. */
                 409: components["responses"]["IdempotencyKeyConflict"];
                 413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
@@ -26131,7 +26132,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Acquisition replay conflict or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE). IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything. */
+                /** @description Acquisition replay conflict or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE). IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything. DIVIDEND_DEFAULT_CHANGED when the income account marked income_account_from_default is no longer the one the stored default applies on the date, checked again at commit (#664). */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -26646,6 +26647,16 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description DIVIDEND_DEFAULT_CHANGED when an account marked income_account_from_default or withholding_account_from_default is no longer the one the stored default applies on the dividend's date (#664). */
+                409: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
                 413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
@@ -26721,7 +26732,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Acquisition replay cannot complete (historical code INVESTMENT_BUY_DEPENDENCY or INVESTMENT_EVENT_OUT_OF_ORDER) */
+                /** @description Acquisition replay cannot complete (historical code INVESTMENT_BUY_DEPENDENCY or INVESTMENT_EVENT_OUT_OF_ORDER), or DIVIDEND_DEFAULT_CHANGED when the income account marked income_account_from_default is no longer the one the stored default applies on the date (#664). */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];

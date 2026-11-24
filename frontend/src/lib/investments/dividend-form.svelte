@@ -44,7 +44,7 @@
 
   import { usePrefilledInstrument } from '#lib/investments/investment-prefill.svelte.ts';
   import { APIClientError } from '#lib/api/client.ts';
-  import { defaultAccountToApply, defaultStillApplies, heldButUnavailable } from '#lib/investments/dividend-default-choice.ts';
+  import { applicableDividendDefault, defaultAccountToApply, defaultStillApplies, heldButUnavailable } from '#lib/investments/dividend-default-choice.ts';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
   import { isSettlementAccount } from '#lib/investments/settlement-accounts.ts';
   const ownerToday = useOwnerToday();
@@ -128,6 +128,9 @@
   // instrument's default applies, while an amount the owner typed stays.
   let withholdingAmountFromDefault = $state(false);
   let withholdingShownByDefault = $state(false);
+  // Set once the owner toggles withholding: a later default then fills the
+  // amount but leaves the switch as the owner set it (#664 review).
+  let withholdingVisibilityChosen = $state(false);
   let amountStr = $state('');
   let withholdingStr = $state('');
   let showWithholding = $state(false);
@@ -140,7 +143,7 @@
   let formError = $state<unknown>(undefined);
   // New transaction's working copy and shared context (#508).
   const workingCopy = useEntryActivity(untrack(() => mode === 'reinvested' ? 'reinvested' : mode === 'withholding' ? 'withholding' : 'dividend'), {
-    values: () => ({ exDate, incomeAccountID, withholdingAccountID, incomeFromDefault, withholdingFromDefault, withholdingAmountFromDefault, withholdingShownByDefault, amountStr, withholdingStr, showWithholding, quantityStr }),
+    values: () => ({ exDate, incomeAccountID, withholdingAccountID, incomeFromDefault, withholdingFromDefault, withholdingAmountFromDefault, withholdingShownByDefault, withholdingVisibilityChosen, amountStr, withholdingStr, showWithholding, quantityStr }),
     date: () => transactionDate,
     memo: () => memo,
     holding: () => Number(holdingAccountID) || undefined,
@@ -161,6 +164,7 @@
     withholdingFromDefault = workingCopy.withholdingFromDefault ?? withholdingFromDefault;
     withholdingAmountFromDefault = workingCopy.withholdingAmountFromDefault ?? withholdingAmountFromDefault;
     withholdingShownByDefault = workingCopy.withholdingShownByDefault ?? withholdingShownByDefault;
+    withholdingVisibilityChosen = workingCopy.withholdingVisibilityChosen ?? withholdingVisibilityChosen;
     quantityStr = workingCopy.quantityStr ?? quantityStr;
   });
   untrack(() => { if (prefill?.currencyID !== undefined && mode === 'reinvested') reinvestmentCurrencyID = String(prefill.currencyID); });
@@ -269,6 +273,20 @@
     withholdingAmountFromDefault = false;
     withholdingShownByDefault = false;
   }
+  // A new entry date can select a different default: take back what the
+  // previous one filled in and resolve again for the selected instrument.
+  let defaultsResolvedFor = untrack(() => transactionDate);
+  $effect(() => {
+    const date = transactionDate;
+    if (date === defaultsResolvedFor) return;
+    defaultsResolvedFor = date;
+    untrack(() => {
+      const instrument = selectedInstrument;
+      if (!instrument) return;
+      clearInstrumentDefaults();
+      pendingDefaultFor = instrument;
+    });
+  });
   $effect(() => {
     const inst = pendingDefaultFor;
     const defaults = dividendDefaultsQuery.data?.defaults;
@@ -279,10 +297,10 @@
       pendingDefaultFor = null;
       // The default belongs to the instrument still selected, or to none.
       if (selectedInstrument?.id !== inst.id) return;
-      // A default matching this instrument's commodity, else the global one.
+      // The default the server applies on the entry's date: the commodity's
+      // own before the global one, by effective date (#664 review).
       const match: DividendDefaultResponse | undefined =
-        defaults.find((d) => d.commodity_id === inst.commodity_id && d.status === 'active') ??
-        defaults.find((d) => d.commodity_id === undefined && d.status === 'active');
+        applicableDividendDefault(defaults, inst.commodity_id, transactionDate || ownerToday());
       if (!match) return;
       if (incomeAccountID === '') {
         incomeAccountID = defaultAccountToApply(match.income_account_id, incomeAccounts, today);
@@ -295,8 +313,10 @@
       if (withholdingStr === '' && match.default_withholding_value && match.default_withholding_scale !== undefined) {
         withholdingStr = formatEditableAmount(String(match.default_withholding_value), match.default_withholding_scale);
         withholdingAmountFromDefault = true;
-        withholdingShownByDefault = !showWithholding;
-        showWithholding = true;
+        if (!withholdingVisibilityChosen) {
+          withholdingShownByDefault = !showWithholding;
+          showWithholding = true;
+        }
       }
     });
   });
@@ -771,7 +791,7 @@
   {#if mode === 'cash'}
     <div>
       <label class="flex items-center gap-2 text-sm font-medium text-foreground">
-        <input type="checkbox" bind:checked={showWithholding} onchange={() => { withholdingShownByDefault = false; withholdingAmountFromDefault = false; }} class="rounded" />
+        <input type="checkbox" bind:checked={showWithholding} onchange={() => { withholdingShownByDefault = false; withholdingVisibilityChosen = true; }} class="rounded" />
         {m.investments_form_withholding_toggle()}
       </label>
     </div>
