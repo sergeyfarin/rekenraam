@@ -62,6 +62,9 @@
   let statusFilter = $state<StatusFilter>('active');
   let editor = $state<EditorState>({ type: 'none' });
   let actionError = $state<unknown>(undefined);
+  // The row whose action failed shows the error beside its buttons, so it is
+  // on screen where the owner tapped, at any width (#664 review).
+  let actionErrorCategoryID = $state<number | undefined>(undefined);
   let actionPendingKey = $state('');
   let setupPending = $state(false);
   let setupError = $state<unknown>(undefined);
@@ -337,13 +340,13 @@
   }
 
   async function handleArchiveCategory(category: CategoryResponse) {
-    await runCategoryAction(`archive:${category.id}`, async (token) => {
+    await runCategoryAction(category.id, `archive:${category.id}`, async (token) => {
       await disableCategory(category.id, token);
     });
   }
 
   async function handleRestoreCategory(category: CategoryResponse) {
-    await runCategoryAction(`restore:${category.id}`, async (token) => {
+    await runCategoryAction(category.id, `restore:${category.id}`, async (token) => {
       await restoreCategory(category.id, token);
     });
   }
@@ -353,14 +356,15 @@
       return;
     }
 
-    await runCategoryAction(`delete:${category.id}`, async (token) => {
+    await runCategoryAction(category.id, `delete:${category.id}`, async (token) => {
       await deleteCategory(category.id, token);
     });
   }
 
-  async function runCategoryAction(key: string, action: (csrfToken: string) => Promise<void>) {
+  async function runCategoryAction(categoryID: number, key: string, action: (csrfToken: string) => Promise<void>) {
     actionPendingKey = key;
     actionError = undefined;
+    actionErrorCategoryID = categoryID;
 
     try {
       const token = await getCSRFToken();
@@ -440,8 +444,6 @@
       </button>
     </div>
   </Panel>
-
-  <APIFormError error={actionError} id="categories-action-error" />
 
   {#if editor.type !== 'none'}
     <Panel>
@@ -608,6 +610,12 @@
                     <Trash size={15} aria-hidden="true" />
                   </button>
                 </div>
+                {#if actionErrorCategoryID === category.id}
+                  <!-- Above the stretched link, so the message is not a link to the category. -->
+                  <div class="relative z-1 lg:col-span-full">
+                    <APIFormError error={actionError} id="categories-action-error" />
+                  </div>
+                {/if}
               </article>
             {/each}
           </div>
