@@ -9,6 +9,7 @@
   import Tags from '@lucide/svelte/icons/tags';
   import Trash from '@lucide/svelte/icons/trash';
   import APIFormError from '#lib/components/api-form-error.svelte';
+  import { SvelteMap, SvelteSet } from 'svelte/reactivity';
   import Panel from '#lib/components/panel.svelte';
   import StatePanel from '#lib/components/state-panel.svelte';
   import StatusBadge from '#lib/components/status-badge.svelte';
@@ -61,11 +62,11 @@
   let typeFilter = $state<TypeFilter>('all');
   let statusFilter = $state<StatusFilter>('active');
   let editor = $state<EditorState>({ type: 'none' });
-  let actionError = $state<unknown>(undefined);
-  // The row whose action failed shows the error beside its buttons, so it is
-  // on screen where the owner tapped, at any width (#664 review).
-  let actionErrorCategoryID = $state<number | undefined>(undefined);
-  let actionPendingKey = $state('');
+  // Each row owns its pending action and its error, so two overlapping
+  // actions cannot show one row's refusal under the other, and the error sits
+  // beside the button that was tapped, on screen at any width (#664 review).
+  const actionErrors = new SvelteMap<number, unknown>();
+  const actionsPending = new SvelteSet<string>();
   let setupPending = $state(false);
   let setupError = $state<unknown>(undefined);
   let collapsedCategoryIDs = $state<Set<number>>(new Set());
@@ -362,18 +363,17 @@
   }
 
   async function runCategoryAction(categoryID: number, key: string, action: (csrfToken: string) => Promise<void>) {
-    actionPendingKey = key;
-    actionError = undefined;
-    actionErrorCategoryID = categoryID;
+    actionsPending.add(key);
+    actionErrors.delete(categoryID);
 
     try {
       const token = await getCSRFToken();
       await action(token);
       await refreshCategories();
     } catch (error) {
-      actionError = error;
+      actionErrors.set(categoryID, error);
     } finally {
-      actionPendingKey = '';
+      actionsPending.delete(key);
     }
   }
 </script>
@@ -580,7 +580,7 @@
                       type="button"
                       class="inline-flex h-9 w-9 items-center justify-center rounded-(--radius-control) border border-border bg-control text-foreground transition hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-50"
                       onclick={() => handleArchiveCategory(category)}
-                      disabled={category.is_builtin || (activeChildCounts.get(category.id) ?? 0) > 0 || actionPendingKey === `archive:${category.id}`}
+                      disabled={category.is_builtin || (activeChildCounts.get(category.id) ?? 0) > 0 || actionsPending.has(`archive:${category.id}`)}
                       aria-label={m.categories_action_archive({ name: categoryDisplayName(category) })}
                       title={m.categories_action_archive({ name: categoryDisplayName(category) })}
                     >
@@ -591,7 +591,7 @@
                       type="button"
                       class="inline-flex h-9 w-9 items-center justify-center rounded-(--radius-control) border border-border bg-control text-foreground transition hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-50"
                       onclick={() => handleRestoreCategory(category)}
-                      disabled={category.is_builtin || actionPendingKey === `restore:${category.id}`}
+                      disabled={category.is_builtin || actionsPending.has(`restore:${category.id}`)}
                       aria-label={m.categories_action_restore({ name: categoryDisplayName(category) })}
                       title={m.categories_action_restore({ name: categoryDisplayName(category) })}
                     >
@@ -603,17 +603,17 @@
                     type="button"
                     class="inline-flex h-9 w-9 items-center justify-center rounded-(--radius-control) border border-danger/30 bg-danger-soft text-danger transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                     onclick={() => handleDeleteCategory(category)}
-                    disabled={category.is_builtin || (anyChildCounts.get(category.id) ?? 0) > 0 || actionPendingKey === `delete:${category.id}`}
+                    disabled={category.is_builtin || (anyChildCounts.get(category.id) ?? 0) > 0 || actionsPending.has(`delete:${category.id}`)}
                     aria-label={m.categories_action_delete({ name: categoryDisplayName(category) })}
                     title={m.categories_action_delete({ name: categoryDisplayName(category) })}
                   >
                     <Trash size={15} aria-hidden="true" />
                   </button>
                 </div>
-                {#if actionErrorCategoryID === category.id}
+                {#if actionErrors.has(category.id)}
                   <!-- Above the stretched link, so the message is not a link to the category. -->
                   <div class="relative z-1 lg:col-span-full">
-                    <APIFormError error={actionError} id="categories-action-error" />
+                    <APIFormError error={actionErrors.get(category.id)} id="categories-action-error-{category.id}" />
                   </div>
                 {/if}
               </article>
