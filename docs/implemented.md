@@ -101,13 +101,17 @@ once. Go validation, the posting trigger (migration 0016) and the in-write
 eligibility guard share the rule; archived ordinary accounts still accept
 nothing. A disable that would leave a later posting, future-dated included,
 returns `409 REFERENCE_DATED_CONFLICT` (`category_posting_after_disable`) with
-the earliest such date and writes nothing; the category screen explains it in
-every locale. The shared rules by operation are in the
+the earliest such date and writes nothing; only postings the disable itself
+strands count. The category screen explains it in every locale, in the row
+whose action failed, and a picker loaded before the archive drops the category
+at once. The shared rules by operation are in the
 [account design](design/accounts-system-design.md#archived-references-by-operation).
 Named cases: API `TestCategoryDisableKeepsItsLastPostingDay`,
 `TestCategoryDisableRefusesALaterPosting`,
 `TestCategoryDisableDayAllowanceLeavesOtherContracts`,
-`TestCategoryDisableDayMigrationUpgradesAnExistingDatabase`; `form-errors.test.ts`;
+`TestCategoryDisableDayMigrationUpgradesAnExistingDatabase`,
+`TestCategoryDisableIgnoresPostingsAlreadyRefused`; `form-errors.test.ts`,
+`categories.test.ts` (category writes refresh every cached category list);
 browser `category-disable-day.spec.ts`.
 
 ## Project website source

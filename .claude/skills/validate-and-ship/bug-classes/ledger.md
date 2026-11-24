@@ -144,7 +144,12 @@ including a future-dated one, succeeded and stranded it. A status that carries
 (`PostingAccountRule.AcceptsPostingsOn`), the posting trigger and the in-write
 guard are three copies, so change them together and test them at D−1, D and
 D+1. Every lifecycle write that appends a version runs the guard before
-commit. Named checks: `TestCategoryDisableKeepsItsLastPostingDay`,
+commit, and the guard compares the version that governed each posting before
+the write with the new one: a posting already refused is not the new
+version's doing (`TestCategoryDisableIgnoresPostingsAlreadyRefused`). Accepting
+the last day in the ledger makes a stale picker the only thing between the
+owner and a posting on an archived category, so a category write refreshes
+every cached category list (`category-disable-day.spec.ts`, same-tab picker). Named checks: `TestCategoryDisableKeepsItsLastPostingDay`,
 `TestCategoryDisableRefusesALaterPosting`,
 `TestCategoryDisableDayAllowanceLeavesOtherContracts`,
 `TestCategoryDisableDayMigrationUpgradesAnExistingDatabase`,

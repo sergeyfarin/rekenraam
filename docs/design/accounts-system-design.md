@@ -1051,10 +1051,16 @@ history. The rules below are shared; each kind's design links here.
   `conflict_rule` `category_posting_after_disable` for a category. The check
   covers current versions of transactions that are neither voided nor
   soft-deleted, future-dated ones included, and writes no version or audit row
-  when it refuses.
+  when it refuses. It counts only postings the new version strands: ones the
+  version governing them before the write accepted. A posting an older version
+  already refuses (for example after *Allows postings* was turned off, #680) is
+  not reported against the new version and does not block it; it keeps its own
+  repair.
 - **Everyday choices read today's status.** Pickers, payee defaults and import
   rule application treat an archived target as absent from the moment it is
-  archived, even on the day the ledger still accepts it. Accepting a fresh
+  archived, even on the day the ledger still accepts it. The app shell
+  refreshes every cached category list after a successful category write, so a
+  picker loaded before the archive never offers it afterwards. Accepting a fresh
   posting dated on or before the disable day is a ledger guarantee for the API
   and for history entry, not a picker choice.
 - **Retained versus new links.** An edit that restates a link the record
