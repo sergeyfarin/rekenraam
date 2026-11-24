@@ -111,7 +111,8 @@ Named cases: API `TestCategoryDisableKeepsItsLastPostingDay`,
 `TestCategoryDisableDayAllowanceLeavesOtherContracts`,
 `TestCategoryDisableDayMigrationUpgradesAnExistingDatabase`,
 `TestCategoryDisableIgnoresPostingsAlreadyRefused`; `form-errors.test.ts`,
-`categories.test.ts` (category writes refresh every cached category list);
+`categories.test.ts`, `category-cache.test.ts` (a disable leaves cached
+pickers before its response returns);
 browser `category-disable-day.spec.ts`.
 
 ## Project website source

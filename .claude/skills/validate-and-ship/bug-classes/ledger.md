@@ -148,8 +148,11 @@ commit, and the guard compares the version that governed each posting before
 the write with the new one: a posting already refused is not the new
 version's doing (`TestCategoryDisableIgnoresPostingsAlreadyRefused`). Accepting
 the last day in the ledger makes a stale picker the only thing between the
-owner and a posting on an archived category, so a category write refreshes
-every cached category list (`category-disable-day.spec.ts`, same-tab picker). Named checks: `TestCategoryDisableKeepsItsLastPostingDay`,
+owner and a posting on an archived category, so a disable or delete is applied to
+every cached category and account list before its response returns, with
+in-flight reads cancelled; invalidating alone leaves the stale row selectable
+until the refetch lands (`category-cache.test.ts`,
+`category-disable-day.spec.ts` with the refetch held). Named checks: `TestCategoryDisableKeepsItsLastPostingDay`,
 `TestCategoryDisableRefusesALaterPosting`,
 `TestCategoryDisableDayAllowanceLeavesOtherContracts`,
 `TestCategoryDisableDayMigrationUpgradesAnExistingDatabase`,

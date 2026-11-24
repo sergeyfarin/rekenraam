@@ -1059,8 +1059,11 @@ history. The rules below are shared; each kind's design links here.
 - **Everyday choices read today's status.** Pickers, payee defaults and import
   rule application treat an archived target as absent from the moment it is
   archived, even on the day the ledger still accepts it. The app shell
-  refreshes every cached category list after a successful category write, so a
-  picker loaded before the archive never offers it afterwards. Accepting a fresh
+  applies a successful disable or delete to every cached category and account
+  list before the caller sees the response, cancelling reads already in flight,
+  and then refetches them. A picker loaded earlier (the entry editor's
+  categories, an investment form's income accounts) therefore never offers the
+  category, even while its refetch is pending (`category-cache.ts`). Accepting a fresh
   posting dated on or before the disable day is a ledger guarantee for the API
   and for history entry, not a picker choice.
 - **Retained versus new links.** An edit that restates a link the record
