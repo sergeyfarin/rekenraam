@@ -13,7 +13,7 @@
   import { tagDirectoryQueryKey, tagsQueryKey } from '#lib/api/tags.ts';
   import { payeeDirectoryQueryKey, payeesQueryKey } from '#lib/api/payees.ts';
   import { searchCatalogQueryKey } from '#lib/api/search.ts';
-  import { categoriesQueryKey, changesCategories } from '#lib/api/categories.ts';
+  import { applyCategoryWrite } from '#lib/categories/category-cache.ts';
   import { provideAttention } from '#lib/attention/context.ts';
   import { attentionSummary, sourceBadge } from '#lib/attention/model.ts';
   import { getLocale } from '#lib/paraglide/runtime.js';
@@ -100,7 +100,7 @@
   // implemented with async handlers rather than TanStack mutations.
   onMount(() => {
     const middleware: Middleware = {
-      onResponse({ request, response }) {
+      async onResponse({ request, response }) {
         if (response.ok && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
           void queryClient.invalidateQueries({ queryKey: attentionQueryKey });
           void queryClient.invalidateQueries({ queryKey: homeQueryKey });
@@ -115,10 +115,9 @@
             void queryClient.invalidateQueries({ queryKey: payeesQueryKey });
             void queryClient.invalidateQueries({ queryKey: searchCatalogQueryKey });
           }
-          if (changesCategories(path)) {
-            void queryClient.invalidateQueries({ queryKey: categoriesQueryKey });
-            void queryClient.invalidateQueries({ queryKey: searchCatalogQueryKey });
-          }
+          // Awaited, so the caller sees the response only after a disabled
+          // category has left every cached picker (#664 review).
+          await applyCategoryWrite(queryClient, request.method, path);
         }
       }
     };
