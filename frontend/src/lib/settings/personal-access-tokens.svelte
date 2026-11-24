@@ -91,6 +91,14 @@
     }
   }
 
+  // The same for a revocation seen succeed and one found saved after a lost
+  // response: any one-time disclosure on screen is scrubbed.
+  function confirmRevoked() {
+    clearSecrets();
+    revokeTarget = undefined;
+    revoked = true;
+  }
+
   async function revoke() {
     if (!revokeTarget) return;
     const target = revokeTarget;
@@ -99,9 +107,7 @@
     createOutcomeUnknown = false;
     try {
       await revokePersonalAccessToken(target.id, session.data?.csrf_token ?? '');
-      secret = '';
-      revokeTarget = undefined;
-      revoked = true;
+      confirmRevoked();
       await refresh();
     } catch (cause) {
       error = cause;
@@ -110,8 +116,7 @@
       await refresh();
       if (credentials.find((credential) => credential.id === target.id)?.revoked_at) {
         error = undefined;
-        revokeTarget = undefined;
-        revoked = true;
+        confirmRevoked();
       }
     } finally {
       pending = false;
@@ -187,7 +192,7 @@
           </li>
         {/each}
       </ul>
-      {#if tokens.hasNextPage}<button type="button" class={buttonClass} disabled={tokens.isFetchingNextPage} onclick={() => tokens.fetchNextPage()}>{m.security_tokens_more()}</button>{/if}
+      {#if tokens.hasNextPage}<button type="button" class={buttonClass} disabled={pending || tokens.isFetchingNextPage || tokens.isRefetching} onclick={() => tokens.fetchNextPage({ cancelRefetch: false })}>{m.security_tokens_more()}</button>{/if}
     {/if}
   </div>
 </Panel>
