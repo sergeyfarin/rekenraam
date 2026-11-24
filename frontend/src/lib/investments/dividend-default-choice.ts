@@ -20,3 +20,13 @@ export function defaultAccountToApply(id: number | null | undefined, offered: re
 export function heldButUnavailable(id: string, offered: readonly AccountLike[]): boolean {
   return id !== '' && !offered.some((account) => String(account.id) === id);
 }
+
+/**
+ * Whether an account a default filled in may still be sent: it must be in
+ * the owner-day list and not archived there. A default that stops applying
+ * is cleared, not sent as if the owner had chosen it (#664 review).
+ */
+export function defaultStillApplies(id: string, today: readonly AccountLike[]): boolean {
+  const current = today.find((account) => String(account.id) === id);
+  return current !== undefined && current.status !== 'archived';
+}

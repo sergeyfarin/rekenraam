@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultAccountToApply, heldButUnavailable } from './dividend-default-choice.ts';
+import { defaultAccountToApply, defaultStillApplies, heldButUnavailable } from './dividend-default-choice.ts';
 
 describe('dividend default choice (#664 review)', () => {
   const offered = [{ id: 7, status: 'active' }, { id: 8, status: 'active' }];
@@ -25,5 +25,11 @@ describe('dividend default choice (#664 review)', () => {
     expect(heldButUnavailable('9', offered)).toBe(true);
     expect(heldButUnavailable('7', offered)).toBe(false);
     expect(heldButUnavailable('', offered)).toBe(false);
+  });
+
+  it('a filled default stops applying once it is archived today or leaves today\'s list', () => {
+    expect(defaultStillApplies('7', [{ id: 7, status: 'active' }])).toBe(true);
+    expect(defaultStillApplies('7', [{ id: 7, status: 'archived' }])).toBe(false);
+    expect(defaultStillApplies('7', [])).toBe(false);
   });
 });
