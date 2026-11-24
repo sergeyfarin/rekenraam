@@ -166,7 +166,12 @@ automatic mark travels with the request, so the server checks a displayed
 default at commit (`TestDividendAccountFromDefaultIsCheckedAtWrite`), and
 every field a default fills is marked, amounts included: an unmarked default
 withholding amount survived an instrument switch and posted the previous
-instrument's tax. An owner's choice
+instrument's tax. Mark each field separately: toggling the switch is not
+editing the amount. The client resolves a default by the server's own rule
+(date and precedence, `applicableDividendDefault`), or a backdated entry
+loops on a refusal; and the write re-resolves the default in its transaction
+(`TestDividendDefaultEditedBeforeCommitIsRefused`), because a guard on account
+versions cannot see an edit to the default row. An owner's choice
 that stops being offered stays visible and blocks the save; clearing it
 silently lets the server substitute the stored default. Named checks: `TestCategoryDisableKeepsItsLastPostingDay`,
 `TestCategoryDisableRefusesALaterPosting`,

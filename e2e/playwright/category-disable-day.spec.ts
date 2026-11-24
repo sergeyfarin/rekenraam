@@ -490,6 +490,17 @@ test('[acceptance] a dividend default withholding amount follows the selected in
   await expect(amount).toHaveValue('2.75');
   await expect(account).toHaveValue(String(secondTax.id));
 
+  // Toggling withholding off and on keeps it shown but leaves the amount
+  // automatic, so the next instrument's default still replaces it.
+  const toggle = form.getByRole('checkbox', { name: 'Add withholding tax' });
+  await choose(f.name);
+  await expect(amount).toHaveValue('1.25');
+  await toggle.uncheck();
+  await toggle.check();
+  await choose(secondName);
+  await expect(amount).toHaveValue('2.75');
+  await expect(toggle).toBeChecked();
+
   // An amount the owner typed is theirs and survives the next switch.
   await amount.fill('5.00');
   await choose(f.name);
@@ -540,4 +551,40 @@ test('[acceptance] a dividend saved with a default archived in flight is refused
   await expect(income).toHaveValue('');
   await expect(form.getByRole('button', { name: 'Record dividend', exact: true })).toBeDisabled();
   await expect(income.locator(`option[value="${f.retired.id}"]`)).toHaveCount(1);
+});
+
+// With two defaults for one instrument, a backdated entry shows the one in
+// effect on its date, as the server resolves it, and a date change resolves
+// again (#664 review: the form picked the newer default and the server
+// refused it on every retry).
+test('[acceptance] a backdated dividend shows the default in effect on its date', async ({ page }) => {
+  const f = await dividendFixture(page);
+  for (const [account, from] of [[f.fallback.id, addDays(f.today, -10)], [f.other.id, addDays(f.today, -2)]] as const) {
+    await apiJSON(page, 'POST', '/api/v1/investments/dividend-defaults', f.csrfToken, {
+      commodity_id: f.instrument.commodity_id, income_account_id: account, status: 'active', effective_from: from
+    });
+  }
+
+  await page.goto('/app/ledger/transactions');
+  await openInvestmentActivity(page, 'dividend');
+  const form = page.getByRole('dialog', { name: 'Record dividend' });
+  const income = form.locator('#div-income-account');
+  await form.locator('#div-date').fill(addDays(f.today, -5));
+  await form.locator('#div-instrument').fill(f.name);
+  await page.getByRole('option').filter({ hasText: f.name }).click();
+  await expect(income).toHaveValue(String(f.fallback.id));
+
+  await form.locator('#div-date').fill(f.today);
+  await expect(income).toHaveValue(String(f.other.id));
+  await form.locator('#div-date').fill(addDays(f.today, -5));
+  await expect(income).toHaveValue(String(f.fallback.id));
+
+  await form.locator('#div-cash-account').selectOption(String(f.cash.id));
+  await form.locator('#div-amount').fill('3.25');
+  const answered = page.waitForResponse((response) => response.url().endsWith('/api/v1/investments/dividend') && response.request().method() === 'POST');
+  await form.getByRole('button', { name: 'Record dividend', exact: true }).click();
+  const response = await answered;
+  expect(response.status()).toBe(201);
+  const postings = ((await response.json()).journal_entries as Array<{ postings: Array<{ account_id: number }> }>).flatMap((entry) => entry.postings);
+  expect(postings.map((posting) => posting.account_id)).toContain(f.fallback.id);
 });

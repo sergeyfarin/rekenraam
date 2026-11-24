@@ -60,6 +60,13 @@ post:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
       $ref: "../openapi.yaml#/components/responses/IdempotencyKeyConflict"
+      description: >-
+        IDEMPOTENCY_KEY_REUSED or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE, as for
+        every keyed create; or DIVIDEND_DEFAULT_CHANGED when an account marked
+        income_account_from_default or withholding_account_from_default is no
+        longer the one the stored default applies on the dividend's date
+        (changed, or its account archived today), checked again when the write
+        commits (#664). None writes anything.
     "500":
       description: Internal server error
       headers:

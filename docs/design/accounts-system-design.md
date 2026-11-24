@@ -1097,7 +1097,13 @@ history. The rules below are shared; each kind's design links here.
   (`income_account_from_default`, `withholding_account_from_default`), and the
   server writes such an account only while the default still applies it,
   bound to its version, or refuses with `409 DIVIDEND_DEFAULT_CHANGED`; the form
-  then reloads and shows the current default for review. A backdated entry can
+  then reloads and shows the current default for review. The write resolves
+  the default again inside its transaction, since editing a default row
+  changes no account version. The form resolves a default the way the server
+  does: in effect on the entry's date, the commodity's own before the global
+  one, latest effective date first, and again when the date changes. Toggling
+  withholding is the owner's visibility choice; it does not make a default
+  amount the owner's. A backdated entry can
   still choose such an account by hand. A choice the picker stops
   offering, for example after a date change, stays visible as unavailable and
   blocks Record; it is never dropped for the server to replace with the

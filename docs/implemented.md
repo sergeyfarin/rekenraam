@@ -117,7 +117,8 @@ pickers before its response returns, dated snapshots before it excepted);
 app `TestDividendDefaultSkipsAnArchivedTarget`,
 `TestDividendDefaultDecisionIsBoundToTheVersionItRead`,
 `TestUnusedDividendDefaultDoesNotBindTheWrite`,
-`TestDividendAccountFromDefaultIsCheckedAtWrite`, API
+`TestDividendAccountFromDefaultIsCheckedAtWrite`,
+`TestDividendDefaultEditedBeforeCommitIsRefused`, API
 `TestDividendAccountFromChangedDefaultIsRefused_HTTP`;
 `dividend-default-choice.test.ts`;
 browser `category-disable-day.spec.ts`.
