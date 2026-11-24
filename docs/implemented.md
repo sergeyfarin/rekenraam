@@ -104,7 +104,8 @@ returns `409 REFERENCE_DATED_CONFLICT` (`category_posting_after_disable`) with
 the earliest such date and writes nothing; only postings the disable itself
 strands count. The category screen explains it in every locale, in the row
 whose action failed, and a picker loaded before the archive drops the category
-at once. The shared rules by operation are in the
+at once. A stored dividend default never applies an archived income or
+withholding account. The shared rules by operation are in the
 [account design](design/accounts-system-design.md#archived-references-by-operation).
 Named cases: API `TestCategoryDisableKeepsItsLastPostingDay`,
 `TestCategoryDisableRefusesALaterPosting`,
@@ -112,7 +113,8 @@ Named cases: API `TestCategoryDisableKeepsItsLastPostingDay`,
 `TestCategoryDisableDayMigrationUpgradesAnExistingDatabase`,
 `TestCategoryDisableIgnoresPostingsAlreadyRefused`; `form-errors.test.ts`,
 `categories.test.ts`, `category-cache.test.ts` (a disable leaves cached
-pickers before its response returns);
+pickers before its response returns, dated snapshots before it excepted);
+app `TestDividendDefaultSkipsAnArchivedTarget`;
 browser `category-disable-day.spec.ts`.
 
 ## Project website source

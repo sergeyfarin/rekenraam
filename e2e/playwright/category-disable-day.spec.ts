@@ -244,3 +244,43 @@ ownedBookTest('[acceptance] overlapping archive refusals stay on their own rows'
   await expect(errorOf(b.id)).toContainText(await formatted(b.date));
   await expect(errorOf(b.id)).not.toContainText(await formatted(a.date));
 });
+
+// A Cash dividend never carries an archived default: the field stays blank
+// and Record dividend waits for an offered account. Otherwise the hidden ID
+// was sent and the ledger accepted it on the disable day (#664 review).
+test('[acceptance] a cash dividend does not apply an archived default income category', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const suffix = Date.now();
+  const today = await ownerToday(page);
+  const opened = addDays(today, -10);
+  const name = `Default shares ${suffix}`;
+  const instrument = await apiJSON<{ id: number; commodity_id: number }>(page, 'POST', '/api/v1/investments/instruments', csrfToken, {
+    commodity_code: `DD${suffix}`, instrument_type: 'stock', display_name: name,
+    quantity_scale: 0, price_scale: 2, quote_commodity_id: currencyID, effective_from: opened
+  });
+  const cash = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/accounts', csrfToken, {
+    name: `Default cash ${suffix}`, account_class: 'asset', account_kind: 'brokerage_cash', default_commodity_id: currencyID,
+    allows_postings: true, opened_on: opened, effective_from: opened
+  });
+  const retired = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/categories', csrfToken, { name: `Default dividends ${suffix}`, category_type: 'income' });
+  const active = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/categories', csrfToken, { name: `Other dividends ${suffix}`, category_type: 'income' });
+  await apiJSON(page, 'POST', '/api/v1/investments/dividend-defaults', csrfToken, {
+    commodity_id: instrument.commodity_id, income_account_id: retired.id, status: 'active', effective_from: opened
+  });
+  await apiJSON(page, 'POST', `/api/v1/categories/${retired.id}/disable`, csrfToken, {});
+
+  await page.goto('/app/ledger/transactions');
+  await openInvestmentActivity(page, 'dividend');
+  const form = page.getByRole('dialog', { name: 'Record dividend' });
+  await form.locator('#div-instrument').fill(name);
+  await page.getByRole('option').filter({ hasText: name }).click();
+  await form.locator('#div-cash-account').selectOption(String(cash.id));
+  await form.locator('#div-amount').fill('3.25');
+  const income = form.locator('#div-income-account');
+  await expect(income.locator(`option[value="${retired.id}"]`)).toHaveCount(0);
+  await expect(income).toHaveValue('');
+  const record = form.getByRole('button', { name: 'Record dividend', exact: true });
+  await expect(record).toBeDisabled();
+  await income.selectOption(String(active.id));
+  await expect(record).toBeEnabled();
+});

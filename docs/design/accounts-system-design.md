@@ -1063,7 +1063,9 @@ history. The rules below are shared; each kind's design links here.
   list before the caller sees the response, cancelling reads already in flight,
   and then refetches them. A picker loaded earlier (the entry editor's
   categories, an investment form's income accounts) therefore never offers the
-  category, even while its refetch is pending (`category-cache.ts`). Accepting a fresh
+  category, even while its refetch is pending (`category-cache.ts`). A dated
+  snapshot from before the disable's effective date keeps it, since the
+  category was open then. Accepting a fresh
   posting dated on or before the disable day is a ledger guarantee for the API
   and for history entry, not a picker choice.
 - **Retained versus new links.** An edit that restates a link the record
@@ -1079,7 +1081,11 @@ history. The rules below are shared; each kind's design links here.
 - **Stored automation targets versus new generation and application.** A
   stored import rule or recurring template keeps naming an archived target and
   stays readable and repairable (#283, #656). Applying an import rule skips it
-  while any target is archived today. Recurring generation validates each
+  while any target is archived today. A stored dividend default is the same
+  kind of target: cash and reinvested dividends and the import dividend review
+  apply its income or withholding account only while that account is not
+  archived today (`applicableDividendDefault`), and the Cash dividend form fills
+  and sends only accounts its pickers offer. Recurring generation validates each
   occurrence on its own date: one dated on or before a category's disable day
   passes the posting rule, and a later one is recorded `blocked`
   ([recurring plan](../plans/recurring-transactions-plan.md)).

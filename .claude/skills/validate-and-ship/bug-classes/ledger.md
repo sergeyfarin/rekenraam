@@ -152,7 +152,11 @@ owner and a posting on an archived category, so a disable or delete is applied t
 every cached category and account list before its response returns, with
 in-flight reads cancelled; invalidating alone leaves the stale row selectable
 until the refetch lands (`category-cache.test.ts`,
-`category-disable-day.spec.ts` with the refetch held). Named checks: `TestCategoryDisableKeepsItsLastPostingDay`,
+`category-disable-day.spec.ts` with the refetch held), leaving dated
+snapshots from before the disable alone. A stored default that names the
+target is applied only while it is not archived, on the server
+(`TestDividendDefaultSkipsAnArchivedTarget`) and in the form, which sends only
+offered IDs: a blank select can still hold a hidden archived ID. Named checks: `TestCategoryDisableKeepsItsLastPostingDay`,
 `TestCategoryDisableRefusesALaterPosting`,
 `TestCategoryDisableDayAllowanceLeavesOtherContracts`,
 `TestCategoryDisableDayMigrationUpgradesAnExistingDatabase`,
