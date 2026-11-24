@@ -585,27 +585,33 @@ type dividendRequest struct {
 	WithholdingValue     *moneyCoefficient     `json:"withholding_value"`
 	WithholdingScale     *int                  `json:"withholding_scale"`
 	WithholdingAccountID *int64                `json:"withholding_account_id"`
-	Memo                 string                `json:"memo"`
-	PayeeID              *int64                `json:"payee_id"`
-	Status               string                `json:"status"`
-	ChangeReason         string                `json:"change_reason"`
+	// IncomeAccountFromDefault / WithholdingAccountFromDefault: the form filled
+	// the account from the stored default (#664 review).
+	IncomeAccountFromDefault      bool   `json:"income_account_from_default"`
+	WithholdingAccountFromDefault bool   `json:"withholding_account_from_default"`
+	Memo                          string `json:"memo"`
+	PayeeID                       *int64 `json:"payee_id"`
+	Status                        string `json:"status"`
+	ChangeReason                  string `json:"change_reason"`
 	reconciliationOverrideFields
 }
 
 type reinvestedDividendRequest struct {
-	TransactionDate  string            `json:"transaction_date"`
-	CommodityID      int64             `json:"commodity_id"`
-	HoldingAccountID int64             `json:"holding_account_id"`
-	IncomeAccountID  *int64            `json:"income_account_id"`
-	QuantityValue    exact.Coefficient `json:"quantity_value"`
-	QuantityScale    int               `json:"quantity_scale"`
-	AmountValue      moneyCoefficient  `json:"amount_value"`
-	AmountScale      int               `json:"amount_scale"`
-	CashCommodityID  int64             `json:"cash_commodity_id"`
-	Memo             string            `json:"memo"`
-	PayeeID          *int64            `json:"payee_id"`
-	Status           string            `json:"status"`
-	ChangeReason     string            `json:"change_reason"`
+	TransactionDate  string `json:"transaction_date"`
+	CommodityID      int64  `json:"commodity_id"`
+	HoldingAccountID int64  `json:"holding_account_id"`
+	IncomeAccountID  *int64 `json:"income_account_id"`
+	// IncomeAccountFromDefault: see dividendRequest (#664 review).
+	IncomeAccountFromDefault bool              `json:"income_account_from_default"`
+	QuantityValue            exact.Coefficient `json:"quantity_value"`
+	QuantityScale            int               `json:"quantity_scale"`
+	AmountValue              moneyCoefficient  `json:"amount_value"`
+	AmountScale              int               `json:"amount_scale"`
+	CashCommodityID          int64             `json:"cash_commodity_id"`
+	Memo                     string            `json:"memo"`
+	PayeeID                  *int64            `json:"payee_id"`
+	Status                   string            `json:"status"`
+	ChangeReason             string            `json:"change_reason"`
 	reconciliationOverrideFields
 	GainImpactAcknowledgement string `json:"gain_impact_acknowledgement,omitempty"`
 }
@@ -2071,6 +2077,8 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "cost basis profile already exists")
 	case errors.Is(err, app.ErrDividendDefaultNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "dividend default not found")
+	case errors.Is(err, app.ErrDividendDefaultChanged):
+		writeAPIError(w, http.StatusConflict, "DIVIDEND_DEFAULT_CHANGED", err.Error())
 	case errors.Is(err, app.ErrInvestmentLotsInsufficient):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "insufficient investment lots")
 	case errors.Is(err, db.ErrAverageCostTransferRequiresPoolAllocation):
@@ -2302,6 +2310,7 @@ func toDividendInput(owner app.Owner, r *http.Request, request dividendRequest) 
 		CashCommodityID: request.CashCommodityID, IncomeAccountID: request.IncomeAccountID, AmountValue: int64(request.AmountValue),
 		AmountScale: request.AmountScale, WithholdingValue: moneyInt64Pointer(request.WithholdingValue), WithholdingScale: request.WithholdingScale,
 		WithholdingAccountID: request.WithholdingAccountID, Memo: request.Memo, PayeeID: request.PayeeID,
+		IncomeAccountFromDefault: request.IncomeAccountFromDefault, WithholdingAccountFromDefault: request.WithholdingAccountFromDefault,
 		Status: request.Status, ChangeReason: request.ChangeReason,
 		ReconciliationOverride: request.checkpointOverride(),
 	}
@@ -2311,7 +2320,8 @@ func toReinvestedDividendInput(owner app.Owner, r *http.Request, request reinves
 	return app.ReinvestedDividendInput{
 		OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
 		TransactionDate: request.TransactionDate, CommodityID: request.CommodityID, HoldingAccountID: request.HoldingAccountID,
-		IncomeAccountID: request.IncomeAccountID, QuantityValue: request.QuantityValue, QuantityScale: request.QuantityScale,
+		IncomeAccountID: request.IncomeAccountID, IncomeAccountFromDefault: request.IncomeAccountFromDefault,
+		QuantityValue: request.QuantityValue, QuantityScale: request.QuantityScale,
 		AmountValue: int64(request.AmountValue), AmountScale: request.AmountScale, CashCommodityID: request.CashCommodityID,
 		Memo: request.Memo, PayeeID: request.PayeeID, Status: request.Status, ChangeReason: request.ChangeReason,
 		ReconciliationOverride: request.checkpointOverride(), GainImpactAcknowledgement: request.GainImpactAcknowledgement,

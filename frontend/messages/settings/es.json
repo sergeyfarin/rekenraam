@@ -168,6 +168,7 @@
   "api_error_transaction_version_stale": "Este asiento cambió en otra pestaña o ventana mientras lo editaba. Vuelva a cargarlo y realice el cambio de nuevo.",
   "api_error_reconciliation_impact_stale": "Las conciliaciones finalizadas que este cambio invalidaría cambiaron después de que las revisara. Revise la lista de nuevo antes de confirmar.",
   "api_error_posting_account_version_stale": "Una cuenta usada por este asiento cambió mientras lo introducía. Vuelva a cargarlo e introdúzcalo de nuevo.",
+  "api_error_dividend_default_changed": "El valor predeterminado de dividendos cambió desde que este formulario lo mostró, o su cuenta se archivó. Revise las cuentas de ingresos y de retención y registre de nuevo.",
   "api_error_network": "No se ha podido contactar con el servidor. Compruebe la conexión y vuelva a intentarlo.",
   "api_error_not_found": "No se ha encontrado el elemento solicitado.",
   "api_error_provider_error": "El proveedor externo ha rechazado la solicitud. Compruebe la conexión y vuelva a intentarlo.",

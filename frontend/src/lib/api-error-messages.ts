@@ -90,6 +90,7 @@ const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   IDEMPOTENCY_KEY_RESULT_UNAVAILABLE: () => m.api_error_idempotency_key_result_unavailable(),
   RECONCILIATION_IMPACT_STALE: () => m.api_error_reconciliation_impact_stale(),
   POSTING_ACCOUNT_VERSION_STALE: () => m.api_error_posting_account_version_stale(),
+  DIVIDEND_DEFAULT_CHANGED: () => m.api_error_dividend_default_changed(),
   RECURRING_TEMPLATE_UNBALANCED: () => m.api_error_recurring_template_unbalanced(),
   RECONCILIATION_START_STALE: () => m.api_error_reconciliation_start_stale(),
   RECURRING_SCHEDULE_INVALID: () => m.api_error_recurring_schedule_invalid(),

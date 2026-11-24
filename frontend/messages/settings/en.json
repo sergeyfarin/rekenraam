@@ -170,6 +170,7 @@
   "api_error_idempotency_key_result_unavailable": "An earlier save of this entry was recorded, but its result is not available yet. Save again in a moment to see it. If it stays unavailable, refresh the list: the entry is already saved, so do not enter it again.",
   "api_error_reconciliation_impact_stale": "The finished reconciliations this change would invalidate changed after you reviewed them. Review the list again before you confirm.",
   "api_error_posting_account_version_stale": "An account used by this entry changed while you were entering it. Reload it and make your entry again.",
+  "api_error_dividend_default_changed": "The dividend default changed since this form showed it, or its account was archived. Check the income and withholding accounts and record again.",
   "api_error_network": "The server could not be reached. Check the connection and try again.",
   "api_error_not_found": "The requested item could not be found.",
   "api_error_provider_error": "The external provider rejected the request. Check the connection and try again.",

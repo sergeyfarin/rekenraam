@@ -101,6 +101,7 @@ ErrorBody:
         - PROVIDER_ERROR
         - EXPORT_SCOPE_UNSUPPORTED
         - QIF_ACCOUNT_UNSUPPORTED
+        - DIVIDEND_DEFAULT_CHANGED
         - INTERNAL_ERROR
     message:
       type: string

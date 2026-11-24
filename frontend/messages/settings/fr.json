@@ -168,6 +168,7 @@
   "api_error_transaction_version_stale": "Cette écriture a été modifiée dans un autre onglet ou une autre fenêtre pendant votre saisie. Rechargez-la et refaites votre modification.",
   "api_error_reconciliation_impact_stale": "Les rapprochements terminés que cette modification invaliderait ont changé depuis votre vérification. Vérifiez à nouveau la liste avant de confirmer.",
   "api_error_posting_account_version_stale": "Un compte utilisé par cette écriture a été modifié pendant votre saisie. Rechargez-la et ressaisissez-la.",
+  "api_error_dividend_default_changed": "Le compte par défaut des dividendes a changé depuis l’affichage du formulaire, ou il a été archivé. Vérifiez les comptes de revenu et de retenue, puis enregistrez à nouveau.",
   "api_error_network": "Le serveur est injoignable. Vérifiez la connexion et réessayez.",
   "api_error_not_found": "L'élément demandé est introuvable.",
   "api_error_provider_error": "Le fournisseur externe a rejeté la demande. Vérifiez la connexion et réessayez.",

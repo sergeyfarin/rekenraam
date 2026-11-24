@@ -161,3 +161,71 @@ func TestUnusedDividendDefaultDoesNotBindTheWrite(t *testing.T) {
 	_, err = f.transactionService.repository.CreateTransactionWithPostWrite(ctx, params, nil)
 	require.NoError(t, err, "neither default target is used by this posting")
 }
+
+// #664 review. An account the request says came from the default is the
+// default's decision, not the owner's: the write requires the default to still
+// apply it, on the server at commit, and refuses when it changed or its account
+// was archived since the form showed it.
+func TestDividendAccountFromDefaultIsCheckedAtWrite(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f := newInvestmentsTestFixture(t)
+	const day, yesterday = "2026-03-01", "2026-02-28"
+	now := func() time.Time { return time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC) }
+	categories := NewCategoryService(db.NewCategoryRepository(f.database), nil)
+	categories.SetNowForTest(now)
+	f.investmentService.SetNowForTest(now)
+	create := func(name string) Category {
+		category, err := categories.CreateCategory(ctx, CreateCategoryInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "category.create", Name: name, CategoryType: "income"})
+		require.NoError(t, err)
+		return category
+	}
+	shown := create("Shown default")
+	saved, err := f.investmentService.SaveDividendDefault(ctx, DividendDefaultInput{
+		OwnerUserID: f.ownerUserID, CommodityID: &f.stockCommodityID, IncomeAccountID: shown.ID, Status: "active", EffectiveFrom: "2026-01-01",
+	})
+	require.NoError(t, err)
+	cash := func(date string) DividendInput {
+		return DividendInput{OwnerUserID: f.ownerUserID, TransactionDate: date, CommodityID: NullableValue(f.stockCommodityID),
+			CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID, IncomeAccountID: &shown.ID, IncomeAccountFromDefault: true,
+			AmountValue: 1000, AmountScale: 2}
+	}
+
+	t.Run("the shown default still applying is accepted and bound to its version", func(t *testing.T) {
+		plan, err := f.investmentService.dividendPlan(ctx, cash(yesterday))
+		require.NoError(t, err)
+		require.Contains(t, plan.AccountRuleDependencies.list(), db.AccountRuleDependency{AccountID: shown.ID, LatestVersionID: accountLatestVersionID(t, f, shown.ID)})
+	})
+
+	t.Run("a default changed since it was shown is refused", func(t *testing.T) {
+		other := create("Newer default")
+		_, err := f.investmentService.SaveDividendDefault(ctx, DividendDefaultInput{DefaultID: saved.ID,
+			OwnerUserID: f.ownerUserID, CommodityID: &f.stockCommodityID, IncomeAccountID: other.ID, Status: "active", EffectiveFrom: "2026-01-01",
+		})
+		require.NoError(t, err)
+		_, err = f.investmentService.Dividend(ctx, cash(yesterday))
+		require.ErrorIs(t, err, ErrDividendDefaultChanged)
+		_, err = acknowledgedReinvestedDividend(ctx, f.investmentService, ReinvestedDividendInput{
+			OwnerUserID: f.ownerUserID, TransactionDate: yesterday, CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
+			IncomeAccountID: &shown.ID, IncomeAccountFromDefault: true,
+			QuantityValue: exact.New(1), QuantityScale: 0, AmountValue: 2500, AmountScale: 2, CashCommodityID: f.eurCommodityID,
+		})
+		require.ErrorIs(t, err, ErrDividendDefaultChanged)
+		_, err = f.investmentService.SaveDividendDefault(ctx, DividendDefaultInput{DefaultID: saved.ID,
+			OwnerUserID: f.ownerUserID, CommodityID: &f.stockCommodityID, IncomeAccountID: shown.ID, Status: "active", EffectiveFrom: "2026-01-01",
+		})
+		require.NoError(t, err)
+	})
+
+	t.Run("a default archived since it was shown is refused on a backdated entry", func(t *testing.T) {
+		_, err := categories.DisableCategory(ctx, CategoryLifecycleInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", CategoryID: shown.ID, EffectiveFrom: day})
+		require.NoError(t, err)
+		_, err = f.investmentService.Dividend(ctx, cash(yesterday))
+		require.ErrorIs(t, err, ErrDividendDefaultChanged)
+
+		chosen := cash(yesterday)
+		chosen.IncomeAccountFromDefault = false
+		_, err = f.investmentService.Dividend(ctx, chosen)
+		require.NoError(t, err, "the owner may still choose the category by hand for a day it was open")
+	})
+}
