@@ -86,6 +86,37 @@ test('a lost activation response shows two-factor as on and leads to new recover
   await expect(notice).toHaveCount(0);
 });
 
+test('a lost activation claims neither on nor off until its status read answers', async ({ page }) => {
+  await openSecurity(page);
+  const secret = await startEnrollment(page);
+  const committed = await dropCommittedResponse(page, ACTIVATE_PATH);
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  let readArrived!: () => void;
+  const arrived = new Promise<void>((resolve) => (readArrived = resolve));
+  await page.route('**/api/v1/auth/mfa', async (route) => {
+    if (!committed() || route.request().method() !== 'GET') return route.continue();
+    readArrived();
+    await held;
+    await route.continue();
+  });
+
+  await page.getByLabel('Code from your app').fill(totpCode(secret, currentStep()));
+  await page.getByRole('button', { name: 'Turn on' }).click();
+  await arrived;
+
+  // The cached status is from before the write; MFA is already active.
+  await expect(page.getByText('Checking status...', { exact: true })).toBeVisible();
+  await expect(page.getByText('Off', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('On', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Turn on' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Set up' })).toHaveCount(0);
+
+  release();
+  await expect(page.getByText('On', { exact: true })).toBeVisible();
+  await expect(page.getByText('recovery codes could not be shown')).toBeVisible();
+});
+
 test('an activation refused before commit keeps the enrollment step', async ({ page }) => {
   await openSecurity(page);
   await startEnrollment(page);
@@ -114,6 +145,14 @@ test('a lost regeneration response warns that the earlier codes may be gone and 
   await expect(notice).toBeVisible();
   expect(committed()).toBe(true);
   await expect(page.locator('#security-mfa-error')).toHaveCount(0);
+
+  // A refused retry replaces nothing, so the saved codes are still invalid:
+  // the warning stays beside the retry's own error.
+  await page.getByLabel('Your password', { exact: true }).fill('wrong-password');
+  await page.getByRole('button', { name: 'New recovery codes' }).click();
+  await expect(page.locator('#security-mfa-error')).toBeVisible();
+  await expect(notice).toBeVisible();
+  await expect(page.getByText(/unused recovery codes remain/)).toHaveCount(0);
 
   // Regenerating again is safe and finally shows a set.
   await page.getByLabel('Your password', { exact: true }).fill(OWNER_PASSWORD);
@@ -229,4 +268,76 @@ test('a lost revoke response shows the token as revoked (#662)', async ({ page }
   await expect(row.getByText('Revoked', { exact: true })).toBeVisible();
   await expect(page.getByText('Token revoked.', { exact: true })).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('a token refresh after a lost create cannot be cancelled by Show more', async ({ page }) => {
+  test.setTimeout(120_000);
+  await ensureBrowserSession(page);
+  const csrfToken = await csrfTokenFor(page);
+  const create = (name: string) => apiJSON<{ credential: { id: number } }>(page, 'POST', TOKENS_PATH, csrfToken, {
+    name, password: OWNER_PASSWORD, scopes: ['ledger:read'], expires_in_days: 30
+  });
+  // More records than one page (50) while staying under the 50 active tokens.
+  const ids: number[] = [];
+  for (let i = 0; i < 50; i++) ids.push((await create(`Synthetic filler ${i}`)).credential.id);
+  for (const id of ids.slice(0, 2)) await apiJSON(page, 'DELETE', `${TOKENS_PATH}/${id}`, csrfToken, undefined, [200, 204]);
+  await create('Synthetic filler 50');
+
+  await page.goto('/app/settings/security');
+  const showMore = page.getByRole('button', { name: 'Show more tokens', exact: true });
+  await expect(showMore).toBeEnabled();
+
+  const committed = await dropCommittedResponse(page, TOKENS_PATH);
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  let readArrived!: () => void;
+  const arrived = new Promise<void>((resolve) => (readArrived = resolve));
+  await page.route(`**${TOKENS_PATH}`, async (route) => {
+    if (!committed() || route.request().method() !== 'GET') return route.fallback();
+    readArrived();
+    await held;
+    await route.fallback();
+  });
+
+  const name = 'Synthetic paged lost-response client';
+  await page.getByLabel('Token name', { exact: true }).fill(name);
+  await page.getByLabel('Confirm your password', { exact: true }).fill(OWNER_PASSWORD);
+  await page.getByRole('button', { name: 'Create token', exact: true }).click();
+  await arrived;
+
+  // Loading the next page now would cancel the refresh that lists the token.
+  await expect(showMore).toBeDisabled();
+  release();
+  const row = page.locator('li').filter({ has: page.getByText(name, { exact: true }) });
+  await expect(row).toBeVisible();
+  await expect(showMore).toBeEnabled();
+  await showMore.click();
+  await expect(page.getByText('Synthetic filler 0', { exact: true })).toBeVisible();
+  await expect(row).toBeVisible();
+});
+
+test('a lost revoke response scrubs the disclosed token it revoked', async ({ page }) => {
+  await ensureBrowserSession(page);
+  await page.goto('/app/settings/security');
+  const name = 'Synthetic disclosed lost-revoke client';
+  await page.getByLabel('Token name', { exact: true }).fill(name);
+  await page.getByLabel('Confirm your password', { exact: true }).fill(OWNER_PASSWORD);
+  await page.getByRole('button', { name: 'Create token', exact: true }).click();
+  const secretField = page.getByLabel('Your new token', { exact: true });
+  await expect(secretField).toBeVisible();
+  const disclosed = await secretField.inputValue();
+
+  const saved = await apiJSON<{ tokens: Array<{ id: number; name: string }> }>(page, 'GET', TOKENS_PATH);
+  const id = saved.tokens.find((token) => token.name === name)!.id;
+  const committed = await dropCommittedResponse(page, `${TOKENS_PATH}/${id}`, 'DELETE');
+  const row = page.locator('li').filter({ has: page.getByText(name, { exact: true }) });
+  await row.getByRole('button', { name: 'Revoke token', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Revoke token', exact: true });
+  await dialog.getByRole('button', { name: 'Revoke token', exact: true }).click();
+
+  await expect(dialog).toHaveCount(0);
+  expect(committed()).toBe(true);
+  await expect(row.getByText('Revoked', { exact: true })).toBeVisible();
+  await expect(secretField).toHaveCount(0);
+  expect(await page.locator('body').innerText()).not.toContain(disclosed);
 });

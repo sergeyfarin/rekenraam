@@ -17,6 +17,7 @@
     regenerateMFARecoveryCodes
   } from '#lib/api/auth.ts';
   import { saveOutcomeUnknown } from '#lib/api/request-key.ts';
+  import { applySavedRead } from '#lib/api/saved-read.ts';
   import { m } from '#lib/paraglide/messages.js';
 
   const queryClient = useQueryClient();
@@ -38,8 +39,15 @@
   let recoveryCodes = $state<string[]>([]);
   // A failed write that hands out recovery codes may still have committed
   // (#661). Once the saved status is read again, these say what the owner
-  // has lost and lead to new codes; regenerating is safe to repeat.
+  // has lost and lead to new codes; regenerating is safe to repeat. The
+  // warning stays through refused retries until a write succeeds: new codes
+  // shown, or MFA turned off.
   let failedCodesWrite = $state<'activate' | 'regenerate' | null>(null);
+  // Whether the current error is the one the warning already explains.
+  let errorExplained = $state(false);
+  // From a failed write until its saved status is read: the cached status may
+  // be from before the write, so the page claims neither state.
+  let statusUnresolved = $state(false);
   // Only from a status that was read successfully: while the read fails, the
   // write's own error stays on screen beside the status error.
   const savedActive = $derived(statusQuery.isSuccess && status === 'active');
@@ -63,9 +71,9 @@
   // write (bug class 86). If that read fails too, the query shows its error
   // rather than the old status.
   async function readSavedStatus() {
+    statusUnresolved = true;
     try {
-      const saved = await getMFAStatus();
-      queryClient.setQueryData(mfaStatusQueryKey, saved);
+      const saved = await applySavedRead(queryClient, mfaStatusQueryKey, getMFAStatus);
       if (saved.status === 'active') {
         // The enrollment it belonged to is finished; drop the shared secret.
         secret = '';
@@ -74,21 +82,26 @@
       }
     } catch {
       await refreshStatus();
+    } finally {
+      statusUnresolved = false;
     }
   }
 
   async function run(action: () => Promise<void>, codesWrite?: 'activate' | 'regenerate') {
     pending = true;
     formError = undefined;
-    failedCodesWrite = null;
+    errorExplained = false;
     try {
       await action();
+      failedCodesWrite = null;
     } catch (error) {
       formError = error;
       // A refused activation can mean an earlier lost one already committed,
-      // so any activation failure checks; a refused regeneration replaced nothing.
+      // so any activation failure checks; a refused regeneration replaced
+      // nothing. Codes never shown after an activation stay the warning.
       if (codesWrite === 'activate' || (codesWrite === 'regenerate' && saveOutcomeUnknown(error))) {
-        failedCodesWrite = codesWrite;
+        if (failedCodesWrite !== 'activate') failedCodesWrite = codesWrite;
+        errorExplained = true;
       }
       await readSavedStatus();
     } finally {
@@ -143,7 +156,7 @@
   <Panel>
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
-        {#if !statusQuery.isError}
+        {#if !statusQuery.isError && !statusUnresolved}
         <StatusBadge tone={status === 'active' ? 'positive' : 'neutral'}>
           {status === 'active' ? m.security_mfa_badge_active() : m.security_mfa_badge_inactive()}
         </StatusBadge>
@@ -156,11 +169,11 @@
       </div>
     </div>
 
-    {#if !activatedWithoutCodes && !codesMaybeReplaced}
+    {#if !errorExplained || !(activatedWithoutCodes || codesMaybeReplaced)}
       <APIFormError error={formError} id="security-mfa-error" />
     {/if}
 
-    {#if statusQuery.isPending}
+    {#if statusQuery.isPending || statusUnresolved}
       <p class="mt-6 text-sm text-muted">{m.security_mfa_loading()}</p>
     {:else if statusQuery.isError}
       <APIFormError error={statusQuery.error} id="security-mfa-status-error" />
