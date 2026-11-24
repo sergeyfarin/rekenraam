@@ -1084,8 +1084,14 @@ history. The rules below are shared; each kind's design links here.
   while any target is archived today. A stored dividend default is the same
   kind of target: cash and reinvested dividends and the import dividend review
   apply its income or withholding account only while that account is not
-  archived today (`applicableDividendDefault`), and the Cash dividend form fills
-  and sends only accounts its pickers offer. Recurring generation validates each
+  archived today (`applicableDividendDefault`). The write is bound to the
+  account version that status was read from, so an archive committed before
+  the write refuses it. The dividend form fills a field from a default only
+  when the account is offered on the entry's date and not archived today, so a
+  backdated entry can still choose it by hand. A choice the picker stops
+  offering, for example after a date change, stays visible as unavailable and
+  blocks Record; it is never dropped for the server to replace with the
+  stored default. Recurring generation validates each
   occurrence on its own date: one dated on or before a category's disable day
   passes the posting rule, and a later one is recorded `blocked`
   ([recurring plan](../plans/recurring-transactions-plan.md)).

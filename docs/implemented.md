@@ -114,7 +114,9 @@ Named cases: API `TestCategoryDisableKeepsItsLastPostingDay`,
 `TestCategoryDisableIgnoresPostingsAlreadyRefused`; `form-errors.test.ts`,
 `categories.test.ts`, `category-cache.test.ts` (a disable leaves cached
 pickers before its response returns, dated snapshots before it excepted);
-app `TestDividendDefaultSkipsAnArchivedTarget`;
+app `TestDividendDefaultSkipsAnArchivedTarget`,
+`TestDividendDefaultDecisionIsBoundToTheVersionItRead`;
+`dividend-default-choice.test.ts`;
 browser `category-disable-day.spec.ts`.
 
 ## Project website source

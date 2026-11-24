@@ -284,3 +284,90 @@ test('[acceptance] a cash dividend does not apply an archived default income cat
   await income.selectOption(String(active.id));
   await expect(record).toBeEnabled();
 });
+
+async function dividendFixture(page: Page) {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const suffix = Date.now();
+  const today = await ownerToday(page);
+  const opened = addDays(today, -10);
+  const name = `Backdated shares ${suffix}`;
+  const instrument = await apiJSON<{ id: number; commodity_id: number }>(page, 'POST', '/api/v1/investments/instruments', csrfToken, {
+    commodity_code: `BD${suffix}`, instrument_type: 'stock', display_name: name,
+    quantity_scale: 0, price_scale: 2, quote_commodity_id: currencyID, effective_from: opened
+  });
+  const holding = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/holding-accounts', csrfToken, {
+    instrument_id: instrument.id, name: `Backdated holding ${suffix}`, opened_on: opened, effective_from: opened
+  });
+  const cash = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/accounts', csrfToken, {
+    name: `Backdated cash ${suffix}`, account_class: 'asset', account_kind: 'brokerage_cash', default_commodity_id: currencyID,
+    allows_postings: true, opened_on: opened, effective_from: opened
+  });
+  const category = (label: string) => apiJSON<{ id: number }>(page, 'POST', '/api/v1/categories', csrfToken, { name: `${label} ${suffix}`, category_type: 'income' });
+  const retired = await category('Retired dividends');
+  const fallback = await category('Fallback dividends');
+  const other = await category('Other dividends');
+  return { csrfToken, currencyID, today, name, instrument, holding, cash, retired, fallback, other };
+}
+
+// A default is applied only while its account is not archived today, even on
+// a backdated entry whose dated picker still offers it; choosing it by hand
+// stays possible there (#664 review).
+test('[acceptance] a backdated cash dividend leaves an archived default for the owner to choose', async ({ page }) => {
+  const f = await dividendFixture(page);
+  await apiJSON(page, 'POST', '/api/v1/investments/dividend-defaults', f.csrfToken, {
+    commodity_id: f.instrument.commodity_id, income_account_id: f.retired.id, status: 'active', effective_from: addDays(f.today, -10)
+  });
+  await apiJSON(page, 'POST', `/api/v1/categories/${f.retired.id}/disable`, f.csrfToken, {});
+
+  await page.goto('/app/ledger/transactions');
+  await openInvestmentActivity(page, 'dividend');
+  const form = page.getByRole('dialog', { name: 'Record dividend' });
+  await form.locator('#div-date').fill(addDays(f.today, -1));
+  await form.locator('#div-instrument').fill(f.name);
+  await page.getByRole('option').filter({ hasText: f.name }).click();
+  await form.locator('#div-cash-account').selectOption(String(f.cash.id));
+  await form.locator('#div-amount').fill('3.25');
+  const income = form.locator('#div-income-account');
+  await expect(income.locator(`option[value="${f.retired.id}"]`)).toHaveCount(1);
+  await expect(income).toHaveValue('');
+  const record = form.getByRole('button', { name: 'Record dividend', exact: true });
+  await expect(record).toBeDisabled();
+  await income.selectOption(String(f.retired.id));
+  await expect(record).toBeEnabled();
+});
+
+// A chosen account the picker stops offering after a date change stays
+// visible as unavailable and blocks Record; it is never dropped for the
+// server to replace with the stored default (#664 review).
+test('[acceptance] a reinvested dividend keeps an unavailable choice visible and blocks Record', async ({ page }) => {
+  const f = await dividendFixture(page);
+  await apiJSON(page, 'POST', '/api/v1/investments/dividend-defaults', f.csrfToken, {
+    commodity_id: f.instrument.commodity_id, income_account_id: f.fallback.id, status: 'active', effective_from: addDays(f.today, -10)
+  });
+  await apiJSON(page, 'POST', `/api/v1/categories/${f.retired.id}/disable`, f.csrfToken, {});
+
+  await page.goto('/app/ledger/transactions');
+  await openInvestmentActivity(page, 'reinvested');
+  const form = page.getByRole('dialog');
+  await form.locator('#div-date').fill(addDays(f.today, -1));
+  await form.locator('#div-instrument').fill(f.name);
+  await page.getByRole('option').filter({ hasText: f.name }).click();
+  await form.locator('#div-holding-account').selectOption(String(f.holding.id));
+  await form.locator('#div-cost-currency').selectOption(String(f.currencyID));
+  await form.locator('#div-quantity').fill('1');
+  await form.locator('#div-amount').fill('25.00');
+  const income = form.locator('#div-income-account');
+  await income.selectOption(String(f.retired.id));
+  const record = form.locator('button[type="submit"]');
+  await expect(record).toBeEnabled();
+
+  await form.locator('#div-date').fill(f.today);
+  await expect(income).toHaveValue(String(f.retired.id));
+  await expect(income.locator('option:checked')).toContainText('not available on this date');
+  await expect(form.locator('#div-income-unavailable')).toBeVisible();
+  await expect(record).toBeDisabled();
+
+  await income.selectOption(String(f.other.id));
+  await expect(form.locator('#div-income-unavailable')).toHaveCount(0);
+  await expect(record).toBeEnabled();
+});
