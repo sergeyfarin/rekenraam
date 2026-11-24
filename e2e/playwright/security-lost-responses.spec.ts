@@ -3,8 +3,10 @@
  *
  * Activating two-factor authentication, regenerating recovery codes and
  * creating a personal access token each return a secret exactly once. Each
- * case forwards the POST to the real app, drops its successful response and
- * checks the page against the saved state. Every test owns its app and
+ * case forwards the write to the real app, drops its successful response and
+ * checks the page against the saved state. Disabling MFA and revoking a token
+ * return no secret, but a repeat is refused, so they re-read the same way
+ * (#662). Every test owns its app and
  * database, so an MFA left on never reaches another spec's sign-in.
  */
 
@@ -21,12 +23,12 @@ const TOKENS_PATH = '/api/v1/auth/tokens';
 
 type MFAStatus = { status: string; recovery_codes_remaining?: number };
 
-/** Commits the POST on the server, then fails it in the browser. */
-async function dropCommittedResponse(page: Page, path: string) {
+/** Commits the write on the server, then fails it in the browser. */
+async function dropCommittedResponse(page: Page, path: string, method = 'POST') {
   // Not `times: 1`: a GET of the same path would use it up.
   let committed = false;
   await page.route(`**${path}`, async (route) => {
-    if (committed || route.request().method() !== 'POST') return route.continue();
+    if (committed || route.request().method() !== method) return route.continue();
     const response = await route.fetch();
     expect(response.ok(), `the forwarded ${path} write must commit`).toBe(true);
     committed = true;
@@ -190,4 +192,41 @@ test('a token create refused before commit adds no row and no notice', async ({ 
   await expect(page.getByText('The token may have been created')).toHaveCount(0);
   await expect(page.getByText(name, { exact: true })).toHaveCount(0);
   await expect(page.getByText('No personal access tokens yet.')).toBeVisible();
+});
+
+test('a lost disable response shows two-factor as off (#662)', async ({ page }) => {
+  await ensureBrowserSession(page);
+  await activateThroughAPI(page);
+  await openSecurity(page);
+  const committed = await dropCommittedResponse(page, '/api/v1/auth/mfa/disable');
+
+  await page.getByLabel('Your password', { exact: true }).fill(OWNER_PASSWORD);
+  await page.getByRole('button', { name: 'Turn off' }).click();
+
+  await expect(page.getByText('Off', { exact: true })).toBeVisible();
+  expect(committed()).toBe(true);
+  expect((await apiJSON<MFAStatus>(page, 'GET', '/api/v1/auth/mfa')).status).toBe('disabled');
+  await expect(page.getByRole('button', { name: 'Set up' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'New recovery codes' })).toHaveCount(0);
+});
+
+test('a lost revoke response shows the token as revoked (#662)', async ({ page }) => {
+  await ensureBrowserSession(page);
+  const name = 'Synthetic lost-revoke client';
+  const { credential } = await apiJSON<{ credential: { id: number } }>(page, 'POST', TOKENS_PATH, await csrfTokenFor(page), {
+    name, password: OWNER_PASSWORD, scopes: ['ledger:read'], expires_in_days: 30
+  });
+  await page.goto('/app/settings/security');
+  const committed = await dropCommittedResponse(page, `${TOKENS_PATH}/${credential.id}`, 'DELETE');
+
+  const row = page.locator('li').filter({ has: page.getByText(name, { exact: true }) });
+  await row.getByRole('button', { name: 'Revoke token', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Revoke token', exact: true });
+  await dialog.getByRole('button', { name: 'Revoke token', exact: true }).click();
+
+  await expect(dialog).toHaveCount(0);
+  expect(committed()).toBe(true);
+  await expect(row.getByText('Revoked', { exact: true })).toBeVisible();
+  await expect(page.getByText('Token revoked.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
 });

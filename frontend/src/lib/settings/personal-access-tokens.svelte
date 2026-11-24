@@ -93,17 +93,26 @@
 
   async function revoke() {
     if (!revokeTarget) return;
+    const target = revokeTarget;
     pending = true;
     error = undefined;
     createOutcomeUnknown = false;
     try {
-      await revokePersonalAccessToken(revokeTarget.id, session.data?.csrf_token ?? '');
+      await revokePersonalAccessToken(target.id, session.data?.csrf_token ?? '');
       secret = '';
       revokeTarget = undefined;
       revoked = true;
       await refresh();
     } catch (cause) {
       error = cause;
+      // A lost response can follow a committed revocation, and a repeat is
+      // refused as not found. Read the list and show what was saved (#662).
+      await refresh();
+      if (credentials.find((credential) => credential.id === target.id)?.revoked_at) {
+        error = undefined;
+        revokeTarget = undefined;
+        revoked = true;
+      }
     } finally {
       pending = false;
     }
