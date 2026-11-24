@@ -1075,7 +1075,51 @@ func (r *InvestmentRepository) ListDividendDefaults(ctx context.Context, bookID 
 }
 
 func (r *InvestmentRepository) ResolveDividendDefault(ctx context.Context, bookID int64, commodityID int64, date string) (DividendDefaultRecord, error) {
-	return scanDividendDefaultRow(r.database.QueryRowContext(ctx, `
+	return resolveDividendDefault(ctx, r.database, bookID, commodityID, date)
+}
+
+// ErrDividendDefaultChanged refuses a dividend that took an account from the
+// stored default when the default no longer applies that account: changed,
+// or its account archived, since the write was prepared or the form showed
+// it (#664 review).
+var ErrDividendDefaultChanged = errors.New("the dividend default changed since it was shown; review the accounts and record again")
+
+// DividendDefaultDependency names the accounts a dividend took from its
+// stored default, by the commodity and date the default was resolved for. A
+// valid field is an account the posting uses that came from the default.
+type DividendDefaultDependency struct {
+	CommodityID          int64
+	Date                 string
+	IncomeAccountID      sql.NullInt64
+	WithholdingAccountID sql.NullInt64
+}
+
+// requireDividendDefaultTx resolves the default again inside the write and
+// refuses if it no longer applies the accounts the dividend took from it. The
+// account-version guard covers an archive; an edit to the default row itself
+// leaves every account version unchanged, so it is checked here (#664 review).
+func requireDividendDefaultTx(ctx context.Context, tx *sql.Tx, bookID int64, dependency *DividendDefaultDependency) error {
+	if dependency == nil {
+		return nil
+	}
+	record, err := resolveDividendDefault(ctx, tx, bookID, dependency.CommodityID, dependency.Date)
+	if errors.Is(err, ErrNotFound) {
+		return ErrDividendDefaultChanged
+	}
+	if err != nil {
+		return err
+	}
+	if dependency.IncomeAccountID.Valid && record.IncomeAccountID != dependency.IncomeAccountID.Int64 {
+		return ErrDividendDefaultChanged
+	}
+	if dependency.WithholdingAccountID.Valid && record.WithholdingAccountID != dependency.WithholdingAccountID {
+		return ErrDividendDefaultChanged
+	}
+	return nil
+}
+
+func resolveDividendDefault(ctx context.Context, queryer rowQueryer, bookID int64, commodityID int64, date string) (DividendDefaultRecord, error) {
+	return scanDividendDefaultRow(queryer.QueryRowContext(ctx, `
 		SELECT id, book_id, commodity_id, income_account_id, withholding_account_id, default_withholding_value,
 			default_withholding_scale, withholding_rate_bps, tax_country_code, tax_treatment, status,
 			effective_from, effective_to, metadata_json, created_at, created_by_user_id, updated_at, updated_by_user_id

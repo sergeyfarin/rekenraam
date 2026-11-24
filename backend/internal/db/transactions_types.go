@@ -276,7 +276,11 @@ type CreateTransactionParams struct {
 	// checks in Spec were decided against. The write transaction refuses the
 	// spec if any of them has been restructured since (T-100).
 	AccountRuleDependencies []AccountRuleDependency
-	InvestmentComponents    []InvestmentComponentSpec
+	// DividendDefault names the accounts a dividend took from its stored
+	// default; the write re-resolves the default and refuses a change (#664
+	// review).
+	DividendDefault      *DividendDefaultDependency
+	InvestmentComponents []InvestmentComponentSpec
 	// Dividend preserves the payment shape independently of optional payer attribution.
 	Dividend *DividendFact
 	// PaymentInLieu names the short holding and ex-date a payment in lieu

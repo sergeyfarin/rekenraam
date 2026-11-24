@@ -105,7 +105,7 @@ func TestDividendDefaultDecisionIsBoundToTheVersionItRead(t *testing.T) {
 		CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID, AmountValue: 1000, AmountScale: 2}
 
 	dependencies := newAccountRuleDependencies()
-	resolved, err := f.investmentService.withDividendDefault(ctx, input, day, dependencies)
+	resolved, _, err := f.investmentService.withDividendDefault(ctx, input, day, dependencies)
 	require.NoError(t, err)
 	require.NotNil(t, resolved.IncomeAccountID)
 	require.Equal(t, income.ID, *resolved.IncomeAccountID)
@@ -228,4 +228,57 @@ func TestDividendAccountFromDefaultIsCheckedAtWrite(t *testing.T) {
 		_, err = f.investmentService.Dividend(ctx, chosen)
 		require.NoError(t, err, "the owner may still choose the category by hand for a day it was open")
 	})
+}
+
+// #664 review. Editing the stored default leaves every account version as it
+// was, so the account guard cannot see it: the write re-resolves the default
+// and refuses when it no longer applies the account the dividend took from it,
+// whether the form marked it or the server filled it in.
+func TestDividendDefaultEditedBeforeCommitIsRefused(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f := newInvestmentsTestFixture(t)
+	now := func() time.Time { return time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC) }
+	categories := NewCategoryService(db.NewCategoryRepository(f.database), nil)
+	categories.SetNowForTest(now)
+	f.investmentService.SetNowForTest(now)
+	create := func(name string) Category {
+		category, err := categories.CreateCategory(ctx, CreateCategoryInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "category.create", Name: name, CategoryType: "income"})
+		require.NoError(t, err)
+		return category
+	}
+	first, second := create("First default"), create("Second default")
+	saved, err := f.investmentService.SaveDividendDefault(ctx, DividendDefaultInput{
+		OwnerUserID: f.ownerUserID, CommodityID: &f.stockCommodityID, IncomeAccountID: first.ID, Status: "active", EffectiveFrom: "2026-01-01",
+	})
+	require.NoError(t, err)
+	point := func(id int64) {
+		t.Helper()
+		_, err := f.investmentService.SaveDividendDefault(ctx, DividendDefaultInput{DefaultID: saved.ID,
+			OwnerUserID: f.ownerUserID, CommodityID: &f.stockCommodityID, IncomeAccountID: id, Status: "active", EffectiveFrom: "2026-01-01",
+		})
+		require.NoError(t, err)
+	}
+
+	for _, test := range []struct {
+		name   string
+		income *int64
+		marked bool
+	}{
+		{"marked by the form", &first.ID, true},
+		{"filled in by the server", nil, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			point(first.ID)
+			params, err := f.investmentService.prepareDividendWrite(ctx, DividendInput{OwnerUserID: f.ownerUserID, TransactionDate: "2026-02-28",
+				CommodityID: NullableValue(f.stockCommodityID), CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
+				IncomeAccountID: test.income, IncomeAccountFromDefault: test.marked, AmountValue: 1000, AmountScale: 2})
+			require.NoError(t, err)
+			require.NotNil(t, params.DividendDefault)
+
+			point(second.ID)
+			_, err = f.transactionService.repository.CreateTransactionWithPostWrite(ctx, params, nil)
+			require.ErrorIs(t, err, ErrDividendDefaultChanged)
+		})
+	}
 }

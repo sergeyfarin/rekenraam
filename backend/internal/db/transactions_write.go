@@ -97,6 +97,9 @@ func createTransactionWithAuditTx(ctx context.Context, tx *sql.Tx, params Create
 	if err := requireAccountRuleDependenciesTx(ctx, tx, params.Spec, params.AccountRuleDependencies); err != nil {
 		return TransactionRecord{}, 0, err
 	}
+	if err := requireDividendDefaultTx(ctx, tx, params.BookID, params.DividendDefault); err != nil {
+		return TransactionRecord{}, 0, err
+	}
 
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
 		BookID:        params.BookID,
