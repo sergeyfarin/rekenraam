@@ -9,6 +9,7 @@
     createPersonalAccessToken, personalAccessTokensQueryKey, personalAccessTokensQueryOptions,
     revokePersonalAccessToken, type PersonalAccessToken, type TokenScope
   } from '#lib/api/auth-tokens.ts';
+  import { saveOutcomeUnknown } from '#lib/api/request-key.ts';
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
 
@@ -26,6 +27,14 @@
   let passwordInput: HTMLInputElement | undefined = $state();
   let pending = $state(false);
   let error = $state<unknown>();
+  // The credential whose one-time token is on screen, so revoking another
+  // token never scrubs it.
+  let disclosedID = $state<number>();
+  // A failed create may have committed a token nobody holds (#661). The page
+  // never says which row that is: a newer row with the same name can come
+  // from another tab, and marking it would lead the owner to revoke a working
+  // token. Only a server-side link to the attempt could tell them apart.
+  let createOutcomeUnknown = $state(false);
   let revoked = $state(false);
   let revokeTarget = $state<PersonalAccessToken>();
   let disclosureGeneration = 0;
@@ -61,6 +70,7 @@
     event.preventDefault();
     pending = true;
     error = undefined;
+    createOutcomeUnknown = false;
     revoked = false;
     secret = '';
     const generation = disclosureGeneration;
@@ -70,31 +80,54 @@
     try {
       const result = await createPersonalAccessToken({ name, password, scopes, expires_in_days: days }, session.data?.csrf_token ?? '');
       // A response delayed beyond navigation must not restore a scrubbed secret.
-      if (generation === disclosureGeneration) secret = result.token;
+      if (generation === disclosureGeneration) {
+        secret = result.token;
+        disclosedID = result.credential.id;
+      }
       name = '';
       await tick();
       secretInput?.focus();
       await refresh();
     } catch (cause) {
       error = cause;
+      // List what was saved, so a committed token whose response was lost is
+      // visible and can be revoked.
+      createOutcomeUnknown = saveOutcomeUnknown(cause);
+      await refresh();
     } finally {
       password = '';
       pending = false;
     }
   }
 
+  // The same for a revocation seen succeed and one found saved after a lost
+  // response: the one-time disclosure of that credential is scrubbed, and
+  // only that one.
+  function confirmRevoked(id: number) {
+    if (id === disclosedID) clearSecrets();
+    revokeTarget = undefined;
+    revoked = true;
+  }
+
   async function revoke() {
     if (!revokeTarget) return;
+    const target = revokeTarget;
     pending = true;
     error = undefined;
+    createOutcomeUnknown = false;
     try {
-      await revokePersonalAccessToken(revokeTarget.id, session.data?.csrf_token ?? '');
-      secret = '';
-      revokeTarget = undefined;
-      revoked = true;
+      await revokePersonalAccessToken(target.id, session.data?.csrf_token ?? '');
+      confirmRevoked(target.id);
       await refresh();
     } catch (cause) {
       error = cause;
+      // A lost response can follow a committed revocation, and a repeat is
+      // refused as not found. Read the list and show what was saved (#662).
+      await refresh();
+      if (credentials.find((credential) => credential.id === target.id)?.revoked_at) {
+        error = undefined;
+        confirmRevoked(target.id);
+      }
     } finally {
       pending = false;
     }
@@ -110,6 +143,7 @@
       <p class="mt-2 max-w-prose text-sm text-muted">{m.security_tokens_hint()}</p>
     </div>
     {#if error && !revokeTarget}<APIFormError {error} />{/if}
+    {#if createOutcomeUnknown && !revokeTarget}<p role="status" class="rounded-(--radius-control) border border-warning/40 bg-warning-soft p-3 text-sm text-foreground">{m.security_tokens_create_outcome_unknown()}</p>{/if}
     {#if revoked}<p role="status" class="text-sm text-foreground">{m.security_tokens_revoked_success()}</p>{/if}
 
     {#if secret}
@@ -168,7 +202,7 @@
           </li>
         {/each}
       </ul>
-      {#if tokens.hasNextPage}<button type="button" class={buttonClass} disabled={tokens.isFetchingNextPage} onclick={() => tokens.fetchNextPage()}>{m.security_tokens_more()}</button>{/if}
+      {#if tokens.hasNextPage}<button type="button" class={buttonClass} disabled={pending || tokens.isFetchingNextPage || tokens.isRefetching} onclick={() => tokens.fetchNextPage({ cancelRefetch: false })}>{m.security_tokens_more()}</button>{/if}
     {/if}
   </div>
 </Panel>

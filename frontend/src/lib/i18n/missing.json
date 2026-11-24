@@ -1,8 +1,8 @@
 {
   "counts": {
-    "es": 191,
-    "fr": 191,
-    "de": 191
+    "es": 195,
+    "fr": 195,
+    "de": 195
   },
   "keys": {
     "es": [
@@ -176,6 +176,10 @@
       "reconciliation_age_out_of_date",
       "reconciliation_age_reconciled",
       "search_editor_open",
+      "security_mfa_activated_codes_lost",
+      "security_mfa_codes_maybe_replaced",
+      "security_mfa_status_retry",
+      "security_tokens_create_outcome_unknown",
       "settings_reconciliation_copy",
       "settings_reconciliation_days_hint",
       "settings_reconciliation_days_label",
@@ -369,6 +373,10 @@
       "reconciliation_age_out_of_date",
       "reconciliation_age_reconciled",
       "search_editor_open",
+      "security_mfa_activated_codes_lost",
+      "security_mfa_codes_maybe_replaced",
+      "security_mfa_status_retry",
+      "security_tokens_create_outcome_unknown",
       "settings_reconciliation_copy",
       "settings_reconciliation_days_hint",
       "settings_reconciliation_days_label",
@@ -562,6 +570,10 @@
       "reconciliation_age_out_of_date",
       "reconciliation_age_reconciled",
       "search_editor_open",
+      "security_mfa_activated_codes_lost",
+      "security_mfa_codes_maybe_replaced",
+      "security_mfa_status_retry",
+      "security_tokens_create_outcome_unknown",
       "settings_reconciliation_copy",
       "settings_reconciliation_days_hint",
       "settings_reconciliation_days_label",
