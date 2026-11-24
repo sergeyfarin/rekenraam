@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 
 	"rekenraam/backend/internal/app"
@@ -174,9 +175,7 @@ func (b *bufferedResponse) Write(data []byte) (int, error) {
 }
 
 func (b *bufferedResponse) flush(w http.ResponseWriter) {
-	for name, values := range b.header {
-		w.Header()[name] = values
-	}
+	maps.Copy(w.Header(), b.header)
 	status := b.status
 	if status == 0 {
 		status = http.StatusOK
