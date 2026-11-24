@@ -87,6 +87,29 @@ describe('request key (#660)', () => {
     expect(requestKey.isUnresolved({ amount: '5.00' })).toBe(false);
   });
 
+  // Review of PR #669, round 3: the write committed, but the server had not
+  // stored its result yet when the retry arrived. Dropping the save then
+  // rebuilt the body without the confirmed override, refused as REUSED.
+  it('keeps the exact save while its committed result is not available yet, then replays it', async () => {
+    const requestKey = new RequestKey();
+    const sent: Array<[string, string]> = [];
+    let calls = 0;
+    const confirmed = async (key: string) => {
+      sent.push(['confirmed', key]);
+      calls += 1;
+      if (calls === 1) throw lost();
+      if (calls === 2) throw new APIClientError({ status: 409, code: 'IDEMPOTENCY_KEY_RESULT_UNAVAILABLE' });
+      return 'replayed';
+    };
+    await expect(requestKey.send({ n: 1 }, confirmed)).rejects.toBeInstanceOf(APIClientError);
+    await expect(requestKey.send({ n: 1 }, async (key) => { sent.push(['rebuilt', key]); })).rejects.toMatchObject({ code: 'IDEMPOTENCY_KEY_RESULT_UNAVAILABLE' });
+    expect(requestKey.isUnresolved({ n: 1 })).toBe(true);
+    await expect(requestKey.send({ n: 1 }, async (key) => { sent.push(['rebuilt', key]); })).resolves.toBe('replayed');
+    expect(sent.map(([what]) => what)).toEqual(['confirmed', 'confirmed', 'confirmed']);
+    expect(new Set(sent.map(([, key]) => key)).size).toBe(1);
+    expect(requestKey.isUnresolved({ n: 1 })).toBe(false);
+  });
+
   it('settles only the refused save, keeping the others', async () => {
     const requestKey = new RequestKey();
     await expect(requestKey.send({ n: 1 }, async () => { throw lost(); })).rejects.toBeInstanceOf(APIClientError);

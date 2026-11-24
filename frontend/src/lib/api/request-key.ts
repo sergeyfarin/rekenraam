@@ -16,7 +16,10 @@ import { APIClientError } from '#lib/api/client.ts';
  * of them it sends that save again instead of the rebuilt one. Under one key
  * at most one of them committed, and none is forgotten until its own outcome
  * is known or the entry is saved: an edited save that also fails leaves the
- * original confirmed save to replay when the owner restores the entry.
+ * original confirmed save to replay when the owner restores the entry. A save
+ * the server reports as committed without a stored result yet
+ * (IDEMPOTENCY_KEY_RESULT_UNAVAILABLE) is kept too: its result is stored
+ * moments later, and only the same bytes under the same key can replay it.
  *
  * Inside a New transaction entry the key lives with the activity's working
  * copy (`useRequestKey`), so closing and reopening an activity keeps it.
@@ -38,7 +41,8 @@ export class RequestKey {
    * Saves the entry with this key: an earlier save of the same entry whose
    * outcome is unknown is sent again as it was, otherwise `save`. Success
    * starts a new entry. A refusal with a code settles only this entry's save:
-   * it wrote nothing, and the other unresolved saves keep theirs. The key is
+   * it wrote nothing, and the other unresolved saves keep theirs. A committed
+   * save whose result is not available yet stays unresolved. The key is
    * kept, including on IDEMPOTENCY_KEY_REUSED: the owner changed an entry
    * whose earlier save was recorded, and is told so rather than handed a key
    * that would record it twice.
@@ -52,7 +56,7 @@ export class RequestKey {
       this.#value = newRequestKey();
       return result;
     } catch (error) {
-      if (saveOutcomeUnknown(error)) this.#unresolved.set(identity, attempt);
+      if (saveOutcomeUnknown(error) || resultNotYetStored(error)) this.#unresolved.set(identity, attempt);
       else this.#unresolved.delete(identity);
       throw error;
     }
@@ -67,6 +71,16 @@ export class RequestKey {
 export function saveOutcomeUnknown(error: unknown): boolean {
   if (!(error instanceof APIClientError)) return true;
   return error.status === 0 || error.status >= 500;
+}
+
+/**
+ * The key's write committed but its response is not stored yet: the request
+ * that committed it is still finishing, or storing failed. Sending the same
+ * bytes again replays the result once it is stored; any other body is refused
+ * as IDEMPOTENCY_KEY_REUSED.
+ */
+function resultNotYetStored(error: unknown): boolean {
+  return error instanceof APIClientError && error.code === 'IDEMPOTENCY_KEY_RESULT_UNAVAILABLE';
 }
 
 function entryIdentity(entry: unknown): string {
