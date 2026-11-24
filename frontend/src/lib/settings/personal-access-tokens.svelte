@@ -4,6 +4,7 @@
   import APIFormError from '#lib/components/api-form-error.svelte';
   import ModalDialog from '#lib/components/modal-dialog.svelte';
   import Panel from '#lib/components/panel.svelte';
+  import StatusBadge from '#lib/components/status-badge.svelte';
   import { authSessionQueryOptions, authenticationEventsQueryKey } from '#lib/api/auth.ts';
   import {
     createPersonalAccessToken, personalAccessTokensQueryKey, personalAccessTokensQueryOptions,
@@ -27,8 +28,19 @@
   let passwordInput: HTMLInputElement | undefined = $state();
   let pending = $state(false);
   let error = $state<unknown>();
-  // A failed create may have committed a token nobody holds (#661).
-  let createOutcomeUnknown = $state(false);
+  // The credential whose one-time token is on screen, so revoking another
+  // token never scrubs it.
+  let disclosedID = $state<number>();
+  // A failed create may have committed a token nobody holds (#661). The page
+  // names it only when the refreshed list shows a credential newer than every
+  // one listed before the attempt, under the submitted name; otherwise an
+  // existing token of the same name could be mistaken for it.
+  let unseenTokenID = $state<number>();
+  const unseenCredential = $derived(
+    credentials.find((credential) => credential.id === unseenTokenID && !credential.revoked_at)
+  );
+  // The outcome is unknown and the list could not settle it.
+  let createOutcomeUnchecked = $state(false);
   let revoked = $state(false);
   let revokeTarget = $state<PersonalAccessToken>();
   let disclosureGeneration = 0;
@@ -64,27 +76,39 @@
     event.preventDefault();
     pending = true;
     error = undefined;
-    createOutcomeUnknown = false;
+    createOutcomeUnchecked = false;
     revoked = false;
     secret = '';
     const generation = disclosureGeneration;
+    const attemptName = name.trim();
+    // The list is newest first, so its first page holds the newest credential.
+    const newestListedID = tokens.isSuccess ? Math.max(0, ...credentials.map((credential) => credential.id)) : undefined;
     const scopes: TokenScope[] = [];
     if (ledger) scopes.push('ledger:read');
     if (reports) scopes.push('reports:read');
     try {
       const result = await createPersonalAccessToken({ name, password, scopes, expires_in_days: days }, session.data?.csrf_token ?? '');
       // A response delayed beyond navigation must not restore a scrubbed secret.
-      if (generation === disclosureGeneration) secret = result.token;
+      if (generation === disclosureGeneration) {
+        secret = result.token;
+        disclosedID = result.credential.id;
+      }
       name = '';
       await tick();
       secretInput?.focus();
       await refresh();
     } catch (cause) {
       error = cause;
-      createOutcomeUnknown = saveOutcomeUnknown(cause);
       // List what was saved, so a committed token whose response was lost is
       // visible and can be revoked.
       await refresh();
+      if (saveOutcomeUnknown(cause)) {
+        const created = newestListedID === undefined || tokens.isError
+          ? undefined
+          : credentials.find((credential) => credential.id > newestListedID && credential.name === attemptName);
+        if (created) unseenTokenID = created.id;
+        else createOutcomeUnchecked = newestListedID === undefined || tokens.isError;
+      }
     } finally {
       password = '';
       pending = false;
@@ -92,9 +116,10 @@
   }
 
   // The same for a revocation seen succeed and one found saved after a lost
-  // response: any one-time disclosure on screen is scrubbed.
-  function confirmRevoked() {
-    clearSecrets();
+  // response: the one-time disclosure of that credential is scrubbed, and
+  // only that one.
+  function confirmRevoked(id: number) {
+    if (id === disclosedID) clearSecrets();
     revokeTarget = undefined;
     revoked = true;
   }
@@ -104,10 +129,10 @@
     const target = revokeTarget;
     pending = true;
     error = undefined;
-    createOutcomeUnknown = false;
+    createOutcomeUnchecked = false;
     try {
       await revokePersonalAccessToken(target.id, session.data?.csrf_token ?? '');
-      confirmRevoked();
+      confirmRevoked(target.id);
       await refresh();
     } catch (cause) {
       error = cause;
@@ -116,7 +141,7 @@
       await refresh();
       if (credentials.find((credential) => credential.id === target.id)?.revoked_at) {
         error = undefined;
-        confirmRevoked();
+        confirmRevoked(target.id);
       }
     } finally {
       pending = false;
@@ -133,7 +158,8 @@
       <p class="mt-2 max-w-prose text-sm text-muted">{m.security_tokens_hint()}</p>
     </div>
     {#if error && !revokeTarget}<APIFormError {error} />{/if}
-    {#if createOutcomeUnknown && !revokeTarget}<p role="status" class="rounded-(--radius-control) border border-warning/40 bg-warning-soft p-3 text-sm text-foreground">{m.security_tokens_create_outcome_unknown()}</p>{/if}
+    {#if unseenCredential && !revokeTarget}<p role="status" class="rounded-(--radius-control) border border-warning/40 bg-warning-soft p-3 text-sm text-foreground break-all">{m.security_tokens_created_unseen({ name: unseenCredential.name })}</p>{/if}
+    {#if createOutcomeUnchecked && !revokeTarget}<p role="status" class="rounded-(--radius-control) border border-warning/40 bg-warning-soft p-3 text-sm text-foreground">{m.security_tokens_create_outcome_unchecked()}</p>{/if}
     {#if revoked}<p role="status" class="text-sm text-foreground">{m.security_tokens_revoked_success()}</p>{/if}
 
     {#if secret}
@@ -182,6 +208,7 @@
             <div class="flex min-w-0 flex-wrap items-start justify-between gap-3">
               <div class="min-w-0 space-y-1 text-sm">
                 <p class="font-semibold break-all text-foreground">{credential.name}</p>
+                {#if credential.id === unseenCredential?.id}<StatusBadge tone="warning">{m.security_tokens_unseen_marker()}</StatusBadge>{/if}
                 <ul class="text-muted">{#each credential.scopes as scope (scope)}<li>{scopeLabel(scope)}</li>{/each}</ul>
                 <p class="text-muted">{m.security_tokens_expires({ when: timestamp(credential.expires_at) })}</p>
                 {#if credential.last_used_at}<p class="text-muted">{m.security_tokens_last_used({ when: timestamp(credential.last_used_at) })}</p>{/if}

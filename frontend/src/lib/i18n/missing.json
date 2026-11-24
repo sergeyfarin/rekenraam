@@ -1,8 +1,8 @@
 {
   "counts": {
-    "es": 194,
-    "fr": 194,
-    "de": 194
+    "es": 197,
+    "fr": 197,
+    "de": 197
   },
   "keys": {
     "es": [
@@ -178,7 +178,10 @@
       "search_editor_open",
       "security_mfa_activated_codes_lost",
       "security_mfa_codes_maybe_replaced",
-      "security_tokens_create_outcome_unknown",
+      "security_mfa_status_retry",
+      "security_tokens_create_outcome_unchecked",
+      "security_tokens_created_unseen",
+      "security_tokens_unseen_marker",
       "settings_reconciliation_copy",
       "settings_reconciliation_days_hint",
       "settings_reconciliation_days_label",
@@ -374,7 +377,10 @@
       "search_editor_open",
       "security_mfa_activated_codes_lost",
       "security_mfa_codes_maybe_replaced",
-      "security_tokens_create_outcome_unknown",
+      "security_mfa_status_retry",
+      "security_tokens_create_outcome_unchecked",
+      "security_tokens_created_unseen",
+      "security_tokens_unseen_marker",
       "settings_reconciliation_copy",
       "settings_reconciliation_days_hint",
       "settings_reconciliation_days_label",
@@ -570,7 +576,10 @@
       "search_editor_open",
       "security_mfa_activated_codes_lost",
       "security_mfa_codes_maybe_replaced",
-      "security_tokens_create_outcome_unknown",
+      "security_mfa_status_retry",
+      "security_tokens_create_outcome_unchecked",
+      "security_tokens_created_unseen",
+      "security_tokens_unseen_marker",
       "settings_reconciliation_copy",
       "settings_reconciliation_days_hint",
       "settings_reconciliation_days_label",
