@@ -260,7 +260,13 @@ committed leads to new recovery codes, a regeneration with an unknown outcome
 says the earlier codes may be gone, a token create lists the unheld token
 (#661, `security-lost-responses.spec.ts`, which also covers MFA disable and
 token revoke). A refusal can mean the lost write committed (activation answers
-"already active"), so read after every failure, not only after a 5xx. The #644
+"already active"), so read after every failure, not only after a 5xx. Until
+that read answers, claim no state from the cache (no On/Off badge), and write
+its answer with `applySavedRead` (`#lib/api/saved-read.ts`), which cancels
+older cached fetches first so a late one cannot restore the pre-write state.
+A warning about lost codes stays through refused retries until a write
+succeeds, and nothing (Show more) may cancel the list refresh that reveals an
+unheld token (#682 review). The #644
 sweep classified 203 write call sites (64 read-only previews); its open
 instances were #660 (creates that duplicate on retry, fixed), #661 (fixed) and
 #662 (rows left on screen after a guarded delete or correction). Not
