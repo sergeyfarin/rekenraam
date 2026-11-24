@@ -173,7 +173,8 @@ When the owner is still on the start form they returned to, show the earlier
 statement's outcome without remounting the form (#647). A failed response
 requires a fresh read of that session before offering to resume it. Status
 retries only read. The same spec covers late success, failed status recovery,
-and a committed Finish with a lost response.
+and a committed Finish with a lost response. One page-level read serves both
+views: on the session itself (#644) writes stay blocked until it answers.
 
 ## 78. A dismissal guard that sees only part of a write chain
 
@@ -234,3 +235,19 @@ response can follow a commit, so read the session again after a failed save
 and bring the native checkbox back in sync before enabling Finish. The real
 app cases in `reconciliation-selection.spec.ts` hold the PATCH, check that no
 checkpoint is written, and cover failures before and after the server commits.
+
+The rule holds for every write: a failed request may have committed. Before
+offering the action again, read the saved state, or make the repeat harmless
+on the server (a version guard as in #296, an "already corrected" refusal, an
+idempotent void). Until the state is known, block writes that conflict with it. Make that
+read a request of its own (`getReconciliationSession`), not
+`queryClient.fetchQuery`. Another session's refresh cancels the cache's reads,
+and a fetch cancelled with `revert` resolves with the cached state from
+before the write, which reads as "still open" (#644 review, `an earlier
+Finish refresh does not cancel a newer Discard recovery`).
+Finish and Discard (#644) and the statement void
+(`reconciliation-void-checkpoint.spec.ts`) follow the rule. The #644 sweep
+classified 203 write call sites (64 read-only previews); its open instances are
+#660 (creates that duplicate on retry), #661 (one-time MFA and token secrets)
+and #662 (rows left on screen after a guarded delete or correction). Not
+mechanically detectable: whether a repeat is harmless depends on the endpoint.

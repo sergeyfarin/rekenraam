@@ -87,3 +87,51 @@ test('a finished statement can be voided from the reconcile screen and reconcile
   // No void action while a session is open.
   await expect(page.getByRole('button', { name: /^Void the statement/ })).toHaveCount(0);
 });
+
+for (const committed of [true, false]) {
+  test(`a failed statement void ${committed ? 'that committed closes as voided' : 'before saving keeps the dialog to retry'} (#644 sweep)`, async ({ page }) => {
+    const { csrfToken, currencyID } = await readyForLedger(page);
+    const suffix = Date.now();
+    const day = todayISO();
+    const cash = await createCashAccount(page, csrfToken, `Lost void ${suffix}`, currencyID, daysFromTodayISO(-2));
+    const session = await apiJSON<{ id: number }>(page, 'POST', `/api/v1/accounts/${cash.id}/reconciliations/start`, csrfToken, {
+      commodity_id: currencyID, source_kind: 'statement', statement_date: day,
+      statement_balance_value: '0', statement_balance_scale: 2
+    });
+    await apiJSON(page, 'POST', `/api/v1/reconciliations/${session.id}/finish`, csrfToken, { change_reason: 'empty statement' });
+    const checkpoints = async () =>
+      (await apiJSON<{ checkpoints: Checkpoint[] }>(page, 'GET', `/api/v1/accounts/${cash.id}/reconciliation-checkpoints`)).checkpoints;
+    let voidRequests = 0;
+    await page.route(`**/api/v1/reconciliation-checkpoints/*/void`, async (route) => {
+      voidRequests++;
+      if (voidRequests > 1) return route.continue();
+      if (committed) expect((await route.fetch()).ok()).toBe(true);
+      await route.abort('failed');
+    });
+
+    await page.goto('/app/ledger/reconcile');
+    await page.getByLabel('Account').selectOption({ label: cash.name });
+    await page.getByRole('button', { name: `Void the statement of ${day}` }).click();
+    const dialog = page.getByRole('alertdialog', { name: 'Void this statement?' });
+    await dialog.getByLabel('Reason for voiding').fill('Lost response');
+    await dialog.getByRole('button', { name: 'Void statement' }).click();
+
+    try {
+      if (committed) {
+        await expect(dialog).toBeHidden();
+        await expect(page.getByRole('status').filter({ hasText: `The statement of ${day} was voided.` })).toBeVisible();
+        await expect(page.getByText('This account has not been reconciled yet.')).toBeVisible();
+      } else {
+        await expect(dialog.getByRole('alert')).toBeVisible();
+        expect((await checkpoints()).map((c) => c.status)).toEqual(['active']);
+        await dialog.getByRole('button', { name: 'Void statement' }).click();
+        await expect(dialog).toBeHidden();
+        await expect(page.getByText('This account has not been reconciled yet.')).toBeVisible();
+      }
+    } finally {
+      await page.unrouteAll({ behavior: 'wait' });
+    }
+    expect(await checkpoints()).toEqual([expect.objectContaining({ status: 'voided', void_reason: 'Lost response' })]);
+    expect(voidRequests).toBe(committed ? 1 : 2);
+  });
+}
