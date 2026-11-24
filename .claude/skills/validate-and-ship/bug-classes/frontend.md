@@ -266,9 +266,11 @@ its answer with `applySavedRead` (`#lib/api/saved-read.ts`), which cancels
 older cached fetches first so a late one cannot restore the pre-write state.
 A warning about lost codes stays through refused retries and failed status
 reads (with a status-only retry) until a write succeeds, and nothing (Show
-more) may cancel the list refresh that reveals an unheld token. Name a row as
-the lost create's only when it is newer than everything listed before the
-attempt and has its name; an older same-name row is a working token. A
+more) may cancel the list refresh that reveals an unheld token. Never name a
+row as the lost create's: a newer row with the same name can come from
+another tab, and marking it leads the owner to revoke a working token. Only
+a server-side link to the attempt could attribute it; the guidance stays
+neutral. A
 revocation scrubs only its own credential's disclosure (#682 review). After a
 reload the page cannot know the codes were replaced (#683). The #644
 sweep classified 203 write call sites (64 read-only previews); its open
