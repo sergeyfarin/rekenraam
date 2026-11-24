@@ -371,3 +371,83 @@ test('[acceptance] a reinvested dividend keeps an unavailable choice visible and
   await expect(form.locator('#div-income-unavailable')).toHaveCount(0);
   await expect(record).toBeEnabled();
 });
+
+// A default that filled the income field is an automatic choice: once its
+// account is archived today, the form takes it back instead of sending it,
+// while a backdated entry can still choose it by hand (#664 review).
+test('[acceptance] a filled-in dividend default archived afterwards is taken back', async ({ page }) => {
+  await page.clock.install();
+  const f = await dividendFixture(page);
+  await apiJSON(page, 'POST', '/api/v1/investments/dividend-defaults', f.csrfToken, {
+    commodity_id: f.instrument.commodity_id, income_account_id: f.retired.id, status: 'active', effective_from: addDays(f.today, -10)
+  });
+
+  await page.goto('/app/ledger/transactions');
+  await openInvestmentActivity(page, 'dividend');
+  const form = page.getByRole('dialog', { name: 'Record dividend' });
+  const yesterday = addDays(f.today, -1);
+  await form.locator('#div-date').fill(yesterday);
+  await form.locator('#div-instrument').fill(f.name);
+  await page.getByRole('option').filter({ hasText: f.name }).click();
+  await form.locator('#div-cash-account').selectOption(String(f.cash.id));
+  await form.locator('#div-amount').fill('3.25');
+  const income = form.locator('#div-income-account');
+  await expect(income).toHaveValue(String(f.retired.id));
+  const record = form.getByRole('button', { name: 'Record dividend', exact: true });
+  await expect(record).toBeEnabled();
+
+  // Archived elsewhere; the owner-day list refreshes once it is stale.
+  await apiJSON(page, 'POST', `/api/v1/categories/${f.retired.id}/disable`, f.csrfToken, {});
+  await page.clock.fastForward('00:15');
+  await form.locator('#div-date').fill(f.today);
+  await expect(income).toHaveValue('');
+  await form.locator('#div-date').fill(yesterday);
+  await expect(income).toHaveValue('');
+  await expect(record).toBeDisabled();
+  await expect(income.locator(`option[value="${f.retired.id}"]`)).toHaveCount(1);
+  await income.selectOption(String(f.retired.id));
+  await expect(record).toBeEnabled();
+});
+
+// A default still loading when the instrument is cleared never applies, and
+// clearing the instrument takes back a default already filled in (#664 review).
+test('[acceptance] a dividend default for a cleared instrument does not apply', async ({ page }) => {
+  const f = await dividendFixture(page);
+  await apiJSON(page, 'POST', '/api/v1/investments/dividend-defaults', f.csrfToken, {
+    commodity_id: f.instrument.commodity_id, income_account_id: f.fallback.id, status: 'active', effective_from: addDays(f.today, -10)
+  });
+  let releaseDefaults: () => void = () => {};
+  const defaultsHeld = new Promise<void>((resolve) => {
+    void page.route('**/api/v1/investments/dividend-defaults', async (route) => {
+      if (route.request().method() !== 'GET') return route.continue();
+      const response = await route.fetch();
+      resolve();
+      await new Promise<void>((release) => { releaseDefaults = release; });
+      await route.fulfill({ response });
+    });
+  });
+
+  await page.goto('/app/ledger/transactions');
+  await openInvestmentActivity(page, 'dividend');
+  const form = page.getByRole('dialog', { name: 'Record dividend' });
+  await form.locator('#div-instrument').fill(f.name);
+  await page.getByRole('option').filter({ hasText: f.name }).click();
+  await defaultsHeld;
+  await form.locator('#div-instrument').fill('');
+  releaseDefaults();
+  await page.unrouteAll({ behavior: 'wait' });
+
+  const income = form.locator('#div-income-account');
+  await form.locator('#div-cash-account').selectOption(String(f.cash.id));
+  await form.locator('#div-amount').fill('3.25');
+  await expect(form.locator(`#div-income-account option[value="${f.fallback.id}"]`)).toHaveCount(1);
+  await expect(income).toHaveValue('');
+  await expect(form.getByRole('button', { name: 'Record dividend', exact: true })).toBeDisabled();
+
+  // Selected again, the default fills in; clearing the instrument takes it back.
+  await form.locator('#div-instrument').fill(f.name);
+  await page.getByRole('option').filter({ hasText: f.name }).click();
+  await expect(income).toHaveValue(String(f.fallback.id));
+  await form.locator('#div-instrument').fill('');
+  await expect(income).toHaveValue('');
+});

@@ -158,7 +158,10 @@ target is applied only while it is not archived, on the server
 (`TestDividendDefaultSkipsAnArchivedTarget`), with the write bound to the
 version the status came from (`TestDividendDefaultDecisionIsBoundToTheVersionItRead`).
 In the form a default is an automatic choice: it checks today's status, not
-only the dated options (`dividend-default-choice.test.ts`). An owner's choice
+only the dated options, belongs to the instrument still selected, and stays
+marked as automatic so a later archive takes it back
+(`dividend-default-choice.test.ts`). On the server only a target the posting
+uses binds the write (`TestUnusedDividendDefaultDoesNotBindTheWrite`). An owner's choice
 that stops being offered stays visible and blocks the save; clearing it
 silently lets the server substitute the stored default. Named checks: `TestCategoryDisableKeepsItsLastPostingDay`,
 `TestCategoryDisableRefusesALaterPosting`,

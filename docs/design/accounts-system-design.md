@@ -1084,11 +1084,16 @@ history. The rules below are shared; each kind's design links here.
   while any target is archived today. A stored dividend default is the same
   kind of target: cash and reinvested dividends and the import dividend review
   apply its income or withholding account only while that account is not
-  archived today (`applicableDividendDefault`). The write is bound to the
-  account version that status was read from, so an archive committed before
-  the write refuses it. The dividend form fills a field from a default only
-  when the account is offered on the entry's date and not archived today, so a
-  backdated entry can still choose it by hand. A choice the picker stops
+  archived today (`applicableDividendDefault`), and only where the posting
+  uses that account (income unless withholding only, withholding when tax is
+  withheld). The write is bound to the version each applied target's status
+  was read from, so an archive committed before the write refuses it, while
+  a change to an unused default does not. The dividend form fills a field from
+  a default only when the account is offered on the entry's date and not
+  archived today, and only for the instrument still selected; it marks the
+  field as filled by default and takes it back if the account is archived
+  later or the instrument changes. A backdated entry can still choose such an
+  account by hand. A choice the picker stops
   offering, for example after a date change, stays visible as unavailable and
   blocks Record; it is never dropped for the server to replace with the
   stored default. Recurring generation validates each
