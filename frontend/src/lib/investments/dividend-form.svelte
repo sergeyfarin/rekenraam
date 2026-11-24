@@ -43,6 +43,7 @@
   import type { GainImpact } from '#lib/api/investments.ts';
 
   import { usePrefilledInstrument } from '#lib/investments/investment-prefill.svelte.ts';
+  import { APIClientError } from '#lib/api/client.ts';
   import { defaultAccountToApply, defaultStillApplies, heldButUnavailable } from '#lib/investments/dividend-default-choice.ts';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
   import { isSettlementAccount } from '#lib/investments/settlement-accounts.ts';
@@ -122,6 +123,11 @@
   // never sent as if the owner had picked it (#664 review).
   let incomeFromDefault = $state(false);
   let withholdingFromDefault = $state(false);
+  // The withholding amount, and the switch that shows it, when a default
+  // filled them in: an instrument change takes them back so the next
+  // instrument's default applies, while an amount the owner typed stays.
+  let withholdingAmountFromDefault = $state(false);
+  let withholdingShownByDefault = $state(false);
   let amountStr = $state('');
   let withholdingStr = $state('');
   let showWithholding = $state(false);
@@ -134,7 +140,7 @@
   let formError = $state<unknown>(undefined);
   // New transaction's working copy and shared context (#508).
   const workingCopy = useEntryActivity(untrack(() => mode === 'reinvested' ? 'reinvested' : mode === 'withholding' ? 'withholding' : 'dividend'), {
-    values: () => ({ exDate, incomeAccountID, withholdingAccountID, incomeFromDefault, withholdingFromDefault, amountStr, withholdingStr, showWithholding, quantityStr }),
+    values: () => ({ exDate, incomeAccountID, withholdingAccountID, incomeFromDefault, withholdingFromDefault, withholdingAmountFromDefault, withholdingShownByDefault, amountStr, withholdingStr, showWithholding, quantityStr }),
     date: () => transactionDate,
     memo: () => memo,
     holding: () => Number(holdingAccountID) || undefined,
@@ -153,6 +159,8 @@
     showWithholding = workingCopy.showWithholding ?? showWithholding;
     incomeFromDefault = workingCopy.incomeFromDefault ?? incomeFromDefault;
     withholdingFromDefault = workingCopy.withholdingFromDefault ?? withholdingFromDefault;
+    withholdingAmountFromDefault = workingCopy.withholdingAmountFromDefault ?? withholdingAmountFromDefault;
+    withholdingShownByDefault = workingCopy.withholdingShownByDefault ?? withholdingShownByDefault;
     quantityStr = workingCopy.quantityStr ?? quantityStr;
   });
   untrack(() => { if (prefill?.currencyID !== undefined && mode === 'reinvested') reinvestmentCurrencyID = String(prefill.currencyID); });
@@ -254,8 +262,12 @@
     pendingDefaultFor = null;
     if (incomeFromDefault) incomeAccountID = '';
     if (withholdingFromDefault) withholdingAccountID = '';
+    if (withholdingAmountFromDefault) withholdingStr = '';
+    if (withholdingShownByDefault) showWithholding = false;
     incomeFromDefault = false;
     withholdingFromDefault = false;
+    withholdingAmountFromDefault = false;
+    withholdingShownByDefault = false;
   }
   $effect(() => {
     const inst = pendingDefaultFor;
@@ -282,6 +294,8 @@
       }
       if (withholdingStr === '' && match.default_withholding_value && match.default_withholding_scale !== undefined) {
         withholdingStr = formatEditableAmount(String(match.default_withholding_value), match.default_withholding_scale);
+        withholdingAmountFromDefault = true;
+        withholdingShownByDefault = !showWithholding;
         showWithholding = true;
       }
     });
@@ -372,12 +386,17 @@
           cash_account_id: Number(cashAccountID),
           cash_commodity_id: cashCommodityID,
           income_account_id: mode !== 'withholding' && chosenIncomeID ? Number(chosenIncomeID) : undefined,
+          // An account a default filled in is the default's choice: the server
+          // checks the default still applies it when it writes (#664 review).
+          income_account_from_default: mode !== 'withholding' && chosenIncomeID && incomeFromDefault ? true : undefined,
           amount_value: amount.value,
           amount_scale: amount.scale,
           withholding_value: withholding?.value,
           withholding_scale: withholding?.scale,
           withholding_account_id:
             (mode === 'withholding' || withholding) && chosenWithholdingID ? Number(chosenWithholdingID) : undefined,
+          withholding_account_from_default:
+            (mode === 'withholding' || withholding) && chosenWithholdingID && withholdingFromDefault ? true : undefined,
           memo: memo.trim() || undefined
         };
 
@@ -394,6 +413,7 @@
           commodity_id: selectedInstrument.commodity_id,
           holding_account_id: Number(holdingAccountID),
           income_account_id: chosenIncomeID ? Number(chosenIncomeID) : undefined,
+          income_account_from_default: chosenIncomeID && incomeFromDefault ? true : undefined,
           quantity_value: quantity.value,
           quantity_scale: quantity.scale,
           amount_value: amount.value,
@@ -435,6 +455,17 @@
   // what was accepted: show the current set instead of a dead end.
   let lastReinvestment: ReinvestedDividendRequest | null = null;
   async function recoverFromRefusal(err: unknown) {
+    // The default changed or its account was archived since the form showed
+    // it: take back what it filled in, reload, and show the current default
+    // for the owner to review before recording again.
+    if (err instanceof APIClientError && err.code === 'DIVIDEND_DEFAULT_CHANGED') {
+      formError = err;
+      const instrument = selectedInstrument;
+      clearInstrumentDefaults();
+      await Promise.allSettled([dividendDefaultsQuery.refetch(), accountsQuery.refetch(), todayAccountsQuery.refetch()]);
+      if (instrument && selectedInstrument?.id === instrument.id) pendingDefaultFor = instrument;
+      return;
+    }
     try {
       if (!isStaleImpactRefusal(err) || !lastReinvestment || !(await reviewReinvestment(lastReinvestment, true))) {
         formError = err;
@@ -740,7 +771,7 @@
   {#if mode === 'cash'}
     <div>
       <label class="flex items-center gap-2 text-sm font-medium text-foreground">
-        <input type="checkbox" bind:checked={showWithholding} class="rounded" />
+        <input type="checkbox" bind:checked={showWithholding} onchange={() => { withholdingShownByDefault = false; withholdingAmountFromDefault = false; }} class="rounded" />
         {m.investments_form_withholding_toggle()}
       </label>
     </div>
@@ -759,6 +790,7 @@
             type="text"
             inputmode="decimal"
             bind:value={withholdingStr}
+            oninput={() => { withholdingAmountFromDefault = false; withholdingShownByDefault = false; }}
             placeholder={formatEditableAmount('0', 2)}
             class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted"
           />
