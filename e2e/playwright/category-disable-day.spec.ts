@@ -1,10 +1,20 @@
 import { readFileSync } from 'node:fs';
-import { expect, test } from './support/fixtures';
+import { expect, test, type Page } from './support/fixtures';
 import { test as ownedBookTest } from './support/owned-book';
 import { apiJSON } from './support/api';
-import { daysFromTodayISO, todayISO } from './support/dates';
 import { createCashAccount, readyForLedger } from './support/ledger';
 import { translationLocales } from './support/locales';
+
+// The owner's day, not the runner's: the server dates the disable on it, and
+// the two differ near midnight or across time zones (#664 review).
+async function ownerToday(page: Page): Promise<string> {
+  return (await apiJSON<{ owner_today: string }>(page, 'GET', '/api/v1/auth/session')).owner_today;
+}
+
+function addDays(day: string, days: number): string {
+  const [year, month, date] = day.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, date + days)).toISOString().slice(0, 10);
+}
 
 type Stored = {
   version_id: number;
@@ -25,7 +35,7 @@ test('[acceptance] an entry dated the disable day still saves with its disabled 
   const description = `Disable day lunch ${suffix}`;
   const account = await createCashAccount(page, csrfToken, `Disable day wallet ${suffix}`, currencyID);
   const category = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/categories', csrfToken, { name, category_type: 'expense' });
-  const today = todayISO();
+  const today = await ownerToday(page);
   const created = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/transactions', csrfToken, {
     transaction_date: today, status: 'posted', description,
     journal_entries: [{ entry_date: today, postings: [
@@ -78,7 +88,7 @@ for (const locale of translationLocales) {
     const name = `Later posting ${suffix}`;
     const account = await createCashAccount(page, csrfToken, `Later wallet ${suffix}`, currencyID);
     const category = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/categories', csrfToken, { name, category_type: 'expense' });
-    const tomorrow = daysFromTodayISO(1);
+    const tomorrow = addDays(await ownerToday(page), 1);
     await apiJSON(page, 'POST', '/api/v1/transactions', csrfToken, {
       transaction_date: tomorrow, status: 'posted', description: `Prepaid ${suffix}`,
       journal_entries: [{ entry_date: tomorrow, postings: [
@@ -103,6 +113,47 @@ for (const locale of translationLocales) {
     await expect(feedback).toContainText(lead.trim());
     await expect(feedback).toContainText(rest.trim());
     await expect(feedback).not.toContainText(tomorrow, { useInnerText: true });
+    // Beside the tapped button, on screen on a phone.
+    await expect(feedback).toBeInViewport();
     expect((await apiJSON<{ status: string }>(page, 'GET', `/api/v1/categories/${category.id}`)).status).toBe('active');
   });
 }
+
+// A picker loaded before the archive must not offer the category afterwards:
+// the shell refreshes every cached category list after a category write. The
+// ledger would accept a posting dated the disable day, so a stale picker is
+// the only thing that would let one through (#664 review).
+test('[acceptance] a category archived in the same tab leaves the entry picker', async ({ page }) => {
+  const { csrfToken } = await readyForLedger(page);
+  const suffix = Date.now();
+  const create = (name: string) => apiJSON<{ id: number }>(page, 'POST', '/api/v1/categories', csrfToken, { name, category_type: 'expense' });
+  const kept = `Picker kept ${suffix}`;
+  const retired = `Picker retired ${suffix}`;
+  const retiredCategory = await create(retired);
+  await create(kept);
+  page.on('dialog', (dialog) => void dialog.accept());
+
+  const pickerOptions = async () => {
+    await page.getByRole('button', { name: 'New transaction' }).click();
+    const form = page.getByRole('region', { name: 'New transaction', exact: true });
+    await form.getByRole('combobox', { name: 'Category', exact: true }).fill(String(suffix));
+    return { form, options: form.getByRole('listbox', { name: 'Category', exact: true }).getByRole('option') };
+  };
+  const tabs = page.getByRole('navigation', { name: 'Ledger pages', exact: true });
+
+  await page.goto('/app/ledger/transactions');
+  let { form, options } = await pickerOptions();
+  await expect(options.filter({ hasText: retired })).toBeVisible();
+  await form.getByRole('combobox', { name: 'Category', exact: true }).fill('');
+  await form.getByRole('button', { name: 'Cancel', exact: true }).first().click();
+  await expect(form).toBeHidden();
+
+  await tabs.getByRole('link', { name: 'Categories', exact: true }).click();
+  await page.getByRole('button', { name: `Archive ${retired}` }).click();
+  await expect.poll(async () => (await apiJSON<{ status: string }>(page, 'GET', `/api/v1/categories/${retiredCategory.id}`)).status).toBe('archived');
+
+  await tabs.getByRole('link', { name: 'Transactions', exact: true }).click();
+  ({ options } = await pickerOptions());
+  await expect(options.filter({ hasText: kept })).toBeVisible();
+  await expect(options.filter({ hasText: retired })).toHaveCount(0);
+});
