@@ -1090,6 +1090,43 @@ func (r *InvestmentRepository) ResolveDividendDefault(ctx context.Context, bookI
 	`, bookID, commodityID, date, date))
 }
 
+// ArchivedAccountIDs reports which of ids are archived on the context's
+// reference date. Applying a stored dividend default skips such a target
+// (#664 review).
+func (r *InvestmentRepository) ArchivedAccountIDs(ctx context.Context, bookID int64, ids []int64) (map[int64]bool, error) {
+	archived := map[int64]bool{}
+	if len(ids) == 0 {
+		return archived, nil
+	}
+	args := []any{bookID}
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	rows, err := r.database.QueryContext(ctx, `
+		SELECT account.id
+		FROM accounts account
+		JOIN `+CurrentReferenceVersions(ctx, "account")+` version ON version.account_id = account.id
+		WHERE account.book_id = ?
+			AND account.id IN (`+strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")+`)
+			AND version.status = 'archived'
+	`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("read archived accounts: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan archived account: %w", err)
+		}
+		archived[id] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read archived accounts: %w", err)
+	}
+	return archived, nil
+}
+
 func (r *InvestmentRepository) SaveDividendDefault(ctx context.Context, params SaveDividendDefaultParams) (DividendDefaultRecord, error) {
 	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {

@@ -1825,15 +1825,49 @@ func (s *InvestmentService) dividendWithPostWrite(ctx context.Context, input Div
 	return s.dividend(ctx, input, postWrite)
 }
 
+// applicableDividendDefault resolves the stored dividend default for a date
+// and leaves out a target archived today. A default is a stored automation
+// target: it stays saved and repairable, but applying it skips an archived
+// target, as import rules do (accounts-system-design.md, archived references
+// by operation). A category disabled on D still accepts postings dated D, so
+// applying it would otherwise post there without the owner naming it (#664
+// review). A cleared income target is 0; a cleared withholding target is
+// invalid.
+func (s *InvestmentService) applicableDividendDefault(ctx context.Context, commodityID int64, date string) (db.DividendDefaultRecord, error) {
+	record, err := s.repository.ResolveDividendDefault(ctx, BookID, commodityID, date)
+	if err != nil {
+		return db.DividendDefaultRecord{}, err
+	}
+	ctx, err = s.settings.referenceContext(ctx, s.now())
+	if err != nil {
+		return db.DividendDefaultRecord{}, err
+	}
+	targets := []int64{record.IncomeAccountID}
+	if record.WithholdingAccountID.Valid {
+		targets = append(targets, record.WithholdingAccountID.Int64)
+	}
+	archived, err := s.repository.ArchivedAccountIDs(ctx, BookID, targets)
+	if err != nil {
+		return db.DividendDefaultRecord{}, err
+	}
+	if archived[record.IncomeAccountID] {
+		record.IncomeAccountID = 0
+	}
+	if record.WithholdingAccountID.Valid && archived[record.WithholdingAccountID.Int64] {
+		record.WithholdingAccountID = sql.NullInt64{}
+	}
+	return record, nil
+}
+
 func (s *InvestmentService) dividendPlan(ctx context.Context, input DividendInput) (investmentTransactionPlan, error) {
 	date, err := validateDividendInput(input)
 	if err != nil {
 		return investmentTransactionPlan{}, err
 	}
 	if input.CommodityID.Value != nil && (input.IncomeAccountID == nil || input.WithholdingAccountID == nil) {
-		defaultRecord, err := s.repository.ResolveDividendDefault(ctx, BookID, *input.CommodityID.Value, date)
+		defaultRecord, err := s.applicableDividendDefault(ctx, *input.CommodityID.Value, date)
 		if err == nil {
-			if input.IncomeAccountID == nil {
+			if input.IncomeAccountID == nil && defaultRecord.IncomeAccountID > 0 {
 				input.IncomeAccountID = &defaultRecord.IncomeAccountID
 			}
 			if input.WithholdingAccountID == nil && defaultRecord.WithholdingAccountID.Valid {
@@ -1996,7 +2030,7 @@ func (s *InvestmentService) reinvestedDividendPlanAs(ctx context.Context, input 
 	if input.IncomeAccountID != nil {
 		incomeAccountID = *input.IncomeAccountID
 	} else {
-		defaultRecord, err := s.repository.ResolveDividendDefault(ctx, BookID, input.CommodityID, date)
+		defaultRecord, err := s.applicableDividendDefault(ctx, input.CommodityID, date)
 		if err == nil {
 			incomeAccountID = defaultRecord.IncomeAccountID
 		} else if !errors.Is(err, db.ErrNotFound) {
