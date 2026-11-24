@@ -9,6 +9,7 @@
     createPersonalAccessToken, personalAccessTokensQueryKey, personalAccessTokensQueryOptions,
     revokePersonalAccessToken, type PersonalAccessToken, type TokenScope
   } from '#lib/api/auth-tokens.ts';
+  import { saveOutcomeUnknown } from '#lib/api/request-key.ts';
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
 
@@ -26,6 +27,8 @@
   let passwordInput: HTMLInputElement | undefined = $state();
   let pending = $state(false);
   let error = $state<unknown>();
+  // A failed create may have committed a token nobody holds (#661).
+  let createOutcomeUnknown = $state(false);
   let revoked = $state(false);
   let revokeTarget = $state<PersonalAccessToken>();
   let disclosureGeneration = 0;
@@ -61,6 +64,7 @@
     event.preventDefault();
     pending = true;
     error = undefined;
+    createOutcomeUnknown = false;
     revoked = false;
     secret = '';
     const generation = disclosureGeneration;
@@ -77,6 +81,10 @@
       await refresh();
     } catch (cause) {
       error = cause;
+      createOutcomeUnknown = saveOutcomeUnknown(cause);
+      // List what was saved, so a committed token whose response was lost is
+      // visible and can be revoked.
+      await refresh();
     } finally {
       password = '';
       pending = false;
@@ -87,6 +95,7 @@
     if (!revokeTarget) return;
     pending = true;
     error = undefined;
+    createOutcomeUnknown = false;
     try {
       await revokePersonalAccessToken(revokeTarget.id, session.data?.csrf_token ?? '');
       secret = '';
@@ -110,6 +119,7 @@
       <p class="mt-2 max-w-prose text-sm text-muted">{m.security_tokens_hint()}</p>
     </div>
     {#if error && !revokeTarget}<APIFormError {error} />{/if}
+    {#if createOutcomeUnknown && !revokeTarget}<p role="status" class="rounded-(--radius-control) border border-warning/40 bg-warning-soft p-3 text-sm text-foreground">{m.security_tokens_create_outcome_unknown()}</p>{/if}
     {#if revoked}<p role="status" class="text-sm text-foreground">{m.security_tokens_revoked_success()}</p>{/if}
 
     {#if secret}

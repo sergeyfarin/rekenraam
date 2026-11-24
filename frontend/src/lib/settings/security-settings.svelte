@@ -3,6 +3,7 @@
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import KeyRound from '@lucide/svelte/icons/key-round';
   import APIFormError from '#lib/components/api-form-error.svelte';
+  import { autofocus } from '#lib/components/autofocus.ts';
   import Panel from '#lib/components/panel.svelte';
   import StatusBadge from '#lib/components/status-badge.svelte';
   import {
@@ -10,10 +11,12 @@
     authSessionQueryOptions,
     disableMFA,
     enrollMFATOTP,
+    getMFAStatus,
     mfaStatusQueryKey,
     mfaStatusQueryOptions,
     regenerateMFARecoveryCodes
   } from '#lib/api/auth.ts';
+  import { saveOutcomeUnknown } from '#lib/api/request-key.ts';
   import { m } from '#lib/paraglide/messages.js';
 
   const queryClient = useQueryClient();
@@ -33,6 +36,15 @@
   let secret = $state('');
   let otpauthURI = $state('');
   let recoveryCodes = $state<string[]>([]);
+  // A failed write that hands out recovery codes may still have committed
+  // (#661). Once the saved status is read again, these say what the owner
+  // has lost and lead to new codes; regenerating is safe to repeat.
+  let failedCodesWrite = $state<'activate' | 'regenerate' | null>(null);
+  // Only from a status that was read successfully: while the read fails, the
+  // write's own error stays on screen beside the status error.
+  const savedActive = $derived(statusQuery.isSuccess && status === 'active');
+  const activatedWithoutCodes = $derived(failedCodesWrite === 'activate' && savedActive);
+  const codesMaybeReplaced = $derived(failedCodesWrite === 'regenerate' && savedActive);
 
   const inputClass =
     'mt-1.5 h-10 w-full rounded-(--radius-control) border border-border bg-control px-3 text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted focus:border-accent disabled:cursor-not-allowed disabled:opacity-70';
@@ -46,13 +58,39 @@
     await queryClient.invalidateQueries({ queryKey: mfaStatusQueryKey });
   }
 
-  async function run(action: () => Promise<void>) {
+  // After a failed write, read the saved status as a request of its own: a
+  // cached refetch can be cancelled and revert to the status from before the
+  // write (bug class 86). If that read fails too, the query shows its error
+  // rather than the old status.
+  async function readSavedStatus() {
+    try {
+      const saved = await getMFAStatus();
+      queryClient.setQueryData(mfaStatusQueryKey, saved);
+      if (saved.status === 'active') {
+        // The enrollment it belonged to is finished; drop the shared secret.
+        secret = '';
+        otpauthURI = '';
+        code = '';
+      }
+    } catch {
+      await refreshStatus();
+    }
+  }
+
+  async function run(action: () => Promise<void>, codesWrite?: 'activate' | 'regenerate') {
     pending = true;
     formError = undefined;
+    failedCodesWrite = null;
     try {
       await action();
     } catch (error) {
       formError = error;
+      // A refused activation can mean an earlier lost one already committed,
+      // so any activation failure checks; a refused regeneration replaced nothing.
+      if (codesWrite === 'activate' || (codesWrite === 'regenerate' && saveOutcomeUnknown(error))) {
+        failedCodesWrite = codesWrite;
+      }
+      await readSavedStatus();
     } finally {
       pending = false;
     }
@@ -78,7 +116,7 @@
       secret = '';
       otpauthURI = '';
       await refreshStatus();
-    });
+    }, 'activate');
   }
 
   async function handleDisable() {
@@ -97,7 +135,7 @@
       recoveryCodes = result.recovery_codes;
       password = '';
       await refreshStatus();
-    });
+    }, 'regenerate');
   }
 </script>
 
@@ -105,9 +143,11 @@
   <Panel>
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
+        {#if !statusQuery.isError}
         <StatusBadge tone={status === 'active' ? 'positive' : 'neutral'}>
           {status === 'active' ? m.security_mfa_badge_active() : m.security_mfa_badge_inactive()}
         </StatusBadge>
+        {/if}
         <h2 class="mt-3 flex items-center gap-2 text-lg font-semibold tracking-tight text-balance">
           <ShieldCheck size={20} aria-hidden="true" />
           {m.security_mfa_title()}
@@ -116,7 +156,9 @@
       </div>
     </div>
 
-    <APIFormError error={formError} id="security-mfa-error" />
+    {#if !activatedWithoutCodes && !codesMaybeReplaced}
+      <APIFormError error={formError} id="security-mfa-error" />
+    {/if}
 
     {#if statusQuery.isPending}
       <p class="mt-6 text-sm text-muted">{m.security_mfa_loading()}</p>
@@ -142,7 +184,7 @@
           {m.security_mfa_recovery_dismiss()}
         </button>
       </div>
-    {:else if secret}
+    {:else if secret && status !== 'active'}
       <div class="mt-6 space-y-4">
         <h3 class="text-sm font-semibold text-foreground">{m.security_mfa_enroll_step_title()}</h3>
         <p class="max-w-prose text-sm text-muted">{m.security_mfa_enroll_step_hint()}</p>
@@ -177,15 +219,22 @@
       </div>
     {:else if status === 'active'}
       <div class="mt-6 space-y-6">
-        <p class="text-sm text-foreground">
-          {m.security_mfa_codes_remaining({ count: statusQuery.data?.recovery_codes_remaining ?? 0 })}
-        </p>
+        {#if activatedWithoutCodes || codesMaybeReplaced}
+          <p role="alert" class="max-w-prose rounded-(--radius-control) border border-warning/40 bg-warning-soft p-3 text-sm text-foreground">
+            {activatedWithoutCodes ? m.security_mfa_activated_codes_lost() : m.security_mfa_codes_maybe_replaced()}
+          </p>
+        {:else}
+          <p class="text-sm text-foreground">
+            {m.security_mfa_codes_remaining({ count: statusQuery.data?.recovery_codes_remaining ?? 0 })}
+          </p>
+        {/if}
 
         <form class="grid max-w-sm gap-3" onsubmit={handleRegenerate}>
           <label>
             <span class={labelClass}>{m.security_mfa_password_label()}</span>
             <input
               bind:value={password}
+              {@attach activatedWithoutCodes && autofocus}
               class={inputClass}
               type="password"
               autocomplete="current-password"
