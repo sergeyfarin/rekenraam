@@ -1090,41 +1090,51 @@ func (r *InvestmentRepository) ResolveDividendDefault(ctx context.Context, bookI
 	`, bookID, commodityID, date, date))
 }
 
-// ArchivedAccountIDs reports which of ids are archived on the context's
-// reference date. Applying a stored dividend default skips such a target
-// (#664 review).
-func (r *InvestmentRepository) ArchivedAccountIDs(ctx context.Context, bookID int64, ids []int64) (map[int64]bool, error) {
-	archived := map[int64]bool{}
+// AccountLifecycleState is an account's status on the context's reference
+// date with its latest version, read in one statement so a decision made on
+// the status can be bound to that version.
+type AccountLifecycleState struct {
+	Status          string
+	LatestVersionID int64
+}
+
+// AccountLifecycleStates reads ids' status as of the context's reference date
+// and their latest version. Applying a stored dividend default skips an
+// archived target and binds the write to the version it decided on (#664
+// review).
+func (r *InvestmentRepository) AccountLifecycleStates(ctx context.Context, bookID int64, ids []int64) (map[int64]AccountLifecycleState, error) {
+	states := map[int64]AccountLifecycleState{}
 	if len(ids) == 0 {
-		return archived, nil
+		return states, nil
 	}
 	args := []any{bookID}
 	for _, id := range ids {
 		args = append(args, id)
 	}
 	rows, err := r.database.QueryContext(ctx, `
-		SELECT account.id
+		SELECT account.id, version.status,
+			(SELECT MAX(latest.id) FROM account_versions latest WHERE latest.account_id = account.id)
 		FROM accounts account
 		JOIN `+CurrentReferenceVersions(ctx, "account")+` version ON version.account_id = account.id
 		WHERE account.book_id = ?
 			AND account.id IN (`+strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")+`)
-			AND version.status = 'archived'
 	`, args...)
 	if err != nil {
-		return nil, fmt.Errorf("read archived accounts: %w", err)
+		return nil, fmt.Errorf("read account lifecycle states: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("scan archived account: %w", err)
+		var state AccountLifecycleState
+		if err := rows.Scan(&id, &state.Status, &state.LatestVersionID); err != nil {
+			return nil, fmt.Errorf("scan account lifecycle state: %w", err)
 		}
-		archived[id] = true
+		states[id] = state
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("read archived accounts: %w", err)
+		return nil, fmt.Errorf("read account lifecycle states: %w", err)
 	}
-	return archived, nil
+	return states, nil
 }
 
 func (r *InvestmentRepository) SaveDividendDefault(ctx context.Context, params SaveDividendDefaultParams) (DividendDefaultRecord, error) {

@@ -82,3 +82,42 @@ func TestDividendDefaultSkipsAnArchivedTarget(t *testing.T) {
 		assert.Contains(t, accounts, income.ID)
 	})
 }
+
+// #664 review. The default's target is decided on the status read with it;
+// an archive committed between that read and the role check must refuse the
+// write, not pass it because the role check saw the newer version first.
+func TestDividendDefaultDecisionIsBoundToTheVersionItRead(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f := newInvestmentsTestFixture(t)
+	const day = "2026-03-01"
+	now := func() time.Time { return time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC) }
+	categories := NewCategoryService(db.NewCategoryRepository(f.database), nil)
+	categories.SetNowForTest(now)
+	f.investmentService.SetNowForTest(now)
+	income, err := categories.CreateCategory(ctx, CreateCategoryInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "category.create", Name: "Dividends", CategoryType: "income"})
+	require.NoError(t, err)
+	_, err = f.investmentService.SaveDividendDefault(ctx, DividendDefaultInput{
+		OwnerUserID: f.ownerUserID, CommodityID: &f.stockCommodityID, IncomeAccountID: income.ID, Status: "active", EffectiveFrom: "2026-01-01",
+	})
+	require.NoError(t, err)
+	input := DividendInput{OwnerUserID: f.ownerUserID, TransactionDate: day, CommodityID: NullableValue(f.stockCommodityID),
+		CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID, AmountValue: 1000, AmountScale: 2}
+
+	dependencies := newAccountRuleDependencies()
+	resolved, err := f.investmentService.withDividendDefault(ctx, input, day, dependencies)
+	require.NoError(t, err)
+	require.NotNil(t, resolved.IncomeAccountID)
+	require.Equal(t, income.ID, *resolved.IncomeAccountID)
+
+	// The archive lands between the default decision and the role check.
+	_, err = categories.DisableCategory(ctx, CategoryLifecycleInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", CategoryID: income.ID, EffectiveFrom: day})
+	require.NoError(t, err)
+
+	plan, err := f.investmentService.dividendPlanFor(ctx, resolved, day, dependencies)
+	require.NoError(t, err, "the disable day still accepts the posting on its own")
+	params, err := f.transactionService.prepareCreateTransactionForWriteCarrying(ctx, plan.Create, plan.AccountRuleDependencies)
+	require.NoError(t, err)
+	_, err = f.transactionService.repository.CreateTransactionWithPostWrite(ctx, params, nil)
+	require.ErrorIs(t, err, db.ErrPostingAccountVersionStale)
+}

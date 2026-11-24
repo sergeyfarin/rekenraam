@@ -1832,8 +1832,10 @@ func (s *InvestmentService) dividendWithPostWrite(ctx context.Context, input Div
 // by operation). A category disabled on D still accepts postings dated D, so
 // applying it would otherwise post there without the owner naming it (#664
 // review). A cleared income target is 0; a cleared withholding target is
-// invalid.
-func (s *InvestmentService) applicableDividendDefault(ctx context.Context, commodityID int64, date string) (db.DividendDefaultRecord, error) {
+// invalid. Each target kept is recorded in dependencies at the version its
+// status was read from, so an archive committed before the write refuses it
+// rather than passing the later role check (#664 review); a preview passes nil.
+func (s *InvestmentService) applicableDividendDefault(ctx context.Context, commodityID int64, date string, dependencies *accountRuleDependencies) (db.DividendDefaultRecord, error) {
 	record, err := s.repository.ResolveDividendDefault(ctx, BookID, commodityID, date)
 	if err != nil {
 		return db.DividendDefaultRecord{}, err
@@ -1846,14 +1848,22 @@ func (s *InvestmentService) applicableDividendDefault(ctx context.Context, commo
 	if record.WithholdingAccountID.Valid {
 		targets = append(targets, record.WithholdingAccountID.Int64)
 	}
-	archived, err := s.repository.ArchivedAccountIDs(ctx, BookID, targets)
+	states, err := s.repository.AccountLifecycleStates(ctx, BookID, targets)
 	if err != nil {
 		return db.DividendDefaultRecord{}, err
 	}
-	if archived[record.IncomeAccountID] {
+	keep := func(id int64) bool {
+		state := states[id]
+		if state.Status == "archived" {
+			return false
+		}
+		dependencies.observe(db.PostingAccountRule{AccountID: id, LatestVersionID: state.LatestVersionID})
+		return true
+	}
+	if !keep(record.IncomeAccountID) {
 		record.IncomeAccountID = 0
 	}
-	if record.WithholdingAccountID.Valid && archived[record.WithholdingAccountID.Int64] {
+	if record.WithholdingAccountID.Valid && !keep(record.WithholdingAccountID.Int64) {
 		record.WithholdingAccountID = sql.NullInt64{}
 	}
 	return record, nil
@@ -1864,19 +1874,39 @@ func (s *InvestmentService) dividendPlan(ctx context.Context, input DividendInpu
 	if err != nil {
 		return investmentTransactionPlan{}, err
 	}
-	if input.CommodityID.Value != nil && (input.IncomeAccountID == nil || input.WithholdingAccountID == nil) {
-		defaultRecord, err := s.applicableDividendDefault(ctx, *input.CommodityID.Value, date)
-		if err == nil {
-			if input.IncomeAccountID == nil && defaultRecord.IncomeAccountID > 0 {
-				input.IncomeAccountID = &defaultRecord.IncomeAccountID
-			}
-			if input.WithholdingAccountID == nil && defaultRecord.WithholdingAccountID.Valid {
-				input.WithholdingAccountID = &defaultRecord.WithholdingAccountID.Int64
-			}
-		} else if !errors.Is(err, db.ErrNotFound) {
-			return investmentTransactionPlan{}, fmt.Errorf("resolve dividend default: %w", err)
-		}
+	dependencies := newAccountRuleDependencies()
+	input, err = s.withDividendDefault(ctx, input, date, dependencies)
+	if err != nil {
+		return investmentTransactionPlan{}, err
 	}
+	return s.dividendPlanFor(ctx, input, date, dependencies)
+}
+
+// withDividendDefault fills the accounts a cash dividend omits from the
+// applicable default, recording each one's version in dependencies.
+func (s *InvestmentService) withDividendDefault(ctx context.Context, input DividendInput, date string, dependencies *accountRuleDependencies) (DividendInput, error) {
+	if input.CommodityID.Value == nil || (input.IncomeAccountID != nil && input.WithholdingAccountID != nil) {
+		return input, nil
+	}
+	defaultRecord, err := s.applicableDividendDefault(ctx, *input.CommodityID.Value, date, dependencies)
+	if errors.Is(err, db.ErrNotFound) {
+		return input, nil
+	}
+	if err != nil {
+		return input, fmt.Errorf("resolve dividend default: %w", err)
+	}
+	if input.IncomeAccountID == nil && defaultRecord.IncomeAccountID > 0 {
+		input.IncomeAccountID = &defaultRecord.IncomeAccountID
+	}
+	if input.WithholdingAccountID == nil && defaultRecord.WithholdingAccountID.Valid {
+		input.WithholdingAccountID = &defaultRecord.WithholdingAccountID.Int64
+	}
+	return input, nil
+}
+
+// dividendPlanFor plans a cash dividend whose defaults are already applied;
+// dependencies already holds the versions those defaults were decided on.
+func (s *InvestmentService) dividendPlanFor(ctx context.Context, input DividendInput, date string, dependencies *accountRuleDependencies) (investmentTransactionPlan, error) {
 	incomeAccountID := int64(0)
 	if input.IncomeAccountID != nil {
 		incomeAccountID = *input.IncomeAccountID
@@ -1884,7 +1914,6 @@ func (s *InvestmentService) dividendPlan(ctx context.Context, input DividendInpu
 	if !input.WithholdingOnly && incomeAccountID <= 0 {
 		return investmentTransactionPlan{}, ValidationError{Message: "dividend income account is required"}
 	}
-	dependencies := newAccountRuleDependencies()
 	if err := s.validateDividendRoles(ctx, input, date, incomeAccountID, dependencies); err != nil {
 		return investmentTransactionPlan{}, err
 	}
@@ -2026,11 +2055,12 @@ func (s *InvestmentService) reinvestedDividendPlanAs(ctx context.Context, input 
 	if err != nil {
 		return investmentTransactionPlan{}, err
 	}
+	dependencies := newAccountRuleDependencies()
 	incomeAccountID := int64(0)
 	if input.IncomeAccountID != nil {
 		incomeAccountID = *input.IncomeAccountID
 	} else {
-		defaultRecord, err := s.applicableDividendDefault(ctx, input.CommodityID, date)
+		defaultRecord, err := s.applicableDividendDefault(ctx, input.CommodityID, date, dependencies)
 		if err == nil {
 			incomeAccountID = defaultRecord.IncomeAccountID
 		} else if !errors.Is(err, db.ErrNotFound) {
@@ -2040,7 +2070,6 @@ func (s *InvestmentService) reinvestedDividendPlanAs(ctx context.Context, input 
 	if incomeAccountID <= 0 {
 		return investmentTransactionPlan{}, ValidationError{Message: "dividend income account is required"}
 	}
-	dependencies := newAccountRuleDependencies()
 	if err := s.validateReinvestedDividendRoles(ctx, input, date, incomeAccountID, dependencies); err != nil {
 		return investmentTransactionPlan{}, err
 	}
