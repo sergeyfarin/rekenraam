@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
-import { expect, test, type Page } from './support/fixtures';
+import { expect, test, type Page, type Route } from './support/fixtures';
 import { test as ownedBookTest } from './support/owned-book';
 import { apiJSON } from './support/api';
 import { createCashAccount, readyForLedger } from './support/ledger';
+import { openInvestmentActivity } from './support/investment-entry';
 import { translationLocales } from './support/locales';
 
 // The owner's day, not the runner's: the server dates the disable on it, and
@@ -108,7 +109,7 @@ for (const locale of translationLocales) {
       code: 'REFERENCE_DATED_CONFLICT', conflict_rule: 'category_posting_after_disable', conflict_date: tomorrow
     });
 
-    const feedback = page.locator('#categories-action-error');
+    const feedback = page.locator(`#categories-action-error-${category.id}`);
     const [lead, rest] = settings.api_error_reference_conflict_category_posting_after_disable.split('{date}');
     await expect(feedback).toContainText(lead.trim());
     await expect(feedback).toContainText(rest.trim());
@@ -119,41 +120,127 @@ for (const locale of translationLocales) {
   });
 }
 
-// A picker loaded before the archive must not offer the category afterwards:
-// the shell refreshes every cached category list after a category write. The
-// ledger would accept a posting dated the disable day, so a stale picker is
-// the only thing that would let one through (#664 review).
-test('[acceptance] a category archived in the same tab leaves the entry picker', async ({ page }) => {
+// A picker loaded before the archive must not offer the category afterwards,
+// even while its refetch is still pending: the ledger accepts a posting dated
+// the disable day, so the cached list is the only thing that would let one
+// through (#664 review). Covers the entry editor's category picker and the
+// Cash dividend income picker, which reads its own account cache.
+test('[acceptance] a category archived in the same tab leaves every picker while the refresh is pending', async ({ page }) => {
   const { csrfToken } = await readyForLedger(page);
   const suffix = Date.now();
-  const create = (name: string) => apiJSON<{ id: number }>(page, 'POST', '/api/v1/categories', csrfToken, { name, category_type: 'expense' });
+  const create = (name: string, type: 'income' | 'expense') =>
+    apiJSON<{ id: number }>(page, 'POST', '/api/v1/categories', csrfToken, { name, category_type: type });
   const kept = `Picker kept ${suffix}`;
   const retired = `Picker retired ${suffix}`;
-  const retiredCategory = await create(retired);
-  await create(kept);
+  const retiredCategory = await create(retired, 'expense');
+  await create(kept, 'expense');
+  const keptIncome = await create(`Dividends kept ${suffix}`, 'income');
+  const retiredIncome = await create(`Dividends retired ${suffix}`, 'income');
   page.on('dialog', (dialog) => void dialog.accept());
 
-  const pickerOptions = async () => {
+  const entry = page.getByRole('region', { name: 'New transaction', exact: true });
+  const cancelEntry = async () => {
+    await entry.getByRole('button', { name: 'Cancel', exact: true }).first().click();
+    await expect(entry).toBeHidden();
+  };
+  const categoryOptions = async () => {
     await page.getByRole('button', { name: 'New transaction' }).click();
-    const form = page.getByRole('region', { name: 'New transaction', exact: true });
-    await form.getByRole('combobox', { name: 'Category', exact: true }).fill(String(suffix));
-    return { form, options: form.getByRole('listbox', { name: 'Category', exact: true }).getByRole('option') };
+    await entry.getByRole('combobox', { name: 'Category', exact: true }).fill(String(suffix));
+    return entry.getByRole('listbox', { name: 'Category', exact: true }).getByRole('option');
+  };
+  const incomeOption = (id: number) => page.locator(`#div-income-account option[value="${id}"]`);
+  const dividend = page.getByRole('dialog', { name: 'Record dividend' });
+  const closeDividend = async () => {
+    await page.keyboard.press('Escape');
+    await expect(dividend).toBeHidden();
+    if (await entry.isVisible()) await cancelEntry();
   };
   const tabs = page.getByRole('navigation', { name: 'Ledger pages', exact: true });
 
+  // Warm both pickers.
   await page.goto('/app/ledger/transactions');
-  let { form, options } = await pickerOptions();
+  let options = await categoryOptions();
   await expect(options.filter({ hasText: retired })).toBeVisible();
-  await form.getByRole('combobox', { name: 'Category', exact: true }).fill('');
-  await form.getByRole('button', { name: 'Cancel', exact: true }).first().click();
-  await expect(form).toBeHidden();
+  await entry.getByRole('combobox', { name: 'Category', exact: true }).fill('');
+  await cancelEntry();
+  await openInvestmentActivity(page, 'dividend');
+  await expect(incomeOption(retiredIncome.id)).toHaveCount(1);
+  await closeDividend();
 
   await tabs.getByRole('link', { name: 'Categories', exact: true }).click();
-  await page.getByRole('button', { name: `Archive ${retired}` }).click();
-  await expect.poll(async () => (await apiJSON<{ status: string }>(page, 'GET', `/api/v1/categories/${retiredCategory.id}`)).status).toBe('archived');
+  await expect(page.getByRole('button', { name: `Archive ${retired}` })).toBeVisible();
+
+  // From here, after the archives succeed, every category and account list read stays pending.
+  const held: Route[] = [];
+  const listReads = new Set(['/api/v1/categories', '/api/v1/accounts', '/api/v1/investments/entry-accounts']);
+  await page.route((url) => listReads.has(url.pathname), (route) => {
+    if (route.request().method() === 'GET') held.push(route);
+    else void route.continue();
+  });
+
+  for (const [name, id] of [[retired, retiredCategory.id], [`Dividends retired ${suffix}`, retiredIncome.id]] as const) {
+    await page.getByRole('button', { name: `Archive ${name}` }).click();
+    await expect.poll(async () => (await apiJSON<{ status: string }>(page, 'GET', `/api/v1/categories/${id}`)).status).toBe('archived');
+  }
 
   await tabs.getByRole('link', { name: 'Transactions', exact: true }).click();
-  ({ options } = await pickerOptions());
+  const heldBefore = held.length;
+  options = await categoryOptions();
+  await expect.poll(() => held.length, { message: 'the picker refetch is pending' }).toBeGreaterThan(heldBefore);
   await expect(options.filter({ hasText: kept })).toBeVisible();
   await expect(options.filter({ hasText: retired })).toHaveCount(0);
+  await entry.getByRole('combobox', { name: 'Category', exact: true }).fill('');
+  await cancelEntry();
+
+  await openInvestmentActivity(page, 'dividend');
+  await expect(incomeOption(keptIncome.id)).toHaveCount(1);
+  await expect(incomeOption(retiredIncome.id)).toHaveCount(0);
+  expect(held.length, 'the dividend picker refetch is pending too').toBeGreaterThan(0);
+
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+  for (const route of held) await route.continue().catch(() => undefined);
+});
+
+// Two overlapping refusals each stay on their own row: A's late answer must
+// not replace B's date or leave A without its message (#664 review).
+ownedBookTest('[acceptance] overlapping archive refusals stay on their own rows', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const suffix = Date.now();
+  const account = await createCashAccount(page, csrfToken, `Overlap wallet ${suffix}`, currencyID);
+  const today = await ownerToday(page);
+  const refused = async (name: string, days: number) => {
+    const category = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/categories', csrfToken, { name, category_type: 'expense' });
+    const date = addDays(today, days);
+    await apiJSON(page, 'POST', '/api/v1/transactions', csrfToken, {
+      transaction_date: date, status: 'posted', description: `${name} prepaid`,
+      journal_entries: [{ entry_date: date, postings: [
+        { account_id: account.id, commodity_id: currencyID, quantity_value: '-500', quantity_scale: 2 },
+        { account_id: category.id, commodity_id: currencyID, quantity_value: '500', quantity_scale: 2 }
+      ] }]
+    });
+    return { id: category.id, name, date };
+  };
+  const a = await refused(`Overlap A ${suffix}`, 1);
+  const b = await refused(`Overlap B ${suffix}`, 2);
+  const formatted = (date: string) => page.evaluate((value) =>
+    new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeZone: 'UTC' }).format(Date.parse(`${value}T00:00:00Z`)), date);
+
+  await page.goto('/app/ledger/categories');
+  let releaseA: () => void = () => {};
+  const aHeld = new Promise<void>((resolve) => {
+    void page.route(`**/api/v1/categories/${a.id}/disable`, async (route) => {
+      const response = await route.fetch();
+      await new Promise<void>((release) => { releaseA = release; resolve(); });
+      await route.fulfill({ response });
+    });
+  });
+  await page.getByRole('button', { name: `Archive ${a.name}` }).click();
+  await aHeld;
+  await page.getByRole('button', { name: `Archive ${b.name}` }).click();
+  const errorOf = (id: number) => page.locator(`#categories-action-error-${id}`);
+  await expect(errorOf(b.id)).toContainText(await formatted(b.date));
+  releaseA();
+  await expect(errorOf(a.id)).toContainText(await formatted(a.date));
+  await expect(errorOf(b.id)).toContainText(await formatted(b.date));
+  await expect(errorOf(b.id)).not.toContainText(await formatted(a.date));
 });
