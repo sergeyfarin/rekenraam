@@ -8073,7 +8073,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description REFERENCE_DATED_CONFLICT when a child category is active on a date the disable governs (category_active_child), or when a posting that is not voided or deleted is dated after the disable date (category_posting_after_disable, conflict_date is the earliest); REFERENCE_VERSION_BACKDATED when dated before the latest version; CONFLICT for a built-in category, which cannot be disabled. */
+                /** @description REFERENCE_DATED_CONFLICT when a child category is active on a date the disable governs (category_active_child), or when the disable would make ineligible a posting the category accepts now, that is a current posting, not voided or deleted, dated after the disable date (category_posting_after_disable, conflict_date is the earliest). A posting an earlier version already refuses, for example after posting was turned off, does not trigger it. REFERENCE_VERSION_BACKDATED when dated before the latest version; CONFLICT for a built-in category, which cannot be disabled. */
                 409: components["responses"]["ReferenceVersionConflict"];
                 413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
@@ -36576,7 +36576,7 @@ export interface components {
             /** @description On a reconciliation guard refusal of a generic ledger write (CONFLICT "reconciliation override is required", or RECONCILIATION_IMPACT_STALE): the checkpoints the write would invalidate right now. A reorder, which has no preview, binds its override to this set (#296). */
             checkpoint_ids?: number[];
             /**
-             * @description On REFERENCE_DATED_CONFLICT: the rule a dated category, payee or institution write breaks on a date the new version governs, which may lie between the requested date and today (#552). category_posting_after_disable: a disable would leave a posting after its date, which may be after today; conflict_date is the earliest such posting's entry date and there is no other record (#664).
+             * @description On REFERENCE_DATED_CONFLICT: the rule a dated category, payee or institution write breaks on a date the new version governs, which may lie between the requested date and today (#552). category_posting_after_disable: a disable would make a posting dated after its date, which may be after today, ineligible although the category accepts it now; a posting an earlier version already refuses does not count. conflict_date is the earliest such posting's entry date and there is no other record (#664).
              * @enum {string}
              */
             conflict_rule?: "category_name_taken" | "payee_name_taken" | "category_parent_archived" | "category_parent_cycle" | "category_active_child" | "institution_linked_account" | "category_posting_after_disable";

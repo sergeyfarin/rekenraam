@@ -65,7 +65,15 @@ post:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
       $ref: "../openapi.yaml#/components/responses/ReferenceVersionConflict"
-      description: REFERENCE_DATED_CONFLICT when a child category is active on a date the disable governs (category_active_child), or when a posting that is not voided or deleted is dated after the disable date (category_posting_after_disable, conflict_date is the earliest); REFERENCE_VERSION_BACKDATED when dated before the latest version; CONFLICT for a built-in category, which cannot be disabled.
+      description: >-
+        REFERENCE_DATED_CONFLICT when a child category is active on a date the
+        disable governs (category_active_child), or when the disable would make
+        ineligible a posting the category accepts now, that is a current posting,
+        not voided or deleted, dated after the disable date
+        (category_posting_after_disable, conflict_date is the earliest). A posting
+        an earlier version already refuses, for example after posting was turned
+        off, does not trigger it. REFERENCE_VERSION_BACKDATED when dated before the
+        latest version; CONFLICT for a built-in category, which cannot be disabled.
     "500":
       description: Internal server error
       headers:
