@@ -161,24 +161,77 @@ test('a lost regeneration response warns that the earlier codes may be gone and 
   await expect(notice).toHaveCount(0);
 });
 
-test('a lost regeneration whose status read also fails keeps the write error', async ({ page }) => {
+test('a lost regeneration whose status read also fails keeps its warning through a status retry', async ({ page }) => {
   await ensureBrowserSession(page);
   await activateThroughAPI(page);
   await openSecurity(page);
   const committed = await dropCommittedResponse(page, REGENERATE_PATH);
-  // Every later status read fails too, so the saved state stays unknown.
+  // Status reads fail until the API recovers, so the saved state stays unknown.
+  let statusReadsFail = true;
   await page.route('**/api/v1/auth/mfa', (route) =>
-    committed() && route.request().method() === 'GET' ? route.abort('failed') : route.continue());
+    statusReadsFail && committed() && route.request().method() === 'GET' ? route.abort('failed') : route.continue());
 
   await page.getByLabel('Your password', { exact: true }).fill(OWNER_PASSWORD);
   await page.getByRole('button', { name: 'New recovery codes' }).click();
 
   await expect(page.locator('#security-mfa-status-error')).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator('#security-mfa-error')).toBeVisible();
   expect(committed()).toBe(true);
+  // The codes may be replaced whatever the status read did.
+  const notice = page.getByRole('alert').filter({ hasText: 'earlier ones may no longer work' });
+  await expect(notice).toBeVisible();
   // An unknown status shows neither badge.
   await expect(page.getByText('On', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Off', { exact: true })).toHaveCount(0);
+
+  // A status-only retry once the API answers keeps the warning.
+  statusReadsFail = false;
+  await page.getByRole('button', { name: 'Check again', exact: true }).click();
+  await expect(page.getByText('On', { exact: true })).toBeVisible();
+  await expect(page.locator('#security-mfa-status-error')).toHaveCount(0);
+  await expect(notice).toBeVisible();
+  await expect(page.getByText(/unused recovery codes remain/)).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'New recovery codes' })).toBeVisible();
+});
+
+test('the badge claims nothing before the first status read or during an activation', async ({ page }) => {
+  await ensureBrowserSession(page);
+  // A fresh page whose first status read is still pending.
+  let releaseFirst!: () => void;
+  const firstHeld = new Promise<void>((resolve) => (releaseFirst = resolve));
+  let firstArrived!: () => void;
+  const first = new Promise<void>((resolve) => (firstArrived = resolve));
+  await page.route('**/api/v1/auth/mfa', async (route) => {
+    firstArrived();
+    await firstHeld;
+    await route.continue();
+  }, { times: 1 });
+  await page.goto('/app/settings/security');
+  await first;
+  await expect(page.getByText('Checking status...', { exact: true })).toBeVisible();
+  await expect(page.getByText('Off', { exact: true })).toHaveCount(0);
+  releaseFirst();
+  await expect(page.getByText('Off', { exact: true })).toBeVisible();
+
+  // An activation that has committed but whose response has not arrived.
+  const secret = await startEnrollment(page);
+  let releaseWrite!: () => void;
+  const writeHeld = new Promise<void>((resolve) => (releaseWrite = resolve));
+  let writeCommitted!: () => void;
+  const committed = new Promise<void>((resolve) => (writeCommitted = resolve));
+  await page.route(`**${ACTIVATE_PATH}`, async (route) => {
+    expect((await route.fetch()).ok()).toBe(true);
+    writeCommitted();
+    await writeHeld;
+    await route.abort('failed');
+  }, { times: 1 });
+  await page.getByLabel('Code from your app').fill(totpCode(secret, currentStep()));
+  await page.getByRole('button', { name: 'Turn on' }).click();
+  await committed;
+  expect((await apiJSON<MFAStatus>(page, 'GET', '/api/v1/auth/mfa')).status).toBe('active');
+  await expect(page.getByText('Off', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('On', { exact: true })).toHaveCount(0);
+  releaseWrite();
+  await expect(page.getByText('On', { exact: true })).toBeVisible();
 });
 
 test('a regeneration refused before commit shows only its error', async ({ page }) => {
@@ -204,11 +257,12 @@ test('a lost token-create response lists the unheld token so it can be revoked',
   await page.getByLabel('Confirm your password', { exact: true }).fill(OWNER_PASSWORD);
   await page.getByRole('button', { name: 'Create token', exact: true }).click();
 
-  await expect(page.getByText('The token may have been created')).toBeVisible();
+  await expect(page.getByText(`A token named “${name}” was created, but it could not be shown to you.`, { exact: false })).toBeVisible();
   expect(committed()).toBe(true);
   await expect(page.getByLabel('Your new token', { exact: true })).toHaveCount(0);
   const row = page.locator('li').filter({ has: page.getByText(name, { exact: true }) });
   await expect(row).toBeVisible();
+  await expect(row.getByText('Never shown', { exact: true })).toBeVisible();
   const saved = await apiJSON<{ tokens: Array<{ name: string }> }>(page, 'GET', TOKENS_PATH);
   expect(saved.tokens.filter((token) => token.name === name)).toHaveLength(1);
 
@@ -228,7 +282,7 @@ test('a token create refused before commit adds no row and no notice', async ({ 
   await page.getByRole('button', { name: 'Create token', exact: true }).click();
 
   await expect(page.getByRole('alert')).toBeVisible();
-  await expect(page.getByText('The token may have been created')).toHaveCount(0);
+  await expect(page.getByText('could not be shown to you')).toHaveCount(0);
   await expect(page.getByText(name, { exact: true })).toHaveCount(0);
   await expect(page.getByText('No personal access tokens yet.')).toBeVisible();
 });
@@ -340,4 +394,72 @@ test('a lost revoke response scrubs the disclosed token it revoked', async ({ pa
   await expect(row.getByText('Revoked', { exact: true })).toBeVisible();
   await expect(secretField).toHaveCount(0);
   expect(await page.locator('body').innerText()).not.toContain(disclosed);
+});
+
+test('a create that never reached the server does not point at an existing token of the same name', async ({ page }) => {
+  await ensureBrowserSession(page);
+  const name = 'Synthetic same-name client';
+  await apiJSON(page, 'POST', TOKENS_PATH, await csrfTokenFor(page), {
+    name, password: OWNER_PASSWORD, scopes: ['ledger:read'], expires_in_days: 30
+  });
+  await page.goto('/app/settings/security');
+  const row = page.locator('li').filter({ has: page.getByText(name, { exact: true }) });
+  await expect(row).toBeVisible();
+  // The request fails in the browser and nothing is written.
+  await page.route(`**${TOKENS_PATH}`, (route) =>
+    route.request().method() === 'POST' ? route.abort('failed') : route.continue());
+
+  await page.getByLabel('Token name', { exact: true }).fill(name);
+  await page.getByLabel('Confirm your password', { exact: true }).fill(OWNER_PASSWORD);
+  await page.getByRole('button', { name: 'Create token', exact: true }).click();
+
+  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create token', exact: true })).toBeEnabled();
+  await expect(page.getByText('could not be shown to you')).toHaveCount(0);
+  await expect(page.getByText('may have been created')).toHaveCount(0);
+  await expect(row.getByText('Never shown', { exact: true })).toHaveCount(0);
+  await expect(row.getByRole('button', { name: 'Revoke token', exact: true })).toBeVisible();
+});
+
+test('a lost create whose list refresh fails gives neutral guidance', async ({ page }) => {
+  await ensureBrowserSession(page);
+  await page.goto('/app/settings/security');
+  await expect(page.getByText('No personal access tokens yet.')).toBeVisible();
+  const committed = await dropCommittedResponse(page, TOKENS_PATH);
+  await page.route(`**${TOKENS_PATH}`, (route) =>
+    committed() && route.request().method() === 'GET' ? route.abort('failed') : route.fallback());
+
+  await page.getByLabel('Token name', { exact: true }).fill('Synthetic unchecked client');
+  await page.getByLabel('Confirm your password', { exact: true }).fill(OWNER_PASSWORD);
+  await page.getByRole('button', { name: 'Create token', exact: true }).click();
+
+  await expect(page.getByText('The token may have been created, and the list could not be checked.', { exact: false })).toBeVisible({ timeout: 15_000 });
+  expect(committed()).toBe(true);
+  await expect(page.getByText('could not be shown to you')).toHaveCount(0);
+});
+
+test('revoking another token after a lost response keeps the token on screen', async ({ page }) => {
+  await ensureBrowserSession(page);
+  const older = 'Synthetic older client';
+  const { credential } = await apiJSON<{ credential: { id: number } }>(page, 'POST', TOKENS_PATH, await csrfTokenFor(page), {
+    name: older, password: OWNER_PASSWORD, scopes: ['ledger:read'], expires_in_days: 30
+  });
+  await page.goto('/app/settings/security');
+  await page.getByLabel('Token name', { exact: true }).fill('Synthetic newly disclosed client');
+  await page.getByLabel('Confirm your password', { exact: true }).fill(OWNER_PASSWORD);
+  await page.getByRole('button', { name: 'Create token', exact: true }).click();
+  const secretField = page.getByLabel('Your new token', { exact: true });
+  await expect(secretField).toBeVisible();
+  const disclosed = await secretField.inputValue();
+
+  const committed = await dropCommittedResponse(page, `${TOKENS_PATH}/${credential.id}`, 'DELETE');
+  const row = page.locator('li').filter({ has: page.getByText(older, { exact: true }) });
+  await row.getByRole('button', { name: 'Revoke token', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Revoke token', exact: true })
+    .getByRole('button', { name: 'Revoke token', exact: true }).click();
+
+  await expect(row.getByText('Revoked', { exact: true })).toBeVisible();
+  expect(committed()).toBe(true);
+  // The only copy of the new, still active token stays until dismissed.
+  await expect(secretField).toHaveValue(disclosed);
 });
