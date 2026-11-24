@@ -48,11 +48,18 @@
   // From a failed write until its saved status is read: the cached status may
   // be from before the write, so the page claims neither state.
   let statusUnresolved = $state(false);
-  // Only from a status that was read successfully: while the read fails, the
-  // write's own error stays on screen beside the status error.
-  const savedActive = $derived(statusQuery.isSuccess && status === 'active');
-  const activatedWithoutCodes = $derived(failedCodesWrite === 'activate' && savedActive);
-  const codesMaybeReplaced = $derived(failedCodesWrite === 'regenerate' && savedActive);
+  // While a write that turns two-factor on or off is in flight, its outcome
+  // is unknown too.
+  let switching = $state(false);
+  // A status the page may state: read successfully, and not overtaken by a
+  // write whose outcome is unknown. Before the first read nothing is claimed.
+  const statusKnown = $derived(statusQuery.isSuccess && !statusUnresolved && !switching);
+  // "On without codes" needs the status to say on. "Codes may be replaced" is
+  // true whatever the status read did, unless it showed two-factor is off.
+  const activatedWithoutCodes = $derived(failedCodesWrite === 'activate' && statusKnown && status === 'active');
+  const codesMaybeReplaced = $derived(
+    failedCodesWrite === 'regenerate' && !(statusKnown && status !== 'active')
+  );
 
   const inputClass =
     'mt-1.5 h-10 w-full rounded-(--radius-control) border border-border bg-control px-3 text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted focus:border-accent disabled:cursor-not-allowed disabled:opacity-70';
@@ -120,9 +127,28 @@
     });
   }
 
+  // Reads the status again without touching the warning (#661).
+  async function checkStatusAgain() {
+    pending = true;
+    try {
+      await readSavedStatus();
+    } finally {
+      pending = false;
+    }
+  }
+
+  async function switchOnOff(action: () => Promise<void>, codesWrite?: 'activate') {
+    switching = true;
+    try {
+      await run(action, codesWrite);
+    } finally {
+      switching = false;
+    }
+  }
+
   async function handleActivate(event: SubmitEvent) {
     event.preventDefault();
-    await run(async () => {
+    await switchOnOff(async () => {
       const result = await activateMFATOTP(code, csrfToken);
       recoveryCodes = result.recovery_codes;
       code = '';
@@ -133,7 +159,7 @@
   }
 
   async function handleDisable() {
-    await run(async () => {
+    await switchOnOff(async () => {
       await disableMFA(password, csrfToken);
       password = '';
       recoveryCodes = [];
@@ -156,7 +182,7 @@
   <Panel>
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
-        {#if !statusQuery.isError && !statusUnresolved}
+        {#if statusKnown}
         <StatusBadge tone={status === 'active' ? 'positive' : 'neutral'}>
           {status === 'active' ? m.security_mfa_badge_active() : m.security_mfa_badge_inactive()}
         </StatusBadge>
@@ -172,11 +198,19 @@
     {#if !errorExplained || !(activatedWithoutCodes || codesMaybeReplaced)}
       <APIFormError error={formError} id="security-mfa-error" />
     {/if}
+    {#if activatedWithoutCodes || codesMaybeReplaced}
+      <p role="alert" class="mt-4 max-w-prose rounded-(--radius-control) border border-warning/40 bg-warning-soft p-3 text-sm text-foreground">
+        {activatedWithoutCodes ? m.security_mfa_activated_codes_lost() : m.security_mfa_codes_maybe_replaced()}
+      </p>
+    {/if}
 
     {#if statusQuery.isPending || statusUnresolved}
       <p class="mt-6 text-sm text-muted">{m.security_mfa_loading()}</p>
     {:else if statusQuery.isError}
       <APIFormError error={statusQuery.error} id="security-mfa-status-error" />
+      <button type="button" class="mt-3 {secondaryButtonClass}" disabled={pending} onclick={checkStatusAgain}>
+        {m.security_mfa_status_retry()}
+      </button>
     {:else if !configured}
       <p class="mt-6 max-w-prose text-sm text-foreground">{m.security_mfa_unconfigured()}</p>
     {:else if recoveryCodes.length > 0}
@@ -232,11 +266,7 @@
       </div>
     {:else if status === 'active'}
       <div class="mt-6 space-y-6">
-        {#if activatedWithoutCodes || codesMaybeReplaced}
-          <p role="alert" class="max-w-prose rounded-(--radius-control) border border-warning/40 bg-warning-soft p-3 text-sm text-foreground">
-            {activatedWithoutCodes ? m.security_mfa_activated_codes_lost() : m.security_mfa_codes_maybe_replaced()}
-          </p>
-        {:else}
+        {#if !activatedWithoutCodes && !codesMaybeReplaced}
           <p class="text-sm text-foreground">
             {m.security_mfa_codes_remaining({ count: statusQuery.data?.recovery_codes_remaining ?? 0 })}
           </p>
