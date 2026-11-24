@@ -257,12 +257,11 @@ test('a lost token-create response lists the unheld token so it can be revoked',
   await page.getByLabel('Confirm your password', { exact: true }).fill(OWNER_PASSWORD);
   await page.getByRole('button', { name: 'Create token', exact: true }).click();
 
-  await expect(page.getByText(`A token named “${name}” was created, but it could not be shown to you.`, { exact: false })).toBeVisible();
+  await expect(page.getByText('The token may or may not have been created.', { exact: false })).toBeVisible();
   expect(committed()).toBe(true);
   await expect(page.getByLabel('Your new token', { exact: true })).toHaveCount(0);
   const row = page.locator('li').filter({ has: page.getByText(name, { exact: true }) });
   await expect(row).toBeVisible();
-  await expect(row.getByText('Never shown', { exact: true })).toBeVisible();
   const saved = await apiJSON<{ tokens: Array<{ name: string }> }>(page, 'GET', TOKENS_PATH);
   expect(saved.tokens.filter((token) => token.name === name)).toHaveLength(1);
 
@@ -282,7 +281,7 @@ test('a token create refused before commit adds no row and no notice', async ({ 
   await page.getByRole('button', { name: 'Create token', exact: true }).click();
 
   await expect(page.getByRole('alert')).toBeVisible();
-  await expect(page.getByText('could not be shown to you')).toHaveCount(0);
+  await expect(page.getByText('The token may or may not have been created.', { exact: false })).toHaveCount(0);
   await expect(page.getByText(name, { exact: true })).toHaveCount(0);
   await expect(page.getByText('No personal access tokens yet.')).toBeVisible();
 });
@@ -396,29 +395,39 @@ test('a lost revoke response scrubs the disclosed token it revoked', async ({ pa
   expect(await page.locator('body').innerText()).not.toContain(disclosed);
 });
 
-test('a create that never reached the server does not point at an existing token of the same name', async ({ page }) => {
+test('a create that never reached the server marks no row, even a same-name token from another tab', async ({ page }) => {
   await ensureBrowserSession(page);
-  const name = 'Synthetic same-name client';
-  await apiJSON(page, 'POST', TOKENS_PATH, await csrfTokenFor(page), {
-    name, password: OWNER_PASSWORD, scopes: ['ledger:read'], expires_in_days: 30
-  });
   await page.goto('/app/settings/security');
-  const row = page.locator('li').filter({ has: page.getByText(name, { exact: true }) });
-  await expect(row).toBeVisible();
-  // The request fails in the browser and nothing is written.
+  const name = 'Synthetic two-tab client';
+  // This tab's request fails in the browser and nothing is written.
   await page.route(`**${TOKENS_PATH}`, (route) =>
     route.request().method() === 'POST' ? route.abort('failed') : route.continue());
+
+  // Meanwhile another tab creates a working token with the same name.
+  const other = await page.context().newPage();
+  await other.goto('/app/settings/security');
+  await other.getByLabel('Token name', { exact: true }).fill(name);
+  await other.getByLabel('Confirm your password', { exact: true }).fill(OWNER_PASSWORD);
+  await other.getByRole('button', { name: 'Create token', exact: true }).click();
+  const working = await other.getByLabel('Your new token', { exact: true }).inputValue();
+  expect(working).toMatch(/^rr_pat_/);
 
   await page.getByLabel('Token name', { exact: true }).fill(name);
   await page.getByLabel('Confirm your password', { exact: true }).fill(OWNER_PASSWORD);
   await page.getByRole('button', { name: 'Create token', exact: true }).click();
 
-  await expect(page.getByRole('alert')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Create token', exact: true })).toBeEnabled();
-  await expect(page.getByText('could not be shown to you')).toHaveCount(0);
-  await expect(page.getByText('may have been created')).toHaveCount(0);
-  await expect(row.getByText('Never shown', { exact: true })).toHaveCount(0);
-  await expect(row.getByRole('button', { name: 'Revoke token', exact: true })).toBeVisible();
+  // The refreshed list shows the other tab's token as new, but nothing ties
+  // it to this attempt: the guidance stays neutral and names no row.
+  const notice = page.getByText('The token may or may not have been created.', { exact: false });
+  await expect(notice).toBeVisible();
+  await expect(notice).not.toContainText(name);
+  const row = page.locator('li').filter({ has: page.getByText(name, { exact: true }) });
+  await expect(row).toHaveCount(1);
+  const status = await other.evaluate(async (token) => (await fetch('/api/v1/accounts', {
+    credentials: 'omit', headers: { Authorization: `Bearer ${token}` }
+  })).status, working);
+  expect(status).toBe(200);
+  await other.close();
 });
 
 test('a lost create whose list refresh fails gives neutral guidance', async ({ page }) => {
@@ -433,9 +442,8 @@ test('a lost create whose list refresh fails gives neutral guidance', async ({ p
   await page.getByLabel('Confirm your password', { exact: true }).fill(OWNER_PASSWORD);
   await page.getByRole('button', { name: 'Create token', exact: true }).click();
 
-  await expect(page.getByText('The token may have been created, and the list could not be checked.', { exact: false })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('The token may or may not have been created.', { exact: false })).toBeVisible({ timeout: 15_000 });
   expect(committed()).toBe(true);
-  await expect(page.getByText('could not be shown to you')).toHaveCount(0);
 });
 
 test('revoking another token after a lost response keeps the token on screen', async ({ page }) => {
