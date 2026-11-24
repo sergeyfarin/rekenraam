@@ -264,9 +264,13 @@ token revoke). A refusal can mean the lost write committed (activation answers
 that read answers, claim no state from the cache (no On/Off badge), and write
 its answer with `applySavedRead` (`#lib/api/saved-read.ts`), which cancels
 older cached fetches first so a late one cannot restore the pre-write state.
-A warning about lost codes stays through refused retries until a write
-succeeds, and nothing (Show more) may cancel the list refresh that reveals an
-unheld token (#682 review). The #644
+A warning about lost codes stays through refused retries and failed status
+reads (with a status-only retry) until a write succeeds, and nothing (Show
+more) may cancel the list refresh that reveals an unheld token. Name a row as
+the lost create's only when it is newer than everything listed before the
+attempt and has its name; an older same-name row is a working token. A
+revocation scrubs only its own credential's disclosure (#682 review). After a
+reload the page cannot know the codes were replaced (#683). The #644
 sweep classified 203 write call sites (64 read-only previews); its open
 instances were #660 (creates that duplicate on retry, fixed), #661 (fixed) and
 #662 (rows left on screen after a guarded delete or correction). Not
