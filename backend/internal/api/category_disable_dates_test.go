@@ -310,3 +310,19 @@ func copyPostingToDate(database *sql.DB, postingLineID int64, date string) error
 	`, newEntryID, newLineID, postingLineID)
 	return err
 }
+
+// A posting the category already refused before the disable is not stranded
+// by it. Turning off postings effective D leaves a posting on D ineligible
+// (#680); a disable on D must not report it as a posting after its date, and
+// must not be refused for it (PR #681 review).
+func TestCategoryDisableIgnoresPostingsAlreadyRefused(t *testing.T) {
+	t.Parallel()
+	f := newCategoryDisableFixture(t)
+	f.spend(t, categoryDisableDay, http.StatusCreated)
+	f.spend(t, categoryDisableDayAfter, http.StatusCreated)
+	mutateCategory(t, f.handler, f.cookie, f.csrf, http.MethodPatch, "/api/v1/categories/"+strconvFormatInt(f.category.ID),
+		`{"allows_postings":false,"effective_from":"`+categoryDisableDay+`"}`, http.StatusOK)
+
+	disabled := mutateCategory(t, f.handler, f.cookie, f.csrf, http.MethodPost, f.disablePath(), `{"effective_from":"`+categoryDisableDay+`"}`, http.StatusOK)
+	assert.Equal(t, "archived", disabled.Status)
+}
