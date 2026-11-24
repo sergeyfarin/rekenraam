@@ -161,7 +161,12 @@ In the form a default is an automatic choice: it checks today's status, not
 only the dated options, belongs to the instrument still selected, and stays
 marked as automatic so a later archive takes it back
 (`dividend-default-choice.test.ts`). On the server only a target the posting
-uses binds the write (`TestUnusedDividendDefaultDoesNotBindTheWrite`). An owner's choice
+uses binds the write (`TestUnusedDividendDefaultDoesNotBindTheWrite`). The
+automatic mark travels with the request, so the server checks a displayed
+default at commit (`TestDividendAccountFromDefaultIsCheckedAtWrite`), and
+every field a default fills is marked, amounts included: an unmarked default
+withholding amount survived an instrument switch and posted the previous
+instrument's tax. An owner's choice
 that stops being offered stays visible and blocks the save; clearing it
 silently lets the server substitute the stored default. Named checks: `TestCategoryDisableKeepsItsLastPostingDay`,
 `TestCategoryDisableRefusesALaterPosting`,

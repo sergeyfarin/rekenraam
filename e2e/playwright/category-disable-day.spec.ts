@@ -451,3 +451,93 @@ test('[acceptance] a dividend default for a cleared instrument does not apply', 
   await form.locator('#div-instrument').fill('');
   await expect(income).toHaveValue('');
 });
+
+// Switching instruments replaces the withholding amount a default filled in
+// with the next instrument's default, and keeps an amount the owner typed
+// (#664 review: the first instrument's tax was posted against the second).
+test('[acceptance] a dividend default withholding amount follows the selected instrument', async ({ page }) => {
+  const f = await dividendFixture(page);
+  const opened = addDays(f.today, -10);
+  const secondName = `Second shares ${Date.now()}`;
+  const second = await apiJSON<{ id: number; commodity_id: number }>(page, 'POST', '/api/v1/investments/instruments', f.csrfToken, {
+    commodity_code: `SS${Date.now()}`, instrument_type: 'stock', display_name: secondName,
+    quantity_scale: 0, price_scale: 2, quote_commodity_id: f.currencyID, effective_from: opened
+  });
+  const tax = (label: string) => apiJSON<{ id: number }>(page, 'POST', '/api/v1/categories', f.csrfToken, { name: `${label} ${Date.now()}`, category_type: 'expense' });
+  const firstTax = await tax('First tax');
+  const secondTax = await tax('Second tax');
+  for (const [commodity, account, value] of [[f.instrument.commodity_id, firstTax.id, '125'], [second.commodity_id, secondTax.id, '275']] as const) {
+    await apiJSON(page, 'POST', '/api/v1/investments/dividend-defaults', f.csrfToken, {
+      commodity_id: commodity, income_account_id: f.fallback.id, withholding_account_id: account,
+      default_withholding_value: value, default_withholding_scale: 2, status: 'active', effective_from: opened
+    });
+  }
+
+  await page.goto('/app/ledger/transactions');
+  await openInvestmentActivity(page, 'dividend');
+  const form = page.getByRole('dialog', { name: 'Record dividend' });
+  const choose = async (name: string) => {
+    await form.locator('#div-instrument').fill(name);
+    await page.getByRole('option').filter({ hasText: name }).click();
+  };
+  const amount = form.locator('#div-withholding');
+  const account = form.locator('#div-withholding-account');
+
+  await choose(f.name);
+  await expect(amount).toHaveValue('1.25');
+  await expect(account).toHaveValue(String(firstTax.id));
+  await choose(secondName);
+  await expect(amount).toHaveValue('2.75');
+  await expect(account).toHaveValue(String(secondTax.id));
+
+  // An amount the owner typed is theirs and survives the next switch.
+  await amount.fill('5.00');
+  await choose(f.name);
+  await expect(amount).toHaveValue('5.00');
+  await expect(account).toHaveValue(String(firstTax.id));
+});
+
+// The server checks an automatic account when it writes: an archive landing
+// while Save is in flight refuses the dividend, and the form takes the
+// default back for the owner to review (#664 review).
+test('[acceptance] a dividend saved with a default archived in flight is refused', async ({ page }) => {
+  const f = await dividendFixture(page);
+  await apiJSON(page, 'POST', '/api/v1/investments/dividend-defaults', f.csrfToken, {
+    commodity_id: f.instrument.commodity_id, income_account_id: f.retired.id, status: 'active', effective_from: addDays(f.today, -10)
+  });
+
+  await page.goto('/app/ledger/transactions');
+  await openInvestmentActivity(page, 'dividend');
+  const form = page.getByRole('dialog', { name: 'Record dividend' });
+  await form.locator('#div-date').fill(addDays(f.today, -1));
+  await form.locator('#div-instrument').fill(f.name);
+  await page.getByRole('option').filter({ hasText: f.name }).click();
+  await form.locator('#div-cash-account').selectOption(String(f.cash.id));
+  await form.locator('#div-amount').fill('3.25');
+  const income = form.locator('#div-income-account');
+  await expect(income).toHaveValue(String(f.retired.id));
+
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    void page.route('**/api/v1/investments/dividend', async (route) => {
+      expect(route.request().postDataJSON()).toMatchObject({ income_account_id: f.retired.id, income_account_from_default: true });
+      resolve();
+      await new Promise<void>((go) => { release = go; });
+      await route.continue();
+    });
+  });
+  const answered = page.waitForResponse((response) => response.url().endsWith('/api/v1/investments/dividend') && response.request().method() === 'POST');
+  await form.getByRole('button', { name: 'Record dividend', exact: true }).click();
+  await held;
+  await apiJSON(page, 'POST', `/api/v1/categories/${f.retired.id}/disable`, f.csrfToken, {});
+  release();
+  const response = await answered;
+  expect(response.status()).toBe(409);
+  expect((await response.json()).error.code).toBe('DIVIDEND_DEFAULT_CHANGED');
+  await page.unrouteAll({ behavior: 'wait' });
+
+  await expect(form.locator('#div-form-error')).toContainText('The dividend default changed');
+  await expect(income).toHaveValue('');
+  await expect(form.getByRole('button', { name: 'Record dividend', exact: true })).toBeDisabled();
+  await expect(income.locator(`option[value="${f.retired.id}"]`)).toHaveCount(1);
+});

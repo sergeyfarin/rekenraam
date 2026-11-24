@@ -1091,9 +1091,14 @@ history. The rules below are shared; each kind's design links here.
   a change to an unused default does not. The dividend form fills a field from
   a default only when the account is offered on the entry's date and not
   archived today, and only for the instrument still selected; it marks the
-  field as filled by default and takes it back if the account is archived
-  later or the instrument changes. A backdated entry can still choose such an
-  account by hand. A choice the picker stops
+  fields a default filled (accounts and the withholding amount) and takes them
+  back if the account is archived later or the instrument changes, keeping
+  what the owner chose or typed. The request carries that mark
+  (`income_account_from_default`, `withholding_account_from_default`), and the
+  server writes such an account only while the default still applies it,
+  bound to its version, or refuses with `409 DIVIDEND_DEFAULT_CHANGED`; the form
+  then reloads and shows the current default for review. A backdated entry can
+  still choose such an account by hand. A choice the picker stops
   offering, for example after a date change, stays visible as unavailable and
   blocks Record; it is never dropped for the server to replace with the
   stored default. Recurring generation validates each
