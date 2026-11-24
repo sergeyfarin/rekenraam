@@ -1,8 +1,8 @@
 {
   "counts": {
-    "es": 197,
-    "fr": 197,
-    "de": 197
+    "es": 195,
+    "fr": 195,
+    "de": 195
   },
   "keys": {
     "es": [
@@ -179,9 +179,7 @@
       "security_mfa_activated_codes_lost",
       "security_mfa_codes_maybe_replaced",
       "security_mfa_status_retry",
-      "security_tokens_create_outcome_unchecked",
-      "security_tokens_created_unseen",
-      "security_tokens_unseen_marker",
+      "security_tokens_create_outcome_unknown",
       "settings_reconciliation_copy",
       "settings_reconciliation_days_hint",
       "settings_reconciliation_days_label",
@@ -378,9 +376,7 @@
       "security_mfa_activated_codes_lost",
       "security_mfa_codes_maybe_replaced",
       "security_mfa_status_retry",
-      "security_tokens_create_outcome_unchecked",
-      "security_tokens_created_unseen",
-      "security_tokens_unseen_marker",
+      "security_tokens_create_outcome_unknown",
       "settings_reconciliation_copy",
       "settings_reconciliation_days_hint",
       "settings_reconciliation_days_label",
@@ -577,9 +573,7 @@
       "security_mfa_activated_codes_lost",
       "security_mfa_codes_maybe_replaced",
       "security_mfa_status_retry",
-      "security_tokens_create_outcome_unchecked",
-      "security_tokens_created_unseen",
-      "security_tokens_unseen_marker",
+      "security_tokens_create_outcome_unknown",
       "settings_reconciliation_copy",
       "settings_reconciliation_days_hint",
       "settings_reconciliation_days_label",

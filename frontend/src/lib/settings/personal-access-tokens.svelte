@@ -4,7 +4,6 @@
   import APIFormError from '#lib/components/api-form-error.svelte';
   import ModalDialog from '#lib/components/modal-dialog.svelte';
   import Panel from '#lib/components/panel.svelte';
-  import StatusBadge from '#lib/components/status-badge.svelte';
   import { authSessionQueryOptions, authenticationEventsQueryKey } from '#lib/api/auth.ts';
   import {
     createPersonalAccessToken, personalAccessTokensQueryKey, personalAccessTokensQueryOptions,
@@ -32,15 +31,10 @@
   // token never scrubs it.
   let disclosedID = $state<number>();
   // A failed create may have committed a token nobody holds (#661). The page
-  // names it only when the refreshed list shows a credential newer than every
-  // one listed before the attempt, under the submitted name; otherwise an
-  // existing token of the same name could be mistaken for it.
-  let unseenTokenID = $state<number>();
-  const unseenCredential = $derived(
-    credentials.find((credential) => credential.id === unseenTokenID && !credential.revoked_at)
-  );
-  // The outcome is unknown and the list could not settle it.
-  let createOutcomeUnchecked = $state(false);
+  // never says which row that is: a newer row with the same name can come
+  // from another tab, and marking it would lead the owner to revoke a working
+  // token. Only a server-side link to the attempt could tell them apart.
+  let createOutcomeUnknown = $state(false);
   let revoked = $state(false);
   let revokeTarget = $state<PersonalAccessToken>();
   let disclosureGeneration = 0;
@@ -76,13 +70,10 @@
     event.preventDefault();
     pending = true;
     error = undefined;
-    createOutcomeUnchecked = false;
+    createOutcomeUnknown = false;
     revoked = false;
     secret = '';
     const generation = disclosureGeneration;
-    const attemptName = name.trim();
-    // The list is newest first, so its first page holds the newest credential.
-    const newestListedID = tokens.isSuccess ? Math.max(0, ...credentials.map((credential) => credential.id)) : undefined;
     const scopes: TokenScope[] = [];
     if (ledger) scopes.push('ledger:read');
     if (reports) scopes.push('reports:read');
@@ -101,14 +92,8 @@
       error = cause;
       // List what was saved, so a committed token whose response was lost is
       // visible and can be revoked.
+      createOutcomeUnknown = saveOutcomeUnknown(cause);
       await refresh();
-      if (saveOutcomeUnknown(cause)) {
-        const created = newestListedID === undefined || tokens.isError
-          ? undefined
-          : credentials.find((credential) => credential.id > newestListedID && credential.name === attemptName);
-        if (created) unseenTokenID = created.id;
-        else createOutcomeUnchecked = newestListedID === undefined || tokens.isError;
-      }
     } finally {
       password = '';
       pending = false;
@@ -129,7 +114,7 @@
     const target = revokeTarget;
     pending = true;
     error = undefined;
-    createOutcomeUnchecked = false;
+    createOutcomeUnknown = false;
     try {
       await revokePersonalAccessToken(target.id, session.data?.csrf_token ?? '');
       confirmRevoked(target.id);
@@ -158,8 +143,7 @@
       <p class="mt-2 max-w-prose text-sm text-muted">{m.security_tokens_hint()}</p>
     </div>
     {#if error && !revokeTarget}<APIFormError {error} />{/if}
-    {#if unseenCredential && !revokeTarget}<p role="status" class="rounded-(--radius-control) border border-warning/40 bg-warning-soft p-3 text-sm text-foreground break-all">{m.security_tokens_created_unseen({ name: unseenCredential.name })}</p>{/if}
-    {#if createOutcomeUnchecked && !revokeTarget}<p role="status" class="rounded-(--radius-control) border border-warning/40 bg-warning-soft p-3 text-sm text-foreground">{m.security_tokens_create_outcome_unchecked()}</p>{/if}
+    {#if createOutcomeUnknown && !revokeTarget}<p role="status" class="rounded-(--radius-control) border border-warning/40 bg-warning-soft p-3 text-sm text-foreground">{m.security_tokens_create_outcome_unknown()}</p>{/if}
     {#if revoked}<p role="status" class="text-sm text-foreground">{m.security_tokens_revoked_success()}</p>{/if}
 
     {#if secret}
@@ -208,7 +192,6 @@
             <div class="flex min-w-0 flex-wrap items-start justify-between gap-3">
               <div class="min-w-0 space-y-1 text-sm">
                 <p class="font-semibold break-all text-foreground">{credential.name}</p>
-                {#if credential.id === unseenCredential?.id}<StatusBadge tone="warning">{m.security_tokens_unseen_marker()}</StatusBadge>{/if}
                 <ul class="text-muted">{#each credential.scopes as scope (scope)}<li>{scopeLabel(scope)}</li>{/each}</ul>
                 <p class="text-muted">{m.security_tokens_expires({ when: timestamp(credential.expires_at) })}</p>
                 {#if credential.last_used_at}<p class="text-muted">{m.security_tokens_last_used({ when: timestamp(credential.last_used_at) })}</p>{/if}
