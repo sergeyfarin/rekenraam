@@ -117,7 +117,7 @@
           }
           // Awaited, so the caller sees the response only after a disabled
           // category has left every cached picker (#664 review).
-          await applyCategoryWrite(queryClient, request.method, path);
+          await applyCategoryWrite(queryClient, request.method, path, response);
         }
       }
     };

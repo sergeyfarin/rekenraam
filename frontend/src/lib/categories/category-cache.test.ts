@@ -6,6 +6,7 @@ const activeCategories = ['api', 'categories', {}] as const;
 const allCategories = ['api', 'categories', { includeArchived: true }] as const;
 const activeAccounts = ['api', 'accounts', { includeArchived: false, includeSystem: false }] as const;
 const dividendAccounts = ['api', 'accounts', 'investment-entry', '2026-11-24'] as const;
+const earlierDividendAccounts = ['api', 'accounts', 'investment-entry', '2026-11-23'] as const;
 const accountDetail = ['api', 'accounts', 'detail', 7] as const;
 
 function seeded(): QueryClient {
@@ -15,6 +16,7 @@ function seeded(): QueryClient {
   client.setQueryData(allCategories, { categories: rows });
   client.setQueryData(activeAccounts, { accounts: rows });
   client.setQueryData(dividendAccounts, { accounts: rows });
+  client.setQueryData(earlierDividendAccounts, { accounts: rows });
   client.setQueryData(accountDetail, { id: 7, status: 'active' });
   return client;
 }
@@ -43,11 +45,28 @@ describe('a category write applied to cached pickers (#664 review)', () => {
     expect(client.getQueryState(dividendAccounts)?.isInvalidated).toBe(true);
   });
 
+  it('keeps a dated snapshot from before the disable date and drops one on or after it', async () => {
+    const client = seeded();
+    const response = new Response(JSON.stringify({ id: 7, status: 'archived', effective_from: '2026-11-24' }));
+    await applyCategoryWrite(client, 'POST', '/api/v1/categories/7/disable', response);
+    expect(ids(client, earlierDividendAccounts, 'accounts')).toEqual(['7:active', '8:active']);
+    expect(ids(client, dividendAccounts, 'accounts')).toEqual(['8:active']);
+    expect(ids(client, activeCategories, 'categories')).toEqual(['8:active']);
+    expect(client.getQueryState(earlierDividendAccounts)?.isInvalidated).toBe(true);
+  });
+
+  it('without a readable date drops the category from every dated snapshot', async () => {
+    const client = seeded();
+    await applyCategoryWrite(client, 'POST', '/api/v1/categories/7/disable', new Response('not json'));
+    expect(ids(client, earlierDividendAccounts, 'accounts')).toEqual(['8:active']);
+  });
+
   it('drops a deleted category from every list', async () => {
     const client = seeded();
     await applyCategoryWrite(client, 'DELETE', '/api/v1/categories/7');
     expect(ids(client, allCategories, 'categories')).toEqual(['8:active']);
     expect(ids(client, activeAccounts, 'accounts')).toEqual(['8:active']);
+    expect(ids(client, earlierDividendAccounts, 'accounts')).toEqual(['8:active']);
   });
 
   it('only refetches after a restore', async () => {
