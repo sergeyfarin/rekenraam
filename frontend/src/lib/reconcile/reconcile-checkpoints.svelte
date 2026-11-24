@@ -11,6 +11,7 @@
   import { afterStatementVoided } from '#lib/reconcile/invalidate.ts';
   import { coveredByLaterActiveCheckpoint } from '#lib/reconcile/checkpoint-chain.ts';
   import {
+    getReconciliationCheckpoints,
     reconciliationCheckpointsQueryOptions,
     voidReconciliationCheckpoint,
     type ReconciliationCheckpointResponse
@@ -106,16 +107,34 @@
     }
     voidNeedsReason = false;
     voidPending = true;
+    const target = voidTarget;
     try {
-      const voided = await voidReconciliationCheckpoint(voidTarget.id, { change_reason: voidReason.trim() }, csrfToken);
-      voidedNotice = m.reconcile_checkpoint_voided({ date: voided.statement_date });
-      voidTarget = undefined;
-      await afterStatementVoided(queryClient, voided.account_id, voided.id);
+      await closeVoided(await voidReconciliationCheckpoint(target.id, { change_reason: voidReason.trim() }, csrfToken));
     } catch (error) {
       voidError = error;
+      // The void may have committed before its response was lost: a fresh
+      // list read shows it. Retrying is safe either way; voiding is idempotent.
+      const saved = await savedCheckpoint(target.id).catch(() => undefined);
+      if (saved?.status === 'voided' && voidTarget === target) {
+        voidError = undefined;
+        await closeVoided(saved);
+      }
     } finally {
       voidPending = false;
     }
+  }
+
+  async function closeVoided(voided: ReconciliationCheckpointResponse) {
+    voidedNotice = m.reconcile_checkpoint_voided({ date: voided.statement_date });
+    voidTarget = undefined;
+    await afterStatementVoided(queryClient, voided.account_id, voided.id);
+  }
+
+  async function savedCheckpoint(checkpointID: number) {
+    // A request of its own: a cancelled cache fetch resolves with the cached
+    // list from before the write (#644 review).
+    const saved = await getReconciliationCheckpoints(accountID, commodityID);
+    return saved.checkpoints.find((checkpoint) => checkpoint.id === checkpointID);
   }
 </script>
 
