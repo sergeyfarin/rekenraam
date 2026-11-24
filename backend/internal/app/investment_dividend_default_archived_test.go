@@ -121,3 +121,43 @@ func TestDividendDefaultDecisionIsBoundToTheVersionItRead(t *testing.T) {
 	_, err = f.transactionService.repository.CreateTransactionWithPostWrite(ctx, params, nil)
 	require.ErrorIs(t, err, db.ErrPostingAccountVersionStale)
 }
+
+// #664 review. Only a default target that supplies an account the posting
+// uses binds the write: archiving an unused default between planning and
+// writing must not refuse a dividend whose accounts were named explicitly.
+func TestUnusedDividendDefaultDoesNotBindTheWrite(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f := newInvestmentsTestFixture(t)
+	const day = "2026-03-01"
+	now := func() time.Time { return time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC) }
+	categories := NewCategoryService(db.NewCategoryRepository(f.database), nil)
+	categories.SetNowForTest(now)
+	f.investmentService.SetNowForTest(now)
+	create := func(name, kind string) Category {
+		category, err := categories.CreateCategory(ctx, CreateCategoryInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "category.create", Name: name, CategoryType: kind})
+		require.NoError(t, err)
+		return category
+	}
+	unusedIncome := create("Default dividends", "income")
+	unusedWithholding := create("Default dividend tax", "expense")
+	_, err := f.investmentService.SaveDividendDefault(ctx, DividendDefaultInput{
+		OwnerUserID: f.ownerUserID, CommodityID: &f.stockCommodityID, IncomeAccountID: unusedIncome.ID,
+		WithholdingAccountID: &unusedWithholding.ID, Status: "active", EffectiveFrom: "2026-01-01",
+	})
+	require.NoError(t, err)
+
+	plan, err := f.investmentService.dividendPlan(ctx, DividendInput{OwnerUserID: f.ownerUserID, TransactionDate: day,
+		CommodityID: NullableValue(f.stockCommodityID), CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
+		IncomeAccountID: &f.incomeAccountID, AmountValue: 1000, AmountScale: 2})
+	require.NoError(t, err)
+	for _, id := range []int64{unusedIncome.ID, unusedWithholding.ID} {
+		_, err = categories.DisableCategory(ctx, CategoryLifecycleInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", CategoryID: id, EffectiveFrom: day})
+		require.NoError(t, err)
+	}
+
+	params, err := f.transactionService.prepareCreateTransactionForWriteCarrying(ctx, plan.Create, plan.AccountRuleDependencies)
+	require.NoError(t, err)
+	_, err = f.transactionService.repository.CreateTransactionWithPostWrite(ctx, params, nil)
+	require.NoError(t, err, "neither default target is used by this posting")
+}

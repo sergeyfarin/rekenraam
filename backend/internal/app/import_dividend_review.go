@@ -169,7 +169,7 @@ func (s *ImportService) dividendReviewDefaults(ctx context.Context, c importDivi
 		}
 	}
 	if res.CategoryID == nil || res.WithholdingAccountID == nil {
-		defaults, err := s.investmentService.applicableDividendDefault(ctx, res.InstrumentCommodityID, c.source.Date, nil)
+		defaults, _, err := s.investmentService.applicableDividendDefault(ctx, res.InstrumentCommodityID, c.source.Date)
 		if err != nil && !errors.Is(err, db.ErrNotFound) {
 			return res, err
 		}
