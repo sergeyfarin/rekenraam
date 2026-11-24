@@ -1309,6 +1309,7 @@
   "api_error_reference_conflict_category_parent_archived": "El {date}, la categoría superior «{name}» está archivada. El cambio se aplicaría ese día, así que elija una categoría superior activa u otra fecha de entrada en vigor.",
   "api_error_reference_conflict_category_parent_cycle": "A partir del {date}, «{name}» está dentro de esta categoría, así que no puede ser su categoría superior. Elija otra categoría superior u otra fecha de entrada en vigor.",
   "api_error_reference_conflict_category_active_child": "El {date}, la subcategoría «{name}» sigue activa. Archívela o muévala primero, o elija una fecha posterior.",
+  "api_error_reference_conflict_category_posting_after_disable": "Un asiento del {date} todavía usa esta categoría después de la fecha de desactivación. Muévalo, junto con los asientos posteriores, a otra categoría, o desactive la categoría más tarde.",
   "api_error_reference_conflict_institution_linked_account": "El {date}, la cuenta «{name}» todavía usa esta entidad. Archive primero la cuenta o cambie su entidad, o elija una fecha posterior.",
   "api_error_investment_instrument_version_backdated": "Los cambios estructurales del instrumento no pueden entrar en vigor antes de la última versión. Elija esa fecha o una posterior.",
   "api_error_investment_exchange_already_corrected": "Este canje de acciones ya se ha corregido.",

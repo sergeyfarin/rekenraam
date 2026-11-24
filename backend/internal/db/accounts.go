@@ -837,7 +837,9 @@ func (e AccountParentCycleError) Unwrap() error { return ErrAccountParentCycle }
 // not this write's doing, which keeps a repair (such as a reopen from the
 // closing date) possible. Voided and soft-deleted transactions are skipped;
 // nothing rewrites their postings. The eligibility test mirrors the
-// posting_versions_account_version_valid trigger.
+// posting_versions_account_version_valid trigger and
+// PostingAccountRule.AcceptsPostingsOn, including a disabled category's
+// closing day (#664).
 func requirePostingsStayEligibleTx(ctx context.Context, tx *sql.Tx, accountID int64, versionID int64) error {
 	var earliest sql.NullString
 	if err := tx.QueryRowContext(ctx, `
@@ -859,6 +861,10 @@ func requirePostingsStayEligibleTx(ctx context.Context, tx *sql.Tx, accountID in
 				(
 					av.status = 'active'
 					OR (av.status = 'closed' AND av.closed_on IS NOT NULL AND je.entry_date <= av.closed_on)
+					OR (
+						av.status = 'archived' AND av.closed_on IS NOT NULL AND je.entry_date <= av.closed_on
+						AND `+categoryAccountPredicate("av")+`
+					)
 				)
 				AND av.allows_postings = 1
 				AND (av.opened_on IS NULL OR je.entry_date >= av.opened_on)

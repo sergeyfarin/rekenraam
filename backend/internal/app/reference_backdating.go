@@ -62,12 +62,13 @@ func (e ReferenceRuleConflictError) Error() string {
 func (e ReferenceRuleConflictError) Unwrap() error { return e.Err }
 
 var referenceRuleErrors = map[string]error{
-	db.ReferenceRuleCategoryNameTaken:        ErrCategoryExists,
-	db.ReferenceRulePayeeNameTaken:           ErrPayeeExists,
-	db.ReferenceRuleCategoryParentArchived:   ErrCategoryParentInvalid,
-	db.ReferenceRuleCategoryParentCycle:      ErrCategoryParentInvalid,
-	db.ReferenceRuleCategoryActiveChild:      ErrCategoryHasActiveChildren,
-	db.ReferenceRuleInstitutionLinkedAccount: ErrInstitutionInUse,
+	db.ReferenceRuleCategoryNameTaken:           ErrCategoryExists,
+	db.ReferenceRulePayeeNameTaken:              ErrPayeeExists,
+	db.ReferenceRuleCategoryParentArchived:      ErrCategoryParentInvalid,
+	db.ReferenceRuleCategoryParentCycle:         ErrCategoryParentInvalid,
+	db.ReferenceRuleCategoryActiveChild:         ErrCategoryHasActiveChildren,
+	db.ReferenceRuleInstitutionLinkedAccount:    ErrInstitutionInUse,
+	db.ReferenceRuleCategoryPostingAfterDisable: ErrCategoryPostingsAfterDisable,
 }
 
 // referenceBackdatingError maps the shared reference-version refusals (#552).

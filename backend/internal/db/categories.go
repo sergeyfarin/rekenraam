@@ -21,6 +21,10 @@ var (
 	// category of the same type on every date the new version governs, or
 	// that makes the category its own ancestor on any of those dates.
 	ErrCategoryParentInvalid = errors.New("category parent is invalid")
+	// ErrCategoryPostingsAfterDisable refuses a disable dated before a
+	// posting the category already has: the archived version keeps only its
+	// disable date open (#664).
+	ErrCategoryPostingsAfterDisable = errors.New("category has postings after the disable date")
 )
 
 type CategoryRepository struct {
@@ -534,6 +538,17 @@ func (r *CategoryRepository) ChangeCategoryStatus(ctx context.Context, params Ca
 	if err != nil {
 		return AccountRecord{}, err
 	}
+	// Asked inside the write, after the version exists, so it sees postings
+	// committed concurrently and uses the posting trigger's as-of pick. The
+	// disable date itself stays open (#664); a later posting refuses it.
+	if params.Status == "archived" {
+		if err := requirePostingsStayEligibleTx(ctx, tx, params.CategoryID, record.VersionID); err != nil {
+			if outside, ok := errors.AsType[AccountPostingsOutsideDatesError](err); ok {
+				return AccountRecord{}, ReferenceRuleConflictError{Rule: ReferenceRuleCategoryPostingAfterDisable, Date: outside.EntryDate, Err: ErrCategoryPostingsAfterDisable}
+			}
+			return AccountRecord{}, err
+		}
+	}
 
 	if err := tx.Commit(); err != nil {
 		return AccountRecord{}, fmt.Errorf("commit change category status transaction: %w", err)
@@ -954,10 +969,13 @@ func categoryHasFinancialReferences(ctx context.Context, tx *sql.Tx, bookID int6
 	return referenceCount > 0, nil
 }
 
+// categoryAccountPredicate is the rule every category read uses. It is
+// two-valued: IS, not =, so an account without category metadata yields false
+// rather than NULL, and the predicate stays correct under NOT (#664).
 func categoryAccountPredicate(alias string) string {
 	return alias + `.account_class IN ('income', 'expense')
 		AND ` + alias + `.account_kind = ` + alias + `.account_class
-		AND json_extract(` + alias + `.metadata_json, '$.category.type') = ` + alias + `.account_class`
+		AND json_extract(` + alias + `.metadata_json, '$.category.type') IS ` + alias + `.account_class`
 }
 
 func accountSpecFromRecord(record AccountRecord) AccountSpec {

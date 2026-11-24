@@ -1314,6 +1314,7 @@
   "api_error_reference_conflict_category_parent_archived": "Op {date} is de bovenliggende categorie “{name}” gearchiveerd. De wijziging zou op die dag gelden, dus kies een actieve bovenliggende categorie of een andere ingangsdatum.",
   "api_error_reference_conflict_category_parent_cycle": "Vanaf {date} valt “{name}” onder deze categorie en kan dus niet de bovenliggende categorie worden. Kies een andere bovenliggende categorie of ingangsdatum.",
   "api_error_reference_conflict_category_active_child": "Op {date} is de subcategorie “{name}” nog actief. Archiveer of verplaats die eerst, of kies een latere datum.",
+  "api_error_reference_conflict_category_posting_after_disable": "Een boeking op {date} gebruikt deze categorie nog na de uitschakeldatum. Verplaats die en latere boekingen naar een andere categorie, of schakel de categorie later uit.",
   "api_error_reference_conflict_institution_linked_account": "Op {date} gebruikt de rekening “{name}” deze instelling nog. Archiveer eerst de rekening of wijzig de instelling ervan, of kies een latere datum.",
   "api_error_investment_instrument_version_backdated": "Structurele wijzigingen van het instrument kunnen niet ingaan vóór de nieuwste versie. Kies die datum of een latere.",
   "api_error_investment_exchange_already_corrected": "Deze aandelenomwisseling is al gecorrigeerd.",

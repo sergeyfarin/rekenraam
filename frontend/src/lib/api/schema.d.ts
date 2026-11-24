@@ -8003,7 +8003,7 @@ export interface paths {
         put?: never;
         /**
          * Disable a category
-         * @description Disabling archives the category for active pickers while preserving history. Active child categories must be disabled or moved first.
+         * @description Disabling archives the category for active pickers while preserving history. Active child categories must be disabled or moved first. The disable date is the category's closed_on and its last open day, as for a closed account; postings dated on or before it stay valid, and a fresh posting on or before it is still accepted by the ledger (#664).
          */
         post: {
             parameters: {
@@ -8073,7 +8073,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description REFERENCE_DATED_CONFLICT when a child category is active on a date the disable governs; REFERENCE_VERSION_BACKDATED when dated before the latest version; CONFLICT for a built-in category, which cannot be disabled. */
+                /** @description REFERENCE_DATED_CONFLICT when a child category is active on a date the disable governs (category_active_child), or when a posting that is not voided or deleted is dated after the disable date (category_posting_after_disable, conflict_date is the earliest); REFERENCE_VERSION_BACKDATED when dated before the latest version; CONFLICT for a built-in category, which cannot be disabled. */
                 409: components["responses"]["ReferenceVersionConflict"];
                 413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
@@ -36576,10 +36576,10 @@ export interface components {
             /** @description On a reconciliation guard refusal of a generic ledger write (CONFLICT "reconciliation override is required", or RECONCILIATION_IMPACT_STALE): the checkpoints the write would invalidate right now. A reorder, which has no preview, binds its override to this set (#296). */
             checkpoint_ids?: number[];
             /**
-             * @description On REFERENCE_DATED_CONFLICT: the rule a dated category, payee or institution write breaks on a date the new version governs, which may lie between the requested date and today (#552).
+             * @description On REFERENCE_DATED_CONFLICT: the rule a dated category, payee or institution write breaks on a date the new version governs, which may lie between the requested date and today (#552). category_posting_after_disable: a disable would leave a posting after its date, which may be after today; conflict_date is the earliest such posting's entry date and there is no other record (#664).
              * @enum {string}
              */
-            conflict_rule?: "category_name_taken" | "payee_name_taken" | "category_parent_archived" | "category_parent_cycle" | "category_active_child" | "institution_linked_account";
+            conflict_rule?: "category_name_taken" | "payee_name_taken" | "category_parent_archived" | "category_parent_cycle" | "category_active_child" | "institution_linked_account" | "category_posting_after_disable";
             /**
              * Format: date
              * @description On REFERENCE_DATED_CONFLICT: the first date the rule fails. On REFERENCE_VERSION_BACKDATED: the latest version's date, the earliest date a lifecycle or structural change may take effect. On REFERENCE_VERSION_BEFORE_FIRST: the first version's date, the earliest date any change may take effect.

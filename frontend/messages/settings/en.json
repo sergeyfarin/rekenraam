@@ -1343,6 +1343,7 @@
   "api_error_reference_conflict_category_parent_archived": "On {date}, the parent category “{name}” is archived. This change would apply on that day, so choose an active parent or a different effective date.",
   "api_error_reference_conflict_category_parent_cycle": "From {date}, “{name}” sits under this category, so it cannot become its parent. Choose a different parent or effective date.",
   "api_error_reference_conflict_category_active_child": "On {date}, the subcategory “{name}” is still active. Archive or move it first, or choose a later date.",
+  "api_error_reference_conflict_category_posting_after_disable": "A posting on {date} still uses this category after the disable date. Move it and any later postings to another category, or disable the category later.",
   "api_error_reference_conflict_institution_linked_account": "On {date}, the account “{name}” still uses this institution. Archive the account or change its institution first, or choose a later date.",
   "api_error_investment_instrument_version_backdated": "Structural instrument changes cannot take effect before the latest version. Choose that date or a later one.",
   "api_error_investment_exchange_already_corrected": "This share exchange has already been corrected.",

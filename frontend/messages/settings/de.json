@@ -1309,6 +1309,7 @@
   "api_error_reference_conflict_category_parent_archived": "Am {date} ist die übergeordnete Kategorie „{name}“ archiviert. Die Änderung würde an diesem Tag gelten. Wählen Sie daher eine aktive übergeordnete Kategorie oder ein anderes Gültigkeitsdatum.",
   "api_error_reference_conflict_category_parent_cycle": "Ab dem {date} liegt „{name}“ unterhalb dieser Kategorie und kann daher nicht ihre übergeordnete Kategorie werden. Wählen Sie eine andere übergeordnete Kategorie oder ein anderes Gültigkeitsdatum.",
   "api_error_reference_conflict_category_active_child": "Am {date} ist die Unterkategorie „{name}“ noch aktiv. Archivieren oder verschieben Sie sie zuerst, oder wählen Sie ein späteres Datum.",
+  "api_error_reference_conflict_category_posting_after_disable": "Eine Buchung am {date} verwendet diese Kategorie noch nach dem Deaktivierungsdatum. Verschieben Sie sie und spätere Buchungen in eine andere Kategorie, oder deaktivieren Sie die Kategorie später.",
   "api_error_reference_conflict_institution_linked_account": "Am {date} verwendet das Konto „{name}“ dieses Institut noch. Archivieren Sie zuerst das Konto oder ändern Sie dessen Institut, oder wählen Sie ein späteres Datum.",
   "api_error_investment_instrument_version_backdated": "Strukturelle Änderungen am Instrument können nicht vor der neuesten Version wirksam werden. Wählen Sie dieses Datum oder ein späteres.",
   "api_error_investment_exchange_already_corrected": "Dieser Aktientausch wurde bereits korrigiert.",

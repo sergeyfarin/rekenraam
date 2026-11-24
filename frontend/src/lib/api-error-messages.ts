@@ -124,6 +124,11 @@ function referenceConflictMessage(code: APIErrorCode, conflict: APIReferenceConf
   if (code === 'REFERENCE_VERSION_BEFORE_FIRST') {
     return m.api_error_reference_version_before_first_from({ date });
   }
+  // The disable's own category is the record in question, so this rule
+  // names only the day (#664).
+  if (code === 'REFERENCE_DATED_CONFLICT' && conflict.rule === 'category_posting_after_disable') {
+    return m.api_error_reference_conflict_category_posting_after_disable({ date });
+  }
   const name = conflict.name?.trim() || (conflict.builtinKey ? builtinCategoryLabel(conflict.builtinKey) : '');
   if (code !== 'REFERENCE_DATED_CONFLICT' || !name) {
     return undefined;

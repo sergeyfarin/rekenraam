@@ -67,6 +67,27 @@ describe('dated reference conflicts name the rule, day and record (#552)', () =>
     }
   });
 
+  it.each(locales)('names the earliest posting a disable would strand in %s (#664)', (locale) => {
+    const previous = getLocale;
+    try {
+      overwriteGetLocale(() => locale);
+      const state = getFormErrorState(new APIClientError({
+        status: 409,
+        code: 'REFERENCE_DATED_CONFLICT',
+        detail: 'server detail must not replace translated guidance',
+        conflict: { rule: 'category_posting_after_disable', date: '2026-09-01' }
+      }));
+      const date = formatCalendarDate('2026-09-01', locale);
+      expect(state?.message).toBe(m.api_error_reference_conflict_category_posting_after_disable({ date }));
+      expect(state?.message).toContain(date);
+      if (locale !== 'en') {
+        expect(state?.message).not.toBe(m.api_error_reference_conflict_category_posting_after_disable({ date }, { locale: 'en' }));
+      }
+    } finally {
+      overwriteGetLocale(previous);
+    }
+  });
+
   it('labels an unnamed built-in category by its key', () => {
     const state = getFormErrorState(new APIClientError({
       status: 409,

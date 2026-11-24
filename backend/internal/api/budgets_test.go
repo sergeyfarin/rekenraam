@@ -159,25 +159,28 @@ func TestBudgetCountsPostingDatedSplitsFundedThroughClearing(t *testing.T) {
 }
 
 // #320: archiving a category later must not rewrite a month it was active in.
+// The category clock is 2026-01-01, so the disables below take effect then and
+// the active month is December 2025: a disable dated before a posting the
+// category has is refused (#664).
 func TestBudgetKeepsArchivedCategoryHistoryInItsMonths(t *testing.T) {
 	t.Parallel()
 	handler, _ := newSetupTestHandler(t)
 	cookie, csrf, usd := setupAccountAPITest(t, handler)
-	checking := createLedgerAccount(t, handler, cookie, csrf, "Archive checking", "asset", "checking", usd, 2)
+	checking := createLedgerAccountOpenedOn(t, handler, cookie, csrf, "Archive checking", "asset", "checking", usd, 2, "2025-01-01")
 	kept := createCategoryForSession(t, handler, cookie, csrf, `{"name":"Archive kept","category_type":"expense"}`)
 	retired := createCategoryForSession(t, handler, cookie, csrf, `{"name":"Archive retired","category_type":"expense"}`)
 	bonus := createCategoryForSession(t, handler, cookie, csrf, `{"name":"Archive bonus","category_type":"income"}`)
 	unused := createCategoryForSession(t, handler, cookie, csrf, `{"name":"Archive unused","category_type":"expense"}`)
-	createTransactionForSession(t, handler, cookie, csrf, balancedBody("2026-02-10", posting(checking.ID, -1000, 2, usd), posting(kept.ID, 1000, 2, usd)), http.StatusCreated)
-	createTransactionForSession(t, handler, cookie, csrf, balancedBody("2026-02-11", posting(checking.ID, -999, 2, usd), posting(retired.ID, 999, 2, usd)), http.StatusCreated)
-	createTransactionForSession(t, handler, cookie, csrf, balancedBody("2026-02-12", posting(checking.ID, 30000, 2, usd), posting(bonus.ID, -30000, 2, usd)), http.StatusCreated)
+	createTransactionForSession(t, handler, cookie, csrf, balancedBody("2025-12-10", posting(checking.ID, -1000, 2, usd), posting(kept.ID, 1000, 2, usd)), http.StatusCreated)
+	createTransactionForSession(t, handler, cookie, csrf, balancedBody("2025-12-11", posting(checking.ID, -999, 2, usd), posting(retired.ID, 999, 2, usd)), http.StatusCreated)
+	createTransactionForSession(t, handler, cookie, csrf, balancedBody("2025-12-12", posting(checking.ID, 30000, 2, usd), posting(bonus.ID, -30000, 2, usd)), http.StatusCreated)
 	mutateBudget(t, handler, cookie, csrf, http.MethodPut, "/api/v1/budgets/targets/"+strconvFormatInt(retired.ID)+"/"+strconvFormatInt(usd),
-		`{"period_start":"2026-02-01","quantity_value":"1500","quantity_scale":2,"change_reason":"plan"}`)
+		`{"period_start":"2025-12-01","quantity_value":"1500","quantity_scale":2,"change_reason":"plan"}`)
 	for _, id := range []int64{retired.ID, bonus.ID, unused.ID} {
 		mutateCategory(t, handler, cookie, csrf, http.MethodPost, "/api/v1/categories/"+strconvFormatInt(id)+"/disable", `{}`, http.StatusOK)
 	}
 
-	month := readBudget(t, handler, cookie, "2026-02-01")
+	month := readBudget(t, handler, cookie, "2025-12-01")
 	expense := budgetTotalFor(t, month, "expense", usd)
 	assert.Equal(t, "1999", expense.Actual.QuantityValue.String(), "10.00 + 9.99")
 	assert.Equal(t, "1500", expense.Target.QuantityValue.String())
@@ -191,7 +194,7 @@ func TestBudgetKeepsArchivedCategoryHistoryInItsMonths(t *testing.T) {
 	for _, c := range month.Categories {
 		assert.NotEqual(t, unused.ID, c.ID, "an archived category with no activity stays hidden")
 	}
-	for _, c := range readBudget(t, handler, cookie, "2026-03-01").Categories {
+	for _, c := range readBudget(t, handler, cookie, "2026-02-01").Categories {
 		assert.NotEqual(t, retired.ID, c.ID, "an archived category is hidden from months without activity")
 	}
 }

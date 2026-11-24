@@ -1309,6 +1309,7 @@
   "api_error_reference_conflict_category_parent_archived": "Le {date}, la catégorie parente « {name} » est archivée. La modification s'appliquerait ce jour-là : choisissez une catégorie parente active ou une autre date d'effet.",
   "api_error_reference_conflict_category_parent_cycle": "À partir du {date}, « {name} » se trouve sous cette catégorie et ne peut donc pas devenir sa catégorie parente. Choisissez une autre catégorie parente ou une autre date d'effet.",
   "api_error_reference_conflict_category_active_child": "Le {date}, la sous-catégorie « {name} » est encore active. Archivez-la ou déplacez-la d'abord, ou choisissez une date ultérieure.",
+  "api_error_reference_conflict_category_posting_after_disable": "Une écriture du {date} utilise encore cette catégorie après la date de désactivation. Déplacez-la, ainsi que les écritures ultérieures, vers une autre catégorie, ou désactivez la catégorie plus tard.",
   "api_error_reference_conflict_institution_linked_account": "Le {date}, le compte « {name} » utilise encore cet établissement. Archivez d'abord le compte ou changez son établissement, ou choisissez une date ultérieure.",
   "api_error_investment_instrument_version_backdated": "Les modifications structurelles de l'instrument ne peuvent pas prendre effet avant la dernière version. Choisissez cette date ou une date ultérieure.",
   "api_error_investment_exchange_already_corrected": "Cet échange d’actions a déjà été corrigé.",
