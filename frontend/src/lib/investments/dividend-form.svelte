@@ -206,6 +206,13 @@
     cashCommodityID ? (currenciesByID.get(cashCommodityID)?.code ?? '') : ''
   );
 
+  // A selected account counts only while it is one of the picker's options.
+  // An archived default or a choice archived since keeps its ID in state but
+  // shows a blank field, so it is never sent or treated as chosen (#664 review).
+  const offered = (accounts: AccountResponse[], id: string) => id !== '' && accounts.some((account) => String(account.id) === id);
+  const chosenIncomeID = $derived(offered(incomeAccounts, incomeAccountID) ? incomeAccountID : '');
+  const chosenWithholdingID = $derived(offered(withholdingAccounts, withholdingAccountID) ? withholdingAccountID : '');
+
   function applyDefaultsForInstrument(inst: InvestmentInstrumentResponse) {
     const defaults = dividendDefaultsQuery.data?.defaults ?? [];
     // Find a default that matches this instrument's commodity or is the global default (no commodity_id)
@@ -213,8 +220,14 @@
       defaults.find((d) => d.commodity_id === inst.commodity_id && d.status === 'active') ??
       defaults.find((d) => d.commodity_id === undefined && d.status === 'active');
     if (!match) return;
-    if (incomeAccountID === '') incomeAccountID = String(match.income_account_id);
-    if (withholdingAccountID === '' && match.withholding_account_id) {
+    // A default fills a field only with an offered option; before the
+    // accounts load, the submit checks below still apply.
+    const loaded = accountsQuery.data !== undefined;
+    if (incomeAccountID === '' && (!loaded || offered(incomeAccounts, String(match.income_account_id)))) {
+      incomeAccountID = String(match.income_account_id);
+    }
+    if (withholdingAccountID === '' && match.withholding_account_id &&
+      (!loaded || offered(withholdingAccounts, String(match.withholding_account_id)))) {
       withholdingAccountID = String(match.withholding_account_id);
     }
     if (withholdingStr === '' && match.default_withholding_value && match.default_withholding_scale !== undefined) {
@@ -239,7 +252,8 @@
   const canSubmitCash = $derived(
     cashAccounts.some((account) => String(account.id) === cashAccountID) &&
     !!cashCommodityID &&
-    (mode === 'withholding' ? withholdingAccountID !== '' : incomeAccountID !== '') &&
+    (mode === 'withholding' ? chosenWithholdingID !== '' : chosenIncomeID !== '') &&
+    (mode !== 'cash' || !showWithholding || withholdingAccountID === '' || chosenWithholdingID !== '') &&
     amountStr.trim() !== ''
   );
 
@@ -288,13 +302,13 @@
           ex_date: exDate || undefined,
           cash_account_id: Number(cashAccountID),
           cash_commodity_id: cashCommodityID,
-          income_account_id: mode !== 'withholding' && incomeAccountID ? Number(incomeAccountID) : undefined,
+          income_account_id: mode !== 'withholding' && chosenIncomeID ? Number(chosenIncomeID) : undefined,
           amount_value: amount.value,
           amount_scale: amount.scale,
           withholding_value: withholding?.value,
           withholding_scale: withholding?.scale,
           withholding_account_id:
-            (mode === 'withholding' || withholding) && withholdingAccountID ? Number(withholdingAccountID) : undefined,
+            (mode === 'withholding' || withholding) && chosenWithholdingID ? Number(chosenWithholdingID) : undefined,
           memo: memo.trim() || undefined
         };
 
@@ -310,7 +324,7 @@
           transaction_date: transactionDate,
           commodity_id: selectedInstrument.commodity_id,
           holding_account_id: Number(holdingAccountID),
-          income_account_id: incomeAccountID ? Number(incomeAccountID) : undefined,
+          income_account_id: chosenIncomeID ? Number(chosenIncomeID) : undefined,
           quantity_value: quantity.value,
           quantity_scale: quantity.scale,
           amount_value: amount.value,
