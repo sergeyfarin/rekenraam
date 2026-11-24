@@ -229,7 +229,8 @@ keyboard selection (`home-entry.spec.ts`).
 
 Creates that duplicate on retry (#660) are guarded by request keys
 (`docs/conventions.md` → *Create Request Keys*): a retry resends the exact
-unresolved save under the same key. Open instance: a preview-first investment
+unresolved save under the same key, including after a 5xx on an edited save
+or `IDEMPOTENCY_KEY_RESULT_UNAVAILABLE` (committed, result not stored yet). Open instance: a preview-first investment
 create reopened after a lost response must preview again, and that preview
 refuses what the lost save already moved (#677).
 

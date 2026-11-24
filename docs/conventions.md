@@ -596,7 +596,10 @@ exchange, cash-and-stock merger, spin-off, internal and external transfers) and
   sale already disposed). The same key with another route or body returns 409
   `IDEMPOTENCY_KEY_REUSED`. The form keeps its key, so no later save of that
   entry can record it a second time; a separate record is a new entry. A key whose write committed but whose
-  response was never stored returns 409 `IDEMPOTENCY_KEY_RESULT_UNAVAILABLE`.
+  response is not stored yet (the committing request is still finishing, or
+  storing failed) returns 409 `IDEMPOTENCY_KEY_RESULT_UNAVAILABLE` for the
+  same request. The form keeps that save unresolved, like a lost response, so
+  the next Save sends the same bytes and replays the result once it is stored.
 - A form must reach the keyed write on a retry. A review-at-commit form
   (`commitReview`) asks for the write's impact before saving, and that impact
   can be refused once the lost write has committed (a sale's units are gone).
