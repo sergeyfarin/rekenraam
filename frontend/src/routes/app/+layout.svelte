@@ -13,6 +13,7 @@
   import { tagDirectoryQueryKey, tagsQueryKey } from '#lib/api/tags.ts';
   import { payeeDirectoryQueryKey, payeesQueryKey } from '#lib/api/payees.ts';
   import { searchCatalogQueryKey } from '#lib/api/search.ts';
+  import { categoriesQueryKey, changesCategories } from '#lib/api/categories.ts';
   import { provideAttention } from '#lib/attention/context.ts';
   import { attentionSummary, sourceBadge } from '#lib/attention/model.ts';
   import { getLocale } from '#lib/paraglide/runtime.js';
@@ -112,6 +113,10 @@
           }
           if (path.startsWith('/api/v1/payees/')) {
             void queryClient.invalidateQueries({ queryKey: payeesQueryKey });
+            void queryClient.invalidateQueries({ queryKey: searchCatalogQueryKey });
+          }
+          if (changesCategories(path)) {
+            void queryClient.invalidateQueries({ queryKey: categoriesQueryKey });
             void queryClient.invalidateQueries({ queryKey: searchCatalogQueryKey });
           }
         }

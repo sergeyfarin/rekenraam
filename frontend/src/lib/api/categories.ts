@@ -10,6 +10,15 @@ export type CompleteCategoriesSetupResponse = components['schemas']['CompleteCat
 
 export const categoriesQueryKey = ['api', 'categories'] as const;
 
+/**
+ * Whether a successful write to this API path changes a category list. The
+ * shell invalidates every cached list after one, so a picker loaded before an
+ * archive never offers the archived category again (#664 review).
+ */
+export function changesCategories(path: string): boolean {
+  return path === '/api/v1/categories' || path.startsWith('/api/v1/categories/') || path === '/api/v1/setup/categories';
+}
+
 export function categoriesQueryOptions(options: { includeArchived?: boolean; categoryType?: 'income' | 'expense' } = {}) {
   return {
     queryKey: [...categoriesQueryKey, options] as const,
