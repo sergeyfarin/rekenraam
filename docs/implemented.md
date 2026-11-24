@@ -118,7 +118,8 @@ app `TestDividendDefaultSkipsAnArchivedTarget`,
 `TestDividendDefaultDecisionIsBoundToTheVersionItRead`,
 `TestUnusedDividendDefaultDoesNotBindTheWrite`,
 `TestDividendAccountFromDefaultIsCheckedAtWrite`,
-`TestDividendDefaultEditedBeforeCommitIsRefused`, API
+`TestDividendDefaultEditedBeforeCommitIsRefused`,
+`TestImportedDividendDefaultArchivedBeforeWriteIsHeld`, API
 `TestDividendAccountFromChangedDefaultIsRefused_HTTP`;
 `dividend-default-choice.test.ts`;
 browser `category-disable-day.spec.ts`.

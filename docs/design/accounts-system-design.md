@@ -1099,7 +1099,11 @@ history. The rules below are shared; each kind's design links here.
   bound to its version, or refuses with `409 DIVIDEND_DEFAULT_CHANGED`; the form
   then reloads and shows the current default for review. The write resolves
   the default again inside its transaction, since editing a default row
-  changes no account version. The form resolves a default the way the server
+  changes no account version. Import review marks the accounts it fills from
+  the default the same way, so an imported dividend whose default was archived
+  or changed after the review filled it is held for review instead of posted.
+  A default-filled withholding *amount* is not yet checked at commit (#684).
+  The form resolves a default the way the server
   does: in effect on the entry's date, the commodity's own before the global
   one, latest effective date first, and again when the date changes. Toggling
   withholding is the owner's visibility choice; it does not make a default

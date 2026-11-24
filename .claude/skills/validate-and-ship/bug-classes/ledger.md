@@ -171,7 +171,10 @@ editing the amount. The client resolves a default by the server's own rule
 (date and precedence, `applicableDividendDefault`), or a backdated entry
 loops on a refusal; and the write re-resolves the default in its transaction
 (`TestDividendDefaultEditedBeforeCommitIsRefused`), because a guard on account
-versions cannot see an edit to the default row. An owner's choice
+versions cannot see an edit to the default row. Every producer that fills
+from a default must mark it, not only the form: import review passed its
+default as an explicit choice until `TestImportedDividendDefaultArchivedBeforeWriteIsHeld`.
+The amount is the open gap (#684). An owner's choice
 that stops being offered stays visible and blocks the save; clearing it
 silently lets the server substitute the stored default. Named checks: `TestCategoryDisableKeepsItsLastPostingDay`,
 `TestCategoryDisableRefusesALaterPosting`,
