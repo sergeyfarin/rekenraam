@@ -1927,11 +1927,19 @@ func (s *InvestmentService) withDividendDefault(ctx context.Context, input Divid
 	if !income.wanted() && !withholding.wanted() {
 		return input, nil, nil
 	}
+	// A dividend without a payer resolves the global default, as an import
+	// review does before an instrument exists; the server fills nothing from
+	// it unless the request says an account came from it.
+	commodityID := input.CommodityID.Value
+	if commodityID == nil && (income.fromDefault || withholding.fromDefault) {
+		global := int64(0)
+		commodityID = &global
+	}
 	var defaultRecord db.DividendDefaultRecord
 	var versions map[int64]int64
-	if input.CommodityID.Value != nil {
+	if commodityID != nil {
 		var err error
-		defaultRecord, versions, err = s.applicableDividendDefault(ctx, *input.CommodityID.Value, date)
+		defaultRecord, versions, err = s.applicableDividendDefault(ctx, *commodityID, date)
 		if err != nil && !errors.Is(err, db.ErrNotFound) {
 			return input, nil, fmt.Errorf("resolve dividend default: %w", err)
 		}
@@ -1948,7 +1956,7 @@ func (s *InvestmentService) withDividendDefault(ctx context.Context, input Divid
 	if err != nil {
 		return input, nil, err
 	}
-	return input, dividendDefaultDependency(input.CommodityID.Value, date, incomeUsed, withholdingUsed), nil
+	return input, dividendDefaultDependency(commodityID, date, incomeUsed, withholdingUsed), nil
 }
 
 // dividendDefaultDependency names the accounts taken from the default, or nil
