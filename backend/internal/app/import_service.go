@@ -994,7 +994,7 @@ func (s *ImportService) PreviewCommit(ctx context.Context, input PreviewCommitIn
 			if err != nil {
 				return PreviewCommitResult{}, err
 			}
-			dividend, _, err := s.reviewedDividendInput(ctx, c, c.resolution, input.OwnerUserID, 0, "")
+			dividend, _, err := s.reviewedDividendInput(ctx, c, c.resolution, dividendDefaultFill{}, input.OwnerUserID, 0, "")
 			if errors.Is(err, ErrImportDividendReviewRequired) {
 				continue
 			}

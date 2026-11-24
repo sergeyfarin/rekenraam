@@ -14,6 +14,10 @@ type reviewImportDividendRequest struct {
 	Resolution                   app.ImportRowResolution `json:"resolution"`
 	ExpectedTransactionVersionID int64                   `json:"expected_transaction_version_id"`
 	Reason                       string                  `json:"reason"`
+	// The review response's marks for accounts the default filled, sent back
+	// while the owner keeps them (#664 review).
+	IncomeAccountFromDefault      bool `json:"income_account_from_default"`
+	WithholdingAccountFromDefault bool `json:"withholding_account_from_default"`
 	reconciliationOverrideFields
 }
 
@@ -68,7 +72,8 @@ func reviewImportDividend(logger *slog.Logger, auth *app.AuthService, service *a
 			writeDecodeError(w, err)
 			return
 		}
-		input := app.ReviewImportDividendInput{OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()), BatchID: batchID, RowID: rowID, Resolution: request.Resolution, Reason: request.Reason, ExpectedTransactionVersionID: request.ExpectedTransactionVersionID, ReconciliationOverride: request.checkpointOverride()}
+		input := app.ReviewImportDividendInput{OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()), BatchID: batchID, RowID: rowID, Resolution: request.Resolution, Reason: request.Reason, ExpectedTransactionVersionID: request.ExpectedTransactionVersionID, ReconciliationOverride: request.checkpointOverride(),
+			IncomeAccountFromDefault: request.IncomeAccountFromDefault, WithholdingAccountFromDefault: request.WithholdingAccountFromDefault}
 		if preview {
 			impact, err := service.ImportDividendReviewImpact(r.Context(), input)
 			if err != nil {
@@ -101,6 +106,8 @@ func writeImportDividendReviewError(w http.ResponseWriter, r *http.Request, logg
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "investment instrument not found")
 	case errors.Is(err, exact.ErrInt64Range):
 		writeAPIError(w, http.StatusUnprocessableEntity, "LEDGER_OVERFLOW", "dividend amount exceeds supported precision")
+	case errors.Is(err, app.ErrDividendDefaultChanged):
+		writeAPIError(w, http.StatusConflict, "DIVIDEND_DEFAULT_CHANGED", err.Error())
 	default:
 		writeTransactionServiceError(w, r, logger, "review imported dividend", err)
 	}
