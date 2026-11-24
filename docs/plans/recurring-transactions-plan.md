@@ -350,7 +350,11 @@ was satisfied in slice 5 on 2026-08-31: startup and minute ticks now run from
    and enqueue must be one repo-layer transaction) applies unchanged.
 4. On a validation failure — archived account, closed account, retired
    commodity, unbalanced template — write a `blocked` row with the message and
-   move on. No retry, no log line per minute.
+   move on. No retry, no log line per minute. Each occurrence is judged on its
+   own date by the shared [archived-reference
+   rules](../design/accounts-system-design.md#archived-references-by-operation):
+   an occurrence dated on or before a category's disable day still generates
+   (#664).
 5. Advance `generate_from` to the bounded window end plus one day once every
    date in the window has a row — `generated` or `blocked` both count, because both are
    recorded. A date left unrecorded by a crash or a per-tick cap holds the

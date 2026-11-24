@@ -91,6 +91,25 @@ them through the same boundary. The
 [per-kind contract and named regressions](design/accounts-system-design.md)
 record the field split, the window rule, and API and translation coverage.
 
+## Category disable keeps its disable day — #664
+
+A category disabled on a date is archived with that date as `closed_on`, and,
+like a closed account (#292), that day stays open: postings dated on or before
+it can be edited with their journal kept, voided and unvoided, and the ledger
+still accepts a fresh posting dated then, while pickers hide the category at
+once. Go validation, the posting trigger (migration 0016) and the in-write
+eligibility guard share the rule; archived ordinary accounts still accept
+nothing. A disable that would leave a later posting, future-dated included,
+returns `409 REFERENCE_DATED_CONFLICT` (`category_posting_after_disable`) with
+the earliest such date and writes nothing; the category screen explains it in
+every locale. The shared rules by operation are in the
+[account design](design/accounts-system-design.md#archived-references-by-operation).
+Named cases: API `TestCategoryDisableKeepsItsLastPostingDay`,
+`TestCategoryDisableRefusesALaterPosting`,
+`TestCategoryDisableDayAllowanceLeavesOtherContracts`,
+`TestCategoryDisableDayMigrationUpgradesAnExistingDatabase`; `form-errors.test.ts`;
+browser `category-disable-day.spec.ts`.
+
 ## Project website source
 
 The independently built [public website](../website/README.md) implements the

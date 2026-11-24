@@ -130,3 +130,22 @@ category or payee on an import rule (#652) and archived tags on a correction
 `TestTagListByIDResolvesAssignmentsPastTheCatalogLimit`,
 `tags.test.ts` (`getTagsByID`), `transaction-archived-tags.spec.ts` (201 tags
 and a long archived line tag at 320 px), `recurring.spec.ts`.
+
+## 88. A one-step lifecycle version that refuses its own last day
+
+Disabling a category archives it in one step, with `effective_from` and
+`closed_on` both on the disable date. The posting rule honoured `closed_on`
+only for `closed` versions (#292), so the archived version refused its own
+date: an entry on that day could no longer be edited with its journal kept,
+voided or unvoided (#664). The category write also skipped
+`requirePostingsStayEligibleTx`, so a disable dated before a later posting,
+including a future-dated one, succeeded and stranded it. A status that carries
+`closed_on` must accept that day wherever eligibility is decided: the Go rule
+(`PostingAccountRule.AcceptsPostingsOn`), the posting trigger and the in-write
+guard are three copies, so change them together and test them at D−1, D and
+D+1. Every lifecycle write that appends a version runs the guard before
+commit. Named checks: `TestCategoryDisableKeepsItsLastPostingDay`,
+`TestCategoryDisableRefusesALaterPosting`,
+`TestCategoryDisableDayAllowanceLeavesOtherContracts`,
+`TestCategoryDisableDayMigrationUpgradesAnExistingDatabase`,
+`category-disable-day.spec.ts`. Re-entry through restore is #665.
