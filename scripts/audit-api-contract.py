@@ -84,6 +84,8 @@ TESTS = [
  'TestAccountLabelPartsReachEveryAccountRead',
  'TestHomeReturnsWidgetsReadTheLatestSavedRun',
  'TestLedgerOverviewHTTPComposesAccountMetadataAndBalances',
+ 'TestSectionOverviewFiguresMatchTheirCanonicalPages',
+ 'TestSectionOverviewKeepsOtherSourcesWhenBudgetFailsOrRatesAreMissing',
  'TestReconciliationPolicyHTTPSavesTheWindowTheAccountListReads',
  'TestAccountReconciliationLookupHTTP',
  'TestSeparateWithholdingAPIAndBundle',

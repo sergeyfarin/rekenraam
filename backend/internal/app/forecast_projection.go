@@ -40,8 +40,16 @@ type forecastBuild struct {
 }
 
 func buildForecast(ctx context.Context, input forecastNormalizedInput, bounds forecastBounds, scope forecastScope, snapshot db.ForecastSnapshot, computedAt string) (ForecastResult, error) {
-	if err := ctx.Err(); err != nil {
+	b, err := prepareForecast(ctx, bounds, scope, snapshot)
+	if err != nil {
 		return ForecastResult{}, err
+	}
+	return b.finish(input, computedAt)
+}
+
+func prepareForecast(ctx context.Context, bounds forecastBounds, scope forecastScope, snapshot db.ForecastSnapshot) (*forecastBuild, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	b := &forecastBuild{ctx: ctx, bounds: bounds, scope: scope, snapshot: snapshot,
 		selected: map[int64]bool{}, opening: map[forecastPair]*exact.ScaledInt{}, movements: map[forecastPair]map[string]*forecastMovement{}, scales: map[forecastPair]int{}, rules: newForecastRuleLookup(snapshot)}
@@ -49,7 +57,7 @@ func buildForecast(ctx context.Context, input forecastNormalizedInput, bounds fo
 		b.selected[id] = true
 	}
 	if err := b.addPosted(); err != nil {
-		return ForecastResult{}, err
+		return nil, err
 	}
 	b.addZeroDefaultSeries()
 	acted := map[string]db.ForecastOccurrenceRecord{}
@@ -57,13 +65,13 @@ func buildForecast(ctx context.Context, input forecastNormalizedInput, bounds fo
 		acted[forecastOccurrenceKey(occurrence.TemplateID, occurrence.OccurrenceDate)] = occurrence
 	}
 	if err := b.addDrafts(); err != nil {
-		return ForecastResult{}, err
+		return nil, err
 	}
 	b.addOccurrenceDiagnostics()
 	if err := b.addTemplates(acted); err != nil {
-		return ForecastResult{}, err
+		return nil, err
 	}
-	return b.finish(input, computedAt)
+	return b, nil
 }
 
 func (b *forecastBuild) addPosted() error {
@@ -425,7 +433,7 @@ func (b *forecastBuild) finish(input forecastNormalizedInput, computedAt string)
 		result.Series = append(result.Series, series)
 	}
 	for _, commodityID := range commodityIDs {
-		aggregate, err := b.makeAggregate(commodityID, pairs)
+		aggregate, err := b.makeAggregate(commodityID, pairs, true)
 		if err != nil {
 			return ForecastResult{}, err
 		}
@@ -532,7 +540,7 @@ func (b *forecastBuild) makeSeries(pair forecastPair, scale int) (ForecastSeries
 	return series, nil
 }
 
-func (b *forecastBuild) makeAggregate(commodityID int64, pairs []forecastPair) (ForecastSeries, error) {
+func (b *forecastBuild) makeAggregate(commodityID int64, pairs []forecastPair, includePoints bool) (ForecastSeries, error) {
 	scale := 0
 	for _, pair := range pairs {
 		if pair.CommodityID == commodityID && b.scales[pair] > scale {
@@ -570,12 +578,14 @@ func (b *forecastBuild) makeAggregate(commodityID int64, pairs []forecastPair) (
 				return ForecastSeries{}, err
 			}
 		}
-		point := ForecastPoint{Date: date, Components: ForecastComponents{Posted: b.valueAtScale(movement.Posted, scale), Draft: b.valueAtScale(movement.Draft, scale), Template: b.valueAtScale(movement.Template, scale)}, RecordedBalance: b.valueAtScale(recorded, scale), ProjectedBalance: b.valueAtScale(projected, scale)}
-		point.SourceCounts, point.CarriedForward = b.eventCounts(date, nil, commodityID)
-		series.Points = append(series.Points, point)
 		if projected.Cmp(exact.ScaledIntFromCoefficient(series.Minimum.Value, series.Minimum.Scale)) < 0 {
-			series.Minimum = point.ProjectedBalance
+			series.Minimum = b.valueAtScale(projected, scale)
 			series.MinimumDate = date
+		}
+		if includePoints {
+			point := ForecastPoint{Date: date, Components: ForecastComponents{Posted: b.valueAtScale(movement.Posted, scale), Draft: b.valueAtScale(movement.Draft, scale), Template: b.valueAtScale(movement.Template, scale)}, RecordedBalance: b.valueAtScale(recorded, scale), ProjectedBalance: b.valueAtScale(projected, scale)}
+			point.SourceCounts, point.CarriedForward = b.eventCounts(date, nil, commodityID)
+			series.Points = append(series.Points, point)
 		}
 	}
 	return series, nil

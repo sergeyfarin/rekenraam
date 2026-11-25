@@ -203,7 +203,11 @@ func forecastDateBounds(nowUTC time.Time, timeZone string, horizon int) (forecas
 	if err != nil {
 		return forecastBounds{}, fmt.Errorf("load forecast time zone: %w", err)
 	}
-	asOfTime, err := time.Parse(time.DateOnly, nowUTC.In(location).Format(time.DateOnly))
+	return forecastBoundsFromDate(nowUTC.In(location).Format(time.DateOnly), horizon)
+}
+
+func forecastBoundsFromDate(asOf string, horizon int) (forecastBounds, error) {
+	asOfTime, err := time.Parse(time.DateOnly, asOf)
 	if err != nil {
 		return forecastBounds{}, fmt.Errorf("parse forecast date: %w", err)
 	}

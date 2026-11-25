@@ -5166,6 +5166,138 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/planning/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Planning overview
+         * @description Composes the owner-local month's per-currency expense budget totals, counts from the recurring Due view, and the default 90-day liquid balance estimate by currency. The forecast minimum includes the opening balance. One source's failure is reported on its own card. Session-only.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Planning overview cards */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PlanningOverview"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Unable to establish the owner-local date for the overview */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Database busy. Retry the request. */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Reports overview
+         * @description Composes month-to-date spending and operating cashflow, net worth as of owner-local today, and recent saved investment reports. Headlines use the book's default reporting currency when coverage permits it. Each failed source is reported independently. Session-only.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Report headlines and saved report links */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReportsOverview"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Unable to establish the owner-local date for the overview */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Database busy. Retry the request. */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/search/catalog": {
         parameters: {
             query?: never;
@@ -30282,6 +30414,90 @@ export interface components {
             /** @description Every commodity any widget names, so no second read labels an amount. */
             commodities: components["schemas"]["HomeReportingCurrency"][];
         };
+        PlanningOverview: {
+            /** Format: date */
+            as_of: string;
+            budget: {
+                status: components["schemas"]["ReadCardStatus"];
+                summary: {
+                    /** Format: date */
+                    start_date: string;
+                    /** Format: date */
+                    end_date: string;
+                    elapsed_basis_points: number;
+                    totals: {
+                        /** Format: int64 */
+                        commodity_id: number;
+                        remaining: components["schemas"]["OverviewAmount"];
+                        /** @description Exact ratio in basis points (10000 = 100%), rounded half-up and encoded as a decimal integer string. */
+                        spent_basis_points: string;
+                    }[];
+                } | null;
+            };
+            recurring: {
+                status: components["schemas"]["ReadCardStatus"];
+                summary: {
+                    draft_count: number;
+                    blocked_count: number;
+                } | null;
+            };
+            forecast: {
+                status: components["schemas"]["ReadCardStatus"];
+                summary: {
+                    /** Format: date */
+                    through_date: string;
+                    horizon_days: number;
+                    complete: boolean;
+                    minimums: {
+                        /** Format: date */
+                        date: string;
+                        amount: components["schemas"]["OverviewAmount"];
+                    }[];
+                } | null;
+            };
+        };
+        ReportsOverview: {
+            /** Format: date */
+            as_of: string;
+            /** Format: date */
+            month_start: string;
+            /** Format: int64 */
+            reporting_currency_id: number | null;
+            spending: components["schemas"]["OverviewReportCard"];
+            cashflow: components["schemas"]["OverviewReportCard"];
+            net_worth: components["schemas"]["OverviewReportCard"];
+            gains_runs: components["schemas"]["OverviewSavedReportsCard"];
+            returns_runs: components["schemas"]["OverviewSavedReportsCard"];
+        };
+        OverviewAmount: {
+            commodity_code: string;
+            quantity_value: string;
+            quantity_scale: number;
+        };
+        OverviewReportCard: {
+            status: components["schemas"]["ReadCardStatus"];
+            summary: {
+                /**
+                 * @description Incomplete conversion may still have exact source-currency figures.
+                 * @enum {string}
+                 */
+                state: "ready" | "empty" | "incomplete" | "no_currency";
+                amounts: components["schemas"]["OverviewAmount"][];
+                /** @description The displayed total used an earlier observation within the report's allowed window. */
+                stale: boolean;
+            } | null;
+        };
+        OverviewSavedReportsCard: {
+            status: components["schemas"]["ReadCardStatus"];
+            summary: {
+                /** Format: int64 */
+                id: number;
+                /** @enum {string} */
+                kind: "gains" | "statement" | "returns";
+                /** Format: date-time */
+                captured_at: string;
+            }[] | null;
+        };
         HomeHeadline: {
             /**
              * @description cash is open checking, savings, cash and other money accounts, which need no price.
@@ -30327,58 +30543,59 @@ export interface components {
             scale: number;
         };
         /**
-         * @description failed means this summary could not be read; summary is then null and the other widgets are unaffected.
+         * @description A failed read has a null summary. Other summaries can still be read.
          * @enum {string}
          */
-        HomeWidgetStatus: "ok" | "failed";
+        ReadCardStatus: "ok" | "failed";
+        HomeWidgetStatus: components["schemas"]["ReadCardStatus"];
         /** @description The default My Home widgets (#478) and the More to explore widgets (#479). Each fails on its own. */
         HomeWidgets: {
             spending: {
-                status: components["schemas"]["HomeWidgetStatus"];
+                status: components["schemas"]["ReadCardStatus"];
                 summary: components["schemas"]["HomeSpendingSummary"] | null;
             };
             budgets: {
-                status: components["schemas"]["HomeWidgetStatus"];
+                status: components["schemas"]["ReadCardStatus"];
                 summary: components["schemas"]["HomeBudgetSummary"] | null;
             };
             accounts: {
-                status: components["schemas"]["HomeWidgetStatus"];
+                status: components["schemas"]["ReadCardStatus"];
                 summary: components["schemas"]["HomeAccountsSummary"] | null;
             };
             recurring: {
-                status: components["schemas"]["HomeWidgetStatus"];
+                status: components["schemas"]["ReadCardStatus"];
                 summary: components["schemas"]["HomeRecurringSummary"] | null;
             };
             net_worth_trend: {
-                status: components["schemas"]["HomeWidgetStatus"];
+                status: components["schemas"]["ReadCardStatus"];
                 summary: components["schemas"]["HomeNetWorthTrendSummary"] | null;
             };
             cashflow: {
-                status: components["schemas"]["HomeWidgetStatus"];
+                status: components["schemas"]["ReadCardStatus"];
                 summary: components["schemas"]["HomeCashflowSummary"] | null;
             };
             holdings: {
-                status: components["schemas"]["HomeWidgetStatus"];
+                status: components["schemas"]["ReadCardStatus"];
                 summary: components["schemas"]["HomeHoldingsSummary"] | null;
             };
             returns: {
-                status: components["schemas"]["HomeWidgetStatus"];
+                status: components["schemas"]["ReadCardStatus"];
                 summary: components["schemas"]["HomeReturnsSummary"] | null;
             };
             allocation: {
-                status: components["schemas"]["HomeWidgetStatus"];
+                status: components["schemas"]["ReadCardStatus"];
                 summary: components["schemas"]["HomeAllocationSummary"] | null;
             };
             income: {
-                status: components["schemas"]["HomeWidgetStatus"];
+                status: components["schemas"]["ReadCardStatus"];
                 summary: components["schemas"]["HomeIncomeSummary"] | null;
             };
             backups: {
-                status: components["schemas"]["HomeWidgetStatus"];
+                status: components["schemas"]["ReadCardStatus"];
                 summary: components["schemas"]["HomeBackupsSummary"] | null;
             };
             reconciliation: {
-                status: components["schemas"]["HomeWidgetStatus"];
+                status: components["schemas"]["ReadCardStatus"];
                 summary: components["schemas"]["HomeReconciliationSummary"] | null;
             };
         };

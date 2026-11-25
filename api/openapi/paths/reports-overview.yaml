@@ -1,0 +1,34 @@
+get:
+  summary: Reports overview
+  description: >-
+    Composes month-to-date spending and operating cashflow, net worth as of
+    owner-local today, and recent saved investment reports. Headlines use the
+    book's default reporting currency when coverage permits it. Each failed
+    source is reported independently. Session-only.
+  security:
+    - CookieSession: []
+  responses:
+    '200':
+      description: Report headlines and saved report links
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ReportsOverview'
+    '401':
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    '500':
+      description: Unable to establish the owner-local date for the overview
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    '503':
+      description: Database busy. Retry the request.
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'

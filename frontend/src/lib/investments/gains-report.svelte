@@ -1,8 +1,14 @@
 <script lang="ts">
   import SaveGainsRun from './save-gains-run.svelte';
   import GainsRuns from './gains-runs.svelte';
+  import { page } from '$app/state';
   let { csrfToken }: { csrfToken: string } = $props();
   let selectedRunID = $state(0);
+  $effect(() => {
+    const raw = page.url.searchParams.get('run_id');
+    const id = Number(raw);
+    selectedRunID = raw && /^[1-9]\d*$/.test(raw) && Number.isSafeInteger(id) ? id : 0;
+  });
   function runSaved(id: number) { selectedRunID = id; }
   import GainsFXView from './gains-fx-view.svelte';
   import type { GainsFXInput, InvestmentGainsResponse } from '#lib/api/investments.ts';

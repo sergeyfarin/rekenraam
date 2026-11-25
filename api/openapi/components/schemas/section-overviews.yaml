@@ -1,0 +1,119 @@
+ReadCardStatus:
+  type: string
+  enum: [ok, failed]
+  description: A failed read has a null summary. Other summaries can still be read.
+
+OverviewAmount:
+  type: object
+  required: [commodity_code, quantity_value, quantity_scale]
+  properties:
+    commodity_code: { type: string }
+    quantity_value: { type: string }
+    quantity_scale: { type: integer }
+
+PlanningOverview:
+  type: object
+  required: [as_of, budget, recurring, forecast]
+  properties:
+    as_of: { type: string, format: date }
+    budget:
+      type: object
+      required: [status, summary]
+      properties:
+        status: { $ref: '../../openapi.yaml#/components/schemas/ReadCardStatus' }
+        summary:
+          type: [object, 'null']
+          required: [start_date, end_date, elapsed_basis_points, totals]
+          properties:
+            start_date: { type: string, format: date }
+            end_date: { type: string, format: date }
+            elapsed_basis_points: { type: integer }
+            totals:
+              type: array
+              items:
+                type: object
+                required: [commodity_id, remaining, spent_basis_points]
+                properties:
+                  commodity_id: { type: integer, format: int64 }
+                  remaining: { $ref: '../../openapi.yaml#/components/schemas/OverviewAmount' }
+                  spent_basis_points:
+                    type: string
+                    pattern: '^-?[0-9]+$'
+                    description: Exact ratio in basis points (10000 = 100%), rounded half-up and encoded as a decimal integer string.
+    recurring:
+      type: object
+      required: [status, summary]
+      properties:
+        status: { $ref: '../../openapi.yaml#/components/schemas/ReadCardStatus' }
+        summary:
+          type: [object, 'null']
+          required: [draft_count, blocked_count]
+          properties:
+            draft_count: { type: integer }
+            blocked_count: { type: integer }
+    forecast:
+      type: object
+      required: [status, summary]
+      properties:
+        status: { $ref: '../../openapi.yaml#/components/schemas/ReadCardStatus' }
+        summary:
+          type: [object, 'null']
+          required: [through_date, horizon_days, complete, minimums]
+          properties:
+            through_date: { type: string, format: date }
+            horizon_days: { type: integer }
+            complete: { type: boolean }
+            minimums:
+              type: array
+              items:
+                type: object
+                required: [date, amount]
+                properties:
+                  date: { type: string, format: date }
+                  amount: { $ref: '../../openapi.yaml#/components/schemas/OverviewAmount' }
+
+ReportsOverview:
+  type: object
+  required: [as_of, month_start, reporting_currency_id, spending, cashflow, net_worth, gains_runs, returns_runs]
+  properties:
+    as_of: { type: string, format: date }
+    month_start: { type: string, format: date }
+    reporting_currency_id: { type: [integer, 'null'], format: int64 }
+    spending: { $ref: '../../openapi.yaml#/components/schemas/OverviewReportCard' }
+    cashflow: { $ref: '../../openapi.yaml#/components/schemas/OverviewReportCard' }
+    net_worth: { $ref: '../../openapi.yaml#/components/schemas/OverviewReportCard' }
+    gains_runs: { $ref: '../../openapi.yaml#/components/schemas/OverviewSavedReportsCard' }
+    returns_runs: { $ref: '../../openapi.yaml#/components/schemas/OverviewSavedReportsCard' }
+
+OverviewReportCard:
+  type: object
+  required: [status, summary]
+  properties:
+    status: { $ref: '../../openapi.yaml#/components/schemas/ReadCardStatus' }
+    summary:
+      type: [object, 'null']
+      required: [state, amounts, stale]
+      properties:
+        state:
+          type: string
+          description: Incomplete conversion may still have exact source-currency figures.
+          enum: [ready, empty, incomplete, no_currency]
+        amounts:
+          type: array
+          items: { $ref: '../../openapi.yaml#/components/schemas/OverviewAmount' }
+        stale: { type: boolean, description: The displayed total used an earlier observation within the report's allowed window. }
+
+OverviewSavedReportsCard:
+  type: object
+  required: [status, summary]
+  properties:
+    status: { $ref: '../../openapi.yaml#/components/schemas/ReadCardStatus' }
+    summary:
+      type: [array, 'null']
+      items:
+        type: object
+        required: [id, kind, captured_at]
+        properties:
+          id: { type: integer, format: int64 }
+          kind: { type: string, enum: [gains, statement, returns] }
+          captured_at: { type: string, format: date-time }

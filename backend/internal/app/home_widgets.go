@@ -56,28 +56,22 @@ func NewHomeService(transactions *TransactionService, budgets *BudgetService, re
 	return &HomeService{transactions: transactions, budgets: budgets, recurring: recurring, investments: investments, backups: backups}
 }
 
-// HomeWidget is one summary or the error that kept it from being read.
-type HomeWidget[T any] struct {
-	Summary *T
-	Err     error
-}
-
 type Home struct {
 	Briefing      HomeBriefing
-	Spending      HomeWidget[HomeSpendingSummary]
-	Budgets       HomeWidget[HomeBudgetSummary]
-	Accounts      HomeWidget[HomeAccountsSummary]
-	Recurring     HomeWidget[HomeRecurringSummary]
-	NetWorthTrend HomeWidget[HomeNetWorthTrendSummary]
+	Spending      ReadCard[HomeSpendingSummary]
+	Budgets       ReadCard[HomeBudgetSummary]
+	Accounts      ReadCard[HomeAccountsSummary]
+	Recurring     ReadCard[HomeRecurringSummary]
+	NetWorthTrend ReadCard[HomeNetWorthTrendSummary]
 	// More to explore (#479).
-	Cashflow   HomeWidget[HomeCashflowSummary]
-	Holdings   HomeWidget[HomeHoldingsSummary]
-	Returns    HomeWidget[HomeReturnsSummary]
-	Allocation HomeWidget[HomeAllocationSummary]
-	Income     HomeWidget[HomeIncomeSummary]
-	Backups    HomeWidget[HomeBackupsSummary]
+	Cashflow   ReadCard[HomeCashflowSummary]
+	Holdings   ReadCard[HomeHoldingsSummary]
+	Returns    ReadCard[HomeReturnsSummary]
+	Allocation ReadCard[HomeAllocationSummary]
+	Income     ReadCard[HomeIncomeSummary]
+	Backups    ReadCard[HomeBackupsSummary]
 	// Reconciliation is the account list's out-of-date rule (#482).
-	Reconciliation HomeWidget[HomeReconciliationSummary]
+	Reconciliation ReadCard[HomeReconciliationSummary]
 	// Commodities describes every commodity any summary names, so Home needs no
 	// second read to label an amount.
 	Commodities []db.ReportingCurrencyRecord
@@ -249,28 +243,28 @@ func (s *HomeService) compose(ctx context.Context, ownerUserID int64) (Home, err
 	}
 
 	s.read("briefing")
-	home.Spending = homeWidget(s.spendingSummary(ctx, briefing.AsOf, reportingID))
+	home.Spending = readCard(s.spendingSummary(ctx, briefing.AsOf, reportingID))
 	s.read("spending")
-	home.Budgets = homeWidget(s.budgetSummary(ctx, briefing.AsOf, reportingID))
+	home.Budgets = readCard(s.budgetSummary(ctx, briefing.AsOf, reportingID))
 	s.read("budgets")
 	// Accounts and holdings value the fold's balances through one rate table.
 	rates, ratesErr := s.homeRates(ctx, briefing, reportingID)
 	if ratesErr != nil {
-		home.Accounts, home.Holdings = HomeWidget[HomeAccountsSummary]{Err: ratesErr}, HomeWidget[HomeHoldingsSummary]{Err: ratesErr}
+		home.Accounts, home.Holdings = ReadCard[HomeAccountsSummary]{Err: ratesErr}, ReadCard[HomeHoldingsSummary]{Err: ratesErr}
 	} else {
-		home.Accounts = homeWidget(accountsSummary(briefing, rates), nil)
-		home.Holdings = homeWidget(s.holdingsSummary(ctx, briefing, rates))
+		home.Accounts = readCard(accountsSummary(briefing, rates), nil)
+		home.Holdings = readCard(s.holdingsSummary(ctx, briefing, rates))
 	}
-	home.Recurring = homeWidget(s.recurringSummary(ctx, ownerUserID, briefing.AsOf))
+	home.Recurring = readCard(s.recurringSummary(ctx, ownerUserID, briefing.AsOf))
 	s.read("recurring")
-	home.NetWorthTrend = homeWidget(netWorthTrendSummary(briefing))
-	home.Cashflow = homeWidget(s.cashflowSummary(ctx, briefing.AsOf, reportingID))
+	home.NetWorthTrend = readCard(netWorthTrendSummary(briefing))
+	home.Cashflow = readCard(s.cashflowSummary(ctx, briefing.AsOf, reportingID))
 	s.read("cashflow")
 	returns, allocation, returnsErr := s.returnsSummaries(ctx)
-	home.Returns, home.Allocation = homeWidget(returns, returnsErr), homeWidget(allocation, returnsErr)
-	home.Income = homeWidget(s.incomeSummary(ctx))
-	home.Backups = homeWidget(s.backupsSummary(ctx))
-	home.Reconciliation = homeWidget(s.reconciliationSummary(ctx, ownerUserID))
+	home.Returns, home.Allocation = readCard(returns, returnsErr), readCard(allocation, returnsErr)
+	home.Income = readCard(s.incomeSummary(ctx))
+	home.Backups = readCard(s.backupsSummary(ctx))
+	home.Reconciliation = readCard(s.reconciliationSummary(ctx, ownerUserID))
 	// A cancelled request is not a widget failure.
 	for _, widgetErr := range []error{home.Spending.Err, home.Budgets.Err, home.Accounts.Err, home.Recurring.Err, home.NetWorthTrend.Err,
 		home.Cashflow.Err, home.Holdings.Err, home.Returns.Err, home.Income.Err, home.Backups.Err, home.Reconciliation.Err} {
@@ -323,21 +317,8 @@ func (s *HomeService) labelHomeCategories(ctx context.Context, home Home) error 
 	return nil
 }
 
-func homeWidget[T any](summary *T, err error) HomeWidget[T] {
-	if err != nil {
-		return HomeWidget[T]{Err: err}
-	}
-	return HomeWidget[T]{Summary: summary}
-}
-
-func homeMonthStart(asOf string) string { return asOf[:8] + "01" }
-
 func (s *HomeService) spendingSummary(ctx context.Context, asOf string, reportingID int64) (*HomeSpendingSummary, error) {
-	input := SpendingInput{StartDate: homeMonthStart(asOf), EndDate: asOf, GroupBy: "category", Mode: "spending"}
-	if reportingID != 0 {
-		input.Reporting = &ReportingCurrencyInput{CommodityID: reportingID}
-	}
-	report, err := s.transactions.Spending(ctx, input)
+	report, err := s.transactions.Spending(ctx, monthToDateSpending(asOf, optionalReportingCurrency(reportingID)))
 	if err != nil {
 		return nil, fmt.Errorf("home spending: %w", err)
 	}
@@ -357,7 +338,7 @@ func (s *HomeService) spendingSummary(ctx context.Context, asOf string, reportin
 }
 
 func (s *HomeService) budgetSummary(ctx context.Context, asOf string, reportingID int64) (*HomeBudgetSummary, error) {
-	month, err := s.budgets.Month(ctx, homeMonthStart(asOf))
+	month, err := s.budgets.Month(ctx, monthStart(asOf))
 	if err != nil {
 		return nil, fmt.Errorf("home budgets: %w", err)
 	}

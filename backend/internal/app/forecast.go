@@ -240,39 +240,8 @@ func (s *ForecastService) Balances(ctx context.Context, input ForecastInput) (Fo
 		return ForecastResult{}, err
 	}
 	nowUTC := s.now().UTC()
-	var scope forecastScope
-	var bounds forecastBounds
-	snapshot, err := s.repository.LoadResolvedSnapshot(ctx, db.ForecastSnapshotRequest{
-		BookID: BookID, OwnerUserID: input.OwnerUserID,
-		Limits: db.DefaultForecastSnapshotLimits(),
-	}, func(base db.ForecastSnapshot) (db.ForecastSnapshotResolution, error) {
-		bounds, err = forecastDateBounds(nowUTC, base.TimeZone, normalized.HorizonDays)
-		if err != nil {
-			return db.ForecastSnapshotResolution{}, err
-		}
-		scope, err = resolveForecastScope(base.AccountVersions, bounds.AsOf, normalized)
-		if err == nil {
-			err = validateForecastReportingCurrency(base.CommodityVersions, bounds.AsOf, normalized)
-		}
-		if err == nil {
-			err = validateForecastLearningCategories(base.AccountVersions, bounds.AsOf, normalized)
-		}
-		resolution := db.ForecastSnapshotResolution{KnowledgeCutoff: nowUTC.Format(time.RFC3339Nano), AccountIDs: scope.AccountIDs, ThroughDate: bounds.Through, AsOfDate: bounds.AsOf, ReportingCurrencyID: normalized.ReportingCurrencyID}
-		// The history read joins this same transaction, so a model can never
-		// be trained on one view of the ledger and applied to another.
-		if err == nil && normalized.learningEnabled() {
-			var historyStart string
-			historyStart, err = forecastLearningWindow(normalized, bounds.AsOf)
-			if err == nil {
-				resolution.LearningHistory = &db.ForecastLearningHistoryRequest{StartDate: historyStart, EndDate: bounds.Through}
-			}
-		}
-		return resolution, err
-	})
+	bounds, scope, snapshot, err := s.loadForecastSnapshot(ctx, normalized, input.OwnerUserID, nowUTC, "")
 	if err != nil {
-		if errors.Is(err, db.ErrForecastInputTooLarge) {
-			return ForecastResult{}, ErrForecastTooLarge
-		}
 		return ForecastResult{}, err
 	}
 	result, err := buildForecast(ctx, normalized, bounds, scope, snapshot, nowUTC.Format(time.RFC3339))
@@ -307,4 +276,45 @@ func (s *ForecastService) Balances(ctx context.Context, input ForecastInput) (Fo
 	result.basisParts = parts
 	s.basis.remember(result.BasisToken, parts)
 	return result, nil
+}
+
+func (s *ForecastService) loadForecastSnapshot(ctx context.Context, normalized forecastNormalizedInput, ownerID int64, nowUTC time.Time, asOf string) (forecastBounds, forecastScope, db.ForecastSnapshot, error) {
+	var scope forecastScope
+	var bounds forecastBounds
+	var err error
+	snapshot, err := s.repository.LoadResolvedSnapshot(ctx, db.ForecastSnapshotRequest{
+		BookID: BookID, OwnerUserID: ownerID,
+		Limits: db.DefaultForecastSnapshotLimits(),
+	}, func(base db.ForecastSnapshot) (db.ForecastSnapshotResolution, error) {
+		if asOf == "" {
+			bounds, err = forecastDateBounds(nowUTC, base.TimeZone, normalized.HorizonDays)
+		} else {
+			bounds, err = forecastBoundsFromDate(asOf, normalized.HorizonDays)
+		}
+		if err != nil {
+			return db.ForecastSnapshotResolution{}, err
+		}
+		scope, err = resolveForecastScope(base.AccountVersions, bounds.AsOf, normalized)
+		if err == nil {
+			err = validateForecastReportingCurrency(base.CommodityVersions, bounds.AsOf, normalized)
+		}
+		if err == nil {
+			err = validateForecastLearningCategories(base.AccountVersions, bounds.AsOf, normalized)
+		}
+		resolution := db.ForecastSnapshotResolution{KnowledgeCutoff: nowUTC.Format(time.RFC3339Nano), AccountIDs: scope.AccountIDs, ThroughDate: bounds.Through, AsOfDate: bounds.AsOf, ReportingCurrencyID: normalized.ReportingCurrencyID}
+		// The history read joins this same transaction, so a model can never
+		// be trained on one view of the ledger and applied to another.
+		if err == nil && normalized.learningEnabled() {
+			var historyStart string
+			historyStart, err = forecastLearningWindow(normalized, bounds.AsOf)
+			if err == nil {
+				resolution.LearningHistory = &db.ForecastLearningHistoryRequest{StartDate: historyStart, EndDate: bounds.Through}
+			}
+		}
+		return resolution, err
+	})
+	if errors.Is(err, db.ErrForecastInputTooLarge) {
+		err = ErrForecastTooLarge
+	}
+	return bounds, scope, snapshot, err
 }

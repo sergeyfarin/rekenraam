@@ -43,24 +43,19 @@ type homeResponse struct {
 	Consistent        bool                            `json:"consistent"`
 }
 
-type homeWidgetResponse[T any] struct {
-	Status  string `json:"status"`
-	Summary *T     `json:"summary"`
-}
-
 type homeWidgetsResponse struct {
-	Spending       homeWidgetResponse[homeSpendingSummaryResponse]       `json:"spending"`
-	Budgets        homeWidgetResponse[homeBudgetSummaryResponse]         `json:"budgets"`
-	Accounts       homeWidgetResponse[homeAccountsSummaryResponse]       `json:"accounts"`
-	Recurring      homeWidgetResponse[homeRecurringSummaryResponse]      `json:"recurring"`
-	NetWorthTrend  homeWidgetResponse[homeNetWorthTrendSummaryResponse]  `json:"net_worth_trend"`
-	Cashflow       homeWidgetResponse[homeCashflowSummaryResponse]       `json:"cashflow"`
-	Holdings       homeWidgetResponse[homeHoldingsSummaryResponse]       `json:"holdings"`
-	Returns        homeWidgetResponse[homeReturnsSummaryResponse]        `json:"returns"`
-	Allocation     homeWidgetResponse[homeAllocationSummaryResponse]     `json:"allocation"`
-	Income         homeWidgetResponse[homeIncomeSummaryResponse]         `json:"income"`
-	Backups        homeWidgetResponse[homeBackupsSummaryResponse]        `json:"backups"`
-	Reconciliation homeWidgetResponse[homeReconciliationSummaryResponse] `json:"reconciliation"`
+	Spending       readCardResponse[homeSpendingSummaryResponse]       `json:"spending"`
+	Budgets        readCardResponse[homeBudgetSummaryResponse]         `json:"budgets"`
+	Accounts       readCardResponse[homeAccountsSummaryResponse]       `json:"accounts"`
+	Recurring      readCardResponse[homeRecurringSummaryResponse]      `json:"recurring"`
+	NetWorthTrend  readCardResponse[homeNetWorthTrendSummaryResponse]  `json:"net_worth_trend"`
+	Cashflow       readCardResponse[homeCashflowSummaryResponse]       `json:"cashflow"`
+	Holdings       readCardResponse[homeHoldingsSummaryResponse]       `json:"holdings"`
+	Returns        readCardResponse[homeReturnsSummaryResponse]        `json:"returns"`
+	Allocation     readCardResponse[homeAllocationSummaryResponse]     `json:"allocation"`
+	Income         readCardResponse[homeIncomeSummaryResponse]         `json:"income"`
+	Backups        readCardResponse[homeBackupsSummaryResponse]        `json:"backups"`
+	Reconciliation readCardResponse[homeReconciliationSummaryResponse] `json:"reconciliation"`
 }
 
 type homeReconciliationSummaryResponse struct {
@@ -267,18 +262,18 @@ func homeRead(logger *slog.Logger, authService *app.AuthService, homeService *ap
 			response.Commodities = append(response.Commodities, homeReportingCurrencyResponse{CommodityID: commodity.ID, Code: commodity.Code, Kind: commodity.Kind, Symbol: commodity.DisplaySymbol, Scale: commodity.StandardScale})
 		}
 		response.Widgets = homeWidgetsResponse{
-			Spending:       toHomeWidget(r, logger, "spending", home.Spending, toHomeSpendingSummary),
-			Budgets:        toHomeWidget(r, logger, "budgets", home.Budgets, toHomeBudgetSummary),
-			Accounts:       toHomeWidget(r, logger, "accounts", home.Accounts, toHomeAccountsSummary),
-			Recurring:      toHomeWidget(r, logger, "recurring", home.Recurring, toHomeRecurringSummary),
-			NetWorthTrend:  toHomeWidget(r, logger, "net_worth_trend", home.NetWorthTrend, toHomeNetWorthTrendSummary),
-			Cashflow:       toHomeWidget(r, logger, "cashflow", home.Cashflow, toHomeCashflowSummary),
-			Holdings:       toHomeWidget(r, logger, "holdings", home.Holdings, toHomeHoldingsSummary),
-			Returns:        toHomeWidget(r, logger, "returns", home.Returns, toHomeReturnsSummary),
-			Allocation:     toHomeWidget(r, logger, "allocation", home.Allocation, toHomeAllocationSummary),
-			Income:         toHomeWidget(r, logger, "income", home.Income, toHomeIncomeSummary),
-			Backups:        toHomeWidget(r, logger, "backups", home.Backups, toHomeBackupsSummary),
-			Reconciliation: toHomeWidget(r, logger, "reconciliation", home.Reconciliation, toHomeReconciliationSummary),
+			Spending:       mapReadCard(r, logger, "home: spending", home.Spending, toHomeSpendingSummary),
+			Budgets:        mapReadCard(r, logger, "home: budgets", home.Budgets, toHomeBudgetSummary),
+			Accounts:       mapReadCard(r, logger, "home: accounts", home.Accounts, toHomeAccountsSummary),
+			Recurring:      mapReadCard(r, logger, "home: recurring", home.Recurring, toHomeRecurringSummary),
+			NetWorthTrend:  mapReadCard(r, logger, "home: net_worth_trend", home.NetWorthTrend, toHomeNetWorthTrendSummary),
+			Cashflow:       mapReadCard(r, logger, "home: cashflow", home.Cashflow, toHomeCashflowSummary),
+			Holdings:       mapReadCard(r, logger, "home: holdings", home.Holdings, toHomeHoldingsSummary),
+			Returns:        mapReadCard(r, logger, "home: returns", home.Returns, toHomeReturnsSummary),
+			Allocation:     mapReadCard(r, logger, "home: allocation", home.Allocation, toHomeAllocationSummary),
+			Income:         mapReadCard(r, logger, "home: income", home.Income, toHomeIncomeSummary),
+			Backups:        mapReadCard(r, logger, "home: backups", home.Backups, toHomeBackupsSummary),
+			Reconciliation: mapReadCard(r, logger, "home: reconciliation", home.Reconciliation, toHomeReconciliationSummary),
 		}
 		for _, headline := range result.Headlines {
 			item := homeHeadlineResponse{
@@ -306,17 +301,6 @@ func toHomeValuationInputs(inputs []app.HomeValuationInput) []homeValuationInput
 		response = append(response, homeValuationInputResponse{CommodityID: input.CommodityID, Code: input.Code, Kind: input.Kind})
 	}
 	return response
-}
-
-// toHomeWidget maps one summary, or logs why it failed and reports it failed:
-// the widget's failure stays in its card.
-func toHomeWidget[T any, R any](r *http.Request, logger *slog.Logger, widget string, result app.HomeWidget[T], convert func(T) R) homeWidgetResponse[R] {
-	if result.Err != nil || result.Summary == nil {
-		logger.ErrorContext(r.Context(), "read home widget", slog.String("widget", widget), slog.Any("err", result.Err))
-		return homeWidgetResponse[R]{Status: "failed"}
-	}
-	summary := convert(*result.Summary)
-	return homeWidgetResponse[R]{Status: "ok", Summary: &summary}
 }
 
 func toHomeSpendingSummary(summary app.HomeSpendingSummary) homeSpendingSummaryResponse {

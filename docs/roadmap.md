@@ -139,8 +139,9 @@ Implement the owner-approved [Home and navigation design](design/home-and-naviga
 recorded in [commit `457dd74`](https://github.com/sergeyfarin/rekenraam/commit/457dd74a8344caa962bfdf29fe8dd18a69254102),
 with its [v3 mockup](design/home-mockup/README.md). The design is approved;
 its header, registry, tab-route, hide-amounts, shared-search and attention slices
-#455–#459 and section-owned paths #460 are delivered, and Home #437 is delivered and closed; the shell #436 closed on 2026-11-09. The pages, object navigation and depth items below are not delivered. The owner made it the current
-initiative on 2026-10-29, after the remaining maintenance items (#414, #416)
+#455–#459 and section-owned paths #460 are delivered. Home #437 is closed,
+and the shell #436 closed on 2026-11-09. The owner made the overhaul the
+current initiative on 2026-10-29, after the remaining maintenance items (#414, #416)
 were judged not to block it; they, owner-dependent readiness and release
 evidence continue in parallel.
 
@@ -204,8 +205,9 @@ Deliver incrementally, tracked in #441, in this order:
    pages with Trash moved to Transactions › Deleted and export to Reports
    (#446) delivered 2026-10-31; Import views (#447) and Ledger overview,
    Institutions and brokerages (#448) delivered 2026-11-13. Ledger › Payees
-   (#443) delivered 2026-11-21. The Tags view (#444) adds tag management
-   under Categories. Planning and Reports overviews (#450) remain.
+   (#443) delivered 2026-11-21, and tag management under Categories (#444)
+   delivered 2026-11-22. Planning and Reports overviews (#450) delivered
+   2026-11-25.
 5. **Object navigation (#442):** the switcher as scoped search, pinned
    accounts and breadcrumbs, after #448 and the owner-run real-book count
    (#449).

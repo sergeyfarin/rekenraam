@@ -33,7 +33,7 @@
 
 </script>
 
-<section class="min-w-0 space-y-3" aria-label={m.valuation_runs_title()} data-testid="gains-runs">
+<section id="saved-gains" class="min-w-0 space-y-3" aria-label={m.valuation_runs_title()} data-testid="gains-runs">
   <h2 class="text-sm font-semibold text-foreground">{m.valuation_runs_title()}</h2>
   <p class="text-sm text-muted">{m.valuation_runs_note()}</p>
   {#if list.isPending}<p role="status" class="text-sm text-muted">{m.valuation_runs_loading()}</p>
