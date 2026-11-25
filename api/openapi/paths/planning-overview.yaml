@@ -1,0 +1,34 @@
+get:
+  summary: Planning overview
+  description: >-
+    Composes the owner-local month's per-currency expense budget totals, counts
+    from the recurring Due view, and the default 90-day liquid balance estimate
+    by currency. The forecast minimum includes the opening balance. One source's
+    failure is reported on its own card. Session-only.
+  security:
+    - CookieSession: []
+  responses:
+    '200':
+      description: Planning overview cards
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/PlanningOverview'
+    '401':
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    '500':
+      description: Unable to establish the owner-local date for the overview
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    '503':
+      description: Database busy. Retry the request.
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'

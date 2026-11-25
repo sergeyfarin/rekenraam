@@ -6,6 +6,7 @@ import { ledgerQueryKey } from '#lib/api/ledger.ts';
 import { priceManagementQueryKey } from '#lib/api/price-management.ts';
 import { reconciliationQueryKey } from '#lib/api/reconciliation.ts';
 import { reportsQueryKey } from '#lib/api/reports.ts';
+import { planningOverviewQueryKey } from '#lib/api/section-overviews.ts';
 import { accountRegisterQueryKey, transactionsQueryKey } from '#lib/api/transactions.ts';
 
 /**
@@ -24,6 +25,7 @@ export const transactionWriteReadKeys = [
   reportsQueryKey,
   budgetQueryKey,
   forecastQueryKey,
+  planningOverviewQueryKey,
   reconciliationQueryKey,
   priceManagementQueryKey,
   investmentPositionsQueryKey,

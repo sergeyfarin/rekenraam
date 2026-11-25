@@ -104,9 +104,7 @@ HomeResponse:
       items:
         $ref: '../../openapi.yaml#/components/schemas/HomeReportingCurrency'
 HomeWidgetStatus:
-  type: string
-  enum: [ok, failed]
-  description: failed means this summary could not be read; summary is then null and the other widgets are unaffected.
+  $ref: '../../openapi.yaml#/components/schemas/ReadCardStatus'
 HomeWidgets:
   type: object
   description: The default My Home widgets (#478) and the More to explore widgets (#479). Each fails on its own.
@@ -116,7 +114,7 @@ HomeWidgets:
       type: object
       required: [status, summary]
       properties:
-        status: { $ref: '../../openapi.yaml#/components/schemas/HomeWidgetStatus' }
+        status: { $ref: '../../openapi.yaml#/components/schemas/ReadCardStatus' }
         summary:
           oneOf:
             - $ref: '../../openapi.yaml#/components/schemas/HomeSpendingSummary'
@@ -125,7 +123,7 @@ HomeWidgets:
       type: object
       required: [status, summary]
       properties:
-        status: { $ref: '../../openapi.yaml#/components/schemas/HomeWidgetStatus' }
+        status: { $ref: '../../openapi.yaml#/components/schemas/ReadCardStatus' }
         summary:
           oneOf:
             - $ref: '../../openapi.yaml#/components/schemas/HomeBudgetSummary'
@@ -134,7 +132,7 @@ HomeWidgets:
       type: object
       required: [status, summary]
       properties:
-        status: { $ref: '../../openapi.yaml#/components/schemas/HomeWidgetStatus' }
+        status: { $ref: '../../openapi.yaml#/components/schemas/ReadCardStatus' }
         summary:
           oneOf:
             - $ref: '../../openapi.yaml#/components/schemas/HomeAccountsSummary'
@@ -143,7 +141,7 @@ HomeWidgets:
       type: object
       required: [status, summary]
       properties:
-        status: { $ref: '../../openapi.yaml#/components/schemas/HomeWidgetStatus' }
+        status: { $ref: '../../openapi.yaml#/components/schemas/ReadCardStatus' }
         summary:
           oneOf:
             - $ref: '../../openapi.yaml#/components/schemas/HomeRecurringSummary'
@@ -152,7 +150,7 @@ HomeWidgets:
       type: object
       required: [status, summary]
       properties:
-        status: { $ref: '../../openapi.yaml#/components/schemas/HomeWidgetStatus' }
+        status: { $ref: '../../openapi.yaml#/components/schemas/ReadCardStatus' }
         summary:
           oneOf:
             - $ref: '../../openapi.yaml#/components/schemas/HomeNetWorthTrendSummary'
@@ -161,7 +159,7 @@ HomeWidgets:
       type: object
       required: [status, summary]
       properties:
-        status: { $ref: '../../openapi.yaml#/components/schemas/HomeWidgetStatus' }
+        status: { $ref: '../../openapi.yaml#/components/schemas/ReadCardStatus' }
         summary:
           oneOf:
             - $ref: '../../openapi.yaml#/components/schemas/HomeCashflowSummary'
@@ -170,7 +168,7 @@ HomeWidgets:
       type: object
       required: [status, summary]
       properties:
-        status: { $ref: '../../openapi.yaml#/components/schemas/HomeWidgetStatus' }
+        status: { $ref: '../../openapi.yaml#/components/schemas/ReadCardStatus' }
         summary:
           oneOf:
             - $ref: '../../openapi.yaml#/components/schemas/HomeHoldingsSummary'
@@ -179,7 +177,7 @@ HomeWidgets:
       type: object
       required: [status, summary]
       properties:
-        status: { $ref: '../../openapi.yaml#/components/schemas/HomeWidgetStatus' }
+        status: { $ref: '../../openapi.yaml#/components/schemas/ReadCardStatus' }
         summary:
           oneOf:
             - $ref: '../../openapi.yaml#/components/schemas/HomeReturnsSummary'
@@ -188,7 +186,7 @@ HomeWidgets:
       type: object
       required: [status, summary]
       properties:
-        status: { $ref: '../../openapi.yaml#/components/schemas/HomeWidgetStatus' }
+        status: { $ref: '../../openapi.yaml#/components/schemas/ReadCardStatus' }
         summary:
           oneOf:
             - $ref: '../../openapi.yaml#/components/schemas/HomeAllocationSummary'
@@ -197,7 +195,7 @@ HomeWidgets:
       type: object
       required: [status, summary]
       properties:
-        status: { $ref: '../../openapi.yaml#/components/schemas/HomeWidgetStatus' }
+        status: { $ref: '../../openapi.yaml#/components/schemas/ReadCardStatus' }
         summary:
           oneOf:
             - $ref: '../../openapi.yaml#/components/schemas/HomeIncomeSummary'
@@ -206,7 +204,7 @@ HomeWidgets:
       type: object
       required: [status, summary]
       properties:
-        status: { $ref: '../../openapi.yaml#/components/schemas/HomeWidgetStatus' }
+        status: { $ref: '../../openapi.yaml#/components/schemas/ReadCardStatus' }
         summary:
           oneOf:
             - $ref: '../../openapi.yaml#/components/schemas/HomeBackupsSummary'
@@ -215,7 +213,7 @@ HomeWidgets:
       type: object
       required: [status, summary]
       properties:
-        status: { $ref: '../../openapi.yaml#/components/schemas/HomeWidgetStatus' }
+        status: { $ref: '../../openapi.yaml#/components/schemas/ReadCardStatus' }
         summary:
           oneOf:
             - $ref: '../../openapi.yaml#/components/schemas/HomeReconciliationSummary'

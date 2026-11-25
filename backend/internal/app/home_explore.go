@@ -179,11 +179,7 @@ func (s *HomeService) reconciliationSummary(ctx context.Context, ownerUserID int
 }
 
 func (s *HomeService) cashflowSummary(ctx context.Context, asOf string, reportingID int64) (*HomeCashflowSummary, error) {
-	input := CashflowInput{StartDate: homeMonthStart(asOf), EndDate: asOf, Bucket: "month"}
-	if reportingID != 0 {
-		input.Reporting = &ReportingCurrencyInput{CommodityID: reportingID}
-	}
-	report, err := s.transactions.Cashflow(ctx, input)
+	report, err := s.transactions.Cashflow(ctx, monthToDateCashflow(asOf, optionalReportingCurrency(reportingID)))
 	if err != nil {
 		return nil, fmt.Errorf("home cashflow: %w", err)
 	}

@@ -68,6 +68,12 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 	mux.HandleFunc("GET /api/v1/ledger/overview", ledgerOverview(logger, services.Auth, ledger, false))
 	mux.HandleFunc("GET /api/v1/ledger/accounts/{account_id}", ledgerOverview(logger, services.Auth, ledger, true))
 	mux.HandleFunc("GET /api/v1/home", homeRead(logger, services.Auth, app.NewHomeService(services.Transaction, services.Budget, services.Recurring, services.Investment, services.Backup)))
+	if services.Settings != nil && services.Budget != nil && services.Recurring != nil && services.Forecast != nil {
+		mux.HandleFunc("GET /api/v1/planning/overview", planningOverview(logger, services))
+	}
+	if services.Transaction != nil {
+		mux.HandleFunc("GET /api/v1/reports/overview", reportsOverview(logger, services))
+	}
 	mux.HandleFunc("GET /api/v1/search/catalog", searchCatalog(logger, services.Auth, services.Search))
 	mux.HandleFunc("GET /api/v1/accounts", listAccounts(logger, services.Auth, services.Account))
 	mux.HandleFunc("POST /api/v1/accounts", createAccount(logger, services.Auth, services.Account, options))

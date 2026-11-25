@@ -277,3 +277,14 @@ sweep classified 203 write call sites (64 read-only previews); its open
 instances were #660 (creates that duplicate on retry, fixed), #661 (fixed) and
 #662 (rows left on screen after a guarded delete or correction). Not
 mechanically detectable: whether a repeat is harmless depends on the endpoint.
+
+## 90. Cached figures rendered after a failed refresh
+
+The Planning and Reports overviews rendered cached data before checking the
+query's error state (#450 review). TanStack Query keeps the previous data when
+a refetch fails, so the cards remained visible without any indication that
+the new read had failed. Check the refresh error even when query data is
+present. Hide the figures or identify them as stale and give the user a retry
+for the read. The Planning and Reports refresh cases in
+`section-overviews.spec.ts` load data, fail both attempts on return, and
+verify recovery after Retry.

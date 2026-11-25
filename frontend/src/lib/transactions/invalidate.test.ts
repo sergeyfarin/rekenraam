@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { QueryClient } from '@tanstack/svelte-query';
 import { authSessionQueryKey } from '#lib/api/auth.ts';
 import { categoriesQueryKey } from '#lib/api/categories.ts';
+import { planningOverviewQueryOptions, reportsOverviewQueryOptions } from '#lib/api/section-overviews.ts';
 import { invalidateTransactionReads } from './invalidate.ts';
 
 describe('invalidateTransactionReads', () => {
@@ -14,6 +15,8 @@ describe('invalidateTransactionReads', () => {
       ['api', 'transactions', { q: '' }],
       ['api', 'account-register', 7],
       ['api', 'forecasts', 'balances', {}],
+      planningOverviewQueryOptions('2026-10-31').queryKey,
+      reportsOverviewQueryOptions('2026-10-31').queryKey,
       ['api', 'reconciliation', 'checkpoints', 7, 1],
       // Prices lists the rates posted exposure needs, created or removed by a write.
       ['api', 'pricing', 'management', 'workspace', '2026-10-31'],
