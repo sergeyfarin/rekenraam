@@ -25,32 +25,32 @@
 </script>
 
 {#snippet headline(card: OverviewReportCard, title: string, href: string, period: string, scope?: string)}
-  <OverviewCard {title} {href} failed={card.failed} retry={() => query.refetch()}>
-    {#if card.data}
+  <OverviewCard {title} {href} failed={card.status === 'failed'} retry={() => query.refetch()}>
+    {#if card.summary}
       <p>{period}</p>
       {#if scope}<p>{scope}</p>{/if}
-      {#if card.data.amounts.length > 0}
+      {#if card.summary.amounts.length > 0}
         <ul class="space-y-1 text-lg">
-          {#each card.data.amounts as amount (amount.commodity_code)}
+          {#each card.summary.amounts as amount (amount.commodity_code)}
             <li><OverviewAmount {amount} /></li>
           {/each}
         </ul>
       {/if}
-      {#if card.data.state === 'empty'}
+      {#if card.summary.state === 'empty'}
         <p>{m.overview_report_empty()}</p>
-      {:else if card.data.state === 'incomplete'}
-        <p>{card.data.amounts.length ? m.overview_report_native() : m.overview_net_worth_incomplete()}</p>
-      {:else if card.data.state === 'no_currency'}
+      {:else if card.summary.state === 'incomplete'}
+        <p>{card.summary.amounts.length ? m.overview_report_native() : m.overview_net_worth_incomplete()}</p>
+      {:else if card.summary.state === 'no_currency'}
         <p>{m.overview_net_worth_no_currency()}</p>
       {/if}
-      {#if card.data.stale}<p>{m.overview_report_stale()}</p>{/if}
+      {#if card.summary.stale}<p>{m.overview_report_stale()}</p>{/if}
     {/if}
   </OverviewCard>
 {/snippet}
 
 {#if query.isPending}
   <p role="status" class="text-sm text-muted">{m.overview_loading()}</p>
-{:else if overview}
+{:else if !query.isError && overview}
   {@const { as_of: asOf, month_start: start, reporting_currency_id: currency } = overview}
   {@const date = formatCalendarDate(asOf, locale)}
   {@const period = m.overview_period({ from: formatCalendarDate(start, locale), to: date })}
@@ -64,14 +64,14 @@
     </div>
     <Panel padding="sm">
       <h2 class="text-lg font-semibold text-foreground">{m.overview_saved_reports()}</h2>
-      {#if overview.gains_runs.failed || overview.returns_runs.failed}
+      {#if overview.gains_runs.status === 'failed' || overview.returns_runs.status === 'failed'}
         <p role="alert" class="mt-2 text-sm text-muted">{m.overview_saved_failed()}</p>
         <button type="button" class="min-h-11 text-sm font-medium underline" onclick={() => query.refetch()}>{m.reports_retry()}</button>
-      {:else if !overview.gains_runs.data?.length && !overview.returns_runs.data?.length}
+      {:else if !overview.gains_runs.summary?.length && !overview.returns_runs.summary?.length}
         <p class="mt-2 text-sm text-muted">{m.overview_saved_empty()}</p>
       {/if}
       <ul class="mt-2 divide-y divide-border">
-        {#each overview.gains_runs.data ?? [] as run (run.id)}
+        {#each overview.gains_runs.summary ?? [] as run (run.id)}
           <li>
             <a href={`${gainsHref}?run_id=${run.id}#saved-gains`} class="flex min-h-11 flex-wrap items-center justify-between gap-x-3 text-sm underline-offset-4 hover:underline">
               <span>{run.kind === 'statement' ? m.valuation_statement_title() : m.investments_tab_gains()}</span>
@@ -79,7 +79,7 @@
             </a>
           </li>
         {/each}
-        {#each overview.returns_runs.data ?? [] as run (run.id)}
+        {#each overview.returns_runs.summary ?? [] as run (run.id)}
           <li>
             <a href={`${returnsHref}?run_id=${run.id}#returns-runs-title`} class="flex min-h-11 flex-wrap items-center justify-between gap-x-3 text-sm underline-offset-4 hover:underline">
               <span>{m.nav_returns()}</span>
@@ -88,7 +88,7 @@
           </li>
         {/each}
       </ul>
-      {#if overview.gains_runs.data?.length || overview.returns_runs.data?.length}
+      {#if overview.gains_runs.summary?.length || overview.returns_runs.summary?.length}
         <div class="mt-2 flex flex-wrap gap-x-4 text-sm">
           <a class="inline-flex min-h-11 items-center underline" href={`${gainsHref}#saved-gains`}>{m.valuation_runs_title()}</a>
           <a class="inline-flex min-h-11 items-center underline" href={`${returnsHref}#returns-runs-title`}>{m.returns_runs_title()}</a>

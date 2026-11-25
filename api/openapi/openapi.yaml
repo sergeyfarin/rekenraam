@@ -1118,6 +1118,8 @@ components:
       $ref: "./components/schemas/home.yaml#/HomeValuationInput"
     HomeReportingCurrency:
       $ref: "./components/schemas/home.yaml#/HomeReportingCurrency"
+    ReadCardStatus:
+      $ref: "./components/schemas/section-overviews.yaml#/ReadCardStatus"
     HomeWidgetStatus:
       $ref: "./components/schemas/home.yaml#/HomeWidgetStatus"
     HomeWidgets:

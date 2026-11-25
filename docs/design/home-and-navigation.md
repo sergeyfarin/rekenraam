@@ -123,8 +123,9 @@ header on every page.
   operating cashflow and today's net worth. Card links carry the displayed
   period and reporting currency. If conversion is incomplete, Spending and
   Cashflow retain their exact source-currency totals and Net worth shows the
-  valuation gap. Saved reports link to recent frozen gains, statements and
-  returns, with the full history in Investments. Named saved filter
+  valuation gap. Each card uses an independent read with the scope and
+  coverage of its linked page. Saved reports link to recent frozen gains,
+  statements and returns, with the full history in Investments. Named saved filter
   definitions remain deferred under the [reports plan](../plans/reports-plan.md).
 
 - **Left side:** the word *Home* is the first item of the row, styled like

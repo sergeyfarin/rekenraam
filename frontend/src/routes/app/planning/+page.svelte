@@ -31,13 +31,13 @@
 
 {#if query.isPending}
   <p role="status" class="text-sm text-muted">{m.overview_loading()}</p>
-{:else if overview}
-  {@const budget = overview.budget.data}
-  {@const due = overview.recurring.data}
-  {@const forecast = overview.forecast.data}
+{:else if !query.isError && overview}
+  {@const budget = overview.budget.summary}
+  {@const due = overview.recurring.summary}
+  {@const forecast = overview.forecast.summary}
   <div class="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3" data-testid="planning-overview">
     <OverviewCard title={m.budgets_title()} href={budgetHref(budget?.start_date, budget?.totals[0]?.commodity_id)}
-      failed={overview.budget.failed} retry={() => query.refetch()}>
+      failed={overview.budget.status === 'failed'} retry={() => query.refetch()}>
       {#if budget}
         <p>{monthFormatter.format(new Date(`${budget.start_date}T00:00:00Z`))}</p>
         {#if budget.totals.length === 0}
@@ -58,7 +58,7 @@
         {/if}
       {/if}
     </OverviewCard>
-    <OverviewCard title={m.recurring_title()} href="/app/planning/recurring" failed={overview.recurring.failed} retry={() => query.refetch()}>
+    <OverviewCard title={m.recurring_title()} href="/app/planning/recurring" failed={overview.recurring.status === 'failed'} retry={() => query.refetch()}>
       {#if due}
         {#if due.draft_count === 0 && due.blocked_count === 0}
           <p>{m.overview_due_empty()}</p>
@@ -77,7 +77,7 @@
       {/if}
     </OverviewCard>
     <OverviewCard title={m.forecast_nav()} href={forecast ? `/app/planning/forecast?horizon_days=${forecast.horizon_days}` : '/app/planning/forecast'}
-      failed={overview.forecast.failed} retry={() => query.refetch()}>
+      failed={overview.forecast.status === 'failed'} retry={() => query.refetch()}>
       {#if forecast}
         <p>{m.overview_forecast_estimate({ days: integer.format(forecast.horizon_days), date: formatCalendarDate(forecast.through_date, locale) })}</p>
         {#if forecast.minimums.length === 0}

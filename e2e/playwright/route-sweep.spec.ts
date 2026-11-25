@@ -33,10 +33,8 @@ const test = base.extend<object, { routeBook: Map<string, number> }>({
 // A pass means no machine-checkable defect on the state each route reaches
 // here; it does not certify every state of every screen.
 
-// `data: false` routes have no data of their own to fail: appearance and
-// language fetch nothing, and the overview reads only /health, which the shell
-// gate needs too. The Settings overview shows a failed status inline in each
-// value rather than as one alert (#329).
+// Preferences has no route-owned data read. Settings General reports a
+// failed status alongside each affected value (#329).
 type Route = {
   name: string;
   /** The SvelteKit route id this entry covers, for the coverage check below. */
@@ -48,7 +46,7 @@ type Route = {
 
 const routes: Route[] = [
   { name: 'review', route: '/app/review', path: () => '/app/review', data: true },
-  { name: 'home', route: '/app', path: () => '/app', data: false },
+  { name: 'home', route: '/app', path: () => '/app', data: true },
   { name: 'ledger overview', route: '/app/ledger', path: () => '/app/ledger', data: true },
   { name: 'account register', route: '/app/ledger/accounts/[id]/register', path: (ids) => `/app/ledger/accounts/${ids.get('checking')}/register`, data: true },
   { name: 'categories', route: '/app/ledger/categories', path: () => '/app/ledger/categories', data: true },
@@ -65,11 +63,11 @@ const routes: Route[] = [
   { name: 'returns', route: '/app/investments/returns', path: () => '/app/investments/returns', data: true },
   { name: 'gains', route: '/app/investments/gains', path: () => '/app/investments/gains', data: true },
   { name: 'prices', route: '/app/investments/prices', path: () => '/app/investments/prices', data: true },
-  { name: 'planning overview', route: '/app/planning', path: () => '/app/planning', data: false },
+  { name: 'planning overview', route: '/app/planning', path: () => '/app/planning', data: true },
   { name: 'budgets', route: '/app/planning/budgets', path: () => '/app/planning/budgets', data: true },
   { name: 'recurring', route: '/app/planning/recurring', path: () => '/app/planning/recurring', data: true },
   { name: 'forecast', route: '/app/planning/forecast', path: () => '/app/planning/forecast', data: true },
-  { name: 'reports overview', route: '/app/reports', path: () => '/app/reports', data: false },
+  { name: 'reports overview', route: '/app/reports', path: () => '/app/reports', data: true },
   { name: 'spending', route: '/app/reports/spending', path: () => `/app/reports/spending?${reportRange}`, data: true },
   { name: 'cashflow', route: '/app/reports/cashflow', path: () => `/app/reports/cashflow?${reportRange}`, data: true },
   { name: 'net worth', route: '/app/reports/net-worth', path: () => `/app/reports/net-worth?${reportRange}`, data: true },
@@ -272,7 +270,7 @@ test.describe('route sweep (#278)', () => {
         // this worker while the sub-view sweep runs axe (one run saw the
         // failure snapshot itself take 10.1s), so keep the wait bounded but
         // long enough that a stalled renderer is not reported as a stuck state.
-        // Twenty seconds also keeps a systematic failure across all 21 routes
+        // Twenty seconds also keeps several systematic failures
         // inside the test's 600s budget, so the collected messages survive.
         const shown = await alert.waitFor({ state: 'visible', timeout: 20_000 }).then(() => true, () => false);
         if (!shown) {

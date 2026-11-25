@@ -90,18 +90,79 @@ test('a failed overview card keeps the other cards usable and can be retried (#4
   await page.route('**/api/v1/planning/overview', async route => {
     const response = await route.fetch();
     const data = await response.json();
-    data.budget = { failed: true, data: null };
+    data.budget = { status: 'failed', summary: null };
+    data.forecast.summary.complete = false;
     await route.fulfill({ response, json: data });
   }, { times: 1 });
   await page.goto('/app/planning');
   const overview = page.getByTestId('planning-overview');
   await expect(overview.getByRole('alert')).toHaveText('This summary could not be loaded.');
   await expect(overview.getByRole('link', { name: 'Forecast' })).toBeVisible();
+  await expect(overview.getByText('Some scheduled movements could not be included.')).toBeVisible();
   await expect(overview.getByText('Nothing due for review.')).toBeVisible();
   await overview.getByRole('button', { name: 'Try again' }).click();
   await expect(overview.getByText('No expense targets this month.')).toBeVisible();
   await expect(overview.getByRole('alert')).toHaveCount(0);
+  await expect(overview.getByText('Some scheduled movements could not be included.')).toHaveCount(0);
 });
+
+test('Reports shows valuation gaps and preserves saved links when one source fails (#450)', async ({ page }) => {
+  await readyForLedger(page);
+  let requestCount = 0;
+  await page.route('**/api/v1/reports/overview', async route => {
+    const response = await route.fetch();
+    const data = await response.json();
+    if (++requestCount === 1) {
+      data.cashflow = { status: 'ok', summary: {
+        state: 'incomplete', stale: false,
+        amounts: [{ commodity_code: 'EUR', quantity_value: '-763', quantity_scale: 2 }]
+      } };
+      data.net_worth = { status: 'ok', summary: { state: 'incomplete', amounts: [], stale: false } };
+      data.gains_runs = { status: 'failed', summary: null };
+      data.returns_runs = { status: 'ok', summary: [{ id: 7, kind: 'returns', captured_at: '2026-09-07T12:00:00Z' }] };
+    } else {
+      data.reporting_currency_id = null;
+      data.net_worth = { status: 'ok', summary: { state: 'no_currency', amounts: [], stale: false } };
+    }
+    await route.fulfill({ response, json: data });
+  });
+  await page.goto('/app/reports');
+  const overview = page.getByTestId('reports-overview');
+  await expect(overview.getByText('Conversion is incomplete. Exact amounts are shown by currency.')).toBeVisible();
+  await expect(overview.getByText('EUR -7.63', { exact: true })).toBeVisible();
+  await expect(overview.getByRole('alert')).toHaveText('Some saved reports could not be loaded.');
+  await expect(overview.locator('a[href="/app/investments/returns?run_id=7#returns-runs-title"]')).toBeVisible();
+  await overview.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(overview.getByText('Set a default currency to value net worth.')).toBeVisible();
+  await expect(overview.getByRole('alert')).toHaveCount(0);
+});
+
+for (const [section, destination] of [['planning', 'Forecast'], ['reports', 'Spending']] as const) {
+  test(`${section} hides cached cards after a failed refresh and recovers on retry (#450)`, async ({ page }) => {
+    await readyForLedger(page);
+    const endpoint = `/api/v1/${section}/overview`;
+    const overview = page.getByTestId(`${section}-overview`);
+    await page.goto(`/app/${section}`);
+    await expect(overview).toBeVisible();
+    await overview.getByRole('link', { name: destination, exact: true }).click();
+    await expect(page).toHaveURL((url) => url.pathname !== `/app/${section}`);
+
+    let failedRequests = 0;
+    await page.route(`**${endpoint}`, async route => {
+      failedRequests++;
+      await route.fulfill({ status: 503, json: { error: { code: 'RESOURCE_BUSY', message: 'test overview failure' } } });
+    });
+    await page.goBack();
+    await expect.poll(() => failedRequests).toBe(2);
+    await expect(page.locator('main').getByRole('alert')).toHaveText('The overview could not be loaded.');
+    await expect(overview).toHaveCount(0);
+
+    await page.unroute(`**${endpoint}`);
+    await page.locator('main').getByRole('button', { name: 'Try again', exact: true }).click();
+    await expect(overview).toBeVisible();
+    await expect(page.locator('main').getByRole('alert')).toHaveCount(0);
+  });
+}
 
 test('both overview layouts fit at 320px in every locale (#450)', async ({ page }) => {
   test.setTimeout(60_000);

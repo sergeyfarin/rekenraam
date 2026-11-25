@@ -1,3 +1,8 @@
+ReadCardStatus:
+  type: string
+  enum: [ok, failed]
+  description: A failed read has a null summary. Other summaries can still be read.
+
 OverviewAmount:
   type: object
   required: [commodity_code, quantity_value, quantity_scale]
@@ -13,10 +18,10 @@ PlanningOverview:
     as_of: { type: string, format: date }
     budget:
       type: object
-      required: [failed, data]
+      required: [status, summary]
       properties:
-        failed: { type: boolean }
-        data:
+        status: { $ref: '../../openapi.yaml#/components/schemas/ReadCardStatus' }
+        summary:
           type: [object, 'null']
           required: [start_date, end_date, elapsed_basis_points, totals]
           properties:
@@ -37,10 +42,10 @@ PlanningOverview:
                     description: Exact ratio in basis points (10000 = 100%), rounded half-up and encoded as a decimal integer string.
     recurring:
       type: object
-      required: [failed, data]
+      required: [status, summary]
       properties:
-        failed: { type: boolean }
-        data:
+        status: { $ref: '../../openapi.yaml#/components/schemas/ReadCardStatus' }
+        summary:
           type: [object, 'null']
           required: [draft_count, blocked_count]
           properties:
@@ -48,10 +53,10 @@ PlanningOverview:
             blocked_count: { type: integer }
     forecast:
       type: object
-      required: [failed, data]
+      required: [status, summary]
       properties:
-        failed: { type: boolean }
-        data:
+        status: { $ref: '../../openapi.yaml#/components/schemas/ReadCardStatus' }
+        summary:
           type: [object, 'null']
           required: [through_date, horizon_days, complete, minimums]
           properties:
@@ -82,10 +87,10 @@ ReportsOverview:
 
 OverviewReportCard:
   type: object
-  required: [failed, data]
+  required: [status, summary]
   properties:
-    failed: { type: boolean }
-    data:
+    status: { $ref: '../../openapi.yaml#/components/schemas/ReadCardStatus' }
+    summary:
       type: [object, 'null']
       required: [state, amounts, stale]
       properties:
@@ -100,10 +105,10 @@ OverviewReportCard:
 
 OverviewSavedReportsCard:
   type: object
-  required: [failed, data]
+  required: [status, summary]
   properties:
-    failed: { type: boolean }
-    data:
+    status: { $ref: '../../openapi.yaml#/components/schemas/ReadCardStatus' }
+    summary:
       type: [array, 'null']
       items:
         type: object

@@ -30418,8 +30418,8 @@ export interface components {
             /** Format: date */
             as_of: string;
             budget: {
-                failed: boolean;
-                data: {
+                status: components["schemas"]["ReadCardStatus"];
+                summary: {
                     /** Format: date */
                     start_date: string;
                     /** Format: date */
@@ -30435,15 +30435,15 @@ export interface components {
                 } | null;
             };
             recurring: {
-                failed: boolean;
-                data: {
+                status: components["schemas"]["ReadCardStatus"];
+                summary: {
                     draft_count: number;
                     blocked_count: number;
                 } | null;
             };
             forecast: {
-                failed: boolean;
-                data: {
+                status: components["schemas"]["ReadCardStatus"];
+                summary: {
                     /** Format: date */
                     through_date: string;
                     horizon_days: number;
@@ -30475,8 +30475,8 @@ export interface components {
             quantity_scale: number;
         };
         OverviewReportCard: {
-            failed: boolean;
-            data: {
+            status: components["schemas"]["ReadCardStatus"];
+            summary: {
                 /**
                  * @description Incomplete conversion may still have exact source-currency figures.
                  * @enum {string}
@@ -30488,8 +30488,8 @@ export interface components {
             } | null;
         };
         OverviewSavedReportsCard: {
-            failed: boolean;
-            data: {
+            status: components["schemas"]["ReadCardStatus"];
+            summary: {
                 /** Format: int64 */
                 id: number;
                 /** @enum {string} */
@@ -30543,58 +30543,59 @@ export interface components {
             scale: number;
         };
         /**
-         * @description failed means this summary could not be read; summary is then null and the other widgets are unaffected.
+         * @description A failed read has a null summary. Other summaries can still be read.
          * @enum {string}
          */
-        HomeWidgetStatus: "ok" | "failed";
+        ReadCardStatus: "ok" | "failed";
+        HomeWidgetStatus: components["schemas"]["ReadCardStatus"];
         /** @description The default My Home widgets (#478) and the More to explore widgets (#479). Each fails on its own. */
         HomeWidgets: {
             spending: {
-                status: components["schemas"]["HomeWidgetStatus"];
+                status: components["schemas"]["ReadCardStatus"];
                 summary: components["schemas"]["HomeSpendingSummary"] | null;
             };
             budgets: {
-                status: components["schemas"]["HomeWidgetStatus"];
+                status: components["schemas"]["ReadCardStatus"];
                 summary: components["schemas"]["HomeBudgetSummary"] | null;
             };
             accounts: {
-                status: components["schemas"]["HomeWidgetStatus"];
+                status: components["schemas"]["ReadCardStatus"];
                 summary: components["schemas"]["HomeAccountsSummary"] | null;
             };
             recurring: {
-                status: components["schemas"]["HomeWidgetStatus"];
+                status: components["schemas"]["ReadCardStatus"];
                 summary: components["schemas"]["HomeRecurringSummary"] | null;
             };
             net_worth_trend: {
-                status: components["schemas"]["HomeWidgetStatus"];
+                status: components["schemas"]["ReadCardStatus"];
                 summary: components["schemas"]["HomeNetWorthTrendSummary"] | null;
             };
             cashflow: {
-                status: components["schemas"]["HomeWidgetStatus"];
+                status: components["schemas"]["ReadCardStatus"];
                 summary: components["schemas"]["HomeCashflowSummary"] | null;
             };
             holdings: {
-                status: components["schemas"]["HomeWidgetStatus"];
+                status: components["schemas"]["ReadCardStatus"];
                 summary: components["schemas"]["HomeHoldingsSummary"] | null;
             };
             returns: {
-                status: components["schemas"]["HomeWidgetStatus"];
+                status: components["schemas"]["ReadCardStatus"];
                 summary: components["schemas"]["HomeReturnsSummary"] | null;
             };
             allocation: {
-                status: components["schemas"]["HomeWidgetStatus"];
+                status: components["schemas"]["ReadCardStatus"];
                 summary: components["schemas"]["HomeAllocationSummary"] | null;
             };
             income: {
-                status: components["schemas"]["HomeWidgetStatus"];
+                status: components["schemas"]["ReadCardStatus"];
                 summary: components["schemas"]["HomeIncomeSummary"] | null;
             };
             backups: {
-                status: components["schemas"]["HomeWidgetStatus"];
+                status: components["schemas"]["ReadCardStatus"];
                 summary: components["schemas"]["HomeBackupsSummary"] | null;
             };
             reconciliation: {
-                status: components["schemas"]["HomeWidgetStatus"];
+                status: components["schemas"]["ReadCardStatus"];
                 summary: components["schemas"]["HomeReconciliationSummary"] | null;
             };
         };

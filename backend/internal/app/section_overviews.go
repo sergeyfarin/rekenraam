@@ -12,15 +12,6 @@ import (
 	"rekenraam/backend/internal/exact"
 )
 
-type OverviewSource[T any] struct {
-	Data T
-	Err  error
-}
-
-func overviewSource[T any](data T, err error) OverviewSource[T] {
-	return OverviewSource[T]{Data: data, Err: err}
-}
-
 type OverviewAmount struct {
 	Code  string            `json:"commodity_code"`
 	Value exact.Coefficient `json:"quantity_value"`
@@ -29,9 +20,9 @@ type OverviewAmount struct {
 
 type PlanningOverview struct {
 	AsOf      string
-	Budget    OverviewSource[PlanningBudget]
-	Recurring OverviewSource[RecurringSummary]
-	Forecast  OverviewSource[PlanningForecast]
+	Budget    ReadCard[PlanningBudget]
+	Recurring ReadCard[RecurringSummary]
+	Forecast  ReadCard[PlanningForecast]
 }
 
 type PlanningBudget struct {
@@ -70,9 +61,9 @@ func ReadPlanningOverview(ctx context.Context, settings *SettingsService, budget
 	}
 	return PlanningOverview{
 		AsOf:      asOf,
-		Budget:    overviewSource(planningBudget(ctx, budgets, asOf)),
-		Recurring: overviewSource(recurring.reviewSummary(ctx, asOf)),
-		Forecast:  overviewSource(forecast.planningMinimums(ctx, ownerID, now.UTC(), asOf)),
+		Budget:    valueReadCard(planningBudget(ctx, budgets, asOf)),
+		Recurring: valueReadCard(recurring.reviewSummary(ctx, asOf)),
+		Forecast:  valueReadCard(forecast.planningMinimums(ctx, ownerID, now.UTC(), asOf)),
 	}, nil
 }
 
@@ -81,7 +72,7 @@ func planningBudget(ctx context.Context, budgets *BudgetService, asOf string) (P
 	if err != nil {
 		return PlanningBudget{}, err
 	}
-	month, err := budgets.Month(ctx, today.Format("2006-01")+"-01")
+	month, err := budgets.Month(ctx, monthStart(asOf))
 	if err != nil {
 		return PlanningBudget{}, err
 	}
@@ -153,11 +144,11 @@ func (s *ForecastService) planningMinimums(ctx context.Context, ownerID int64, n
 type ReportsOverview struct {
 	AsOf, MonthStart    string
 	ReportingCurrencyID *int64
-	Spending            OverviewSource[ReportHeadline]
-	Cashflow            OverviewSource[ReportHeadline]
-	NetWorth            OverviewSource[ReportHeadline]
-	GainsRuns           OverviewSource[[]OverviewSavedReport]
-	ReturnsRuns         OverviewSource[[]OverviewSavedReport]
+	Spending            ReadCard[ReportHeadline]
+	Cashflow            ReadCard[ReportHeadline]
+	NetWorth            ReadCard[ReportHeadline]
+	GainsRuns           ReadCard[[]OverviewSavedReport]
+	ReturnsRuns         ReadCard[[]OverviewSavedReport]
 }
 
 type ReportHeadline struct {
@@ -181,14 +172,13 @@ func ReadReportsOverview(ctx context.Context, transactions *TransactionService, 
 	if err != nil {
 		return ReportsOverview{}, err
 	}
-	monthStart := asOf[:8] + "01"
-	result := ReportsOverview{AsOf: asOf, MonthStart: monthStart,
-		GainsRuns:   OverviewSource[[]OverviewSavedReport]{Data: []OverviewSavedReport{}},
-		ReturnsRuns: OverviewSource[[]OverviewSavedReport]{Data: []OverviewSavedReport{}},
+	result := ReportsOverview{AsOf: asOf, MonthStart: monthStart(asOf),
+		GainsRuns:   valueReadCard([]OverviewSavedReport{}, nil),
+		ReturnsRuns: valueReadCard([]OverviewSavedReport{}, nil),
 	}
 	if investments != nil {
-		result.GainsRuns = overviewSource(overviewGainsRuns(ctx, investments))
-		result.ReturnsRuns = overviewSource(overviewReturnsRuns(ctx, investments))
+		result.GainsRuns = valueReadCard(overviewGainsRuns(ctx, investments))
+		result.ReturnsRuns = valueReadCard(overviewReturnsRuns(ctx, investments))
 	}
 	reporting, err := transactions.overviewReportingCurrency(ctx)
 	if err != nil {
@@ -198,9 +188,9 @@ func ReadReportsOverview(ctx context.Context, transactions *TransactionService, 
 	if reporting != nil {
 		result.ReportingCurrencyID = &reporting.CommodityID
 	}
-	result.Spending = overviewSource(transactions.overviewSpending(ctx, monthStart, asOf, reporting))
-	result.Cashflow = overviewSource(transactions.overviewCashflow(ctx, monthStart, asOf, reporting))
-	result.NetWorth = overviewSource(transactions.overviewNetWorth(ctx, asOf, reporting))
+	result.Spending = valueReadCard(transactions.overviewSpending(ctx, asOf, reporting))
+	result.Cashflow = valueReadCard(transactions.overviewCashflow(ctx, asOf, reporting))
+	result.NetWorth = valueReadCard(transactions.overviewNetWorth(ctx, asOf, reporting))
 	return result, nil
 }
 
@@ -218,16 +208,16 @@ func (s *TransactionService) overviewReportingCurrency(ctx context.Context) (*Re
 	return &ReportingCurrencyInput{CommodityID: currency.ID}, nil
 }
 
-func (s *TransactionService) overviewSpending(ctx context.Context, start, end string, reporting *ReportingCurrencyInput) (ReportHeadline, error) {
-	report, err := s.Spending(ctx, SpendingInput{StartDate: start, EndDate: end, GroupBy: "category", Mode: "spending", Reporting: reporting})
+func (s *TransactionService) overviewSpending(ctx context.Context, asOf string, reporting *ReportingCurrencyInput) (ReportHeadline, error) {
+	report, err := s.Spending(ctx, monthToDateSpending(asOf, reporting))
 	if err != nil {
 		return ReportHeadline{}, err
 	}
 	return s.overviewHeadline(ctx, report.CommodityTotals, report.ConvertedTotal, report.Valuation)
 }
 
-func (s *TransactionService) overviewCashflow(ctx context.Context, start, end string, reporting *ReportingCurrencyInput) (ReportHeadline, error) {
-	report, err := s.Cashflow(ctx, CashflowInput{StartDate: start, EndDate: end, Bucket: "month", Reporting: reporting})
+func (s *TransactionService) overviewCashflow(ctx context.Context, asOf string, reporting *ReportingCurrencyInput) (ReportHeadline, error) {
+	report, err := s.Cashflow(ctx, monthToDateCashflow(asOf, reporting))
 	if err != nil {
 		return ReportHeadline{}, err
 	}

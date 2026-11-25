@@ -1,23 +1,17 @@
 package api
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
 
 	"rekenraam/backend/internal/app"
 )
 
-type sectionOverviewCard[T any] struct {
-	Data   *T   `json:"data"`
-	Failed bool `json:"failed"`
-}
-
 type planningOverviewResponse struct {
-	AsOf      string                                         `json:"as_of"`
-	Budget    sectionOverviewCard[planningBudgetResponse]    `json:"budget"`
-	Recurring sectionOverviewCard[planningRecurringResponse] `json:"recurring"`
-	Forecast  sectionOverviewCard[planningForecastResponse]  `json:"forecast"`
+	AsOf      string                                      `json:"as_of"`
+	Budget    readCardResponse[planningBudgetResponse]    `json:"budget"`
+	Recurring readCardResponse[planningRecurringResponse] `json:"recurring"`
+	Forecast  readCardResponse[planningForecastResponse]  `json:"forecast"`
 }
 
 type planningBudgetResponse struct {
@@ -46,14 +40,14 @@ type planningForecastResponse struct {
 }
 
 type reportsOverviewResponse struct {
-	AsOf                string                                         `json:"as_of"`
-	MonthStart          string                                         `json:"month_start"`
-	ReportingCurrencyID *int64                                         `json:"reporting_currency_id"`
-	Spending            sectionOverviewCard[app.ReportHeadline]        `json:"spending"`
-	Cashflow            sectionOverviewCard[app.ReportHeadline]        `json:"cashflow"`
-	NetWorth            sectionOverviewCard[app.ReportHeadline]        `json:"net_worth"`
-	GainsRuns           sectionOverviewCard[[]app.OverviewSavedReport] `json:"gains_runs"`
-	ReturnsRuns         sectionOverviewCard[[]app.OverviewSavedReport] `json:"returns_runs"`
+	AsOf                string                                      `json:"as_of"`
+	MonthStart          string                                      `json:"month_start"`
+	ReportingCurrencyID *int64                                      `json:"reporting_currency_id"`
+	Spending            readCardResponse[app.ReportHeadline]        `json:"spending"`
+	Cashflow            readCardResponse[app.ReportHeadline]        `json:"cashflow"`
+	NetWorth            readCardResponse[app.ReportHeadline]        `json:"net_worth"`
+	GainsRuns           readCardResponse[[]app.OverviewSavedReport] `json:"gains_runs"`
+	ReturnsRuns         readCardResponse[[]app.OverviewSavedReport] `json:"returns_runs"`
 }
 
 func planningOverview(logger *slog.Logger, services Services) http.HandlerFunc {
@@ -70,9 +64,9 @@ func planningOverview(logger *slog.Logger, services Services) http.HandlerFunc {
 		w.Header().Set("Cache-Control", "no-store")
 		writeJSON(w, http.StatusOK, planningOverviewResponse{
 			AsOf:      data.AsOf,
-			Budget:    mapOverviewCard(r, logger, "budgets", data.Budget, toPlanningBudget),
-			Recurring: mapOverviewCard(r, logger, "recurring", data.Recurring, toPlanningRecurring),
-			Forecast:  mapOverviewCard(r, logger, "forecast", data.Forecast, toPlanningForecast),
+			Budget:    mapReadCard(r, logger, "planning: budgets", data.Budget, toPlanningBudget),
+			Recurring: mapReadCard(r, logger, "planning: recurring", data.Recurring, toPlanningRecurring),
+			Forecast:  mapReadCard(r, logger, "planning: forecast", data.Forecast, toPlanningForecast),
 		})
 	}
 }
@@ -92,30 +86,13 @@ func reportsOverview(logger *slog.Logger, services Services) http.HandlerFunc {
 			AsOf:                data.AsOf,
 			MonthStart:          data.MonthStart,
 			ReportingCurrencyID: data.ReportingCurrencyID,
-			Spending:            overviewCard(r, logger, "spending", data.Spending),
-			Cashflow:            overviewCard(r, logger, "cashflow", data.Cashflow),
-			NetWorth:            overviewCard(r, logger, "net worth", data.NetWorth),
-			GainsRuns:           overviewCard(r, logger, "saved gains", data.GainsRuns),
-			ReturnsRuns:         overviewCard(r, logger, "saved returns", data.ReturnsRuns),
+			Spending:            toReadCard(r, logger, "reports: spending", data.Spending),
+			Cashflow:            toReadCard(r, logger, "reports: cashflow", data.Cashflow),
+			NetWorth:            toReadCard(r, logger, "reports: net worth", data.NetWorth),
+			GainsRuns:           toReadCard(r, logger, "reports: saved gains", data.GainsRuns),
+			ReturnsRuns:         toReadCard(r, logger, "reports: saved returns", data.ReturnsRuns),
 		})
 	}
-}
-
-func overviewCard[T any](r *http.Request, logger *slog.Logger, source string, result app.OverviewSource[T]) sectionOverviewCard[T] {
-	if result.Err != nil {
-		// A dependency error may carry financial content. Record the source
-		// and error type so the response can safely keep the other cards.
-		logger.ErrorContext(r.Context(), "read section overview card", slog.String("source", source), slog.String("error_type", fmt.Sprintf("%T", result.Err)))
-		return sectionOverviewCard[T]{Failed: true}
-	}
-	return sectionOverviewCard[T]{Data: &result.Data}
-}
-
-func mapOverviewCard[T, R any](r *http.Request, logger *slog.Logger, source string, result app.OverviewSource[T], convert func(T) R) sectionOverviewCard[R] {
-	if result.Err != nil {
-		return overviewCard(r, logger, source, app.OverviewSource[R]{Err: result.Err})
-	}
-	return overviewCard(r, logger, source, app.OverviewSource[R]{Data: convert(result.Data)})
 }
 
 func toPlanningBudget(b app.PlanningBudget) planningBudgetResponse {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"testing"
 	"time"
 
@@ -26,6 +27,7 @@ func TestSectionOverviewFiguresMatchTheirCanonicalPages(t *testing.T) {
 	cookie, csrf, usd := setupAccountAPITest(t, handler)
 	checking := createLedgerAccount(t, handler, cookie, csrf, "Overview checking", "asset", "checking", usd, 2)
 	expense := createCategoryForSession(t, handler, cookie, csrf, `{"name":"Overview groceries","category_type":"expense"}`)
+	untargeted := createCategoryForSession(t, handler, cookie, csrf, `{"name":"Overview untargeted expense","category_type":"expense"}`)
 	income := createCategoryForSession(t, handler, cookie, csrf, `{"name":"Overview salary","category_type":"income"}`)
 	for _, entry := range []struct {
 		date     string
@@ -34,6 +36,7 @@ func TestSectionOverviewFiguresMatchTheirCanonicalPages(t *testing.T) {
 	}{
 		{"2026-09-01", income.ID, 10000},
 		{"2026-09-07", expense.ID, -3000},
+		{"2026-09-07", untargeted.ID, -500},
 		{"2026-09-08", expense.ID, -1500},
 	} {
 		createTransactionForSession(t, handler, cookie, csrf, balancedBody(entry.date,
@@ -58,25 +61,31 @@ func TestSectionOverviewFiguresMatchTheirCanonicalPages(t *testing.T) {
 	var planning planningOverviewResponse
 	read("/api/v1/planning/overview", &planning)
 	assert.Equal(t, "2026-09-07", planning.AsOf)
-	budgetCard := planning.Budget.Data
+	budgetCard := planning.Budget.Summary
 	require.NotNil(t, budgetCard)
 	require.Len(t, budgetCard.Totals, 1)
 	assert.Equal(t, []string{"2026-09-01", "2026-09-30"}, []string{budgetCard.StartDate, budgetCard.EndDate})
 	assert.Equal(t, 2333, budgetCard.ElapsedBasisPoints)
-	assert.Equal(t, "4500", budgetCard.Totals[0].SpentBasisPoints, "posted future expense in the budget month counts; the recurring draft does not")
-	assert.Equal(t, app.OverviewAmount{Code: "USD", Value: exact.New(5500), Scale: 2}, budgetCard.Totals[0].Remaining)
-	assert.Equal(t, budgetCategoryByID(t, budget, expense.ID).Amounts[0].Remaining.QuantityValue, budgetCard.Totals[0].Remaining.Value)
-	require.NotNil(t, planning.Recurring.Data)
-	assert.Equal(t, planningRecurringResponse{DraftCount: 1}, *planning.Recurring.Data)
+	assert.Equal(t, "5000", budgetCard.Totals[0].SpentBasisPoints, "the posted future and untargeted expenses count while the recurring draft stays out")
+	assert.Equal(t, app.OverviewAmount{Code: "USD", Value: exact.New(5000), Scale: 2}, budgetCard.Totals[0].Remaining)
+	expenseTotal := slices.IndexFunc(budget.Totals, func(total budgetTypeTotalResponse) bool {
+		return total.CategoryType == "expense" && total.Amount.CommodityID == usd
+	})
+	require.NotEqual(t, -1, expenseTotal)
+	remaining := budget.Totals[expenseTotal].Amount.Remaining
+	assert.Equal(t, remaining.QuantityValue, budgetCard.Totals[0].Remaining.Value)
+	assert.Equal(t, remaining.QuantityScale, budgetCard.Totals[0].Remaining.Scale)
+	require.NotNil(t, planning.Recurring.Summary)
+	assert.Equal(t, planningRecurringResponse{DraftCount: 1}, *planning.Recurring.Summary)
 
-	require.NotNil(t, planning.Forecast.Data)
-	require.True(t, planning.Forecast.Data.Complete)
-	assert.Equal(t, 90, planning.Forecast.Data.HorizonDays)
-	assert.Equal(t, "2026-12-06", planning.Forecast.Data.ThroughDate)
-	require.Len(t, planning.Forecast.Data.Minimums, 1)
-	minimum := planning.Forecast.Data.Minimums[0]
+	require.NotNil(t, planning.Forecast.Summary)
+	require.True(t, planning.Forecast.Summary.Complete)
+	assert.Equal(t, 90, planning.Forecast.Summary.HorizonDays)
+	assert.Equal(t, "2026-12-06", planning.Forecast.Summary.ThroughDate)
+	require.Len(t, planning.Forecast.Summary.Minimums, 1)
+	minimum := planning.Forecast.Summary.Minimums[0]
 	assert.Equal(t, "2026-12-06", minimum.Date)
-	assert.Equal(t, app.OverviewAmount{Code: "USD", Value: exact.New(-3600), Scale: 2}, minimum.Amount, "70 opening minus the future 15 debit, one carried draft and 90 daily occurrences")
+	assert.Equal(t, app.OverviewAmount{Code: "USD", Value: exact.New(-4100), Scale: 2}, minimum.Amount, "65 opening minus the future 15 debit, one carried draft and 90 daily occurrences")
 	var projection forecastBalancesResponse
 	read("/api/v1/forecasts/balances?horizon_days=90", &projection)
 	require.Len(t, projection.Totals, 1)
@@ -99,20 +108,20 @@ func TestSectionOverviewFiguresMatchTheirCanonicalPages(t *testing.T) {
 	require.Len(t, cashflow.Buckets, 1)
 	require.Len(t, netWorth.Buckets, 1)
 	for _, row := range []struct {
-		card      sectionOverviewCard[app.ReportHeadline]
+		card      readCardResponse[app.ReportHeadline]
 		canonical *balanceQuantityResponse
 		value     int64
 	}{
-		{reports.Spending, spending.ConvertedTotal, 3000},
-		{reports.Cashflow, cashflow.Buckets[0].ConvertedOperatingNet, 7000},
-		{reports.NetWorth, netWorth.Buckets[0].Converted, 7000},
+		{reports.Spending, spending.ConvertedTotal, 3500},
+		{reports.Cashflow, cashflow.Buckets[0].ConvertedOperatingNet, 6500},
+		{reports.NetWorth, netWorth.Buckets[0].Converted, 6500},
 	} {
-		require.NotNil(t, row.card.Data)
+		require.NotNil(t, row.card.Summary)
 		require.NotNil(t, row.canonical)
-		assert.Equal(t, "ready", row.card.Data.State)
-		assert.Equal(t, []app.OverviewAmount{{Code: "USD", Value: exact.New(row.value), Scale: 2}}, row.card.Data.Amounts)
-		assert.Equal(t, row.canonical.QuantityValue, row.card.Data.Amounts[0].Value)
-		assert.Equal(t, row.canonical.QuantityScale, row.card.Data.Amounts[0].Scale)
+		assert.Equal(t, "ready", row.card.Summary.State)
+		assert.Equal(t, []app.OverviewAmount{{Code: "USD", Value: exact.New(row.value), Scale: 2}}, row.card.Summary.Amounts)
+		assert.Equal(t, row.canonical.QuantityValue, row.card.Summary.Amounts[0].Value)
+		assert.Equal(t, row.canonical.QuantityScale, row.card.Summary.Amounts[0].Scale)
 	}
 
 	require.NoError(t, database.QueryRow(`SELECT count(*) FROM audit_events`).Scan(&auditAfter))
@@ -127,9 +136,9 @@ func TestSectionOverviewFiguresMatchTheirCanonicalPages(t *testing.T) {
 		fmt.Sprintf(`{"account_id":%d,"commodity_id":%d,"quantity_value":"-100000000000000000000","quantity_scale":2}`, checking.ID, usd),
 		fmt.Sprintf(`{"account_id":%d,"commodity_id":%d,"quantity_value":"100000000000000000000","quantity_scale":2}`, expense.ID, usd)), http.StatusCreated)
 	read("/api/v1/planning/overview", &planning)
-	require.NotNil(t, planning.Budget.Data)
-	require.Len(t, planning.Budget.Data.Totals, 1)
-	assert.Equal(t, "1000000000000000045000000", planning.Budget.Data.Totals[0].SpentBasisPoints, "valid over-budget shares can exceed a native integer")
+	require.NotNil(t, planning.Budget.Summary)
+	require.Len(t, planning.Budget.Summary.Totals, 1)
+	assert.Equal(t, "1000000000000000050000000", planning.Budget.Summary.Totals[0].SpentBasisPoints, "valid over-budget shares can exceed a native integer")
 }
 
 func TestSectionOverviewKeepsOtherSourcesWhenBudgetFailsOrRatesAreMissing(t *testing.T) {
@@ -154,23 +163,41 @@ func TestSectionOverviewKeepsOtherSourcesWhenBudgetFailsOrRatesAreMissing(t *tes
 	var reports reportsOverviewResponse
 	res = forecastRequest(t, handler, f.sessionCookie, "/api/v1/reports/overview", http.StatusOK)
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&reports))
-	require.NotNil(t, reports.Spending.Data)
-	assert.Equal(t, "incomplete", reports.Spending.Data.State)
-	assert.Equal(t, []app.OverviewAmount{{Code: "EUR", Value: exact.New(763), Scale: 2}}, reports.Spending.Data.Amounts)
-	require.NotNil(t, reports.NetWorth.Data)
-	assert.Equal(t, "incomplete", reports.NetWorth.Data.State)
-	assert.Empty(t, reports.NetWorth.Data.Amounts, "an unvalued currency must not become a partial net worth")
-	require.NotNil(t, reports.GainsRuns.Data)
-	assert.Equal(t, []app.OverviewSavedReport{{ID: saved.ID, Kind: "statement", CapturedAt: saved.CapturedAt}}, *reports.GainsRuns.Data)
+	require.NotNil(t, reports.Spending.Summary)
+	assert.Equal(t, "incomplete", reports.Spending.Summary.State)
+	assert.Equal(t, []app.OverviewAmount{{Code: "EUR", Value: exact.New(763), Scale: 2}}, reports.Spending.Summary.Amounts)
+	require.NotNil(t, reports.Cashflow.Summary)
+	assert.Equal(t, "incomplete", reports.Cashflow.Summary.State)
+	assert.Equal(t, []app.OverviewAmount{{Code: "EUR", Value: exact.New(-763), Scale: 2}}, reports.Cashflow.Summary.Amounts)
+	require.NotNil(t, reports.NetWorth.Summary)
+	assert.Equal(t, "incomplete", reports.NetWorth.Summary.State)
+	assert.Empty(t, reports.NetWorth.Summary.Amounts, "an unvalued currency must not become a partial net worth")
+	require.NotNil(t, reports.GainsRuns.Summary)
+	assert.Equal(t, []app.OverviewSavedReport{{ID: saved.ID, Kind: "statement", CapturedAt: saved.CapturedAt}}, *reports.GainsRuns.Summary)
 
-	_, err := database.Exec(`DROP TABLE budget_targets`)
+	_, err := database.Exec(`UPDATE books SET default_currency_commodity_id = NULL WHERE id = 1`)
+	require.NoError(t, err)
+	_, err = database.Exec(`DROP TABLE investment_gains_runs`)
+	require.NoError(t, err)
+	res = forecastRequest(t, handler, f.sessionCookie, "/api/v1/reports/overview", http.StatusOK)
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&reports))
+	assert.Nil(t, reports.ReportingCurrencyID)
+	require.NotNil(t, reports.NetWorth.Summary)
+	assert.Equal(t, "no_currency", reports.NetWorth.Summary.State)
+	assert.Empty(t, reports.NetWorth.Summary.Amounts)
+	assert.Equal(t, "failed", reports.GainsRuns.Status)
+	assert.Nil(t, reports.GainsRuns.Summary)
+	assert.Equal(t, "ok", reports.ReturnsRuns.Status)
+	assert.Equal(t, "ok", reports.Spending.Status)
+
+	_, err = database.Exec(`DROP TABLE budget_targets`)
 	require.NoError(t, err)
 	var planning planningOverviewResponse
 	res = forecastRequest(t, handler, f.sessionCookie, "/api/v1/planning/overview", http.StatusOK)
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&planning))
-	assert.True(t, planning.Budget.Failed)
-	assert.Nil(t, planning.Budget.Data)
-	assert.NotNil(t, planning.Recurring.Data)
-	require.NotNil(t, planning.Forecast.Data)
-	assert.NotEmpty(t, planning.Forecast.Data.Minimums)
+	assert.Equal(t, "failed", planning.Budget.Status)
+	assert.Nil(t, planning.Budget.Summary)
+	assert.NotNil(t, planning.Recurring.Summary)
+	require.NotNil(t, planning.Forecast.Summary)
+	assert.NotEmpty(t, planning.Forecast.Summary.Minimums)
 }

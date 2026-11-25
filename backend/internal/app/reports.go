@@ -60,6 +60,23 @@ type SpendingInput struct {
 	Reporting *ReportingCurrencyInput
 }
 
+func monthStart(asOf string) string { return asOf[:8] + "01" }
+
+func monthToDateSpending(asOf string, reporting *ReportingCurrencyInput) SpendingInput {
+	return SpendingInput{StartDate: monthStart(asOf), EndDate: asOf, GroupBy: "category", Mode: "spending", Reporting: reporting}
+}
+
+func monthToDateCashflow(asOf string, reporting *ReportingCurrencyInput) CashflowInput {
+	return CashflowInput{StartDate: monthStart(asOf), EndDate: asOf, Bucket: "month", Reporting: reporting}
+}
+
+func optionalReportingCurrency(commodityID int64) *ReportingCurrencyInput {
+	if commodityID == 0 {
+		return nil
+	}
+	return &ReportingCurrencyInput{CommodityID: commodityID}
+}
+
 // SpendingGroupTotal is one commodity's exact total for a group, plus that
 // group's share of the same commodity's report total.
 type SpendingGroupTotal struct {

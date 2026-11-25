@@ -181,6 +181,7 @@ item 31"); they are not an order and are never reused. To read one entry:
 - 79 — An editor that restates more than the owner changed
 - 85 — A scrollable combobox popup that becomes a Tab stop
 - 86 — A final action enabled by an older saved selection
+- 90 — Cached figures rendered after a failed refresh
 
 **Browser journeys and test fixtures** — `bug-classes/e2e.md`
 
