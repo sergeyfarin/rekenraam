@@ -6,6 +6,7 @@ import {
   investmentLotsQueryKey, investmentPositionsQueryKey, investmentReturnsQueryKey, investmentSplitsQueryKey
 } from '#lib/api/investments.ts';
 import { netWorthSeriesQueryOptions } from '#lib/api/reports.ts';
+import { planningOverviewQueryOptions, reportsOverviewQueryOptions } from '#lib/api/section-overviews.ts';
 import { accountRegisterQueryKey, transactionsQueryKey } from '#lib/api/transactions.ts';
 import { invalidateInvestmentReads } from './invalidate';
 
@@ -18,6 +19,16 @@ describe('invalidateInvestmentReads', () => {
     await invalidateInvestmentReads(client);
 
     expect(client.getQueryState(netWorth)?.isInvalidated).toBe(true);
+  });
+
+  it('marks both section overviews stale after investment entry', async () => {
+    const client = new QueryClient();
+    const keys = [planningOverviewQueryOptions('2026-10-31').queryKey, reportsOverviewQueryOptions('2026-10-31').queryKey];
+    for (const queryKey of keys) client.setQueryData(queryKey, {});
+
+    await invalidateInvestmentReads(client);
+
+    for (const queryKey of keys) expect(client.getQueryState(queryKey)?.isInvalidated).toBe(true);
   });
 
   it('invalidates every read an investment write can restate, including gains', async () => {

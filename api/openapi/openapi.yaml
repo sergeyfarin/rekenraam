@@ -113,6 +113,10 @@ paths:
     $ref: "./paths/attention.yaml"
   /api/v1/home:
     $ref: "./paths/home.yaml"
+  /api/v1/planning/overview:
+    $ref: "./paths/planning-overview.yaml"
+  /api/v1/reports/overview:
+    $ref: "./paths/reports-overview.yaml"
   /api/v1/search/catalog:
     $ref: "./paths/search-catalog.yaml"
   /api/v1/accounts:
@@ -1098,6 +1102,16 @@ components:
       $ref: "./components/schemas/ledger.yaml#/BalanceQuantity"
     HomeResponse:
       $ref: "./components/schemas/home.yaml#/HomeResponse"
+    PlanningOverview:
+      $ref: "./components/schemas/section-overviews.yaml#/PlanningOverview"
+    ReportsOverview:
+      $ref: "./components/schemas/section-overviews.yaml#/ReportsOverview"
+    OverviewAmount:
+      $ref: "./components/schemas/section-overviews.yaml#/OverviewAmount"
+    OverviewReportCard:
+      $ref: "./components/schemas/section-overviews.yaml#/OverviewReportCard"
+    OverviewSavedReportsCard:
+      $ref: "./components/schemas/section-overviews.yaml#/OverviewSavedReportsCard"
     HomeHeadline:
       $ref: "./components/schemas/home.yaml#/HomeHeadline"
     HomeValuationInput:

@@ -115,6 +115,18 @@ header on every page.
   reports; it links Gains, which lives in Investments. Investments already
   has its Overview.
 
+  The Planning cards use the owner-local budget month, the recurring Due
+  queue, and Forecast's default 90-day liquid-account projection. Budget
+  progress stays separate by currency. Forecast shows the lowest projected
+  balance per currency, including the opening balance as a candidate, and
+  labels it an estimate. The Reports cards show month-to-date spending and
+  operating cashflow and today's net worth. Card links carry the displayed
+  period and reporting currency. If conversion is incomplete, Spending and
+  Cashflow retain their exact source-currency totals and Net worth shows the
+  valuation gap. Saved reports link to recent frozen gains, statements and
+  returns, with the full history in Investments. Named saved filter
+  definitions remain deferred under the [reports plan](../plans/reports-plan.md).
+
 - **Left side:** the word *Home* is the first item of the row, styled like
   the sections and marked current on Home. The header shows no logo or app
   name; a mark alone was too small a target and too unclear, and beside

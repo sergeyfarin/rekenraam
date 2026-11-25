@@ -311,6 +311,10 @@ func (s *RecurringService) Summary(ctx context.Context, ownerID int64) (Recurrin
 	if err != nil {
 		return RecurringSummary{}, err
 	}
+	return s.reviewSummary(ctx, today)
+}
+
+func (s *RecurringService) reviewSummary(ctx context.Context, today string) (RecurringSummary, error) {
 	drafts, blocked, err := s.repository.RecurringReviewCounts(ctx, BookID)
 	return RecurringSummary{DraftCount: drafts, BlockedCount: blocked, Today: today}, err
 }
