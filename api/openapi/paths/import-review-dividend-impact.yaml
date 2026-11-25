@@ -36,7 +36,7 @@ post:
         application/json:
           schema: { $ref: '../openapi.yaml#/components/schemas/ErrorResponse' }
     '409':
-      description: Review changed or row unavailable
+      description: Review changed or row unavailable; DIVIDEND_DEFAULT_CHANGED when an account marked as filled by the stored default is no longer the one it applies (#664)
       content:
         application/json:
           schema: { $ref: '../openapi.yaml#/components/schemas/ErrorResponse' }

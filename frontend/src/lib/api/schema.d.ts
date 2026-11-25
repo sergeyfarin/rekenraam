@@ -11546,7 +11546,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Stale review, unavailable row or reconciliation override required */
+                /** @description Stale review, unavailable row or reconciliation override required; DIVIDEND_DEFAULT_CHANGED when an account marked as filled by the stored default is no longer the one it applies (#664) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -11638,7 +11638,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Review changed or row unavailable */
+                /** @description Review changed or row unavailable; DIVIDEND_DEFAULT_CHANGED when an account marked as filled by the stored default is no longer the one it applies (#664) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -32118,6 +32118,10 @@ export interface components {
             /** Format: int64 */
             expected_transaction_version_id?: number;
             resolution: components["schemas"]["ImportResolution"];
+            /** @description resolution.category_id was filled from the stored dividend default, not declared. Send it back unchanged on review while the owner keeps that account, so the write checks the default still applies it (#664). */
+            income_account_from_default?: boolean;
+            /** @description As income_account_from_default, for resolution.withholding_account_id. */
+            withholding_account_from_default?: boolean;
         };
         ImportDividendReviewsResponse: {
             rows: components["schemas"]["ImportDividendReview"][];
@@ -32132,6 +32136,10 @@ export interface components {
             expected_transaction_version_id?: number;
             /** @description Required nonempty audit reason for historical repair. */
             reason?: string;
+            /** @description The review list's mark, kept while the owner leaves the income account as the default filled it. The write then requires the default to still apply that account, or answers 409 DIVIDEND_DEFAULT_CHANGED (#664). */
+            income_account_from_default?: boolean;
+            /** @description As income_account_from_default, for the withholding account. */
+            withholding_account_from_default?: boolean;
             /** @default false */
             reconciliation_override: boolean;
             reconciliation_override_checkpoint_ids?: components["schemas"]["ReviewedCheckpointIds"];

@@ -7,6 +7,7 @@
   import type { InvestmentInstrumentResponse, ReconciliationImpactResponse } from '#lib/api/investments.ts';
   import { importDividendReviewImpact, reviewImportDividend, type ImportDividendReview, type ImportResolution } from '#lib/api/imports.ts';
   import APIFormError from '#lib/components/api-form-error.svelte';
+  import { APIClientError } from '#lib/api/client.ts';
   import InvestmentIncomeFields from './investment-income-fields.svelte';
   import ReconciliationConfirm from '#lib/investments/reconciliation-confirm.svelte';
   import { parseDecimalAmount } from '#lib/money/amount.ts';
@@ -22,6 +23,12 @@
     held?: boolean; onPending?: (pending: boolean) => void;
   } = $props();
   let resolution = $state<ImportResolution>(untrack(() => ({ ...review.resolution })));
+  // Accounts the review list filled from the stored dividend default. They
+  // stay the default's until the owner picks an account, and the marks go
+  // back with preview and save so the write checks the default still applies
+  // them (#664 review).
+  let incomeFromDefault = $state(untrack(() => review.income_account_from_default ?? false));
+  let withholdingFromDefault = $state(untrack(() => review.withholding_account_from_default ?? false));
   // Bind the token to these editable fields, not a newer list response.
   // Background refetch preserves the form; it must preserve its version too.
   const expectedTransactionVersionID = untrack(() => review.expected_transaction_version_id);
@@ -38,12 +45,36 @@
   const currency = $derived(review.source_currency || currencies.find(c => c.id === resolution.commodity_id)?.code || '—');
   const source = $derived({ cash_valid: !!parsedCash, kind: 'dividend' as const, instrument_code: review.source_instrument, gross_amount: '', withholding_amount: '' });
   function request(reviewed: ReviewedCheckpoints = []) {
-    return { resolution, expected_transaction_version_id: expectedTransactionVersionID, reason, reconciliation_override: false, ...checkpointOverride(reviewed) };
+    return {
+      resolution, expected_transaction_version_id: expectedTransactionVersionID, reason, reconciliation_override: false,
+      income_account_from_default: incomeFromDefault && resolution.category_id ? true : undefined,
+      withholding_account_from_default: withholdingFromDefault && resolution.withholding_account_id ? true : undefined,
+      ...checkpointOverride(reviewed)
+    };
   }
   $effect(() => {
     onPending?.(pending);
     return () => onPending?.(false);
   });
+  // The default changed or its account was archived since the list filled
+  // it: take the automatic accounts back so the owner chooses, as the dividend
+  // form does.
+  function takeBackChangedDefault(err: unknown): boolean {
+    if (!(err instanceof APIClientError) || err.code !== 'DIVIDEND_DEFAULT_CHANGED') return false;
+    const patch: Partial<ImportResolution> = {};
+    if (incomeFromDefault) patch.category_id = undefined;
+    if (withholdingFromDefault) patch.withholding_account_id = undefined;
+    resolution = { ...resolution, ...patch };
+    incomeFromDefault = false;
+    withholdingFromDefault = false;
+    fieldsRevision++;
+    return true;
+  }
+  function choose(patch: Partial<ImportResolution>) {
+    if ('category_id' in patch && patch.category_id !== resolution.category_id) incomeFromDefault = false;
+    if ('withholding_account_id' in patch && patch.withholding_account_id !== resolution.withholding_account_id) withholdingFromDefault = false;
+    resolution = { ...resolution, ...patch };
+  }
   async function save(reviewed: ReviewedCheckpoints = []) {
     if (held && !pending) return;
     pending = true; error = undefined;
@@ -53,6 +84,7 @@
       await onSaved(transaction.id, repaired);
     } catch (err) {
       impact = null;
+      if (takeBackChangedDefault(err)) { error = err; return; }
       // A statement finished since the review: show the current set (#304).
       try {
         const current = isStaleImpactRefusal(err) ? await importDividendReviewImpact(review, request()) : null;
@@ -70,7 +102,7 @@
       const preview = await importDividendReviewImpact(review, request());
       if (preview.affected_checkpoints.length) { impact = preview; return; }
       await save();
-    } catch (err) { error = err; }
+    } catch (err) { takeBackChangedDefault(err); error = err; }
     finally { pending = false; }
   }
 </script>
@@ -82,7 +114,7 @@
     resolution = { ...resolution, gross_amount: review.source_cash_amount, withholding_amount: '0' }; fieldsRevision++;
   }}>{m.import_dividend_declare_no_tax()}</button>
   {#key fieldsRevision}
-    <InvestmentIncomeFields rowIndex={review.row_index} {source} {resolution} {accounts} {currencies} {instruments} disabled={pending} fixedDividend fixedSettlement={repaired} sourceInstrumentOption={m.import_dividend_source_resolution()} onchange={(patch) => { resolution = { ...resolution, ...patch }; }} />
+    <InvestmentIncomeFields rowIndex={review.row_index} {source} {resolution} {accounts} {currencies} {instruments} disabled={pending} fixedDividend fixedSettlement={repaired} sourceInstrumentOption={m.import_dividend_source_resolution()} onchange={choose} />
   {/key}
   {#if repaired}
     <label class="flex flex-col gap-1 text-sm text-foreground">{m.import_dividend_reason()}
