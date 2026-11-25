@@ -500,9 +500,16 @@ test('[acceptance] an imported dividend does not record a default archived after
   await expect(page.getByText('The dividend default changed', { exact: false })).toBeVisible();
   expect((await f.activity()).transactions).toHaveLength(0);
 
+  // Left blank, the server would fill the current default the owner has not
+  // seen: Record waits for an explicit choice (#664 review).
+  const record = page.getByRole('button', { name: 'Record reviewed dividend', exact: true });
+  await expect(record).toBeDisabled();
+  await expect(record).toHaveAccessibleDescription(/Choose the income account/);
+
   // The automatic account is gone from the next request; the owner's choice records.
   const income = page.getByRole('combobox', { name: 'Income account', exact: true });
   await income.selectOption(String(f.income.id));
+  await expect(record).toBeEnabled();
   const chosen = page.waitForRequest((request) => request.method() === 'POST' && isReview(request.url()));
   await page.getByRole('button', { name: 'Record reviewed dividend', exact: true }).click();
   const body = (await chosen).postDataJSON();

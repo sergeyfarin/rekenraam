@@ -800,6 +800,7 @@
   "import_dividend_declare_no_tax": "Quellbetrag als Brutto ohne Quellensteuer bestätigen",
   "import_dividend_reason": "Grund der Berichtigung",
   "import_dividend_record": "Geprüfte Dividende erfassen",
+  "import_dividend_choose_accounts": "Wählen Sie das Ertragskonto und, falls Steuer einbehalten wurde, das Quellensteuerkonto, bevor Sie erneut erfassen.",
   "import_dividend_repair": "Dividendenzuordnung berichtigen",
   "import_dividend_recorded": "Dividende erfasst.",
   "import_dividend_repaired": "Dividendenzuordnung berichtigt; Geldzahlung beibehalten.",

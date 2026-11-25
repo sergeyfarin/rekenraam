@@ -1105,7 +1105,9 @@ history. The rules below are shared; each kind's design links here.
   the review form sends those marks back until the owner picks an account, and
   the batch commit marks what it fills itself. An imported dividend whose
   default was archived or changed after the review filled it is refused with
-  `409 DIVIDEND_DEFAULT_CHANGED` (the form takes the account back) or held for
+  `409 DIVIDEND_DEFAULT_CHANGED` (the form takes the account back and Record
+  waits for the owner to choose one, since a blank field would let the server
+  fill the current default unseen) or held for
   review instead of posted. Every journal that took an account from the
   default re-resolves it in its write, including import repairs and a
   correction's replacement journal.

@@ -807,6 +807,7 @@
   "import_dividend_declare_no_tax": "Bronbedrag als bruto zonder bronbelasting bevestigen",
   "import_dividend_reason": "Reden voor herstel",
   "import_dividend_record": "Beoordeeld dividend vastleggen",
+  "import_dividend_choose_accounts": "Kies de inkomstenrekening, en de bronbelastingrekening als er belasting is ingehouden, voordat je opnieuw registreert.",
   "import_dividend_repair": "Dividendtoewijzing herstellen",
   "import_dividend_recorded": "Dividend vastgelegd.",
   "import_dividend_repaired": "Dividendtoewijzing hersteld; geldbetaling behouden.",

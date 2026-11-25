@@ -29,6 +29,17 @@
   // them (#664 review).
   let incomeFromDefault = $state(untrack(() => review.income_account_from_default ?? false));
   let withholdingFromDefault = $state(untrack(() => review.withholding_account_from_default ?? false));
+  // After a refusal for a changed default, the owner must choose each account
+  // taken back: left blank, the server would fill the current default, which
+  // the owner has not seen (#664 review). Withholding needs an account only
+  // when an amount is withheld.
+  let incomeChoiceRequired = $state(false);
+  let withholdingChoiceRequired = $state(false);
+  const withholdingWithheld = $derived(/[1-9]/.test(resolution.withholding_amount ?? ''));
+  const choiceMissing = $derived(
+    (incomeChoiceRequired && !resolution.category_id) ||
+    (withholdingChoiceRequired && withholdingWithheld && !resolution.withholding_account_id)
+  );
   // Bind the token to these editable fields, not a newer list response.
   // Background refetch preserves the form; it must preserve its version too.
   const expectedTransactionVersionID = untrack(() => review.expected_transaction_version_id);
@@ -62,8 +73,8 @@
   function takeBackChangedDefault(err: unknown): boolean {
     if (!(err instanceof APIClientError) || err.code !== 'DIVIDEND_DEFAULT_CHANGED') return false;
     const patch: Partial<ImportResolution> = {};
-    if (incomeFromDefault) patch.category_id = undefined;
-    if (withholdingFromDefault) patch.withholding_account_id = undefined;
+    if (incomeFromDefault) { patch.category_id = undefined; incomeChoiceRequired = true; }
+    if (withholdingFromDefault) { patch.withholding_account_id = undefined; withholdingChoiceRequired = true; }
     resolution = { ...resolution, ...patch };
     incomeFromDefault = false;
     withholdingFromDefault = false;
@@ -72,11 +83,13 @@
   }
   function choose(patch: Partial<ImportResolution>) {
     if ('category_id' in patch && patch.category_id !== resolution.category_id) incomeFromDefault = false;
+    if (patch.category_id) incomeChoiceRequired = false;
+    if (patch.withholding_account_id) withholdingChoiceRequired = false;
     if ('withholding_account_id' in patch && patch.withholding_account_id !== resolution.withholding_account_id) withholdingFromDefault = false;
     resolution = { ...resolution, ...patch };
   }
   async function save(reviewed: ReviewedCheckpoints = []) {
-    if (held && !pending) return;
+    if ((held && !pending) || choiceMissing) return;
     pending = true; error = undefined;
     try {
       const transaction = await reviewImportDividend(review, request(reviewed), csrfToken);
@@ -96,7 +109,7 @@
   }
   async function submit(event: SubmitEvent) {
     event.preventDefault();
-    if (pending || held) return;
+    if (pending || held || choiceMissing) return;
     pending = true; error = undefined;
     try {
       const preview = await importDividendReviewImpact(review, request());
@@ -122,7 +135,11 @@
     </label>
   {/if}
   <APIFormError {error} id={`dividend-review-error-${review.row_id}`} />
-  <button type="submit" disabled={pending || held || !csrfToken} class="min-h-11 rounded-(--radius-control) bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-60">
+  {#if choiceMissing}
+    <p id={`dividend-review-choose-${review.row_id}`} class="text-sm text-muted">{m.import_dividend_choose_accounts()}</p>
+  {/if}
+  <button type="submit" disabled={pending || held || !csrfToken || choiceMissing}
+    aria-describedby={choiceMissing ? `dividend-review-choose-${review.row_id}` : undefined} class="min-h-11 rounded-(--radius-control) bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-60">
     {repaired ? m.import_dividend_repair() : m.import_dividend_record()}
   </button>
 </form>

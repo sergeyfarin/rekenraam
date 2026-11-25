@@ -807,6 +807,7 @@
   "import_dividend_declare_no_tax": "Declare source cash as gross with no withholding",
   "import_dividend_reason": "Reason for repair",
   "import_dividend_record": "Record reviewed dividend",
+  "import_dividend_choose_accounts": "Choose the income account, and the withholding account if tax is withheld, before recording again.",
   "import_dividend_repair": "Repair dividend attribution",
   "import_dividend_recorded": "Dividend recorded.",
   "import_dividend_repaired": "Dividend attribution repaired; cash payment preserved.",
