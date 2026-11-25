@@ -3,6 +3,7 @@
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import KeyRound from '@lucide/svelte/icons/key-round';
   import APIFormError from '#lib/components/api-form-error.svelte';
+  import { autofocus } from '#lib/components/autofocus.ts';
   import Panel from '#lib/components/panel.svelte';
   import StatusBadge from '#lib/components/status-badge.svelte';
   import {
@@ -10,10 +11,13 @@
     authSessionQueryOptions,
     disableMFA,
     enrollMFATOTP,
+    getMFAStatus,
     mfaStatusQueryKey,
     mfaStatusQueryOptions,
     regenerateMFARecoveryCodes
   } from '#lib/api/auth.ts';
+  import { saveOutcomeUnknown } from '#lib/api/request-key.ts';
+  import { applySavedRead } from '#lib/api/saved-read.ts';
   import { m } from '#lib/paraglide/messages.js';
 
   const queryClient = useQueryClient();
@@ -33,6 +37,29 @@
   let secret = $state('');
   let otpauthURI = $state('');
   let recoveryCodes = $state<string[]>([]);
+  // A failed write that hands out recovery codes may still have committed
+  // (#661). Once the saved status is read again, these say what the owner
+  // has lost and lead to new codes; regenerating is safe to repeat. The
+  // warning stays through refused retries until a write succeeds: new codes
+  // shown, or MFA turned off.
+  let failedCodesWrite = $state<'activate' | 'regenerate' | null>(null);
+  // Whether the current error is the one the warning already explains.
+  let errorExplained = $state(false);
+  // From a failed write until its saved status is read: the cached status may
+  // be from before the write, so the page claims neither state.
+  let statusUnresolved = $state(false);
+  // While a write that turns two-factor on or off is in flight, its outcome
+  // is unknown too.
+  let switching = $state(false);
+  // A status the page may state: read successfully, and not overtaken by a
+  // write whose outcome is unknown. Before the first read nothing is claimed.
+  const statusKnown = $derived(statusQuery.isSuccess && !statusUnresolved && !switching);
+  // "On without codes" needs the status to say on. "Codes may be replaced" is
+  // true whatever the status read did, unless it showed two-factor is off.
+  const activatedWithoutCodes = $derived(failedCodesWrite === 'activate' && statusKnown && status === 'active');
+  const codesMaybeReplaced = $derived(
+    failedCodesWrite === 'regenerate' && !(statusKnown && status !== 'active')
+  );
 
   const inputClass =
     'mt-1.5 h-10 w-full rounded-(--radius-control) border border-border bg-control px-3 text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted focus:border-accent disabled:cursor-not-allowed disabled:opacity-70';
@@ -46,13 +73,44 @@
     await queryClient.invalidateQueries({ queryKey: mfaStatusQueryKey });
   }
 
-  async function run(action: () => Promise<void>) {
+  // After a failed write, read the saved status as a request of its own: a
+  // cached refetch can be cancelled and revert to the status from before the
+  // write (bug class 86). If that read fails too, the query shows its error
+  // rather than the old status.
+  async function readSavedStatus() {
+    statusUnresolved = true;
+    try {
+      const saved = await applySavedRead(queryClient, mfaStatusQueryKey, getMFAStatus);
+      if (saved.status === 'active') {
+        // The enrollment it belonged to is finished; drop the shared secret.
+        secret = '';
+        otpauthURI = '';
+        code = '';
+      }
+    } catch {
+      await refreshStatus();
+    } finally {
+      statusUnresolved = false;
+    }
+  }
+
+  async function run(action: () => Promise<void>, codesWrite?: 'activate' | 'regenerate') {
     pending = true;
     formError = undefined;
+    errorExplained = false;
     try {
       await action();
+      failedCodesWrite = null;
     } catch (error) {
       formError = error;
+      // A refused activation can mean an earlier lost one already committed,
+      // so any activation failure checks; a refused regeneration replaced
+      // nothing. Codes never shown after an activation stay the warning.
+      if (codesWrite === 'activate' || (codesWrite === 'regenerate' && saveOutcomeUnknown(error))) {
+        if (failedCodesWrite !== 'activate') failedCodesWrite = codesWrite;
+        errorExplained = true;
+      }
+      await readSavedStatus();
     } finally {
       pending = false;
     }
@@ -69,20 +127,39 @@
     });
   }
 
+  // Reads the status again without touching the warning (#661).
+  async function checkStatusAgain() {
+    pending = true;
+    try {
+      await readSavedStatus();
+    } finally {
+      pending = false;
+    }
+  }
+
+  async function switchOnOff(action: () => Promise<void>, codesWrite?: 'activate') {
+    switching = true;
+    try {
+      await run(action, codesWrite);
+    } finally {
+      switching = false;
+    }
+  }
+
   async function handleActivate(event: SubmitEvent) {
     event.preventDefault();
-    await run(async () => {
+    await switchOnOff(async () => {
       const result = await activateMFATOTP(code, csrfToken);
       recoveryCodes = result.recovery_codes;
       code = '';
       secret = '';
       otpauthURI = '';
       await refreshStatus();
-    });
+    }, 'activate');
   }
 
   async function handleDisable() {
-    await run(async () => {
+    await switchOnOff(async () => {
       await disableMFA(password, csrfToken);
       password = '';
       recoveryCodes = [];
@@ -97,7 +174,7 @@
       recoveryCodes = result.recovery_codes;
       password = '';
       await refreshStatus();
-    });
+    }, 'regenerate');
   }
 </script>
 
@@ -105,9 +182,11 @@
   <Panel>
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
+        {#if statusKnown}
         <StatusBadge tone={status === 'active' ? 'positive' : 'neutral'}>
           {status === 'active' ? m.security_mfa_badge_active() : m.security_mfa_badge_inactive()}
         </StatusBadge>
+        {/if}
         <h2 class="mt-3 flex items-center gap-2 text-lg font-semibold tracking-tight text-balance">
           <ShieldCheck size={20} aria-hidden="true" />
           {m.security_mfa_title()}
@@ -116,12 +195,22 @@
       </div>
     </div>
 
-    <APIFormError error={formError} id="security-mfa-error" />
+    {#if !errorExplained || !(activatedWithoutCodes || codesMaybeReplaced)}
+      <APIFormError error={formError} id="security-mfa-error" />
+    {/if}
+    {#if activatedWithoutCodes || codesMaybeReplaced}
+      <p role="alert" class="mt-4 max-w-prose rounded-(--radius-control) border border-warning/40 bg-warning-soft p-3 text-sm text-foreground">
+        {activatedWithoutCodes ? m.security_mfa_activated_codes_lost() : m.security_mfa_codes_maybe_replaced()}
+      </p>
+    {/if}
 
-    {#if statusQuery.isPending}
+    {#if statusQuery.isPending || statusUnresolved}
       <p class="mt-6 text-sm text-muted">{m.security_mfa_loading()}</p>
     {:else if statusQuery.isError}
       <APIFormError error={statusQuery.error} id="security-mfa-status-error" />
+      <button type="button" class="mt-3 {secondaryButtonClass}" disabled={pending} onclick={checkStatusAgain}>
+        {m.security_mfa_status_retry()}
+      </button>
     {:else if !configured}
       <p class="mt-6 max-w-prose text-sm text-foreground">{m.security_mfa_unconfigured()}</p>
     {:else if recoveryCodes.length > 0}
@@ -142,7 +231,7 @@
           {m.security_mfa_recovery_dismiss()}
         </button>
       </div>
-    {:else if secret}
+    {:else if secret && status !== 'active'}
       <div class="mt-6 space-y-4">
         <h3 class="text-sm font-semibold text-foreground">{m.security_mfa_enroll_step_title()}</h3>
         <p class="max-w-prose text-sm text-muted">{m.security_mfa_enroll_step_hint()}</p>
@@ -177,15 +266,18 @@
       </div>
     {:else if status === 'active'}
       <div class="mt-6 space-y-6">
-        <p class="text-sm text-foreground">
-          {m.security_mfa_codes_remaining({ count: statusQuery.data?.recovery_codes_remaining ?? 0 })}
-        </p>
+        {#if !activatedWithoutCodes && !codesMaybeReplaced}
+          <p class="text-sm text-foreground">
+            {m.security_mfa_codes_remaining({ count: statusQuery.data?.recovery_codes_remaining ?? 0 })}
+          </p>
+        {/if}
 
         <form class="grid max-w-sm gap-3" onsubmit={handleRegenerate}>
           <label>
             <span class={labelClass}>{m.security_mfa_password_label()}</span>
             <input
               bind:value={password}
+              {@attach activatedWithoutCodes && autofocus}
               class={inputClass}
               type="password"
               autocomplete="current-password"

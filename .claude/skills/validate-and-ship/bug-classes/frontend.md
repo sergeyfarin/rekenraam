@@ -253,8 +253,27 @@ and a fetch cancelled with `revert` resolves with the cached state from
 before the write, which reads as "still open" (#644 review, `an earlier
 Finish refresh does not cancel a newer Discard recovery`).
 Finish and Discard (#644) and the statement void
-(`reconciliation-void-checkpoint.spec.ts`) follow the rule. The #644 sweep
-classified 203 write call sites (64 read-only previews); its open instances are
-#660 (creates that duplicate on retry), #661 (one-time MFA and token secrets)
-and #662 (rows left on screen after a guarded delete or correction). Not
+(`reconciliation-void-checkpoint.spec.ts`) follow the rule. A write that
+returns a secret once cannot be repeated to see it, so after its failure the
+page reads the saved state and says what was lost: an activation that
+committed leads to new recovery codes, a regeneration with an unknown outcome
+says the earlier codes may be gone, a token create lists the unheld token
+(#661, `security-lost-responses.spec.ts`, which also covers MFA disable and
+token revoke). A refusal can mean the lost write committed (activation answers
+"already active"), so read after every failure, not only after a 5xx. Until
+that read answers, claim no state from the cache (no On/Off badge), and write
+its answer with `applySavedRead` (`#lib/api/saved-read.ts`), which cancels
+older cached fetches first so a late one cannot restore the pre-write state.
+A warning about lost codes stays through refused retries and failed status
+reads (with a status-only retry) until a write succeeds, and nothing (Show
+more) may cancel the list refresh that reveals an unheld token. Never name a
+row as the lost create's: a newer row with the same name can come from
+another tab, and marking it leads the owner to revoke a working token. Only
+a server-side link to the attempt could attribute it; the guidance stays
+neutral. A
+revocation scrubs only its own credential's disclosure (#682 review). After a
+reload the page cannot know the codes were replaced (#683). The #644
+sweep classified 203 write call sites (64 read-only previews); its open
+instances were #660 (creates that duplicate on retry, fixed), #661 (fixed) and
+#662 (rows left on screen after a guarded delete or correction). Not
 mechanically detectable: whether a repeat is harmless depends on the endpoint.
