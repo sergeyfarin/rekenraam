@@ -290,16 +290,16 @@ async function dividendFixture(page: Page) {
   const suffix = Date.now();
   const today = await ownerToday(page);
   const opened = addDays(today, -10);
-  const name = `Backdated shares ${suffix}`;
+  const name = `Prior-day shares ${suffix}`;
   const instrument = await apiJSON<{ id: number; commodity_id: number }>(page, 'POST', '/api/v1/investments/instruments', csrfToken, {
     commodity_code: `BD${suffix}`, instrument_type: 'stock', display_name: name,
     quantity_scale: 0, price_scale: 2, quote_commodity_id: currencyID, effective_from: opened
   });
   const holding = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/holding-accounts', csrfToken, {
-    instrument_id: instrument.id, name: `Backdated holding ${suffix}`, opened_on: opened, effective_from: opened
+    instrument_id: instrument.id, name: `Prior-day holding ${suffix}`, opened_on: opened, effective_from: opened
   });
   const cash = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/accounts', csrfToken, {
-    name: `Backdated cash ${suffix}`, account_class: 'asset', account_kind: 'brokerage_cash', default_commodity_id: currencyID,
+    name: `Prior-day cash ${suffix}`, account_class: 'asset', account_kind: 'brokerage_cash', default_commodity_id: currencyID,
     allows_postings: true, opened_on: opened, effective_from: opened
   });
   const category = (label: string) => apiJSON<{ id: number }>(page, 'POST', '/api/v1/categories', csrfToken, { name: `${label} ${suffix}`, category_type: 'income' });

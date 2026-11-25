@@ -43,7 +43,7 @@ test('[acceptance] a transaction is entered and its statement reconciled at 390 
   await page.getByRole('button', { name: 'New transaction' }).click();
   const form = page.getByRole('region', { name: 'New transaction', exact: true });
   await expect(form.getByLabel('Account').locator('option:checked')).toHaveText(account.name);
-  await form.getByLabel('Date').fill(day);
+  await form.getByLabel('Date', { exact: true }).fill(day);
   await form.getByLabel('Description').fill(description);
   await form.getByLabel('Amount').fill('12.40');
   await form.getByPlaceholder('Search categories').click();
