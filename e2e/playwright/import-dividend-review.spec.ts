@@ -510,6 +510,11 @@ test('[acceptance] an imported dividend does not record a default archived after
   const income = page.getByRole('combobox', { name: 'Income account', exact: true });
   await income.selectOption(String(f.income.id));
   await expect(record).toBeEnabled();
+  // Clearing the choice again blocks Record: the requirement outlives a selection.
+  await income.selectOption('');
+  await expect(record).toBeDisabled();
+  await income.selectOption(String(f.income.id));
+  await expect(record).toBeEnabled();
   const chosen = page.waitForRequest((request) => request.method() === 'POST' && isReview(request.url()));
   await page.getByRole('button', { name: 'Record reviewed dividend', exact: true }).click();
   const body = (await chosen).postDataJSON();

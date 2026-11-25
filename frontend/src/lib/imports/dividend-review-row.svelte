@@ -31,7 +31,9 @@
   let withholdingFromDefault = $state(untrack(() => review.withholding_account_from_default ?? false));
   // After a refusal for a changed default, the owner must choose each account
   // taken back: left blank, the server would fill the current default, which
-  // the owner has not seen (#664 review). Withholding needs an account only
+  // the owner has not seen (#664 review). The requirement stays for the rest
+  // of this form, so clearing a chosen account blocks Record again; every
+  // submit checks the current selection. Withholding needs an account only
   // when an amount is withheld.
   let incomeChoiceRequired = $state(false);
   let withholdingChoiceRequired = $state(false);
@@ -83,8 +85,6 @@
   }
   function choose(patch: Partial<ImportResolution>) {
     if ('category_id' in patch && patch.category_id !== resolution.category_id) incomeFromDefault = false;
-    if (patch.category_id) incomeChoiceRequired = false;
-    if (patch.withholding_account_id) withholdingChoiceRequired = false;
     if ('withholding_account_id' in patch && patch.withholding_account_id !== resolution.withholding_account_id) withholdingFromDefault = false;
     resolution = { ...resolution, ...patch };
   }
