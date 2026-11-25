@@ -1100,8 +1100,15 @@ history. The rules below are shared; each kind's design links here.
   then reloads and shows the current default for review. The write resolves
   the default again inside its transaction, since editing a default row
   changes no account version. Import review marks the accounts it fills from
-  the default the same way, so an imported dividend whose default was archived
-  or changed after the review filled it is held for review instead of posted.
+  the default the same way: its list response says which accounts the default
+  filled (`income_account_from_default`, `withholding_account_from_default`),
+  the review form sends those marks back until the owner picks an account, and
+  the batch commit marks what it fills itself. An imported dividend whose
+  default was archived or changed after the review filled it is refused with
+  `409 DIVIDEND_DEFAULT_CHANGED` (the form takes the account back) or held for
+  review instead of posted. Every journal that took an account from the
+  default re-resolves it in its write, including import repairs and a
+  correction's replacement journal.
   A default-filled withholding *amount* is not yet checked at commit (#684).
   The form resolves a default the way the server
   does: in effect on the entry's date, the commodity's own before the global
