@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -231,9 +232,8 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 	assert.True(t, sqliteObjectExists(t, database, "table", "reconciliation_checkpoint_postings"))
 }
 
-// No legacy installations exist. The consolidated candidate baseline must load
-// the frozen book, preserve it on repeated migration admission, and produce the
-// same schema as a fresh database.
+// The original synthetic book must survive upgrades from migration 0001 and
+// reach the same schema as a fresh database.
 func TestMigrateSeededBaselineMatchesFreshSchema(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -265,6 +265,47 @@ func TestMigrateSeededBaselineMatchesFreshSchema(t *testing.T) {
 	assert.Equal(t, schemaFingerprint(t, fresh), schemaFingerprint(t, seeded))
 }
 
+func TestMigrateSupportedHouseholdDatabase(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	const householdVersion int64 = 16
+	household := seededBaselineDatabase(t)
+	provider, err := goose.NewProvider(goose.DialectSQLite3, household, migrations.FS)
+	require.NoError(t, err)
+	_, err = provider.UpTo(ctx, householdVersion)
+	require.NoError(t, err)
+	version, err := provider.GetDBVersion(ctx)
+	require.NoError(t, err)
+	require.Equal(t, householdVersion, version)
+	before := captureLedgerState(t, household)
+
+	head, err := EmbeddedMigrationVersion()
+	require.NoError(t, err)
+	// Always exercise at least one pending migration, even when the household
+	// freeze is still the latest version. The probe exists only in this test.
+	names, err := fs.Glob(migrations.FS, "*.sql")
+	require.NoError(t, err)
+	next := make(fstest.MapFS, len(names)+1)
+	for _, name := range names {
+		contents, err := migrations.FS.ReadFile(name)
+		require.NoError(t, err)
+		next[name] = &fstest.MapFile{Data: contents}
+	}
+	next[fmt.Sprintf("%04d_household_upgrade_probe.sql", head+1)] = &fstest.MapFile{
+		Data: []byte("-- +goose Up\nCREATE INDEX household_upgrade_probe ON payees (created_at);\n"),
+	}
+
+	require.NoError(t, migrateFromFS(ctx, household, next))
+	assert.True(t, sqliteObjectExists(t, household, "index", "household_upgrade_probe"))
+	require.NoError(t, migrateFromFS(ctx, household, next), "the upgraded database must pass admission on restart")
+	assert.Equal(t, before, captureLedgerState(t, household))
+	assertUpgradedBookIsIntact(t, household)
+
+	fresh := openTestDatabase(t)
+	require.NoError(t, migrateFromFS(ctx, fresh, next))
+	assert.Equal(t, schemaFingerprint(t, fresh), schemaFingerprint(t, household))
+}
+
 // seededBaselineDatabase loads the frozen v0.1 seed into migration 0001 alone,
 // without the later forward migrations.
 func seededBaselineDatabase(t *testing.T) *sql.DB {
@@ -272,8 +313,8 @@ func seededBaselineDatabase(t *testing.T) *sql.DB {
 	ctx := context.Background()
 	seeded := openTestDatabase(t)
 
-	// Start at baseline 1 even after future forward migrations are added. This
-	// fixture will represent an installed v0.1 database once that release exists.
+	// Start at migration 1 even after future forward migrations are added.
+	// This fixture predates the supported household installation at migration 16.
 	baseline, err := migrations.FS.ReadFile("0001_initial_schema.sql")
 	require.NoError(t, err)
 	baselineFS := fstest.MapFS{"0001_initial_schema.sql": {Data: baseline}}

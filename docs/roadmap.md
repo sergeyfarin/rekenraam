@@ -70,7 +70,7 @@ below continue alongside it and do not block it.
    image-advisory disposition
    [#337](https://github.com/sergeyfarin/rekenraam/issues/337). The signed candidate workflow has passed.
    [#333](https://github.com/sergeyfarin/rekenraam/issues/333) retains the
-   migration-checksum freeze at the release cut. The
+   owner-authorized public release cut and its branch/PR policy. The
    upstream driver prerequisite
    [#356](https://github.com/sergeyfarin/rekenraam/issues/356) closed on
    2026-11-11 with the owner's acceptance below and is no longer a release
@@ -91,26 +91,20 @@ below continue alongside it and do not block it.
    maintenance. Adoption assets #335 stay P3 for later release preparation.
    See [Public-release gates](#public-release-gates) for the remaining evidence.
 
-   **Proposed, not a gate: release shape
-   ([#572](https://github.com/sergeyfarin/rekenraam/issues/572), 2026-11-14).**
-   Its essential decision is that the household database of the dry run (#336)
-   is a supported installation, so migrations become append-only from the
-   commit the owner names instead of at the tag. Freezing the existing chain
-   ([#576](https://github.com/sergeyfarin/rekenraam/issues/576)) is enough; a
-   target date and a last consolidation are separate optional choices. Two
-   preparations do not block it: single-book triggers
-   [#573](https://github.com/sergeyfarin/rekenraam/issues/573) (delivered
-   2026-11-18 by [#590](https://github.com/sergeyfarin/rekenraam/pull/590):
-   baseline identity `20261118`), and proving
+   **Supported household preview.** The owner accepted an early migration
+   freeze as proposed in [#572](https://github.com/sergeyfarin/rekenraam/issues/572).
+   The first household database (#336) is supported from the commit that
+   lands the existing chain's checksum pins
+   ([#576](https://github.com/sergeyfarin/rekenraam/issues/576)).
+   Independent schema work includes proving
    SQLite's CHECK-change procedure while moving only individually justified
    constraints
-   [#574](https://github.com/sergeyfarin/rekenraam/issues/574). It also
-   proposes a container image: built from the candidate binary
+   [#574](https://github.com/sergeyfarin/rekenraam/issues/574). #572 also
+   proposes a container image built from the candidate binary
    [#575](https://github.com/sergeyfarin/rekenraam/issues/575), which the dry
    run can use, and published to GHCR at the release cut
-   [#577](https://github.com/sergeyfarin/rekenraam/issues/577). All four owner
-   decisions are open. Nothing here changes the gates below or pauses the UI
-   overhaul.
+   [#577](https://github.com/sergeyfarin/rekenraam/issues/577). The container
+   publication decision is still open.
 2. **Track the remaining bounded maintenance follow-ups.**
 
    - [#414](https://github.com/sergeyfarin/rekenraam/issues/414), P3:
@@ -361,6 +355,14 @@ recorded in [the capability ledger](implemented.md#completed-announcement-prereq
 Dated engineering reviews establish their recorded scenarios; a release
 candidate needs fresh evidence for its actual baseline.
 
+### Household preview
+
+- Install a signed candidate from the freeze commit on `main` or a later one
+  (#576). The household database must upgrade in place through `v0.1.0`.
+- Verify the backup and restore workflow on the intended deployment before
+  entering real data. During the dry run, review the languages you use and
+  record the findings under #102.
+
 ### Before the v0.1.0 tag
 
 Accepted gate issues carry the
@@ -373,11 +375,8 @@ Accepted gate issues carry the
 - Record an explicit list of investment limits and resolve the retained
   image-advisory disposition (#337). The driver prerequisite (#356) closed on
   2026-11-11.
-- Freeze installed-release migrations as append-only at the tag. The
-  [baseline and reset contract](implemented.md) records the schema consolidation;
-  later schema changes follow the release lifecycle in `docs/conventions.md`.
-  #572 proposes freezing earlier, once the household database exists; this
-  rule stands until that decision is accepted.
+- Confirm the release includes the household freeze and checksum pins for
+  every later migration. Activate the installed-release branch/PR policy.
 
 ### Public repository hygiene
 
@@ -401,7 +400,8 @@ runtime-image disposition remains #337.
    and preflight evidence; preserve the
    [reproducibility conditions](developer-workflow.md#reproducibility).
    Actual publication remains a separate owner-authorized release cut, with
-   all migration checksums frozen and installed-release policies activated.
+   all migration checksums pinned and the installed-release branch/PR policy
+   activated.
    Future Wails/Windows packaging can add Authenticode before final checksums;
    no desktop implementation or Windows signing-provider choice is implied.
    Proposed in #572 and not accepted: a public multi-architecture image

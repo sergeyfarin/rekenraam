@@ -106,12 +106,12 @@ enum in the same change. Never return raw Go error strings to the client.
   (goose format: `-- +goose Up` / `-- +goose Down`). Embedded via
   `migrations/embed.go`; they run automatically at startup and in every test
   through `db.Open`.
-- Installed release migration files are immutable and checksum-enforced.
-  ADR 0013 permits an explicitly declared redesign of the unused v0.1
-  candidate baseline before release; update its checksum, fixtures, and reset
-  guidance together. Otherwise add the next sequential migration. Read
-  *Project Lifecycle And Migration Immutability* in `docs/conventions.md`
-  and update historical-upgrade coverage for schema work.
+- Migrations on `main` are immutable from the household freeze (#576). Add
+  the next sequential file and its SHA-256 in
+  `backend/migrations/freeze_test.go` in the same PR. Preserve the baseline
+  generation and historical-upgrade fixtures. Read *Project Lifecycle And
+  Migration Immutability* in `docs/conventions.md` and extend upgrade coverage
+  when changing the schema.
 - Migration numbers collide across branches. The branch merged second renumbers
   its own file; renumbering one already on `main` is a rewrite.
 - IDs are `INTEGER PRIMARY KEY` auto-increment. No UUID keys without an ADR.

@@ -7,10 +7,9 @@ import (
 	"fmt"
 )
 
-// BaselineIdentity is the unused v0.1 schema generation, independent of Goose's
-// forward migration sequence. Old development databases also used version 1.
-// Future forward migrations retain this value; it changes only at an explicitly
-// declared, incompatible pre-release rewrite, never for an installed release.
+// BaselineIdentity is the supported household schema generation, independent
+// of Goose's forward migration sequence. Preserve it in future migrations so
+// the household database and its backups remain compatible.
 const BaselineIdentity = 20261122
 
 // ErrIncompatibleBaseline refuses an incompatible development file or backup.

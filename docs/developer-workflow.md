@@ -432,13 +432,10 @@ the cost commodity's maximum scale, one scale per position — when a test's
 expected basis or gain looks deeper than the amount that produced it, that is
 the policy, not a rounding slip.
 
-The backend suite enforces the consolidated migration checksum and exercises
-fresh and seeded baseline equivalence, including durable-data preservation
-when migration admission is repeated. No legacy databases exist. A checksum
-failure normally means the old migration must be restored and the change moved into the next numbered
-migration. ADR 0013 permits an explicitly declared pre-release redesign of
-the unused v0.1 baseline, with an updated checksum and fixtures. See
-`docs/upgrades.md` for the operator path.
+The backend suite enforces a checksum for every migration and compares
+fresh and upgraded household schemas, including durable-data preservation.
+If a frozen migration's checksum fails, restore the file and put the change in
+the next numbered migration. See `docs/upgrades.md` for the operator path.
 
 `COVERAGE=1 ./scripts/test-backend.sh` runs the same suite without `-race`,
 writes `backend/coverage.out`, and prints the merged total. CI runs this in a
@@ -706,10 +703,13 @@ deterministically, then boots the extracted archive. It creates no signature;
 local key-pair verification is not GitHub OIDC evidence. Ubuntu 24.04 native
 hosted validation remains necessary for the declared runtime baseline.
 
-Actual release publication is a separate, explicitly authorized step. Before
-the first installed `v0.1.0`, pin every included migration in
-`backend/migrations/freeze_test.go` and activate the documented installed-release
-upgrade and branch/PR policies. Resolve the roadmap's remaining release gates,
+For the household installation, take a signed candidate from the commit that
+lands the migration freeze (#576) or a later commit. The household database
+must upgrade in place to the public release.
+
+Actual release publication is a separate, explicitly authorized step. At
+`v0.1.0`, activate the documented installed-release branch/PR policy. Confirm
+all included migration checksums are pinned, resolve the remaining release gates,
 use an exact approved release-tag identity, and publish the verified assets
 through a draft with release immutability enabled. No publication job is
 provided by the candidate workflow. A future Wails Windows target adds
@@ -929,20 +929,21 @@ pnpm test:release-preflight
 ## Migrations And Resetting Your Database
 
 The governing rule is **Project Lifecycle And Migration Immutability** in
-`docs/conventions.md`; this section is only how to carry it out. The unused
-v0.1 candidate baseline may be redesigned under ADR 0013; installed release
-migrations are immutable. Local development databases are disposable.
+`docs/conventions.md`. From the household freeze, migrations on `main` are
+append-only and the baseline generation stays fixed.
 
 Adding schema:
 
 ```sh
 # new sequential file, goose format (-- +goose Up / -- +goose Down)
 $EDITOR backend/migrations/00NN_short_name.sql
+sha256sum backend/migrations/00NN_short_name.sql
+# Add the checksum to backend/migrations/freeze_test.go in the same PR.
 ./scripts/test-backend.sh
 ```
 
-Reset only a disposable development database after a baseline rewrite, in
-this order:
+For a disposable database from an earlier development baseline, reset in this
+order:
 
 1. **Before updating, with the previous build still running**, export anything
    worth keeping (Settings → Data). Exports need the running app; the new build
@@ -1030,27 +1031,20 @@ The e2e database resets itself on every self-managed run and needs no manual res
 
 - Keep nothing in a local database you would be sorry to lose. Reproducible
   fixtures belong in the repo; `backend/var/*.sqlite` is scratch.
-- Rewriting an already-committed migration requires `BREAKING DEV DATABASE` as
-  the first line of the commit body, plus the reset instruction for other
-  developers. Grep for past ones with `git log --grep='BREAKING DEV DATABASE'`.
+- Restore any changed frozen migration to its original bytes. Put the schema
+  change in the next available migration and pin that migration's checksum.
 - Two branches that both added `00NN_` collide. The one merged second renumbers
   **its own** file to the next free number while resolving the merge. Renumbering
   a migration already on `main` counts as a rewrite.
 - Migration numbers are monotonic database sequence numbers, not release
   numbers. Release notes record the highest migration included in each release.
-- CI validates the fresh-install path on every run. Candidate seeded equivalence
-  is covered by `TestMigrateSeededBaselineMatchesFreshSchema` in `internal/db`:
-  it loads `internal/db/testdata/v01_seed.sql` into migration 0001 alone,
-  applies any later embedded migrations, repeats migration admission, and
-  checks schema equivalence and every durable
-  figure — row counts, exact coefficients/scales, lifecycle states, lot and
-  checkpoint conservation, per-commodity balance and `foreign_key_check`.
-  Legacy upgrade fixtures are added once installed releases actually exist.
-- **Installed-release seed fixtures are frozen.** The unused v0.1 candidate
-  seed may be revised with its baseline under ADR 0013. Once a release is
-  installed, its seed stands in for a database written by that version, so
-  regenerating it against a later schema defeats the test it feeds. A new
-  installed release gets a *new* seed file, built with
+- CI covers fresh installs and upgrades from the seeded migration 0001 book.
+  `TestMigrateSupportedHouseholdDatabase` advances that book to the supported
+  household schema at migration 0016, applies later embedded migrations and a
+  test-only append, and compares exact ledger state and schema with the
+  before-upgrade book and a fresh installation respectively.
+- **Upgrade seed fixtures are frozen.** Each represents data written at a
+  particular schema version. A new installed release gets a new seed file, built with
   `./scripts/build-release-seed.sh <out.sql>` — which drives the real HTTP API
   (`TestBuildReleaseSeedFixture` in `internal/api`) so the fixture is a book the
   app would actually have written, then shapes the dump. It restores the book
@@ -1060,8 +1054,8 @@ The e2e database resets itself on every self-managed run and needs no manual res
   compares source row counts and exact figures, runs the ledger/lot/checkpoint
   oracles and repeats migration admission. Output is not
   byte-reproducible: it carries real timestamps and request UUIDs.
-- This is what stands between a post-`v0.1.0` schema redesign and silent data
-  loss. SQLite's twelve-step table rebuild is how such a redesign has to happen,
+- A table rebuild after the freeze must preserve durable data. SQLite's
+  twelve-step table rebuild is how such a redesign has to happen,
   and a rebuild that re-points the wrong foreign key or rescales a coefficient
   leaves every row count identical. Widen the seed before writing a migration
   that touches something it does not cover.
@@ -1148,10 +1142,9 @@ What keeps this safe:
 A direct commit to `main` needs the owner's say-so, for example a docs-only
 correction after a merge.
 
-**The `v0.1.0` release makes this stricter, not different.** It is the same
-milestone that freezes migrations (see *Project Lifecycle And Migration
-Immutability* in `docs/conventions.md`): once a released version exists,
-`main` is something users can be running.
+The migration freeze starts with the first supported household installation
+(*Project Lifecycle And Migration Immutability* in `docs/conventions.md`).
+The installed-release branch/PR policy takes effect at the public `v0.1.0` cut.
 
 ### GitHub repository selection
 
