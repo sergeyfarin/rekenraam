@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -15,8 +14,7 @@ type readCardResponse[T any] struct {
 
 func toReadCard[T any](r *http.Request, logger *slog.Logger, source string, result app.ReadCard[T]) readCardResponse[T] {
 	if result.Err != nil || result.Summary == nil {
-		// Dependency errors may contain financial data. Record the source and type.
-		logger.ErrorContext(r.Context(), "read summary", slog.String("source", source), slog.String("error_type", fmt.Sprintf("%T", result.Err)))
+		logger.ErrorContext(r.Context(), "read summary", slog.String("source", source), slog.Any("err", result.Err))
 		return readCardResponse[T]{Status: "failed"}
 	}
 	return readCardResponse[T]{Status: "ok", Summary: result.Summary}
