@@ -2,6 +2,7 @@ import { ledgerQueryKey } from '#lib/api/ledger.ts';
 import type { QueryClient } from '@tanstack/svelte-query';
 import { priceManagementQueryKey } from '#lib/api/price-management.ts';
 import { forecastQueryKey } from '#lib/api/forecast.ts';
+import { reportsQueryKey } from '#lib/api/reports.ts';
 import {
   cashInLieuLotsQueryKey, datedHoldingsQueryKey, incomeCoverageQueryKey, investmentCorrectionChainQueryKey, investmentGainsQueryKey, investmentInstrumentsQueryKey,
   investmentLotsQueryKey, investmentPositionsQueryKey, investmentReturnsQueryKey, investmentSplitsQueryKey
@@ -16,6 +17,7 @@ export const investmentMutationQueryKeys = [
   transactionsQueryKey,
   accountRegisterQueryKey,
   forecastQueryKey,
+  reportsQueryKey,
   priceManagementQueryKey,
   investmentPositionsQueryKey,
   investmentSplitsQueryKey,
