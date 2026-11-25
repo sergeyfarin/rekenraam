@@ -43,6 +43,8 @@
   import type { GainImpact } from '#lib/api/investments.ts';
 
   import { usePrefilledInstrument } from '#lib/investments/investment-prefill.svelte.ts';
+  import { APIClientError } from '#lib/api/client.ts';
+  import { applicableDividendDefault, defaultAccountToApply, defaultStillApplies, heldButUnavailable } from '#lib/investments/dividend-default-choice.ts';
   import type { InvestmentPrefill } from '#lib/investments/investment-prefill.ts';
   import { isSettlementAccount } from '#lib/investments/settlement-accounts.ts';
   const ownerToday = useOwnerToday();
@@ -90,6 +92,7 @@
     const val = (e.target as HTMLInputElement).value;
     instrumentSearch = val;
     selectedInstrument = null;
+    clearInstrumentDefaults();
     clearTimeout(instrumentDebounceTimer);
     instrumentDebounceTimer = setTimeout(() => {
       instrumentSearchDebounced = val;
@@ -98,6 +101,7 @@
   }
 
   function selectInstrument(inst: InvestmentInstrumentResponse) {
+    if (selectedInstrument?.id !== inst.id) clearInstrumentDefaults();
     selectedInstrument = inst;
     instrumentSearch = inst.display_name;
     instrumentDropdownOpen = false;
@@ -113,6 +117,20 @@
   let reinvestmentCurrencyID = $state('');
   let incomeAccountID = $state('');
   let withholdingAccountID = $state('');
+  // Whether the income or withholding account was filled in by a stored
+  // default rather than chosen by the owner. A default is an automatic choice:
+  // it is cleared when it stops applying today or its instrument changes, and
+  // never sent as if the owner had picked it (#664 review).
+  let incomeFromDefault = $state(false);
+  let withholdingFromDefault = $state(false);
+  // The withholding amount, and the switch that shows it, when a default
+  // filled them in: an instrument change takes them back so the next
+  // instrument's default applies, while an amount the owner typed stays.
+  let withholdingAmountFromDefault = $state(false);
+  let withholdingShownByDefault = $state(false);
+  // Set once the owner toggles withholding: a later default then fills the
+  // amount but leaves the switch as the owner set it (#664 review).
+  let withholdingVisibilityChosen = $state(false);
   let amountStr = $state('');
   let withholdingStr = $state('');
   let showWithholding = $state(false);
@@ -125,7 +143,7 @@
   let formError = $state<unknown>(undefined);
   // New transaction's working copy and shared context (#508).
   const workingCopy = useEntryActivity(untrack(() => mode === 'reinvested' ? 'reinvested' : mode === 'withholding' ? 'withholding' : 'dividend'), {
-    values: () => ({ exDate, incomeAccountID, withholdingAccountID, amountStr, withholdingStr, showWithholding, quantityStr }),
+    values: () => ({ exDate, incomeAccountID, withholdingAccountID, incomeFromDefault, withholdingFromDefault, withholdingAmountFromDefault, withholdingShownByDefault, withholdingVisibilityChosen, amountStr, withholdingStr, showWithholding, quantityStr }),
     date: () => transactionDate,
     memo: () => memo,
     holding: () => Number(holdingAccountID) || undefined,
@@ -142,6 +160,11 @@
     amountStr = workingCopy.amountStr ?? amountStr;
     withholdingStr = workingCopy.withholdingStr ?? withholdingStr;
     showWithholding = workingCopy.showWithholding ?? showWithholding;
+    incomeFromDefault = workingCopy.incomeFromDefault ?? incomeFromDefault;
+    withholdingFromDefault = workingCopy.withholdingFromDefault ?? withholdingFromDefault;
+    withholdingAmountFromDefault = workingCopy.withholdingAmountFromDefault ?? withholdingAmountFromDefault;
+    withholdingShownByDefault = workingCopy.withholdingShownByDefault ?? withholdingShownByDefault;
+    withholdingVisibilityChosen = workingCopy.withholdingVisibilityChosen ?? withholdingVisibilityChosen;
     quantityStr = workingCopy.quantityStr ?? quantityStr;
   });
   untrack(() => { if (prefill?.currencyID !== undefined && mode === 'reinvested') reinvestmentCurrencyID = String(prefill.currencyID); });
@@ -206,22 +229,97 @@
     cashCommodityID ? (currenciesByID.get(cashCommodityID)?.code ?? '') : ''
   );
 
-  function applyDefaultsForInstrument(inst: InvestmentInstrumentResponse) {
-    const defaults = dividendDefaultsQuery.data?.defaults ?? [];
-    // Find a default that matches this instrument's commodity or is the global default (no commodity_id)
-    const match: DividendDefaultResponse | undefined =
-      defaults.find((d) => d.commodity_id === inst.commodity_id && d.status === 'active') ??
-      defaults.find((d) => d.commodity_id === undefined && d.status === 'active');
-    if (!match) return;
-    if (incomeAccountID === '') incomeAccountID = String(match.income_account_id);
-    if (withholdingAccountID === '' && match.withholding_account_id) {
-      withholdingAccountID = String(match.withholding_account_id);
-    }
-    if (withholdingStr === '' && match.default_withholding_value && match.default_withholding_scale !== undefined) {
-      withholdingStr = formatEditableAmount(String(match.default_withholding_value), match.default_withholding_scale);
-      showWithholding = true;
-    }
+  // A selected account counts only while it is one of the picker's options.
+  // A held choice the picker no longer offers (the date moved past its
+  // archive, say) stays visible as unavailable and blocks Record until the
+  // owner clears or replaces it; it is never dropped for the server to fill
+  // from a stored default (#664 review).
+  const offered = (accounts: AccountResponse[], id: string) => id !== '' && accounts.some((account) => String(account.id) === id);
+  const chosenIncomeID = $derived(offered(incomeAccounts, incomeAccountID) ? incomeAccountID : '');
+  const chosenWithholdingID = $derived(offered(withholdingAccounts, withholdingAccountID) ? withholdingAccountID : '');
+  const incomeUnavailable = $derived(heldButUnavailable(incomeAccountID, incomeAccounts));
+  const withholdingUnavailable = $derived(heldButUnavailable(withholdingAccountID, withholdingAccounts));
+
+  // Today's account list: a stored default fills a field only while its
+  // account is not archived today. The dated list stays the picker's options,
+  // so a backdated entry can still choose such an account by hand.
+  const todayAccountsQuery = createQuery(() => investmentEntryAccountsQueryOptions(ownerToday()));
+
+  function unavailableLabel(id: string): string {
+    const account = [...(accountsQuery.data?.accounts ?? []), ...(todayAccountsQuery.data?.accounts ?? [])]
+      .find((candidate: AccountResponse) => String(candidate.id) === id);
+    return account
+      ? m.investments_form_account_unavailable({ name: accountDisplayName(account) })
+      : m.investments_form_account_unavailable_unnamed();
   }
+
+  // Choosing an instrument asks for its default; it is applied once the
+  // defaults and both account lists have loaded, so a prefilled instrument
+  // chosen before they arrive still gets it.
+  let pendingDefaultFor = $state.raw<InvestmentInstrumentResponse | null>(null);
+  function applyDefaultsForInstrument(inst: InvestmentInstrumentResponse) {
+    pendingDefaultFor = inst;
+  }
+  // A changed or cleared instrument cancels a default still waiting for its
+  // data and takes back the accounts an earlier default filled in.
+  function clearInstrumentDefaults() {
+    pendingDefaultFor = null;
+    if (incomeFromDefault) incomeAccountID = '';
+    if (withholdingFromDefault) withholdingAccountID = '';
+    if (withholdingAmountFromDefault) withholdingStr = '';
+    if (withholdingShownByDefault) showWithholding = false;
+    incomeFromDefault = false;
+    withholdingFromDefault = false;
+    withholdingAmountFromDefault = false;
+    withholdingShownByDefault = false;
+  }
+  // A new entry date can select a different default: take back what the
+  // previous one filled in and resolve again for the selected instrument.
+  let defaultsResolvedFor = untrack(() => transactionDate);
+  $effect(() => {
+    const date = transactionDate;
+    if (date === defaultsResolvedFor) return;
+    defaultsResolvedFor = date;
+    untrack(() => {
+      const instrument = selectedInstrument;
+      if (!instrument) return;
+      clearInstrumentDefaults();
+      pendingDefaultFor = instrument;
+    });
+  });
+  $effect(() => {
+    const inst = pendingDefaultFor;
+    const defaults = dividendDefaultsQuery.data?.defaults;
+    const dated = accountsQuery.data?.accounts;
+    const today = todayAccountsQuery.data?.accounts;
+    if (!inst || !defaults || !dated || !today) return;
+    untrack(() => {
+      pendingDefaultFor = null;
+      // The default belongs to the instrument still selected, or to none.
+      if (selectedInstrument?.id !== inst.id) return;
+      // The default the server applies on the entry's date: the commodity's
+      // own before the global one, by effective date (#664 review).
+      const match: DividendDefaultResponse | undefined =
+        applicableDividendDefault(defaults, inst.commodity_id, transactionDate || ownerToday());
+      if (!match) return;
+      if (incomeAccountID === '') {
+        incomeAccountID = defaultAccountToApply(match.income_account_id, incomeAccounts, today);
+        incomeFromDefault = incomeAccountID !== '';
+      }
+      if (withholdingAccountID === '') {
+        withholdingAccountID = defaultAccountToApply(match.withholding_account_id, withholdingAccounts, today);
+        withholdingFromDefault = withholdingAccountID !== '';
+      }
+      if (withholdingStr === '' && match.default_withholding_value && match.default_withholding_scale !== undefined) {
+        withholdingStr = formatEditableAmount(String(match.default_withholding_value), match.default_withholding_scale);
+        withholdingAmountFromDefault = true;
+        if (!withholdingVisibilityChosen) {
+          withholdingShownByDefault = !showWithholding;
+          showWithholding = true;
+        }
+      }
+    });
+  });
 
   // Amount validation lives in #lib/investments/form-amounts.ts so its
   // behaviour can be pinned by name; see that module for what changed.
@@ -236,15 +334,33 @@
     }
   }
 
+  // A filled-in default that stops applying today (archived since, say) is
+  // taken back. Until the effect runs, the derived values block Record; the
+  // account stays selectable by hand on a backdated entry.
+  const todayAccounts = $derived(todayAccountsQuery.data?.accounts);
+  const incomeDefaultStale = $derived(
+    incomeFromDefault && incomeAccountID !== '' && (todayAccounts === undefined || !defaultStillApplies(incomeAccountID, todayAccounts))
+  );
+  const withholdingDefaultStale = $derived(
+    withholdingFromDefault && withholdingAccountID !== '' && (todayAccounts === undefined || !defaultStillApplies(withholdingAccountID, todayAccounts))
+  );
+  $effect(() => {
+    if (todayAccounts === undefined) return;
+    if (incomeDefaultStale) untrack(() => { incomeAccountID = ''; incomeFromDefault = false; });
+    if (withholdingDefaultStale) untrack(() => { withholdingAccountID = ''; withholdingFromDefault = false; });
+  });
+
   const canSubmitCash = $derived(
     cashAccounts.some((account) => String(account.id) === cashAccountID) &&
     !!cashCommodityID &&
-    (mode === 'withholding' ? withholdingAccountID !== '' : incomeAccountID !== '') &&
+    (mode === 'withholding' ? chosenWithholdingID !== '' : chosenIncomeID !== '') &&
+    (mode !== 'cash' || !showWithholding || withholdingAccountID === '' || chosenWithholdingID !== '') &&
     amountStr.trim() !== ''
   );
 
   const canSubmitReinvested = $derived(
     !!selectedInstrument &&
+    !incomeUnavailable &&
     holdingAccounts.some((account) => String(account.id) === holdingAccountID) &&
     !!cashCommodityID &&
     quantityStr.trim() !== '' &&
@@ -253,6 +369,7 @@
 
   const canSubmit = $derived(
     !accountsQuery.isFetching && !accountsQuery.isError &&
+    !incomeDefaultStale && !withholdingDefaultStale &&
     (mode !== 'reinvested' ? canSubmitCash : canSubmitReinvested)
   );
 
@@ -288,13 +405,18 @@
           ex_date: exDate || undefined,
           cash_account_id: Number(cashAccountID),
           cash_commodity_id: cashCommodityID,
-          income_account_id: mode !== 'withholding' && incomeAccountID ? Number(incomeAccountID) : undefined,
+          income_account_id: mode !== 'withholding' && chosenIncomeID ? Number(chosenIncomeID) : undefined,
+          // An account a default filled in is the default's choice: the server
+          // checks the default still applies it when it writes (#664 review).
+          income_account_from_default: mode !== 'withholding' && chosenIncomeID && incomeFromDefault ? true : undefined,
           amount_value: amount.value,
           amount_scale: amount.scale,
           withholding_value: withholding?.value,
           withholding_scale: withholding?.scale,
           withholding_account_id:
-            (mode === 'withholding' || withholding) && withholdingAccountID ? Number(withholdingAccountID) : undefined,
+            (mode === 'withholding' || withholding) && chosenWithholdingID ? Number(chosenWithholdingID) : undefined,
+          withholding_account_from_default:
+            (mode === 'withholding' || withholding) && chosenWithholdingID && withholdingFromDefault ? true : undefined,
           memo: memo.trim() || undefined
         };
 
@@ -310,7 +432,8 @@
           transaction_date: transactionDate,
           commodity_id: selectedInstrument.commodity_id,
           holding_account_id: Number(holdingAccountID),
-          income_account_id: incomeAccountID ? Number(incomeAccountID) : undefined,
+          income_account_id: chosenIncomeID ? Number(chosenIncomeID) : undefined,
+          income_account_from_default: chosenIncomeID && incomeFromDefault ? true : undefined,
           quantity_value: quantity.value,
           quantity_scale: quantity.scale,
           amount_value: amount.value,
@@ -352,6 +475,17 @@
   // what was accepted: show the current set instead of a dead end.
   let lastReinvestment: ReinvestedDividendRequest | null = null;
   async function recoverFromRefusal(err: unknown) {
+    // The default changed or its account was archived since the form showed
+    // it: take back what it filled in, reload, and show the current default
+    // for the owner to review before recording again.
+    if (err instanceof APIClientError && err.code === 'DIVIDEND_DEFAULT_CHANGED') {
+      formError = err;
+      const instrument = selectedInstrument;
+      clearInstrumentDefaults();
+      await Promise.allSettled([dividendDefaultsQuery.refetch(), accountsQuery.refetch(), todayAccountsQuery.refetch()]);
+      if (instrument && selectedInstrument?.id === instrument.id) pendingDefaultFor = instrument;
+      return;
+    }
     try {
       if (!isStaleImpactRefusal(err) || !lastReinvestment || !(await reviewReinvestment(lastReinvestment, true))) {
         formError = err;
@@ -620,30 +754,44 @@
       <select
         id="div-income-account"
         bind:value={incomeAccountID}
+        onchange={() => (incomeFromDefault = false)}
+        aria-describedby={incomeUnavailable ? 'div-income-unavailable' : undefined}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"
       >
         <option value="">{m.investments_form_select_account()}</option>
+        {#if incomeUnavailable}
+          <option value={incomeAccountID}>{unavailableLabel(incomeAccountID)}</option>
+        {/if}
         {#each incomeAccounts as acc (acc.id)}
           <option value={String(acc.id)}>{accountDisplayName(acc)}</option>
         {/each}
       </select>
+      {#if incomeUnavailable}
+        <p id="div-income-unavailable" class="mt-1 text-xs text-danger">{m.investments_form_account_unavailable_hint()}</p>
+      {/if}
     </div>
 
   {:else}
     <div>
       <label for="div-withholding-account" class="mb-1 block text-sm font-medium text-foreground">{m.investments_form_withholding_account()}</label>
       <select id="div-withholding-account" bind:value={withholdingAccountID} required
+        onchange={() => (withholdingFromDefault = false)}
+        aria-describedby={withholdingUnavailable ? 'div-withholding-unavailable' : undefined}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         <option value="">{m.investments_form_select_account()}</option>
+        {#if withholdingUnavailable}<option value={withholdingAccountID}>{unavailableLabel(withholdingAccountID)}</option>{/if}
         {#each withholdingAccounts as account (account.id)}<option value={String(account.id)}>{accountDisplayName(account)}</option>{/each}
       </select>
+      {#if withholdingUnavailable}
+        <p id="div-withholding-unavailable" class="mt-1 text-xs text-danger">{m.investments_form_account_unavailable_hint()}</p>
+      {/if}
     </div>
   {/if}
   <!-- Withholding tax (cash dividend only) -->
   {#if mode === 'cash'}
     <div>
       <label class="flex items-center gap-2 text-sm font-medium text-foreground">
-        <input type="checkbox" bind:checked={showWithholding} class="rounded" />
+        <input type="checkbox" bind:checked={showWithholding} onchange={() => { withholdingShownByDefault = false; withholdingVisibilityChosen = true; }} class="rounded" />
         {m.investments_form_withholding_toggle()}
       </label>
     </div>
@@ -662,6 +810,7 @@
             type="text"
             inputmode="decimal"
             bind:value={withholdingStr}
+            oninput={() => { withholdingAmountFromDefault = false; withholdingShownByDefault = false; }}
             placeholder={formatEditableAmount('0', 2)}
             class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted"
           />
@@ -673,13 +822,21 @@
           <select
             id="div-withholding-account"
             bind:value={withholdingAccountID}
+            onchange={() => (withholdingFromDefault = false)}
+            aria-describedby={withholdingUnavailable ? 'div-withholding-unavailable' : undefined}
             class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"
           >
             <option value="">{m.investments_form_select_account()}</option>
+            {#if withholdingUnavailable}
+              <option value={withholdingAccountID}>{unavailableLabel(withholdingAccountID)}</option>
+            {/if}
             {#each withholdingAccounts as acc (acc.id)}
               <option value={String(acc.id)}>{accountDisplayName(acc)}</option>
             {/each}
           </select>
+          {#if withholdingUnavailable}
+            <p id="div-withholding-unavailable" class="mt-1 text-xs text-danger">{m.investments_form_account_unavailable_hint()}</p>
+          {/if}
         </div>
       </div>
     {/if}

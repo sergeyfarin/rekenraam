@@ -132,6 +132,10 @@ func (r *ImportRepository) RepairImportDividend(ctx context.Context, p RepairImp
 	if err = requireAccountRuleDependenciesTx(ctx, tx, j.Spec, j.AccountRuleDependencies); err != nil {
 		return TransactionRecord{}, err
 	}
+	// An edit to the stored default changes no account version (#664 review).
+	if err = requireDividendDefaultTx(ctx, tx, j.BookID, j.DividendDefault); err != nil {
+		return TransactionRecord{}, err
+	}
 	auditID, err := insertAuditEvent(ctx, tx, AuditEventParams{BookID: j.BookID, ActorUserID: j.ActorUserID, AuthSessionID: j.AuthSessionID, OccurredAt: j.CreatedAt, RequestID: j.RequestID, OriginType: "import", Operation: "import.dividend.repair", Reason: j.ChangeReason, MetadataJSON: j.AuditMetadataJSON})
 	if err != nil {
 		return TransactionRecord{}, err

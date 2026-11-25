@@ -41,6 +41,18 @@ post:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: >-
+        DIVIDEND_DEFAULT_CHANGED when an account marked
+        income_account_from_default or withholding_account_from_default is no
+        longer the one the stored default applies on the dividend's date (#664).
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "500":
       description: Internal server error
       headers:

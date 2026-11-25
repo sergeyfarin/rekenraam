@@ -27,7 +27,7 @@ test('a transaction entered in an account register starts in that account', asyn
   await expect(page.getByRole('heading', { name: account.name })).toBeVisible();
   const form = await addForm(page);
   await expect(form.getByLabel('Account').locator('option:checked')).toHaveText(account.name);
-  await form.getByLabel('Date').fill(todayISO());
+  await form.getByLabel('Date', { exact: true }).fill(todayISO());
   await form.getByLabel('Description').fill(description);
   await form.getByLabel('Amount').fill('12.40');
   await form.getByPlaceholder('Search categories').click();
@@ -53,7 +53,7 @@ test('a transaction entered in a category starts in that category', async ({ pag
   await expect(page.getByRole('heading', { name: `Workspace hobbies ${suffix}` })).toBeVisible();
   const form = await addForm(page);
   await expect(form.getByText(`Workspace hobbies ${suffix}`)).toBeVisible();
-  await form.getByLabel('Date').fill(todayISO());
+  await form.getByLabel('Date', { exact: true }).fill(todayISO());
   await form.getByLabel('Description').fill(description);
   await form.getByLabel('Account').selectOption({ label: account.name });
   await form.getByLabel('Amount').fill('30.00');

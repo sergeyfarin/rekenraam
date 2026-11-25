@@ -14,7 +14,7 @@ test.describe.serial('release preflight journeys', () => {
     await page.goto('/app/ledger/transactions');
     await page.getByRole('button', { name: 'New transaction' }).click();
     const form = page.getByRole('region', { name: 'New transaction', exact: true });
-    await form.getByLabel('Date').fill(todayISO());
+    await form.getByLabel('Date', { exact: true }).fill(todayISO());
     await form.getByLabel('Description').fill(`Preflight transfer ${suffix}`);
     await form.getByRole('button', { name: 'Use split entry' }).click();
 
@@ -133,7 +133,7 @@ test.describe.serial('release preflight journeys', () => {
     await page.goto('/app/ledger/transactions');
     await page.getByRole('button', { name: 'New transaction' }).click();
     const form = page.getByRole('region', { name: 'New transaction', exact: true });
-    await form.getByLabel('Date').fill(todayISO());
+    await form.getByLabel('Date', { exact: true }).fill(todayISO());
     await form.getByLabel('Description').fill(`Preflight mobile entry ${suffix}`);
     await form.getByLabel('Account').selectOption(String(account.id));
     await form.getByLabel('Amount').fill('3.50');
@@ -150,7 +150,7 @@ async function createSimpleTransaction(page: Page, accountID: number, descriptio
   await page.getByRole('button', { name: 'New transaction' }).click();
   const form = page.getByRole('region', { name: 'New transaction', exact: true });
   await form.getByRole('tab', { name: 'Deposit', exact: true }).click();
-  await form.getByLabel('Date').fill(todayISO());
+  await form.getByLabel('Date', { exact: true }).fill(todayISO());
   await form.getByLabel('Description').fill(description);
   await form.getByLabel('Account').selectOption(String(accountID));
   await form.getByLabel('Amount').fill(amount);

@@ -487,7 +487,7 @@ func TestReviewedDividendPendingWriterRefusesDiscardWithoutFinancialEffects(t *t
 	batch, rowID := f.stageDividendRow(t, conn.ID, trading212Dividend{Reference: "discard-race", Amount: "85.00", Currency: "EUR", PaidOn: "2026-03-01", Type: "DIVIDEND"})
 	c, err := f.importService.importDividendContext(ctx, f.ownerUserID, batch, rowID)
 	require.NoError(t, err)
-	input, res, err := f.importService.reviewedDividendInput(ctx, c, reviewedDividendResolution(f, "85.00", "0"), f.ownerUserID, 0, "")
+	input, res, err := f.importService.reviewedDividendInput(ctx, c, reviewedDividendResolution(f, "85.00", "0"), dividendDefaultFill{}, f.ownerUserID, 0, "")
 	require.NoError(t, err)
 	require.NoError(t, f.importService.DiscardImportBatch(ctx, DiscardImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: batch}))
 	before := csvIncomeDurableCount(t, f)

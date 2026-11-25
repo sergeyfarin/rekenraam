@@ -994,7 +994,7 @@ func (s *ImportService) PreviewCommit(ctx context.Context, input PreviewCommitIn
 			if err != nil {
 				return PreviewCommitResult{}, err
 			}
-			dividend, _, err := s.reviewedDividendInput(ctx, c, c.resolution, input.OwnerUserID, 0, "")
+			dividend, _, err := s.reviewedDividendInput(ctx, c, c.resolution, dividendDefaultFill{}, input.OwnerUserID, 0, "")
 			if errors.Is(err, ErrImportDividendReviewRequired) {
 				continue
 			}
@@ -1002,7 +1002,7 @@ func (s *ImportService) PreviewCommit(ctx context.Context, input PreviewCommitIn
 				return PreviewCommitResult{}, err
 			}
 			impact, err := s.investmentService.DividendReconciliationImpact(ctx, dividend)
-			if _, ok := errors.AsType[ValidationError](err); ok {
+			if _, ok := errors.AsType[ValidationError](err); ok || errors.Is(err, ErrDividendDefaultChanged) {
 				continue
 			}
 			if err != nil {
@@ -1284,7 +1284,9 @@ func (s *ImportService) commitImportBatch(ctx context.Context, input CommitImpor
 				continue
 			}
 			var dividendValidation ValidationError
-			if isTrading212DividendRow(batch, row) && (errors.Is(err, ErrImportDividendReviewRequired) || errors.As(err, &dividendValidation) || errors.Is(err, ErrReconciliationOverrideRequired)) {
+			// A default that changed since the review filled it holds the row for
+			// review, like a missing account (#664 review).
+			if isTrading212DividendRow(batch, row) && (errors.Is(err, ErrImportDividendReviewRequired) || errors.As(err, &dividendValidation) || errors.Is(err, ErrReconciliationOverrideRequired) || errors.Is(err, ErrDividendDefaultChanged)) {
 				result.DividendReviewRowIDs = append(result.DividendReviewRowIDs, row.ID)
 				continue
 			}

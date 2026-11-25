@@ -39,6 +39,9 @@ const (
 	ReferenceRuleCategoryParentCycle      = "category_parent_cycle"
 	ReferenceRuleCategoryActiveChild      = "category_active_child"
 	ReferenceRuleInstitutionLinkedAccount = "institution_linked_account"
+	// ReferenceRuleCategoryPostingAfterDisable names the earliest posting a
+	// disable would strand: Date is that posting's entry date (#664).
+	ReferenceRuleCategoryPostingAfterDisable = "category_posting_after_disable"
 )
 
 // ReferenceRuleConflictError refuses a write that breaks a rule involving

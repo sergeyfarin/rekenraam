@@ -42,9 +42,13 @@ var (
 	// ErrCategoryHasActiveChildren refuses a disable: a child active on a date
 	// the disable governs. It reaches callers inside ReferenceRuleConflictError.
 	ErrCategoryHasActiveChildren = errors.New("category has active child categories")
-	ErrCategoryBuiltInProtected  = errors.New("built-in category cannot be edited, disabled or deleted")
-	ErrCategoryUsed              = errors.New("category is used by financial records")
-	categoryIconPattern          = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
+	// ErrCategoryPostingsAfterDisable refuses a disable dated before a posting
+	// the category already has (#664). It reaches callers inside
+	// ReferenceRuleConflictError, whose date is the earliest such posting.
+	ErrCategoryPostingsAfterDisable = errors.New("category has postings after the disable date")
+	ErrCategoryBuiltInProtected     = errors.New("built-in category cannot be edited, disabled or deleted")
+	ErrCategoryUsed                 = errors.New("category is used by financial records")
+	categoryIconPattern             = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 )
 
 var categoryTypes = map[string]bool{
@@ -527,7 +531,6 @@ func (s *CategoryService) changeCategoryStatus(ctx context.Context, input Catego
 		return Category{}, categoryRepositoryError("persist category status", err)
 	}
 
-	_ = current
 	return toCategory(record), nil
 }
 

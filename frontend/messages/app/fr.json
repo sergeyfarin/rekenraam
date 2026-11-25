@@ -800,6 +800,7 @@
   "import_dividend_declare_no_tax": "Confirmer le montant reçu comme brut sans retenue",
   "import_dividend_reason": "Motif de la correction",
   "import_dividend_record": "Enregistrer le dividende vérifié",
+  "import_dividend_choose_accounts": "Choisissez le compte de revenu, et le compte de retenue si un impôt est retenu, avant d’enregistrer à nouveau.",
   "import_dividend_repair": "Corriger l’attribution du dividende",
   "import_dividend_recorded": "Dividende enregistré.",
   "import_dividend_repaired": "Attribution du dividende corrigée ; paiement conservé.",

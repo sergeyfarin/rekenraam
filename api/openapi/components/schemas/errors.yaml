@@ -101,6 +101,7 @@ ErrorBody:
         - PROVIDER_ERROR
         - EXPORT_SCOPE_UNSUPPORTED
         - QIF_ACCOUNT_UNSUPPORTED
+        - DIVIDEND_DEFAULT_CHANGED
         - INTERNAL_ERROR
     message:
       type: string
@@ -123,10 +124,16 @@ ErrorBody:
         - category_parent_cycle
         - category_active_child
         - institution_linked_account
+        - category_posting_after_disable
       description: >
         On REFERENCE_DATED_CONFLICT: the rule a dated category, payee or
         institution write breaks on a date the new version governs, which may
         lie between the requested date and today (#552).
+        category_posting_after_disable: a disable would make a posting dated
+        after its date, which may be after today, ineligible although the
+        category accepts it now; a posting an earlier version already refuses
+        does not count. conflict_date is the earliest such posting's entry date
+        and there is no other record (#664).
     conflict_date:
       type: string
       format: date

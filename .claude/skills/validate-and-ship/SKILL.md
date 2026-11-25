@@ -106,6 +106,7 @@ item 31"); they are not an order and are never reused. To read one entry:
 - 82 — A reference read before the owner's day is pinned
 - 83 — A second clock reading after the owner day is pinned
 - 84 — Date-shaped text mistaken for a calendar date in SQLite CHECKs
+- 89 — A NULL-valued SQL predicate composed under NOT
 
 **Auth, sessions and secrets** — `bug-classes/auth-security.md`
 
@@ -125,6 +126,7 @@ item 31"); they are not an order and are never reused. To read one entry:
 - 74 — Account defaults mistaken for currencies actually held
 - 81 — A raw debit-positive balance in a class-normalized field
 - 87 — An archive check applied to an assignment the record already has
+- 88 — A one-step lifecycle version that refuses its own last day
 
 **Investments** — `bug-classes/investments.md`
 

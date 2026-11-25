@@ -105,6 +105,13 @@ func TestIneligibleAccountDateOnCorrectionIsAValidationError(t *testing.T) {
 // version effective before a posting the account already has.
 func insertStrandingCloseVersion(t *testing.T, database *sql.DB, accountID int64, closedOn string) {
 	t.Helper()
+	insertAccountVersionCopy(t, database, accountID, "closed", closedOn)
+}
+
+// insertAccountVersionCopy appends a copy of the account's latest version with
+// status, effective from and closed on date, bypassing every service check.
+func insertAccountVersionCopy(t *testing.T, database *sql.DB, accountID int64, status string, date string) {
+	t.Helper()
 	ctx := context.Background()
 	rows, err := database.QueryContext(ctx, `SELECT name FROM pragma_table_info('account_versions') WHERE name <> 'id'`)
 	require.NoError(t, err)
@@ -117,9 +124,9 @@ func insertStrandingCloseVersion(t *testing.T, database *sql.DB, accountID int64
 		case "version_seq":
 			values = append(values, "version_seq + 1")
 		case "effective_from", "closed_on":
-			values = append(values, "'"+closedOn+"'")
+			values = append(values, "'"+date+"'")
 		case "status":
-			values = append(values, "'closed'")
+			values = append(values, "'"+status+"'")
 		default:
 			values = append(values, column)
 		}

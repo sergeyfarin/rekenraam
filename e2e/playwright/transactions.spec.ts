@@ -16,7 +16,7 @@ test('creates a simple transaction through the browser form', async ({ page }) =
 
   await expect(page.getByRole('heading', { name: 'New transaction' })).toBeVisible();
   const form = page.getByRole('region', { name: 'New transaction', exact: true });
-  await form.getByLabel('Date').fill(todayISO());
+  await form.getByLabel('Date', { exact: true }).fill(todayISO());
   await form.getByLabel('Description').fill(description);
   await form.getByLabel('Account').selectOption({ label: accountName });
   await form.getByLabel('Amount').fill('4.50');
@@ -68,7 +68,7 @@ test('offers an existing payee before creating a near-duplicate', async ({ page 
   await page.getByRole('button', { name: 'New transaction' }).click();
   const form = page.getByRole('region', { name: 'New transaction', exact: true });
 
-  await form.getByLabel('Date').fill(todayISO());
+  await form.getByLabel('Date', { exact: true }).fill(todayISO());
   await form.getByLabel('Description').fill(description);
   await form.getByLabel('Account').selectOption({ label: accountName });
   await form.getByLabel('Amount').fill('9.99');

@@ -968,6 +968,15 @@ ImportDividendReview:
     transaction_id: { type: integer, format: int64 }
     expected_transaction_version_id: { type: integer, format: int64 }
     resolution: { $ref: '../../openapi.yaml#/components/schemas/ImportResolution' }
+    income_account_from_default:
+      type: boolean
+      description: >-
+        resolution.category_id was filled from the stored dividend default, not
+        declared. Send it back unchanged on review while the owner keeps that
+        account, so the write checks the default still applies it (#664).
+    withholding_account_from_default:
+      type: boolean
+      description: As income_account_from_default, for resolution.withholding_account_id.
 ImportDividendReviewsResponse:
   type: object
   required: [rows, next_cursor]
@@ -986,6 +995,15 @@ ReviewImportDividendRequest:
       format: int64
       description: Required for repair; must match the current posted ordinary transaction.
     reason: { type: string, description: Required nonempty audit reason for historical repair. }
+    income_account_from_default:
+      type: boolean
+      description: >-
+        The review list's mark, kept while the owner leaves the income account
+        as the default filled it. The write then requires the default to still
+        apply that account, or answers 409 DIVIDEND_DEFAULT_CHANGED (#664).
+    withholding_account_from_default:
+      type: boolean
+      description: As income_account_from_default, for the withholding account.
     reconciliation_override: { type: boolean, default: false }
     reconciliation_override_checkpoint_ids:
       $ref: "../../openapi.yaml#/components/schemas/ReviewedCheckpointIds"

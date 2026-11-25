@@ -169,9 +169,16 @@ func runInvestmentJournalsWithGuardTx[T any](ctx context.Context, database *sql.
 			return nil, zero, err
 		}
 	}
-	// Check every journal's pinned rules before creating any audit or journal.
+	// Check every journal's pinned rules before creating any audit or journal:
+	// the account versions, and the stored dividend default a journal took an
+	// account from. Only the first journal passes through
+	// createTransactionWithAuditTx; a correction's replacement is a later one
+	// (#664 review).
 	for _, journal := range params {
 		if err := requireAccountRuleDependenciesTx(ctx, tx, journal.Spec, journal.AccountRuleDependencies); err != nil {
+			return nil, zero, err
+		}
+		if err := requireDividendDefaultTx(ctx, tx, journal.BookID, journal.DividendDefault); err != nil {
 			return nil, zero, err
 		}
 	}

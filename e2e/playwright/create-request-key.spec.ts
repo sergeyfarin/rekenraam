@@ -50,7 +50,7 @@ test('a transaction saved again after its response was lost is recorded once; a 
   const enter = async () => {
     await page.getByRole('button', { name: 'New transaction', exact: true }).click();
     const form = page.getByRole('region', { name: 'New transaction', exact: true });
-    await form.getByLabel('Date').fill(todayISO());
+    await form.getByLabel('Date', { exact: true }).fill(todayISO());
     await form.getByLabel('Description').fill(description);
     await form.getByLabel('Account').selectOption({ label: account.name });
     await form.getByLabel('Amount').fill('4.50');
@@ -215,7 +215,7 @@ test('a transaction confirmed over a reconciled period and saved again after a l
   await page.goto('/app/ledger/transactions');
   await page.getByRole('button', { name: 'New transaction', exact: true }).click();
   const form = page.getByRole('region', { name: 'New transaction', exact: true });
-  await form.getByLabel('Date').fill(daysFromTodayISO(-5));
+  await form.getByLabel('Date', { exact: true }).fill(daysFromTodayISO(-5));
   await form.getByLabel('Description').fill(description);
   await form.getByLabel('Account').selectOption({ label: account.name });
   await form.getByLabel('Amount').fill('4.50');
@@ -262,7 +262,7 @@ test('a confirmed transaction stays replayable after an edited retry fails too',
   await page.goto('/app/ledger/transactions');
   await page.getByRole('button', { name: 'New transaction', exact: true }).click();
   const form = page.getByRole('region', { name: 'New transaction', exact: true });
-  await form.getByLabel('Date').fill(daysFromTodayISO(-5));
+  await form.getByLabel('Date', { exact: true }).fill(daysFromTodayISO(-5));
   await form.getByLabel('Description').fill(description);
   await form.getByLabel('Account').selectOption({ label: account.name });
   await form.getByLabel('Amount').fill('4.50');
@@ -317,7 +317,7 @@ test('a confirmed transaction whose result is not stored yet replays once it is'
   await page.goto('/app/ledger/transactions');
   await page.getByRole('button', { name: 'New transaction', exact: true }).click();
   const form = page.getByRole('region', { name: 'New transaction', exact: true });
-  await form.getByLabel('Date').fill(daysFromTodayISO(-5));
+  await form.getByLabel('Date', { exact: true }).fill(daysFromTodayISO(-5));
   await form.getByLabel('Description').fill(description);
   await form.getByLabel('Account').selectOption({ label: account.name });
   await form.getByLabel('Amount').fill('4.50');

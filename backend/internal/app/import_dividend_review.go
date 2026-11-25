@@ -28,6 +28,11 @@ type ImportDividendReview struct {
 	TransactionID                *int64              `json:"transaction_id,omitempty"`
 	ExpectedTransactionVersionID *int64              `json:"expected_transaction_version_id,omitempty"`
 	Resolution                   ImportRowResolution `json:"resolution"`
+	// IncomeAccountFromDefault and WithholdingAccountFromDefault say the
+	// resolution's account was filled from the stored default, not chosen; a
+	// review that sends it back unchanged keeps the mark (#664 review).
+	IncomeAccountFromDefault      bool `json:"income_account_from_default"`
+	WithholdingAccountFromDefault bool `json:"withholding_account_from_default"`
 }
 
 type ImportDividendReviews struct {
@@ -44,6 +49,9 @@ type ReviewImportDividendInput struct {
 	RequestID, Reason                                                        string
 	Resolution                                                               ImportRowResolution
 	ReconciliationOverride                                                   CheckpointOverride
+	// The review response's marks, sent back for accounts the owner left as
+	// the default filled them (#664 review).
+	IncomeAccountFromDefault, WithholdingAccountFromDefault bool
 }
 
 type importDividendSource struct {
@@ -130,10 +138,23 @@ func (s *ImportService) importDividendContext(ctx context.Context, ownerID, batc
 	return c, nil
 }
 
-func (s *ImportService) dividendReviewDefaults(ctx context.Context, c importDividendContext, res ImportRowResolution) (ImportRowResolution, error) {
+// dividendDefaultFill says which accounts dividendReviewDefaults took from the
+// stored default rather than from the owner's review. The writer is told, so
+// it checks those defaults again when it commits (#664 review).
+type dividendDefaultFill struct {
+	income      bool
+	withholding bool
+}
+
+func (input ReviewImportDividendInput) defaultMarks() dividendDefaultFill {
+	return dividendDefaultFill{income: input.IncomeAccountFromDefault, withholding: input.WithholdingAccountFromDefault}
+}
+
+func (s *ImportService) dividendReviewDefaults(ctx context.Context, c importDividendContext, res ImportRowResolution) (ImportRowResolution, dividendDefaultFill, error) {
+	var filled dividendDefaultFill
 	ctx, referenceErr := s.settings.referenceContext(ctx, s.now())
 	if referenceErr != nil {
-		return ImportRowResolution{}, referenceErr
+		return ImportRowResolution{}, filled, referenceErr
 	}
 
 	if c.original != nil {
@@ -144,7 +165,7 @@ func (s *ImportService) dividendReviewDefaults(ctx context.Context, c importDivi
 	if res.AccountID == 0 && c.batch.ConnectionID.Valid && s.connectionService != nil {
 		conn, err := s.connectionService.GetImportConnection(ctx, c.batch.ConnectionID.Int64)
 		if err != nil && !errors.Is(err, ErrImportConnectionNotFound) {
-			return res, err
+			return res, filled, err
 		}
 		if err == nil && conn.CashAccountID != nil {
 			res.AccountID = *conn.CashAccountID
@@ -153,7 +174,7 @@ func (s *ImportService) dividendReviewDefaults(ctx context.Context, c importDivi
 	if res.CommodityID == 0 {
 		currency, err := s.accountRepository.CurrentCurrencyByCode(ctx, BookID, c.source.CommodityHint)
 		if err != nil && !errors.Is(err, db.ErrNotFound) {
-			return res, err
+			return res, filled, err
 		}
 		if err == nil {
 			res.CommodityID = currency.ID
@@ -162,29 +183,31 @@ func (s *ImportService) dividendReviewDefaults(ctx context.Context, c importDivi
 	if res.InstrumentCommodityID == 0 {
 		_, id, found, err := s.investmentService.FindInstrumentForImport(ctx, c.raw[rawKeyISIN], c.raw[rawKeyTicker])
 		if err != nil {
-			return res, err
+			return res, filled, err
 		}
 		if found {
 			res.InstrumentCommodityID = id
 		}
 	}
 	if res.CategoryID == nil || res.WithholdingAccountID == nil {
-		defaults, err := s.investmentService.repository.ResolveDividendDefault(ctx, BookID, res.InstrumentCommodityID, c.source.Date)
+		defaults, _, err := s.investmentService.applicableDividendDefault(ctx, res.InstrumentCommodityID, c.source.Date)
 		if err != nil && !errors.Is(err, db.ErrNotFound) {
-			return res, err
+			return res, filled, err
 		}
 		if err == nil {
-			if res.CategoryID == nil {
+			if res.CategoryID == nil && defaults.IncomeAccountID > 0 {
 				id := defaults.IncomeAccountID
 				res.CategoryID = &id
+				filled.income = true
 			}
 			if res.WithholdingAccountID == nil && defaults.WithholdingAccountID.Valid {
 				id := defaults.WithholdingAccountID.Int64
 				res.WithholdingAccountID = &id
+				filled.withholding = true
 			}
 		}
 	}
-	return res, nil
+	return res, filled, nil
 }
 
 func (s *ImportService) ListImportDividends(ctx context.Context, input ListImportDividendsInput) (ImportDividendReviews, error) {
@@ -224,11 +247,12 @@ func (s *ImportService) ListImportDividends(ctx context.Context, input ListImpor
 		if err != nil {
 			return result, err
 		}
-		res, err := s.dividendReviewDefaults(ctx, c, c.resolution)
+		res, filled, err := s.dividendReviewDefaults(ctx, c, c.resolution)
 		if err != nil {
 			return result, err
 		}
-		review := ImportDividendReview{RowID: row.ID, BatchID: row.BatchID, RowIndex: row.RowIndex, State: "pending", SourceInstrument: strings.TrimSpace(c.raw[rawKeyTicker] + " " + c.raw[rawKeyISIN]), SourceDate: c.source.Date, SourceCashAmount: c.source.Amount, SourceCurrency: c.source.CommodityHint, Resolution: res}
+		review := ImportDividendReview{RowID: row.ID, BatchID: row.BatchID, RowIndex: row.RowIndex, State: "pending", SourceInstrument: strings.TrimSpace(c.raw[rawKeyTicker] + " " + c.raw[rawKeyISIN]), SourceDate: c.source.Date, SourceCashAmount: c.source.Amount, SourceCurrency: c.source.CommodityHint, Resolution: res,
+			IncomeAccountFromDefault: filled.income, WithholdingAccountFromDefault: filled.withholding}
 		if c.original != nil {
 			review.State = "repairable"
 			id, version := c.original.ID, c.original.VersionID
@@ -240,7 +264,10 @@ func (s *ImportService) ListImportDividends(ctx context.Context, input ListImpor
 	return result, nil
 }
 
-func (s *ImportService) reviewedDividendInput(ctx context.Context, c importDividendContext, resolution ImportRowResolution, ownerID, sessionID int64, requestID string) (DividendInput, ImportRowResolution, error) {
+// reviewedDividendInput builds the dividend a reviewed row records. marked
+// names accounts the review request says the default filled; accounts filled
+// here are marked as well, and the writer checks both (#664 review).
+func (s *ImportService) reviewedDividendInput(ctx context.Context, c importDividendContext, resolution ImportRowResolution, marked dividendDefaultFill, ownerID, sessionID int64, requestID string) (DividendInput, ImportRowResolution, error) {
 	ctx, referenceErr := s.settings.referenceContext(ctx, s.now())
 	if referenceErr != nil {
 		return DividendInput{}, ImportRowResolution{}, referenceErr
@@ -249,7 +276,7 @@ func (s *ImportService) reviewedDividendInput(ctx context.Context, c importDivid
 	refuse := func() (DividendInput, ImportRowResolution, error) {
 		return DividendInput{}, resolution, ErrImportDividendReviewRequired
 	}
-	res, err := s.dividendReviewDefaults(ctx, c, resolution)
+	res, filled, err := s.dividendReviewDefaults(ctx, c, resolution)
 	if err != nil {
 		return DividendInput{}, res, err
 	}
@@ -283,6 +310,10 @@ func (s *ImportService) reviewedDividendInput(ctx context.Context, c importDivid
 	if res.InstrumentCommodityID > 0 {
 		input.CommodityID = NullableValue(res.InstrumentCommodityID)
 	}
+	// Accounts the stored default supplied are the default's, not the
+	// owner's: the writer checks the default still applies them (#664 review).
+	input.IncomeAccountFromDefault = filled.income || marked.income
+	input.WithholdingAccountFromDefault = filled.withholding || (marked.withholding && input.WithholdingAccountID != nil)
 	if tax.Sign() > 0 {
 		value, err := exact.ScaledIntFromCoefficient(tax, ts).Int64()
 		if err != nil {
@@ -309,7 +340,7 @@ func (s *ImportService) commitReviewedTrading212DividendRow(ctx context.Context,
 	if c.original != nil {
 		return true, 0, 0, ErrImportDividendReviewUnavailable
 	}
-	dividend, res, err := s.reviewedDividendInput(ctx, c, c.resolution, input.OwnerUserID, input.AuthSessionID, input.RequestID)
+	dividend, res, err := s.reviewedDividendInput(ctx, c, c.resolution, dividendDefaultFill{}, input.OwnerUserID, input.AuthSessionID, input.RequestID)
 	if err != nil {
 		return true, 0, 0, err
 	}
@@ -384,7 +415,7 @@ func (s *ImportService) prepareImportDividendRepair(ctx context.Context, c impor
 	if reason == "" {
 		return p, ValidationError{Message: "repair reason is required"}
 	}
-	dividend, res, err := s.reviewedDividendInput(ctx, c, input.Resolution, input.OwnerUserID, input.AuthSessionID, input.RequestID)
+	dividend, res, err := s.reviewedDividendInput(ctx, c, input.Resolution, input.defaultMarks(), input.OwnerUserID, input.AuthSessionID, input.RequestID)
 	if err != nil {
 		return p, err
 	}
@@ -486,7 +517,7 @@ func (s *ImportService) ReviewImportDividend(ctx context.Context, input ReviewIm
 		if input.ExpectedTransactionVersionID != 0 {
 			return Transaction{}, ErrTransactionVersionStale
 		}
-		dividend, res, prepareErr := s.reviewedDividendInput(ctx, c, input.Resolution, input.OwnerUserID, input.AuthSessionID, input.RequestID)
+		dividend, res, prepareErr := s.reviewedDividendInput(ctx, c, input.Resolution, input.defaultMarks(), input.OwnerUserID, input.AuthSessionID, input.RequestID)
 		if prepareErr != nil {
 			return Transaction{}, mapImportDividendReviewError(prepareErr)
 		}
@@ -532,7 +563,7 @@ func (s *ImportService) ImportDividendReviewImpact(ctx context.Context, input Re
 		if input.ExpectedTransactionVersionID != 0 {
 			return ReconciliationImpact{}, ErrTransactionVersionStale
 		}
-		dividend, _, err := s.reviewedDividendInput(ctx, c, input.Resolution, input.OwnerUserID, input.AuthSessionID, input.RequestID)
+		dividend, _, err := s.reviewedDividendInput(ctx, c, input.Resolution, input.defaultMarks(), input.OwnerUserID, input.AuthSessionID, input.RequestID)
 		if err != nil {
 			return ReconciliationImpact{}, mapImportDividendReviewError(err)
 		}

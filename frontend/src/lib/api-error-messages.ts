@@ -90,6 +90,7 @@ const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   IDEMPOTENCY_KEY_RESULT_UNAVAILABLE: () => m.api_error_idempotency_key_result_unavailable(),
   RECONCILIATION_IMPACT_STALE: () => m.api_error_reconciliation_impact_stale(),
   POSTING_ACCOUNT_VERSION_STALE: () => m.api_error_posting_account_version_stale(),
+  DIVIDEND_DEFAULT_CHANGED: () => m.api_error_dividend_default_changed(),
   RECURRING_TEMPLATE_UNBALANCED: () => m.api_error_recurring_template_unbalanced(),
   RECONCILIATION_START_STALE: () => m.api_error_reconciliation_start_stale(),
   RECURRING_SCHEDULE_INVALID: () => m.api_error_recurring_schedule_invalid(),
@@ -123,6 +124,11 @@ function referenceConflictMessage(code: APIErrorCode, conflict: APIReferenceConf
   }
   if (code === 'REFERENCE_VERSION_BEFORE_FIRST') {
     return m.api_error_reference_version_before_first_from({ date });
+  }
+  // The disable's own category is the record in question, so this rule
+  // names only the day (#664).
+  if (code === 'REFERENCE_DATED_CONFLICT' && conflict.rule === 'category_posting_after_disable') {
+    return m.api_error_reference_conflict_category_posting_after_disable({ date });
   }
   const name = conflict.name?.trim() || (conflict.builtinKey ? builtinCategoryLabel(conflict.builtinKey) : '');
   if (code !== 'REFERENCE_DATED_CONFLICT' || !name) {

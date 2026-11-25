@@ -276,7 +276,11 @@ type CreateTransactionParams struct {
 	// checks in Spec were decided against. The write transaction refuses the
 	// spec if any of them has been restructured since (T-100).
 	AccountRuleDependencies []AccountRuleDependency
-	InvestmentComponents    []InvestmentComponentSpec
+	// DividendDefault names the accounts a dividend took from its stored
+	// default; the write re-resolves the default and refuses a change (#664
+	// review).
+	DividendDefault      *DividendDefaultDependency
+	InvestmentComponents []InvestmentComponentSpec
 	// Dividend preserves the payment shape independently of optional payer attribution.
 	Dividend *DividendFact
 	// PaymentInLieu names the short holding and ex-date a payment in lieu
@@ -467,13 +471,19 @@ type PostingAccountRule struct {
 	// rather than enumerating codes, so a kind added to the table later is
 	// covered without a second edit somewhere else.
 	BaseKind string
+	// IsCategory reports whether the resolved version is a category, by the
+	// rule every category read uses (categoryAccountPredicate).
+	IsCategory bool
 }
 
 // AcceptsPostingsOn reports whether the version accepts a posting dated
 // entryDate on its status. closed_on is the last day an account is open
 // (accounts-system-design.md), and the closed version takes effect on that day,
-// so a closed version still accepts its closing day (#292). The
-// posting_versions_account_version_valid trigger applies the same rule.
+// so a closed version still accepts its closing day (#292). A disabled
+// category is archived in one step with closed_on on its disable date, and
+// keeps that day the same way (#664); an archived ordinary account accepts
+// nothing. The posting_versions_account_version_valid trigger and
+// requirePostingsStayEligibleTx apply the same rule.
 func (rule PostingAccountRule) AcceptsPostingsOn(entryDate string) bool {
 	if !rule.AllowsPostings {
 		return false
@@ -483,6 +493,8 @@ func (rule PostingAccountRule) AcceptsPostingsOn(entryDate string) bool {
 		return true
 	case "closed":
 		return rule.ClosedOn.Valid && entryDate <= rule.ClosedOn.String
+	case "archived":
+		return rule.IsCategory && rule.ClosedOn.Valid && entryDate <= rule.ClosedOn.String
 	default:
 		return false
 	}

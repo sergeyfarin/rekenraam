@@ -465,3 +465,61 @@ test('a dividend repair keeps its reviewed version when the list refreshes behin
   expect(after.transaction_kind).toBe('ordinary');
   expect(after.journal_entries.flatMap(entry => entry.postings.map(posting => posting.account_id))).toContain(otherIncome.id);
 });
+
+// #664 review: an income account the review filled from the stored default is
+// the default's, not the owner's. The picker lists no categories, so the
+// browser sends that account back unseen; archived since (its disable day
+// still accepts a posting), Record is refused and the account is taken back
+// for the owner to choose; a chosen account then records.
+test('[acceptance] an imported dividend does not record a default archived after the review filled it', async ({ page }) => {
+  const f = await dividendSource(page);
+  const category = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/categories', f.csrfToken, { name: `Default dividends ${Date.now()}`, category_type: 'income' });
+  await apiJSON(page, 'POST', '/api/v1/investments/dividend-defaults', f.csrfToken, {
+    commodity_id: f.instrument.commodity_id, income_account_id: category.id, status: 'active', effective_from: todayISO()
+  });
+  await page.getByRole('button', { name: 'Commit to ledger' }).click();
+  await expect(page.getByText('1 dividend payments remain in review.')).toBeVisible();
+  const listed = await apiJSON<{ rows: Array<{ resolution: { category_id?: number }; income_account_from_default?: boolean }> }>(page, 'GET', '/api/v1/import-dividends');
+  const row = listed.rows.find((candidate) => candidate.resolution.category_id === category.id);
+  expect(row?.income_account_from_default).toBe(true);
+
+  await page.getByRole('link', { name: 'Review dividends and repair attribution', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Pending dividend', exact: true })).toBeVisible();
+  await page.getByLabel('Dividend amount', { exact: true }).fill('85.00');
+  await page.getByLabel('Withholding amount', { exact: true }).fill('0');
+
+  await apiJSON(page, 'POST', `/api/v1/categories/${category.id}/disable`, f.csrfToken, {});
+  const isReview = (url: string) => url.includes('/review-dividend');
+  const sent = page.waitForRequest((request) => request.method() === 'POST' && isReview(request.url()));
+  const refused = page.waitForResponse((response) => response.request().method() === 'POST' && isReview(response.url()));
+  await page.getByRole('button', { name: 'Record reviewed dividend', exact: true }).click();
+  expect((await sent).postDataJSON()).toMatchObject({ income_account_from_default: true, resolution: { category_id: category.id } });
+  const response = await refused;
+  expect(response.status()).toBe(409);
+  expect((await response.json()).error.code).toBe('DIVIDEND_DEFAULT_CHANGED');
+  await expect(page.getByText('The dividend default changed', { exact: false })).toBeVisible();
+  expect((await f.activity()).transactions).toHaveLength(0);
+
+  // Left blank, the server would fill the current default the owner has not
+  // seen: Record waits for an explicit choice (#664 review).
+  const record = page.getByRole('button', { name: 'Record reviewed dividend', exact: true });
+  await expect(record).toBeDisabled();
+  await expect(record).toHaveAccessibleDescription(/Choose the income account/);
+
+  // The automatic account is gone from the next request; the owner's choice records.
+  const income = page.getByRole('combobox', { name: 'Income account', exact: true });
+  await income.selectOption(String(f.income.id));
+  await expect(record).toBeEnabled();
+  // Clearing the choice again blocks Record: the requirement outlives a selection.
+  await income.selectOption('');
+  await expect(record).toBeDisabled();
+  await income.selectOption(String(f.income.id));
+  await expect(record).toBeEnabled();
+  const chosen = page.waitForRequest((request) => request.method() === 'POST' && isReview(request.url()));
+  await page.getByRole('button', { name: 'Record reviewed dividend', exact: true }).click();
+  const body = (await chosen).postDataJSON();
+  expect(body.resolution.category_id).toBe(f.income.id);
+  expect(body.income_account_from_default).toBeUndefined();
+  await expect(page.getByText('Dividend recorded.', { exact: true })).toBeVisible();
+  expect((await f.activity()).transactions).toHaveLength(1);
+});

@@ -55,7 +55,7 @@ async function setup(page: Page) {
 
 async function fillShortForm(page: Page, s: Awaited<ReturnType<typeof setup>>, date: string, quantity: string, amount: string) {
   const form = page.getByRole('dialog').last();
-  await form.getByLabel('Date').fill(date);
+  await form.getByLabel('Date', { exact: true }).fill(date);
   await form.getByLabel('Instrument').fill(s.name);
   await form.getByRole('option').filter({ hasText: s.name }).click();
   await form.getByLabel('Holding account').selectOption(String(s.holdingID));

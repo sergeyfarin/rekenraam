@@ -833,11 +833,12 @@ func (e AccountParentCycleError) Unwrap() error { return ErrAccountParentCycle }
 
 // requirePostingsStayEligibleTx refuses a new account version that would
 // govern an existing posting and not accept it. Only postings the new version
-// governs are examined: a posting already outside an older version's dates is
-// not this write's doing, which keeps a repair (such as a reopen from the
-// closing date) possible. Voided and soft-deleted transactions are skipped;
-// nothing rewrites their postings. The eligibility test mirrors the
-// posting_versions_account_version_valid trigger.
+// strands are counted: one it governs and refuses that the version governing
+// it before this write accepted. A posting already outside an older version's
+// dates is not this write's doing, which keeps a repair (such as a reopen from
+// the closing date) possible, and a category disable is never blamed for a
+// posting the category already refused (#664 review). Voided and soft-deleted
+// transactions are skipped; nothing rewrites their postings.
 func requirePostingsStayEligibleTx(ctx context.Context, tx *sql.Tx, accountID int64, versionID int64) error {
 	var earliest sql.NullString
 	if err := tx.QueryRowContext(ctx, `
@@ -847,6 +848,12 @@ func requirePostingsStayEligibleTx(ctx context.Context, tx *sql.Tx, accountID in
 		JOIN journal_entries je ON je.transaction_version_id = tv.id
 		JOIN posting_versions pv ON pv.journal_entry_id = je.id
 		JOIN account_versions av ON av.id = ?
+		JOIN account_versions prior_av ON prior_av.id = (
+			SELECT before_av.id FROM account_versions before_av
+			WHERE before_av.account_id = pv.account_id AND before_av.effective_from <= je.entry_date
+				AND before_av.id <> av.id
+			ORDER BY before_av.effective_from DESC, before_av.version_seq DESC LIMIT 1
+		)
 		WHERE pv.account_id = ?
 			AND tv.status <> 'voided'
 			AND t.deleted_at IS NULL
@@ -855,17 +862,8 @@ func requirePostingsStayEligibleTx(ctx context.Context, tx *sql.Tx, accountID in
 				WHERE asof_av.account_id = pv.account_id AND asof_av.effective_from <= je.entry_date
 				ORDER BY asof_av.effective_from DESC, asof_av.version_seq DESC LIMIT 1
 			) = av.id
-			AND NOT (
-				(
-					av.status = 'active'
-					OR (av.status = 'closed' AND av.closed_on IS NOT NULL AND je.entry_date <= av.closed_on)
-				)
-				AND av.allows_postings = 1
-				AND (av.opened_on IS NULL OR je.entry_date >= av.opened_on)
-				AND (av.closed_on IS NULL OR je.entry_date <= av.closed_on)
-				AND (av.default_commodity_id IS NULL OR av.default_commodity_id = pv.commodity_id)
-				AND (av.quantity_scale_override IS NULL OR pv.quantity_scale <= av.quantity_scale_override)
-			)
+			AND NOT `+versionAcceptsPostingSQL("av")+`
+			AND `+versionAcceptsPostingSQL("prior_av")+`
 	`, versionID, accountID).Scan(&earliest); err != nil {
 		return fmt.Errorf("check account postings stay eligible: %w", err)
 	}
@@ -873,6 +871,30 @@ func requirePostingsStayEligibleTx(ctx context.Context, tx *sql.Tx, accountID in
 		return AccountPostingsOutsideDatesError{EntryDate: earliest.String}
 	}
 	return nil
+}
+
+// versionAcceptsPostingSQL is the posting rule for account version alias v
+// and the posting pv in journal entry je: the
+// posting_versions_account_version_valid trigger's test and
+// PostingAccountRule.AcceptsPostingsOn, including a disabled category's
+// closing day (#664). It is two-valued for a non-NULL version row, so it is
+// safe under NOT (bug class 89).
+func versionAcceptsPostingSQL(v string) string {
+	return `(
+				(
+					` + v + `.status = 'active'
+					OR (` + v + `.status = 'closed' AND ` + v + `.closed_on IS NOT NULL AND je.entry_date <= ` + v + `.closed_on)
+					OR (
+						` + v + `.status = 'archived' AND ` + v + `.closed_on IS NOT NULL AND je.entry_date <= ` + v + `.closed_on
+						AND ` + categoryAccountPredicate(v) + `
+					)
+				)
+				AND ` + v + `.allows_postings = 1
+				AND (` + v + `.opened_on IS NULL OR je.entry_date >= ` + v + `.opened_on)
+				AND (` + v + `.closed_on IS NULL OR je.entry_date <= ` + v + `.closed_on)
+				AND (` + v + `.default_commodity_id IS NULL OR ` + v + `.default_commodity_id = pv.commodity_id)
+				AND (` + v + `.quantity_scale_override IS NULL OR pv.quantity_scale <= ` + v + `.quantity_scale_override)
+			)`
 }
 
 func (r *AccountRepository) DeleteUnusedAccount(ctx context.Context, params DeleteAccountParams) error {

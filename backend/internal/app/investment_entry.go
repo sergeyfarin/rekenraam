@@ -26,12 +26,14 @@ func (s *InvestmentService) EntryAccounts(ctx context.Context, asOf string) ([]I
 		if account.IsSystem {
 			continue
 		}
+		entryAccount := toAccount(account)
 		rule := db.PostingAccountRule{AccountID: account.ID, AccountClass: account.AccountClass,
 			Status: account.Status, OpenedOn: account.OpenedOn, ClosedOn: account.ClosedOn,
 			EffectiveFrom: account.EffectiveFrom, AllowsPostings: account.AllowsPostings,
 			IsSystem: account.IsSystem, AccountKind: account.AccountKind,
-			BaseKind: snapshot.BaseKinds[account.AccountClass+":"+account.AccountKind]}
-		result = append(result, InvestmentEntryAccount{Account: toAccount(account),
+			BaseKind:   snapshot.BaseKinds[account.AccountClass+":"+account.AccountKind],
+			IsCategory: isCategoryAccount(entryAccount)}
+		result = append(result, InvestmentEntryAccount{Account: entryAccount,
 			InvestmentHolding: investmentAccountRoleError(rule, date, holdingRole) == nil,
 			InvestmentSettlement: investmentAccountRoleError(rule, date, settlementRole) == nil &&
 				account.DefaultCommodityID.Valid && snapshot.Currencies[account.DefaultCommodityID.Int64]})

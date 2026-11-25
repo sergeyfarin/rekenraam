@@ -87,6 +87,13 @@ happen on a date.
 ## Lifecycle Rules
 
 - Disable archives a category for active pickers while preserving history.
+  The disable date is its `closed_on` and its last open day (#664): postings
+  dated on or before it stay editable, voidable and unvoidable, and a disable
+  that would strand a later posting the category still accepts is refused with
+  `category_posting_after_disable` and that posting's date. The Categories
+  screen shows the refusal in the row whose action failed. Ledger
+  eligibility, retained links, automation targets and recovery follow the
+  shared [archived-reference rules](accounts-system-design.md#archived-references-by-operation).
 - Parent categories with active children cannot be disabled until children are
   disabled or moved.
 - Protected built-in categories are the absolute minimum required fallback

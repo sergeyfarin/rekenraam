@@ -1108,6 +1108,37 @@ func TestDividendDefaults_ListAndSave_HTTP(t *testing.T) {
 	}, http.StatusOK)
 }
 
+// #664 review. A dividend whose income account the form filled from the
+// default is refused with a stable code when the default no longer applies it.
+func TestDividendAccountFromChangedDefaultIsRefused_HTTP(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "DDEF")
+	other := createLedgerAccount(t, handler, f.sessionCookie, f.csrfToken, "Other dividend income", "income", "income", f.commodityID, 2)
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/dividend-defaults", dividendDefaultRequest{
+		CommodityID: &instrument.CommodityID, IncomeAccountID: other.ID, Status: "active", EffectiveFrom: "2026-01-01",
+		Metadata: json.RawMessage(`{}`),
+	}, http.StatusCreated)
+
+	request := dividendRequest{
+		TransactionDate: "2026-04-01", CommodityID: nullableField[int64]{NullablePatch: app.NullableValue(instrument.CommodityID)},
+		CashAccountID: f.cashAccount.ID, CashCommodityID: f.commodityID,
+		IncomeAccountID: &f.incomeAccount.ID, IncomeAccountFromDefault: true, AmountValue: 5000, AmountScale: 2,
+	}
+	res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/dividend", request, http.StatusConflict)
+	assert.Equal(t, "DIVIDEND_DEFAULT_CHANGED", apiErrorCode(t, res))
+
+	request.IncomeAccountFromDefault = false
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/dividend", request, http.StatusCreated)
+
+	// The control: the account the default applies, claimed as such, is
+	// accepted, so the refusal above was about the account and not a missing
+	// instrument.
+	request.IncomeAccountID, request.IncomeAccountFromDefault = &other.ID, true
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/dividend", request, http.StatusCreated)
+}
+
 func TestAutomationRules_ListAndReplace_HTTP(t *testing.T) {
 	t.Parallel()
 	handler, _ := newSetupTestHandler(t)

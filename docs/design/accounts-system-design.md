@@ -1023,6 +1023,121 @@ Lifecycle is represented by new versions, not row mutation.
 - Hidden from ordinary lists and pickers by default.
 - Still available in history, exports, and audit views.
 - Intended for accounts/institutions the user no longer wants in day-to-day UI.
+- An archived ordinary account accepts no postings. A disabled category is
+  archived in one step and keeps its disable day; see
+  [Archived references by operation](#archived-references-by-operation).
+
+### Archived references by operation
+
+Archiving an account, category, payee or tag stops *new* use of it. It never
+makes a record that already refers to it uneditable, and it never rewrites
+history. The rules below are shared; each kind's design links here.
+
+- **Posting-date eligibility.** `closed_on` is the last day a posting target
+  is open. A closed account accepts entries dated on or before `closed_on`
+  (#292). A category disable writes one archived version whose `effective_from`
+  and `closed_on` are the disable date, and that version accepts entries dated
+  on or before it, under the usual posting and reconciliation rules (#664). An
+  archived ordinary account accepts nothing: it was closed first, and plain
+  income and expense accounts without category metadata are ordinary accounts.
+  "Category" is the rule every category read uses
+  (`db.categoryAccountPredicate`). `db.PostingAccountRule.AcceptsPostingsOn`,
+  the `posting_versions_account_version_valid` trigger (migration 0016) and
+  `requirePostingsStayEligibleTx` apply this one rule.
+- **A lifecycle version never strands a posting.** A close, archive or
+  category disable that would govern a posting the record already has, and not
+  accept it, is refused inside the write with the earliest blocked entry date:
+  `409 CONFLICT` for an account, `409 REFERENCE_DATED_CONFLICT` with
+  `conflict_rule` `category_posting_after_disable` for a category. The check
+  covers current versions of transactions that are neither voided nor
+  soft-deleted, future-dated ones included, and writes no version or audit row
+  when it refuses. It counts only postings the new version strands: ones the
+  version governing them before the write accepted. A posting an older version
+  already refuses (for example after *Allows postings* was turned off, #680) is
+  not reported against the new version and does not block it; it keeps its own
+  repair.
+- **Everyday choices read today's status.** Pickers, payee defaults and import
+  rule application treat an archived target as absent from the moment it is
+  archived, even on the day the ledger still accepts it. The app shell
+  applies a successful disable or delete to every cached category and account
+  list before the caller sees the response, cancelling reads already in flight,
+  and then refetches them. A picker loaded earlier (the entry editor's
+  categories, an investment form's income accounts) therefore never offers the
+  category, even while its refetch is pending (`category-cache.ts`). A dated
+  snapshot from before the disable's effective date keeps it, since the
+  category was open then. Accepting a fresh
+  posting dated on or before the disable day is a ledger guarantee for the API
+  and for history entry, not a picker choice.
+- **Retained versus new links.** An edit that restates a link the record
+  already carries keeps it; naming an archived tag or payee anywhere it is not
+  already assigned is a fresh link and is refused. Tags follow this today
+  ([Categories And Tags](#categories-and-tags), #650); archived payees on an existing transaction are #631.
+- **Descriptive edits keep structural links.** A description-only edit, with
+  `keep_journal` or restating the same posting lines, writes new posting
+  versions, so each is judged against its own entry date: an entry on a
+  disabled category's disable day saves; one stranded after an older
+  version's dates answers `400 VALIDATION_FAILED` until repaired. How the
+  editor shows a retained archived category or account is #671.
+- **Stored automation targets versus new generation and application.** A
+  stored import rule or recurring template keeps naming an archived target and
+  stays readable and repairable (#283, #656). Applying an import rule skips it
+  while any target is archived today. A stored dividend default is the same
+  kind of target: cash and reinvested dividends and the import dividend review
+  apply its income or withholding account only while that account is not
+  archived today (`applicableDividendDefault`), and only where the posting
+  uses that account (income unless withholding only, withholding when tax is
+  withheld). The write is bound to the version each applied target's status
+  was read from, so an archive committed before the write refuses it, while
+  a change to an unused default does not. The dividend form fills a field from
+  a default only when the account is offered on the entry's date and not
+  archived today, and only for the instrument still selected; it marks the
+  fields a default filled (accounts and the withholding amount) and takes them
+  back if the account is archived later or the instrument changes, keeping
+  what the owner chose or typed. The request carries that mark
+  (`income_account_from_default`, `withholding_account_from_default`), and the
+  server writes such an account only while the default still applies it,
+  bound to its version, or refuses with `409 DIVIDEND_DEFAULT_CHANGED`; the form
+  then reloads and shows the current default for review. The write resolves
+  the default again inside its transaction, since editing a default row
+  changes no account version. Import review marks the accounts it fills from
+  the default the same way: its list response says which accounts the default
+  filled (`income_account_from_default`, `withholding_account_from_default`),
+  the review form sends those marks back until the owner picks an account, and
+  the batch commit marks what it fills itself. An imported dividend whose
+  default was archived or changed after the review filled it is refused with
+  `409 DIVIDEND_DEFAULT_CHANGED` (the form takes the account back and Record
+  waits for the owner to choose one, since a blank field would let the server
+  fill the current default unseen) or held for
+  review instead of posted. Every journal that took an account from the
+  default re-resolves it in its write, including import repairs and a
+  correction's replacement journal.
+  A default-filled withholding *amount* is not yet checked at commit (#684).
+  The form resolves a default the way the server
+  does: in effect on the entry's date, the commodity's own before the global
+  one, latest effective date first, and again when the date changes. Toggling
+  withholding is the owner's visibility choice; it does not make a default
+  amount the owner's. A backdated entry can
+  still choose such an account by hand. A choice the picker stops
+  offering, for example after a date change, stays visible as unavailable and
+  blocks Record; it is never dropped for the server to replace with the
+  stored default. Recurring generation validates each
+  occurrence on its own date: one dated on or before a category's disable day
+  passes the posting rule, and a later one is recorded `blocked`
+  ([recurring plan](../plans/recurring-transactions-plan.md)).
+- **Ledger re-entry versus a fresh posting.** Unvoid and restore put existing
+  postings back in the ledger; they are judged by their own entry dates, like
+  an edit, not by today. Unvoid writes posting versions and meets the trigger;
+  restore and both previews do not check yet (#665). A fresh posting is a new
+  entry under the same date rule.
+- **Dated category restore as recovery (pre-release data).** A book written
+  before the disable check existed can hold a posting dated after its
+  category's disable day; correcting it answers `400`. Restoring the category
+  effective on a date after the disable day and on or before that posting
+  makes it eligible again. This is conditional: the restore date may not be
+  before the category's latest version (`REFERENCE_VERSION_BACKDATED`) or in
+  the future, and an active sibling holding the name on any day it governs
+  refuses it (`category_name_taken`). When version order rules out such a
+  date, move the posting to another category instead.
 
 Closing rules for the first implementation:
 

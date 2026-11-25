@@ -1,6 +1,6 @@
 post:
   summary: Disable a category
-  description: Disabling archives the category for active pickers while preserving history. Active child categories must be disabled or moved first.
+  description: Disabling archives the category for active pickers while preserving history. Active child categories must be disabled or moved first. The disable date is the category's closed_on and its last open day, as for a closed account; postings dated on or before it stay valid, and a fresh posting on or before it is still accepted by the ledger (#664).
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/CategoryID"
     - in: header
@@ -65,7 +65,15 @@ post:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
       $ref: "../openapi.yaml#/components/responses/ReferenceVersionConflict"
-      description: REFERENCE_DATED_CONFLICT when a child category is active on a date the disable governs; REFERENCE_VERSION_BACKDATED when dated before the latest version; CONFLICT for a built-in category, which cannot be disabled.
+      description: >-
+        REFERENCE_DATED_CONFLICT when a child category is active on a date the
+        disable governs (category_active_child), or when the disable would make
+        ineligible a posting the category accepts now, that is a current posting,
+        not voided or deleted, dated after the disable date
+        (category_posting_after_disable, conflict_date is the earliest). A posting
+        an earlier version already refuses, for example after posting was turned
+        off, does not trigger it. REFERENCE_VERSION_BACKDATED when dated before the
+        latest version; CONFLICT for a built-in category, which cannot be disabled.
     "500":
       description: Internal server error
       headers:

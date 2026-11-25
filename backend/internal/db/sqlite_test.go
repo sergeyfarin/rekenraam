@@ -1225,7 +1225,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 
 	version, err := EmbeddedMigrationVersion()
 	require.NoError(t, err)
-	assert.Equal(t, int64(15), version, "the latest forward migration adds create request keys (#660)")
+	assert.Equal(t, int64(16), version, "the latest forward migration keeps a disabled category's disable day (#664)")
 
 	ctx := context.Background()
 	database, err := Open(ctx, SQLiteFileURL(filepath.Join(t.TempDir(), "schema.sqlite")))

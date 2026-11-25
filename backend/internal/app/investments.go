@@ -29,7 +29,13 @@ var (
 	ErrCostBasisProfileNotFound             = errors.New("cost basis profile not found")
 	ErrCostBasisProfileExists               = errors.New("cost basis profile already exists")
 	ErrDividendDefaultNotFound              = errors.New("dividend default not found")
-	ErrInvestmentLotsInsufficient           = errors.New("insufficient investment lots")
+	// ErrDividendDefaultChanged refuses a dividend that took an account from
+	// the stored default when the default no longer applies it: changed, or
+	// its account archived, since the form showed it or the write was prepared
+	// (#664 review). It is the db sentinel, so the commit-time refusal maps the
+	// same way.
+	ErrDividendDefaultChanged     = db.ErrDividendDefaultChanged
+	ErrInvestmentLotsInsufficient = errors.New("insufficient investment lots")
 	// ErrInvestmentEventOutOfOrder reports a trade dated before something that
 	// has already rewritten the position's cost-basis projection. It is the
 	// repository's sentinel under this package's own name, so the API can key
@@ -505,12 +511,17 @@ type DividendInput struct {
 	WithholdingValue     *int64
 	WithholdingScale     *int
 	WithholdingAccountID *int64
-	Memo                 string
-	ExternalRefHint      string
-	MetadataJSON         string
-	PayeeID              *int64
-	Status               string
-	ChangeReason         string
+	// IncomeAccountFromDefault and WithholdingAccountFromDefault say the
+	// account was filled in from the stored default rather than chosen: the
+	// write then requires the default to still apply it (#664 review).
+	IncomeAccountFromDefault      bool
+	WithholdingAccountFromDefault bool
+	Memo                          string
+	ExternalRefHint               string
+	MetadataJSON                  string
+	PayeeID                       *int64
+	Status                        string
+	ChangeReason                  string
 	// ReconciliationOverride allows backdated dividends to invalidate affected
 	// checkpoints through the normal transaction write guard.
 	ReconciliationOverride CheckpointOverride
@@ -521,23 +532,25 @@ type DividendInput struct {
 }
 
 type ReinvestedDividendInput struct {
-	OwnerUserID            int64
-	AuthSessionID          int64
-	RequestID              string
-	TransactionDate        string
-	CommodityID            int64
-	HoldingAccountID       int64
-	IncomeAccountID        *int64
-	QuantityValue          exact.Coefficient
-	QuantityScale          int
-	AmountValue            int64
-	AmountScale            int
-	CashCommodityID        int64
-	Memo                   string
-	PayeeID                *int64
-	Status                 string
-	ChangeReason           string
-	ReconciliationOverride CheckpointOverride
+	OwnerUserID      int64
+	AuthSessionID    int64
+	RequestID        string
+	TransactionDate  string
+	CommodityID      int64
+	HoldingAccountID int64
+	IncomeAccountID  *int64
+	// IncomeAccountFromDefault: see DividendInput (#664 review).
+	IncomeAccountFromDefault bool
+	QuantityValue            exact.Coefficient
+	QuantityScale            int
+	AmountValue              int64
+	AmountScale              int
+	CashCommodityID          int64
+	Memo                     string
+	PayeeID                  *int64
+	Status                   string
+	ChangeReason             string
+	ReconciliationOverride   CheckpointOverride
 	// GainImpactAcknowledgement echoes the preview token for the committed
 	// disposal gain changes the user accepted (T-126).
 	GainImpactAcknowledgement string
@@ -1230,6 +1243,9 @@ type investmentTransactionPlan struct {
 	// its own reads to the same collector, and the write refuses the command
 	// if any of those accounts changed after the role was decided (T-100).
 	AccountRuleDependencies *accountRuleDependencies
+	// DividendDefault names the accounts a dividend took from its stored
+	// default, for the write to re-resolve (#664 review).
+	DividendDefault *db.DividendDefaultDependency
 }
 
 func (s *InvestmentService) buyPlan(ctx context.Context, input InvestmentTradeInput) (investmentTransactionPlan, error) {
@@ -1825,24 +1841,180 @@ func (s *InvestmentService) dividendWithPostWrite(ctx context.Context, input Div
 	return s.dividend(ctx, input, postWrite)
 }
 
+// applicableDividendDefault resolves the stored dividend default for a date
+// and leaves out a target archived today. A default is a stored automation
+// target: it stays saved and repairable, but applying it skips an archived
+// target, as import rules do (accounts-system-design.md, archived references
+// by operation). A category disabled on D still accepts postings dated D, so
+// applying it would otherwise post there without the owner naming it (#664
+// review). A cleared income target is 0; a cleared withholding target is
+// invalid. versions holds the latest version each kept target's status was
+// read from: a caller records, with useDividendDefaultTarget, only the targets
+// that supply an account its posting uses, so an archive committed before the
+// write refuses it while a change to an unused default does not (#664 review).
+func (s *InvestmentService) applicableDividendDefault(ctx context.Context, commodityID int64, date string) (db.DividendDefaultRecord, map[int64]int64, error) {
+	record, err := s.repository.ResolveDividendDefault(ctx, BookID, commodityID, date)
+	if err != nil {
+		return db.DividendDefaultRecord{}, nil, err
+	}
+	ctx, err = s.settings.referenceContext(ctx, s.now())
+	if err != nil {
+		return db.DividendDefaultRecord{}, nil, err
+	}
+	targets := []int64{record.IncomeAccountID}
+	if record.WithholdingAccountID.Valid {
+		targets = append(targets, record.WithholdingAccountID.Int64)
+	}
+	states, err := s.repository.AccountLifecycleStates(ctx, BookID, targets)
+	if err != nil {
+		return db.DividendDefaultRecord{}, nil, err
+	}
+	versions := map[int64]int64{}
+	keep := func(id int64) bool {
+		state := states[id]
+		if state.Status == "archived" {
+			return false
+		}
+		versions[id] = state.LatestVersionID
+		return true
+	}
+	if !keep(record.IncomeAccountID) {
+		record.IncomeAccountID = 0
+	}
+	if record.WithholdingAccountID.Valid && !keep(record.WithholdingAccountID.Int64) {
+		record.WithholdingAccountID = sql.NullInt64{}
+	}
+	return record, versions, nil
+}
+
+// useDividendDefaultTarget records a default target the posting uses at the
+// version its status was read from. The guard keeps the first version it sees
+// for an account, so the later role check cannot replace it.
+func useDividendDefaultTarget(dependencies *accountRuleDependencies, versions map[int64]int64, id int64) {
+	dependencies.observe(db.PostingAccountRule{AccountID: id, LatestVersionID: versions[id]})
+}
+
 func (s *InvestmentService) dividendPlan(ctx context.Context, input DividendInput) (investmentTransactionPlan, error) {
 	date, err := validateDividendInput(input)
 	if err != nil {
 		return investmentTransactionPlan{}, err
 	}
-	if input.CommodityID.Value != nil && (input.IncomeAccountID == nil || input.WithholdingAccountID == nil) {
-		defaultRecord, err := s.repository.ResolveDividendDefault(ctx, BookID, *input.CommodityID.Value, date)
-		if err == nil {
-			if input.IncomeAccountID == nil {
-				input.IncomeAccountID = &defaultRecord.IncomeAccountID
-			}
-			if input.WithholdingAccountID == nil && defaultRecord.WithholdingAccountID.Valid {
-				input.WithholdingAccountID = &defaultRecord.WithholdingAccountID.Int64
-			}
-		} else if !errors.Is(err, db.ErrNotFound) {
-			return investmentTransactionPlan{}, fmt.Errorf("resolve dividend default: %w", err)
+	dependencies := newAccountRuleDependencies()
+	input, defaultDependency, err := s.withDividendDefault(ctx, input, date, dependencies)
+	if err != nil {
+		return investmentTransactionPlan{}, err
+	}
+	plan, err := s.dividendPlanFor(ctx, input, date, dependencies)
+	if err != nil {
+		return investmentTransactionPlan{}, err
+	}
+	plan.DividendDefault = defaultDependency
+	return plan, nil
+}
+
+// withDividendDefault fills, from the applicable default, the accounts a cash
+// dividend omits and its posting uses: income unless the payment is
+// withholding only, withholding when tax is withheld. An account the request
+// says came from the default must still be the one the default applies, or
+// the write is refused (ErrDividendDefaultChanged). Each default account used
+// is recorded in dependencies at the version its status was read from, so an
+// archive committed before the write refuses it (#664 review).
+func (s *InvestmentService) withDividendDefault(ctx context.Context, input DividendInput, date string, dependencies *accountRuleDependencies) (DividendInput, *db.DividendDefaultDependency, error) {
+	usesIncome := !input.WithholdingOnly
+	usesWithholding := input.WithholdingOnly || (input.WithholdingValue != nil && *input.WithholdingValue > 0)
+	income := defaultSlot{used: usesIncome, account: &input.IncomeAccountID, fromDefault: input.IncomeAccountFromDefault}
+	withholding := defaultSlot{used: usesWithholding, account: &input.WithholdingAccountID, fromDefault: input.WithholdingAccountFromDefault}
+	if !income.wanted() && !withholding.wanted() {
+		return input, nil, nil
+	}
+	// A dividend without a payer resolves the global default, as an import
+	// review does before an instrument exists; the server fills nothing from
+	// it unless the request says an account came from it.
+	commodityID := input.CommodityID.Value
+	if commodityID == nil && (income.fromDefault || withholding.fromDefault) {
+		global := int64(0)
+		commodityID = &global
+	}
+	var defaultRecord db.DividendDefaultRecord
+	var versions map[int64]int64
+	if commodityID != nil {
+		var err error
+		defaultRecord, versions, err = s.applicableDividendDefault(ctx, *commodityID, date)
+		if err != nil && !errors.Is(err, db.ErrNotFound) {
+			return input, nil, fmt.Errorf("resolve dividend default: %w", err)
 		}
 	}
+	withholdingDefault := int64(0)
+	if defaultRecord.WithholdingAccountID.Valid {
+		withholdingDefault = defaultRecord.WithholdingAccountID.Int64
+	}
+	incomeUsed, err := income.apply(defaultRecord.IncomeAccountID, versions, dependencies)
+	if err != nil {
+		return input, nil, err
+	}
+	withholdingUsed, err := withholding.apply(withholdingDefault, versions, dependencies)
+	if err != nil {
+		return input, nil, err
+	}
+	return input, dividendDefaultDependency(commodityID, date, incomeUsed, withholdingUsed), nil
+}
+
+// dividendDefaultDependency names the accounts taken from the default, or nil
+// when none was.
+func dividendDefaultDependency(commodityID *int64, date string, incomeID int64, withholdingID int64) *db.DividendDefaultDependency {
+	if commodityID == nil || (incomeID <= 0 && withholdingID <= 0) {
+		return nil
+	}
+	dependency := &db.DividendDefaultDependency{CommodityID: *commodityID, Date: date}
+	if incomeID > 0 {
+		dependency.IncomeAccountID = sql.NullInt64{Int64: incomeID, Valid: true}
+	}
+	if withholdingID > 0 {
+		dependency.WithholdingAccountID = sql.NullInt64{Int64: withholdingID, Valid: true}
+	}
+	return dependency
+}
+
+// defaultSlot is one account a dividend may take from its default.
+type defaultSlot struct {
+	used        bool
+	account     **int64
+	fromDefault bool
+}
+
+// wanted: the posting uses the account and it is missing or claimed to come
+// from the default.
+func (d defaultSlot) wanted() bool {
+	return d.used && (*d.account == nil || d.fromDefault)
+}
+
+// apply fills a missing account from the default, or checks that an account
+// claimed to come from it is still the one it applies (0 is none), and binds
+// the write to that account's version. It returns the account taken from the
+// default, or 0.
+func (d defaultSlot) apply(defaultID int64, versions map[int64]int64, dependencies *accountRuleDependencies) (int64, error) {
+	if !d.wanted() {
+		return 0, nil
+	}
+	if *d.account != nil {
+		if defaultID <= 0 || **d.account != defaultID {
+			return 0, ErrDividendDefaultChanged
+		}
+		useDividendDefaultTarget(dependencies, versions, defaultID)
+		return defaultID, nil
+	}
+	if defaultID <= 0 {
+		return 0, nil
+	}
+	id := defaultID
+	*d.account = &id
+	useDividendDefaultTarget(dependencies, versions, defaultID)
+	return defaultID, nil
+}
+
+// dividendPlanFor plans a cash dividend whose defaults are already applied;
+// dependencies already holds the versions those defaults were decided on.
+func (s *InvestmentService) dividendPlanFor(ctx context.Context, input DividendInput, date string, dependencies *accountRuleDependencies) (investmentTransactionPlan, error) {
 	incomeAccountID := int64(0)
 	if input.IncomeAccountID != nil {
 		incomeAccountID = *input.IncomeAccountID
@@ -1850,7 +2022,6 @@ func (s *InvestmentService) dividendPlan(ctx context.Context, input DividendInpu
 	if !input.WithholdingOnly && incomeAccountID <= 0 {
 		return investmentTransactionPlan{}, ValidationError{Message: "dividend income account is required"}
 	}
-	dependencies := newAccountRuleDependencies()
 	if err := s.validateDividendRoles(ctx, input, date, incomeAccountID, dependencies); err != nil {
 		return investmentTransactionPlan{}, err
 	}
@@ -1956,6 +2127,7 @@ func (s *InvestmentService) prepareDividendWrite(ctx context.Context, input Divi
 	if err != nil {
 		return db.CreateTransactionParams{}, err
 	}
+	params.DividendDefault = plan.DividendDefault
 	params.Dividend = &db.DividendFact{CommodityID: nullableInt64(input.CommodityID.Value), WithholdingOnly: input.WithholdingOnly,
 		ExDate: strings.TrimSpace(input.ExDate.OrZero())}
 	params.InvestmentComponents = []db.InvestmentComponentSpec{{
@@ -1992,21 +2164,31 @@ func (s *InvestmentService) reinvestedDividendPlanAs(ctx context.Context, input 
 	if err != nil {
 		return investmentTransactionPlan{}, err
 	}
+	dependencies := newAccountRuleDependencies()
+	var defaultDependency *db.DividendDefaultDependency
 	incomeAccountID := int64(0)
 	if input.IncomeAccountID != nil {
 		incomeAccountID = *input.IncomeAccountID
-	} else {
-		defaultRecord, err := s.repository.ResolveDividendDefault(ctx, BookID, input.CommodityID, date)
-		if err == nil {
-			incomeAccountID = defaultRecord.IncomeAccountID
-		} else if !errors.Is(err, db.ErrNotFound) {
+	}
+	if input.IncomeAccountID == nil || input.IncomeAccountFromDefault {
+		defaultRecord, versions, err := s.applicableDividendDefault(ctx, input.CommodityID, date)
+		if err != nil && !errors.Is(err, db.ErrNotFound) {
 			return investmentTransactionPlan{}, fmt.Errorf("resolve dividend default: %w", err)
+		}
+		slot := defaultSlot{used: true, account: &input.IncomeAccountID, fromDefault: input.IncomeAccountFromDefault}
+		used, err := slot.apply(defaultRecord.IncomeAccountID, versions, dependencies)
+		if err != nil {
+			return investmentTransactionPlan{}, err
+		}
+		commodityID := input.CommodityID
+		defaultDependency = dividendDefaultDependency(&commodityID, date, used, 0)
+		if input.IncomeAccountID != nil {
+			incomeAccountID = *input.IncomeAccountID
 		}
 	}
 	if incomeAccountID <= 0 {
 		return investmentTransactionPlan{}, ValidationError{Message: "dividend income account is required"}
 	}
-	dependencies := newAccountRuleDependencies()
 	if err := s.validateReinvestedDividendRoles(ctx, input, date, incomeAccountID, dependencies); err != nil {
 		return investmentTransactionPlan{}, err
 	}
@@ -2026,6 +2208,7 @@ func (s *InvestmentService) reinvestedDividendPlanAs(ctx context.Context, input 
 		status = "posted"
 	}
 	return investmentTransactionPlan{
+		DividendDefault:         defaultDependency,
 		AccountRuleDependencies: dependencies,
 		Date:                    date,
 		Create: CreateTransactionInput{
@@ -2092,6 +2275,7 @@ func (s *InvestmentService) prepareReinvestmentWriteAs(ctx context.Context, inpu
 	if err != nil {
 		return db.CreateTransactionParams{}, db.CreateInvestmentLotParams{}, err
 	}
+	transactionParams.DividendDefault = plan.DividendDefault
 	transactionParams.InvestmentComponents = []db.InvestmentComponentSpec{{
 		Kind: "reinvested_distribution", CommodityID: input.CashCommodityID,
 		AmountValue: strconv.FormatInt(input.AmountValue, 10), AmountScale: input.AmountScale,

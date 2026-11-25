@@ -8003,7 +8003,7 @@ export interface paths {
         put?: never;
         /**
          * Disable a category
-         * @description Disabling archives the category for active pickers while preserving history. Active child categories must be disabled or moved first.
+         * @description Disabling archives the category for active pickers while preserving history. Active child categories must be disabled or moved first. The disable date is the category's closed_on and its last open day, as for a closed account; postings dated on or before it stay valid, and a fresh posting on or before it is still accepted by the ledger (#664).
          */
         post: {
             parameters: {
@@ -8073,7 +8073,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description REFERENCE_DATED_CONFLICT when a child category is active on a date the disable governs; REFERENCE_VERSION_BACKDATED when dated before the latest version; CONFLICT for a built-in category, which cannot be disabled. */
+                /** @description REFERENCE_DATED_CONFLICT when a child category is active on a date the disable governs (category_active_child), or when the disable would make ineligible a posting the category accepts now, that is a current posting, not voided or deleted, dated after the disable date (category_posting_after_disable, conflict_date is the earliest). A posting an earlier version already refuses, for example after posting was turned off, does not trigger it. REFERENCE_VERSION_BACKDATED when dated before the latest version; CONFLICT for a built-in category, which cannot be disabled. */
                 409: components["responses"]["ReferenceVersionConflict"];
                 413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
@@ -11546,7 +11546,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Stale review, unavailable row or reconciliation override required */
+                /** @description Stale review, unavailable row or reconciliation override required; DIVIDEND_DEFAULT_CHANGED when an account marked as filled by the stored default is no longer the one it applies (#664) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -11638,7 +11638,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Review changed or row unavailable */
+                /** @description Review changed or row unavailable; DIVIDEND_DEFAULT_CHANGED when an account marked as filled by the stored default is no longer the one it applies (#664) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -26040,6 +26040,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description IDEMPOTENCY_KEY_REUSED or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE, as for every keyed create; or DIVIDEND_DEFAULT_CHANGED when an account marked income_account_from_default or withholding_account_from_default is no longer the one the stored default applies on the dividend's date (changed, or its account archived today), checked again when the write commits (#664). None writes anything. */
                 409: components["responses"]["IdempotencyKeyConflict"];
                 413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
@@ -26131,7 +26132,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Acquisition replay conflict or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE). IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything. */
+                /** @description Acquisition replay conflict or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE). IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything. DIVIDEND_DEFAULT_CHANGED when the income account marked income_account_from_default is no longer the one the stored default applies on the date, checked again at commit (#664). */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -26646,6 +26647,16 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description DIVIDEND_DEFAULT_CHANGED when an account marked income_account_from_default or withholding_account_from_default is no longer the one the stored default applies on the dividend's date (#664). */
+                409: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
                 413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
@@ -26721,7 +26732,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Acquisition replay cannot complete (historical code INVESTMENT_BUY_DEPENDENCY or INVESTMENT_EVENT_OUT_OF_ORDER) */
+                /** @description Acquisition replay cannot complete (historical code INVESTMENT_BUY_DEPENDENCY or INVESTMENT_EVENT_OUT_OF_ORDER), or DIVIDEND_DEFAULT_CHANGED when the income account marked income_account_from_default is no longer the one the stored default applies on the date (#664). */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -32107,6 +32118,10 @@ export interface components {
             /** Format: int64 */
             expected_transaction_version_id?: number;
             resolution: components["schemas"]["ImportResolution"];
+            /** @description resolution.category_id was filled from the stored dividend default, not declared. Send it back unchanged on review while the owner keeps that account, so the write checks the default still applies it (#664). */
+            income_account_from_default?: boolean;
+            /** @description As income_account_from_default, for resolution.withholding_account_id. */
+            withholding_account_from_default?: boolean;
         };
         ImportDividendReviewsResponse: {
             rows: components["schemas"]["ImportDividendReview"][];
@@ -32121,6 +32136,10 @@ export interface components {
             expected_transaction_version_id?: number;
             /** @description Required nonempty audit reason for historical repair. */
             reason?: string;
+            /** @description The review list's mark, kept while the owner leaves the income account as the default filled it. The write then requires the default to still apply that account, or answers 409 DIVIDEND_DEFAULT_CHANGED (#664). */
+            income_account_from_default?: boolean;
+            /** @description As income_account_from_default, for the withholding account. */
+            withholding_account_from_default?: boolean;
             /** @default false */
             reconciliation_override: boolean;
             reconciliation_override_checkpoint_ids?: components["schemas"]["ReviewedCheckpointIds"];
@@ -35306,6 +35325,10 @@ export interface components {
             withholding_scale?: number;
             /** Format: int64 */
             withholding_account_id?: number;
+            /** @description The income account was filled in from the stored dividend default, not chosen. The write then requires the default to still apply that account (not changed, its account not archived today) and binds the write to its version; otherwise 409 DIVIDEND_DEFAULT_CHANGED (#664). */
+            income_account_from_default?: boolean;
+            /** @description As income_account_from_default, for the withholding account. */
+            withholding_account_from_default?: boolean;
             memo?: string;
             /** Format: int64 */
             payee_id?: number;
@@ -35366,6 +35389,8 @@ export interface components {
             holding_account_id: number;
             /** Format: int64 */
             income_account_id?: number;
+            /** @description The income account was filled in from the stored dividend default; see DividendRequest.income_account_from_default (#664). */
+            income_account_from_default?: boolean;
             /** @description Lossless exact integer coefficient normalized to quantity_scale. */
             quantity_value: string;
             quantity_scale: number;
@@ -36571,15 +36596,15 @@ export interface components {
         };
         ErrorBody: {
             /** @enum {string} */
-            code: "VALIDATION_FAILED" | "DECODE_ERROR" | "REQUEST_TOO_LARGE" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "PRICE_IMPACT_STALE" | "CONFLICT" | "REFERENCE_VERSION_BACKDATED" | "REFERENCE_VERSION_BEFORE_FIRST" | "REFERENCE_DATED_CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "MFA_AUTHENTICATOR_UNAVAILABLE" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "FORECAST_TOO_LARGE" | "FORECAST_BASIS_CHANGED" | "INVESTMENT_WORKFLOW_REQUIRED" | "INVESTMENT_INSTRUMENT_VERSION_BACKDATED" | "INVESTMENT_EVENT_OUT_OF_ORDER" | "INVESTMENT_POSITION_SIDE_CONFLICT" | "INVESTMENT_SHORT_DEPENDENCY" | "INVESTMENT_TRANSFER_POOL_REQUIRED" | "INVESTMENT_TRANSFER_POOL_UNAVAILABLE" | "INVESTMENT_SALE_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SALE" | "INVESTMENT_SALE_CHANGED" | "INVESTMENT_SALE_DEPENDENCY" | "INVESTMENT_BUY_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_BUY" | "INVESTMENT_BUY_CHANGED" | "INVESTMENT_BUY_DEPENDENCY" | "INVESTMENT_DIVIDEND_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_DIVIDEND" | "INVESTMENT_DIVIDEND_CHANGED" | "INVESTMENT_PAYMENT_IN_LIEU_ALREADY_CORRECTED" | "INVESTMENT_PAYMENT_IN_LIEU_CHANGED" | "INVESTMENT_WRITE_OFF_ALREADY_CORRECTED" | "INVESTMENT_TRANSFER_ALREADY_CORRECTED" | "INVESTMENT_TRANSFER_CHANGED" | "INVESTMENT_TRANSFER_DEPENDENCY" | "INVESTMENT_IMPORTED_TRANSFER" | "INVESTMENT_TRANSFER_BASIS_RESOLVED" | "INVESTMENT_TRANSFER_BASIS_NOT_UNKNOWN" | "INVESTMENT_TRANSFER_BASIS_NOT_RESOLVED" | "INVESTMENT_BASIS_RESOLUTION_ALREADY_CORRECTED" | "INVESTMENT_BASIS_RESOLUTION_CHANGED" | "INVESTMENT_WRITE_OFF_CHANGED" | "INVESTMENT_REINVESTMENT_ALREADY_CORRECTED" | "INVESTMENT_REINVESTMENT_CHANGED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE" | "INVESTMENT_SPLIT_NO_HOLDINGS" | "INVESTMENT_CAPITAL_RETURN_DEPENDENCY" | "INVESTMENT_CAPITAL_RETURN_NO_HOLDINGS" | "INVESTMENT_CASH_IN_LIEU_SPLIT_UNAVAILABLE" | "INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPLIT_CHANGED" | "INVESTMENT_SPLIT_DEPENDENCY" | "INVESTMENT_SPLIT_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SPLIT" | "INVESTMENT_EXCHANGE_NO_HOLDINGS" | "INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE" | "INVESTMENT_EXCHANGE_CHANGED" | "INVESTMENT_EXCHANGE_ALREADY_CORRECTED" | "INVESTMENT_SPIN_OFF_NO_HOLDINGS" | "INVESTMENT_SPIN_OFF_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPIN_OFF_CHANGED" | "INVESTMENT_SPIN_OFF_ALREADY_CORRECTED" | "INVESTMENT_MERGER_ALREADY_CORRECTED" | "IMPORT_SPLIT_LINK_UNAVAILABLE" | "IMPORT_SHORT_LINK_UNAVAILABLE" | "IMPORT_SHORT_LINK_CHANGED" | "IMPORT_SHORT_LINK_MISMATCH" | "IMPORT_LINK_STALE" | "IMPORT_UPLOAD_TOO_LARGE" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "TRANSACTION_VERSION_STALE" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_RESULT_UNAVAILABLE" | "RECONCILIATION_IMPACT_STALE" | "POSTING_ACCOUNT_VERSION_STALE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECONCILIATION_START_STALE" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
+            code: "VALIDATION_FAILED" | "DECODE_ERROR" | "REQUEST_TOO_LARGE" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "PRICE_IMPACT_STALE" | "CONFLICT" | "REFERENCE_VERSION_BACKDATED" | "REFERENCE_VERSION_BEFORE_FIRST" | "REFERENCE_DATED_CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "MFA_AUTHENTICATOR_UNAVAILABLE" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "FORECAST_TOO_LARGE" | "FORECAST_BASIS_CHANGED" | "INVESTMENT_WORKFLOW_REQUIRED" | "INVESTMENT_INSTRUMENT_VERSION_BACKDATED" | "INVESTMENT_EVENT_OUT_OF_ORDER" | "INVESTMENT_POSITION_SIDE_CONFLICT" | "INVESTMENT_SHORT_DEPENDENCY" | "INVESTMENT_TRANSFER_POOL_REQUIRED" | "INVESTMENT_TRANSFER_POOL_UNAVAILABLE" | "INVESTMENT_SALE_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SALE" | "INVESTMENT_SALE_CHANGED" | "INVESTMENT_SALE_DEPENDENCY" | "INVESTMENT_BUY_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_BUY" | "INVESTMENT_BUY_CHANGED" | "INVESTMENT_BUY_DEPENDENCY" | "INVESTMENT_DIVIDEND_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_DIVIDEND" | "INVESTMENT_DIVIDEND_CHANGED" | "INVESTMENT_PAYMENT_IN_LIEU_ALREADY_CORRECTED" | "INVESTMENT_PAYMENT_IN_LIEU_CHANGED" | "INVESTMENT_WRITE_OFF_ALREADY_CORRECTED" | "INVESTMENT_TRANSFER_ALREADY_CORRECTED" | "INVESTMENT_TRANSFER_CHANGED" | "INVESTMENT_TRANSFER_DEPENDENCY" | "INVESTMENT_IMPORTED_TRANSFER" | "INVESTMENT_TRANSFER_BASIS_RESOLVED" | "INVESTMENT_TRANSFER_BASIS_NOT_UNKNOWN" | "INVESTMENT_TRANSFER_BASIS_NOT_RESOLVED" | "INVESTMENT_BASIS_RESOLUTION_ALREADY_CORRECTED" | "INVESTMENT_BASIS_RESOLUTION_CHANGED" | "INVESTMENT_WRITE_OFF_CHANGED" | "INVESTMENT_REINVESTMENT_ALREADY_CORRECTED" | "INVESTMENT_REINVESTMENT_CHANGED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE" | "INVESTMENT_SPLIT_NO_HOLDINGS" | "INVESTMENT_CAPITAL_RETURN_DEPENDENCY" | "INVESTMENT_CAPITAL_RETURN_NO_HOLDINGS" | "INVESTMENT_CASH_IN_LIEU_SPLIT_UNAVAILABLE" | "INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPLIT_CHANGED" | "INVESTMENT_SPLIT_DEPENDENCY" | "INVESTMENT_SPLIT_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SPLIT" | "INVESTMENT_EXCHANGE_NO_HOLDINGS" | "INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE" | "INVESTMENT_EXCHANGE_CHANGED" | "INVESTMENT_EXCHANGE_ALREADY_CORRECTED" | "INVESTMENT_SPIN_OFF_NO_HOLDINGS" | "INVESTMENT_SPIN_OFF_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPIN_OFF_CHANGED" | "INVESTMENT_SPIN_OFF_ALREADY_CORRECTED" | "INVESTMENT_MERGER_ALREADY_CORRECTED" | "IMPORT_SPLIT_LINK_UNAVAILABLE" | "IMPORT_SHORT_LINK_UNAVAILABLE" | "IMPORT_SHORT_LINK_CHANGED" | "IMPORT_SHORT_LINK_MISMATCH" | "IMPORT_LINK_STALE" | "IMPORT_UPLOAD_TOO_LARGE" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "TRANSACTION_VERSION_STALE" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_RESULT_UNAVAILABLE" | "RECONCILIATION_IMPACT_STALE" | "POSTING_ACCOUNT_VERSION_STALE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECONCILIATION_START_STALE" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "DIVIDEND_DEFAULT_CHANGED" | "INTERNAL_ERROR";
             message: string;
             /** @description On a reconciliation guard refusal of a generic ledger write (CONFLICT "reconciliation override is required", or RECONCILIATION_IMPACT_STALE): the checkpoints the write would invalidate right now. A reorder, which has no preview, binds its override to this set (#296). */
             checkpoint_ids?: number[];
             /**
-             * @description On REFERENCE_DATED_CONFLICT: the rule a dated category, payee or institution write breaks on a date the new version governs, which may lie between the requested date and today (#552).
+             * @description On REFERENCE_DATED_CONFLICT: the rule a dated category, payee or institution write breaks on a date the new version governs, which may lie between the requested date and today (#552). category_posting_after_disable: a disable would make a posting dated after its date, which may be after today, ineligible although the category accepts it now; a posting an earlier version already refuses does not count. conflict_date is the earliest such posting's entry date and there is no other record (#664).
              * @enum {string}
              */
-            conflict_rule?: "category_name_taken" | "payee_name_taken" | "category_parent_archived" | "category_parent_cycle" | "category_active_child" | "institution_linked_account";
+            conflict_rule?: "category_name_taken" | "payee_name_taken" | "category_parent_archived" | "category_parent_cycle" | "category_active_child" | "institution_linked_account" | "category_posting_after_disable";
             /**
              * Format: date
              * @description On REFERENCE_DATED_CONFLICT: the first date the rule fails. On REFERENCE_VERSION_BACKDATED: the latest version's date, the earliest date a lifecycle or structural change may take effect. On REFERENCE_VERSION_BEFORE_FIRST: the first version's date, the earliest date any change may take effect.

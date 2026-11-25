@@ -258,3 +258,19 @@ calendar-date CHECK in UTF-8, UTF-16le and UTF-16be.
 `TestRecurringTemplateEndDateIsOptionalAndOrdered` covers a nullable date
 with an ordering invariant, and `TestBudgetTargetsRequireRealMonthStarts`
 covers the first-of-month rule (#635).
+
+## 89. A NULL-valued SQL predicate composed under NOT
+
+`categoryAccountPredicate` compared `json_extract(metadata_json,
+'$.category.type') = account_class`. For an income or expense account without
+category metadata that is NULL, not false. In a positive `WHERE` the two
+behave alike, so every read was right; inside the eligibility guard's
+`NOT (... OR (archived AND <predicate>) ...)` the whole condition became NULL
+and the row was skipped, so archiving a plain expense account on its closing
+day was no longer refused (#664, caught by the control case before release).
+A predicate meant to be reused, or placed under `NOT`, `<>` or a `CASE`, must
+be two-valued: compare with `IS`, or wrap with `COALESCE(..., 0)`. Give every
+such guard a control row that the predicate does *not* match, alongside the
+row it does. Named check:
+`TestCategoryDisableDayAllowanceLeavesOtherContracts` (an archived ordinary
+expense account refused on its closing day).

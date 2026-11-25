@@ -130,3 +130,58 @@ category or payee on an import rule (#652) and archived tags on a correction
 `TestTagListByIDResolvesAssignmentsPastTheCatalogLimit`,
 `tags.test.ts` (`getTagsByID`), `transaction-archived-tags.spec.ts` (201 tags
 and a long archived line tag at 320 px), `recurring.spec.ts`.
+
+## 88. A one-step lifecycle version that refuses its own last day
+
+Disabling a category archives it in one step, with `effective_from` and
+`closed_on` both on the disable date. The posting rule honoured `closed_on`
+only for `closed` versions (#292), so the archived version refused its own
+date: an entry on that day could no longer be edited with its journal kept,
+voided or unvoided (#664). The category write also skipped
+`requirePostingsStayEligibleTx`, so a disable dated before a later posting,
+including a future-dated one, succeeded and stranded it. A status that carries
+`closed_on` must accept that day wherever eligibility is decided: the Go rule
+(`PostingAccountRule.AcceptsPostingsOn`), the posting trigger and the in-write
+guard are three copies, so change them together and test them at D−1, D and
+D+1. Every lifecycle write that appends a version runs the guard before
+commit, and the guard compares the version that governed each posting before
+the write with the new one: a posting already refused is not the new
+version's doing (`TestCategoryDisableIgnoresPostingsAlreadyRefused`). Accepting
+the last day in the ledger makes a stale picker the only thing between the
+owner and a posting on an archived category, so a disable or delete is applied to
+every cached category and account list before its response returns, with
+in-flight reads cancelled; invalidating alone leaves the stale row selectable
+until the refetch lands (`category-cache.test.ts`,
+`category-disable-day.spec.ts` with the refetch held), leaving dated
+snapshots from before the disable alone. A stored default that names the
+target is applied only while it is not archived, on the server
+(`TestDividendDefaultSkipsAnArchivedTarget`), with the write bound to the
+version the status came from (`TestDividendDefaultDecisionIsBoundToTheVersionItRead`).
+In the form a default is an automatic choice: it checks today's status, not
+only the dated options, belongs to the instrument still selected, and stays
+marked as automatic so a later archive takes it back
+(`dividend-default-choice.test.ts`). On the server only a target the posting
+uses binds the write (`TestUnusedDividendDefaultDoesNotBindTheWrite`). The
+automatic mark travels with the request, so the server checks a displayed
+default at commit (`TestDividendAccountFromDefaultIsCheckedAtWrite`), and
+every field a default fills is marked, amounts included: an unmarked default
+withholding amount survived an instrument switch and posted the previous
+instrument's tax. Mark each field separately: toggling the switch is not
+editing the amount. The client resolves a default by the server's own rule
+(date and precedence, `applicableDividendDefault`), or a backdated entry
+loops on a refusal; and the write re-resolves the default in its transaction
+(`TestDividendDefaultEditedBeforeCommitIsRefused`), because a guard on account
+versions cannot see an edit to the default row. Every producer that fills
+from a default must mark it, not only the form: import review passed its
+default as an explicit choice until `TestImportedDividendDefaultArchivedBeforeWriteIsHeld`,
+and a review list that fills an account must send its mark to the browser and
+back. Check the dependency in every writer that commits a journal, not only
+the shared create: repairs and a command's later journals bypass it
+(`TestDividendDefaultRepointedBeforeRepairOrReplacementCommitIsRefused`).
+The amount is the open gap (#684). An owner's choice
+that stops being offered stays visible and blocks the save; clearing it
+silently lets the server substitute the stored default. Named checks: `TestCategoryDisableKeepsItsLastPostingDay`,
+`TestCategoryDisableRefusesALaterPosting`,
+`TestCategoryDisableDayAllowanceLeavesOtherContracts`,
+`TestCategoryDisableDayMigrationUpgradesAnExistingDatabase`,
+`category-disable-day.spec.ts`. Re-entry through restore is #665.

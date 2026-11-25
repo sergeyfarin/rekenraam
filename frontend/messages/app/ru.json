@@ -807,6 +807,7 @@
   "import_dividend_declare_no_tax": "Подтвердить сумму из источника как валовую без удержания налога",
   "import_dividend_reason": "Причина исправления",
   "import_dividend_record": "Записать проверенный дивиденд",
+  "import_dividend_choose_accounts": "Перед повторной записью выберите счёт дохода и, если налог удержан, счёт удержанного налога.",
   "import_dividend_repair": "Исправить привязку дивиденда",
   "import_dividend_recorded": "Дивиденд записан.",
   "import_dividend_repaired": "Привязка дивиденда исправлена; денежный платёж сохранён.",

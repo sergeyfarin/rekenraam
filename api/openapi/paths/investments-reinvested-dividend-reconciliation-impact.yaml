@@ -47,7 +47,7 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Acquisition replay cannot complete (historical code INVESTMENT_BUY_DEPENDENCY or INVESTMENT_EVENT_OUT_OF_ORDER)
+      description: Acquisition replay cannot complete (historical code INVESTMENT_BUY_DEPENDENCY or INVESTMENT_EVENT_OUT_OF_ORDER), or DIVIDEND_DEFAULT_CHANGED when the income account marked income_account_from_default is no longer the one the stored default applies on the date (#664).
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"

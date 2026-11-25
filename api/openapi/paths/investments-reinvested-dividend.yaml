@@ -62,6 +62,7 @@ post:
       description: >-
         Acquisition replay conflict or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE).
         IDEMPOTENCY_KEY_REUSED (the Idempotency-Key was already used for a different request) or IDEMPOTENCY_KEY_RESULT_UNAVAILABLE (a request with this key was recorded but its result is not stored); neither writes anything.
+        DIVIDEND_DEFAULT_CHANGED when the income account marked income_account_from_default is no longer the one the stored default applies on the date, checked again at commit (#664).
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"

@@ -31,7 +31,8 @@ func (r *TransactionRepository) PostingAccountRule(ctx context.Context, bookID i
 			av.allows_postings,
 			a.system_role,
 			av.account_kind,
-			ak.base_kind
+			ak.base_kind,
+			CASE WHEN `+categoryAccountPredicate("av")+` THEN 1 ELSE 0 END
 		FROM accounts a
 		JOIN account_versions av ON av.account_id = a.id
 		JOIN account_kinds ak ON ak.code = av.account_kind AND ak.account_class = av.account_class
@@ -60,6 +61,7 @@ func (r *TransactionRepository) PostingAccountRule(ctx context.Context, bookID i
 		&systemRole,
 		&rule.AccountKind,
 		&rule.BaseKind,
+		&rule.IsCategory,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return PostingAccountRule{}, ErrNotFound
@@ -101,7 +103,8 @@ func (r *TransactionRepository) EarliestPostingAccountRule(ctx context.Context, 
 			av.allows_postings,
 			a.system_role,
 			av.account_kind,
-			ak.base_kind
+			ak.base_kind,
+			CASE WHEN `+categoryAccountPredicate("av")+` THEN 1 ELSE 0 END
 		FROM accounts a
 		JOIN account_versions av ON av.account_id = a.id
 		JOIN account_kinds ak ON ak.code = av.account_kind AND ak.account_class = av.account_class
@@ -129,6 +132,7 @@ func (r *TransactionRepository) EarliestPostingAccountRule(ctx context.Context, 
 		&systemRole,
 		&rule.AccountKind,
 		&rule.BaseKind,
+		&rule.IsCategory,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return PostingAccountRule{}, ErrNotFound
