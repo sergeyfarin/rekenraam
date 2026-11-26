@@ -7,7 +7,7 @@ import { createCashAccount, readyForLedger } from './support/ledger';
 const suggestionPath = '/api/v1/payees/suggestions';
 
 async function openExpense(page: Page, account: string, category: string) {
-  await page.getByRole('list', { name: 'Shortcuts' }).getByRole('button', { name: 'New transaction' }).click();
+  await page.getByRole('list', { name: 'Shortcuts', exact: true }).getByRole('button', { name: 'New transaction', exact: true }).click();
   const entry = page.getByRole('dialog', { name: 'New transaction', exact: true });
   await entry.getByRole('combobox', { name: 'Account', exact: true }).selectOption({ label: account });
   await entry.getByLabel('Amount', { exact: true }).fill('4.50');
