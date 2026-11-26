@@ -144,7 +144,7 @@ enum in the same change. Never return raw Go error strings to the client.
   `app/investments_test.go` (financial cases), `api/transactions_test.go`
   (HTTP-level with auth/CSRF helpers).
 - Lot fixtures use posted operations through the shared investment writer or
-  the frozen candidate seed (#148). `investment_lots.operation_id` and
+  a frozen release seed (#148, #576). `investment_lots.operation_id` and
   `source_transaction_id` are required; do not insert unmodeled openings.
 - Financial invariants, reconciliation behavior, imports, and calculations
   require **named** test cases — a regression must fail loudly by name.

@@ -70,7 +70,7 @@ below continue alongside it and do not block it.
    image-advisory disposition
    [#337](https://github.com/sergeyfarin/rekenraam/issues/337). The signed candidate workflow has passed.
    [#333](https://github.com/sergeyfarin/rekenraam/issues/333) retains the
-   owner-authorized public release cut and its branch/PR policy. The
+   owner-authorized public release cut. The
    upstream driver prerequisite
    [#356](https://github.com/sergeyfarin/rekenraam/issues/356) closed on
    2026-11-11 with the owner's acceptance below and is no longer a release
@@ -378,7 +378,7 @@ Accepted gate issues carry the
   image-advisory disposition (#337). The driver prerequisite (#356) closed on
   2026-11-11.
 - Confirm the release includes the household freeze and checksum pins for
-  every later migration. Activate the installed-release branch/PR policy.
+  every later migration.
 
 ### Public repository hygiene
 
@@ -402,8 +402,7 @@ runtime-image disposition remains #337.
    and preflight evidence; preserve the
    [reproducibility conditions](developer-workflow.md#reproducibility).
    Actual publication remains a separate owner-authorized release cut, with
-   all migration checksums pinned and the installed-release branch/PR policy
-   activated.
+   all migration checksums pinned.
    Future Wails/Windows packaging can add Authenticode before final checksums;
    no desktop implementation or Windows signing-provider choice is implied.
    Proposed in #572 and not accepted: a public multi-architecture image

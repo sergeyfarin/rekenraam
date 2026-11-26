@@ -82,9 +82,9 @@ upgrade). Keep the backup after any `failed` result.
 
 Later builds, including the public `v0.1.0` release, must accept databases from
 the supported household preview and earlier installed releases.
-`TestMigrateSupportedHouseholdDatabase` advances the frozen synthetic book to
-the household schema at migration 0016, applies forward migrations including
-a test-only append, and checks that the book survives and the upgraded schema
+`TestMigrateSupportedHouseholdDatabase` loads a frozen synthetic book written
+by the app at migration 0016. It applies forward migrations including a
+test-only append, then checks that the book survives and the upgraded schema
 matches a fresh install. The
 [2026-10-18 deployment audit](reviews/deployment-audit-2026-10-18.md) separately
 records an actual candidate-image upgrade from migrations 14 to 18 and rollback

@@ -708,11 +708,11 @@ lands the migration freeze (#576) or a later commit. The household database
 must upgrade in place to the public release.
 
 Actual release publication is a separate, explicitly authorized step. At
-`v0.1.0`, activate the documented installed-release branch/PR policy. Confirm
-all included migration checksums are pinned, resolve the remaining release gates,
-use an exact approved release-tag identity, and publish the verified assets
-through a draft with release immutability enabled. No publication job is
-provided by the candidate workflow. A future Wails Windows target adds
+`v0.1.0`, confirm all included migration checksums are pinned and resolve the
+remaining release gates. Use an exact approved release-tag identity and publish
+the verified assets through a draft with release immutability enabled. The
+candidate workflow produces signed Actions artifacts. A future Wails Windows
+target adds
 Authenticode-signed executables/installers before the shared checksum/signature
 stage; the Windows publisher certificate/provider is selected then.
 
@@ -987,11 +987,11 @@ it. For a populated installation, follow
 
 The per-change reset notices are retained in the
 [pre-release baseline rewrite archive](archive/pre-release-baseline-rewrites.md).
-Databases and backups made before a baseline rewrite or consolidation are
-incompatible with that baseline: export anything worth keeping before updating,
-then recreate only the disposable development database. Do not use restore to
-cross a rewritten-baseline boundary. Future forward migrations preserve data
-only when the existing database uses the same `0001` baseline.
+The compatibility boundary for earlier development databases and backups is
+the baseline generation. For a database on an older generation, export with
+its original build before updating. Recreate only disposable development
+databases. From the household freeze, forward migrations preserve compatibility
+with the supported generation.
 
 **#405 baseline (2026-10-26):** migrations 0001–0027 are consolidated into
 `0001_initial_schema.sql`. The head is **1**. No legacy or installed database
@@ -1039,10 +1039,9 @@ The e2e database resets itself on every self-managed run and needs no manual res
 - Migration numbers are monotonic database sequence numbers, not release
   numbers. Release notes record the highest migration included in each release.
 - CI covers fresh installs and upgrades from the seeded migration 0001 book.
-  `TestMigrateSupportedHouseholdDatabase` advances that book to the supported
-  household schema at migration 0016, applies later embedded migrations and a
-  test-only append, and compares exact ledger state and schema with the
-  before-upgrade book and a fresh installation respectively.
+  `TestMigrateSupportedHouseholdDatabase` loads a separate HTTP-generated seed
+  at migration 0016. It applies later migrations and checks that the book
+  retains its data and the resulting schema matches a fresh install.
 - **Upgrade seed fixtures are frozen.** Each represents data written at a
   particular schema version. A new installed release gets a new seed file, built with
   `./scripts/build-release-seed.sh <out.sql>` — which drives the real HTTP API
@@ -1086,10 +1085,6 @@ Preferred examples:
 - `test(backend): cover reconciliation lock behavior`
 
 Use the smallest honest scope. Avoid mixing unrelated concerns in one commit.
-
-A commit that rewrites an already-committed migration must additionally start
-its body with `BREAKING DEV DATABASE` — see *Migrations And Resetting Your
-Database* above.
 
 ## Branches And PRs
 
@@ -1142,9 +1137,10 @@ What keeps this safe:
 A direct commit to `main` needs the owner's say-so, for example a docs-only
 correction after a merge.
 
-The migration freeze starts with the first supported household installation
-(*Project Lifecycle And Migration Immutability* in `docs/conventions.md`).
-The installed-release branch/PR policy takes effect at the public `v0.1.0` cut.
+The existing branch and pull request rules continue at the public `v0.1.0`
+cut. The migration freeze starts before the first supported household
+installation. See *Project Lifecycle And Migration Immutability* in
+`docs/conventions.md`.
 
 ### GitHub repository selection
 

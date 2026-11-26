@@ -51,8 +51,7 @@ separate deployment, household and advisory gates.
    was signed under a release tag. The household preview uses the commit that
    freezes migrations on `main` or a later commit. Pin every appended
    migration as it lands and preserve the baseline generation so the household
-   database upgrades in place. Activate the installed-release branch/PR policy
-   at the public `v0.1.0` cut.
+   database upgrades in place.
 6. Keep platform build/package steps separate from common manifest signing.
    A future Windows/Wails target adds native build and WebView2 installer
    validation, Authenticode signing and timestamping of the executable, then

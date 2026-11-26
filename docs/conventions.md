@@ -446,10 +446,9 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Soft-deletion uses a nullable `deleted_at` timestamp for current state and append-only deletion/restoration events for auditable history. Do not represent soft-delete as a lifecycle status. The transaction implementation is the reference pattern: it hides a transaction from ordinary views while keeping the row durable for audit and recovery.
 - Schema changes require explicit migrations under `backend/migrations`.
 - The migration runner is **`pressly/goose`** with embedded SQL files. Migrations are sequential numbered `.sql` files under `backend/migrations/`. Run at startup; goose tracks applied versions in the database.
-- The v0.1 baseline generation is `20261122` (`PRAGMA user_version`),
-  independent of Goose's forward migration sequence. Additive migrations retain
-  it. An incompatible pre-release rewrite must change it and its refusal/reset
-  tests; installed releases never rewrite their baseline. Startup and restore
+- The supported household baseline generation is `20261122`
+  (`PRAGMA user_version`), independent of Goose's forward migration sequence.
+  Forward migrations preserve that generation. Startup and restore
   reject mismatched generations, including obsolete files also numbered 1.
 
 - ADR 0014 selects **`github.com/mattn/go-sqlite3`** with bundled native SQLite
