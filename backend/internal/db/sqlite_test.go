@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -241,20 +240,27 @@ func TestMigrateSeededBaselineMatchesFreshSchema(t *testing.T) {
 	seeded := seededBaselineDatabase(t)
 
 	before := captureLedgerState(t, seeded)
-	sources := readMarketDataSourceCodes(t, seeded)
+	// #480 removed this historical pricing preference. Compare the other
+	// fields as written rather than weakening the supported upgrade check.
+	pricing := before["pricing_policies"]
+	pricing.columns = slices.DeleteFunc(pricing.columns, func(name string) bool {
+		return name == "base_commodity_id"
+	})
+	pricing.rows = readLedgerRows(t, seeded, "pricing_policies", pricing.columns, "")
+	before["pricing_policies"] = pricing
+
 	require.NoError(t, Migrate(ctx, seeded))
-	after := captureLedgerState(t, seeded)
-	// #615 adds one built-in provider without changing the seeded book.
-	assert.ElementsMatch(t, append(sources, "massive"), readMarketDataSourceCodes(t, seeded))
-	before["count:market_data_sources"] = fmt.Sprint(len(sources) + 1)
-	assertReleaseSeedStatePreserved(t, before, after)
-
-	// Stated separately from the snapshot comparison so a failure names what
-	// broke rather than dumping two large maps side by side.
-	assertUpgradedBookIsIntact(t, seeded)
-
 	fresh := openTestDatabase(t)
 	require.NoError(t, Migrate(ctx, fresh))
+	// #615 adds one built-in provider. Its row is known from a fresh install.
+	sources := before["market_data_sources"]
+	added := readLedgerRows(t, fresh, "market_data_sources", sources.columns, " WHERE code = ?", "massive")
+	require.Len(t, added, 1)
+	sources.rows = append(sources.rows, added...)
+	slices.Sort(sources.rows)
+	before["market_data_sources"] = sources
+	assertReleaseSeedStatePreserved(t, before, seeded)
+	assertUpgradedBookIsIntact(t, seeded)
 	assert.Equal(t, schemaFingerprint(t, fresh), schemaFingerprint(t, seeded))
 }
 
@@ -276,9 +282,9 @@ func TestMigrateSupportedHouseholdDatabase(t *testing.T) {
 	before := captureLedgerState(t, household)
 	for _, fact := range []string{
 		"import_posting_links", "import_posting_link_retirements", "investment_allocation_revisions",
-		"reconciliation_policies", "request_keys", "transfer_sides",
+		"reconciliation_policies", "request_keys",
 	} {
-		require.NotEmpty(t, before[fact], "the household fixture must exercise %s", fact)
+		require.NotEmpty(t, before[fact].rows, "the household fixture must exercise %s", fact)
 	}
 	var hasTransferSides bool
 	require.NoError(t, household.QueryRowContext(ctx, `SELECT EXISTS (
@@ -305,24 +311,12 @@ func TestMigrateSupportedHouseholdDatabase(t *testing.T) {
 	require.NoError(t, migrateFromFS(ctx, household, next))
 	assert.True(t, sqliteObjectExists(t, household, "table", "household_upgrade_probe"))
 	require.NoError(t, migrateFromFS(ctx, household, next), "the upgraded database must pass admission on restart")
-	assertReleaseSeedStatePreserved(t, before, captureLedgerState(t, household))
+	assertReleaseSeedStatePreserved(t, before, household)
 	assertUpgradedBookIsIntact(t, household)
 
 	fresh := openTestDatabase(t)
 	require.NoError(t, migrateFromFS(ctx, fresh, next))
 	assert.Equal(t, schemaFingerprint(t, fresh), schemaFingerprint(t, household))
-}
-
-func assertReleaseSeedStatePreserved(t *testing.T, before, after map[string]string) {
-	t.Helper()
-	// A newly created table may start empty. Counts and exact values for
-	// every table the book already used are still compared.
-	for key, value := range after {
-		if _, existed := before[key]; !existed && strings.HasPrefix(key, "count:") && value == "0" {
-			delete(after, key)
-		}
-	}
-	assert.Equal(t, before, after, "upgrading must preserve the seeded book")
 }
 
 // seededBaselineDatabase loads the frozen v0.1 seed into migration 0001 alone,
@@ -363,145 +357,6 @@ func loadReleaseSeed(t *testing.T, database *sql.DB, seed []byte) {
 	_, err = loadTx.ExecContext(ctx, string(seed))
 	require.NoError(t, err, "the frozen seed must load into the frozen baseline")
 	require.NoError(t, loadTx.Commit(), "the frozen seed must satisfy every foreign key")
-}
-
-// captureLedgerState reads every durable figure the seed carries, keyed so a
-// diff points at the row that moved. Counting rows is not enough: a migration
-// that rebuilt a table and mangled a coefficient, a scale, or a lifecycle flag
-// would leave every count identical.
-func captureLedgerState(t *testing.T, database *sql.DB) map[string]string {
-	t.Helper()
-	ctx := context.Background()
-	state := map[string]string{}
-
-	// Row counts across every table that carries user data, so a table that
-	// loses or gains rows is caught even where no query below inspects it.
-	// Goose's own history grows with each forward migration; it is not data.
-	rows, err := database.QueryContext(ctx, `
-		SELECT name FROM sqlite_master
-		WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'transaction_search%'
-			AND name != 'goose_db_version'
-		ORDER BY name
-	`)
-	require.NoError(t, err)
-	var tables []string
-	for rows.Next() {
-		var name string
-		require.NoError(t, rows.Scan(&name))
-		tables = append(tables, name)
-	}
-	require.NoError(t, rows.Err())
-	require.NoError(t, rows.Close())
-	for _, table := range tables {
-		var count int64
-		require.NoError(t, database.QueryRowContext(ctx, `SELECT count(*) FROM "`+table+`"`).Scan(&count))
-		state["count:"+table] = strconv.FormatInt(count, 10)
-	}
-
-	// Exact figures, as strings, so a rescaled or rounded value is a diff
-	// rather than an equal number at a different precision.
-	for key, query := range map[string]string{
-		"postings": `SELECT pl.id || '=' || pv.account_id || '/' || pv.commodity_id || '/' ||
-				pv.quantity_value || 'e-' || pv.quantity_scale || '/' || pv.reconciliation_status
-			FROM posting_versions pv JOIN posting_lines pl ON pl.id = pv.posting_line_id
-			ORDER BY pv.id`,
-		"transactions": `SELECT t.id || '=' || tv.version_seq || '/' || tv.status || '/' ||
-				tv.transaction_date || '/' || coalesce(t.deleted_at, '-')
-			FROM transaction_versions tv JOIN transactions t ON t.id = tv.transaction_id
-			ORDER BY tv.id`,
-		"lots": `SELECT id || '=' || opened_on || '/' || COALESCE(status, 'missing') || '/' ||
-				quantity_value || 'e-' || quantity_scale || '/' ||
-				COALESCE(remaining_quantity_value, 'missing') || 'e-' || COALESCE(remaining_quantity_scale, -1) || '/' ||
-				cost_basis_value || 'e-' || cost_basis_scale || '/' ||
-				COALESCE(remaining_cost_basis_value, 'missing') || 'e-' || COALESCE(remaining_cost_basis_scale, -1)
-			FROM current_investment_lots ORDER BY id`,
-		"lot_openings": `SELECT id || '=' || operation_id || '/' || source_transaction_id || '/' || created_audit_event_id
-			FROM investment_lots ORDER BY id`,
-		"lot_events": `SELECT id || '=' || lot_id || '/' || event_kind || '/' || event_date || '/' ||
-				quantity_value || 'e-' || quantity_scale || '/' || cost_basis_value || 'e-' || cost_basis_scale ||
-				'/' || coalesce(cost_basis_method, '-')
-			FROM investment_lot_events ORDER BY id`,
-		"disposal_decisions": `SELECT id || '=' || decision_seq || '/' || event_date || '/' || cost_basis_method || '/' || resolution_tier || '/' ||
-				quantity_value || 'e-' || quantity_scale || '/' || disposed_basis_value || 'e-' || disposed_basis_scale
-			FROM investment_disposal_decisions ORDER BY id`,
-		"disposal_allocations": `SELECT id || '=' || lot_id || '/' || quantity_value || 'e-' || quantity_scale || '/' ||
-				cost_basis_value || 'e-' || cost_basis_scale || '/' || proceeds_value || 'e-' || proceeds_scale
-			FROM investment_disposal_allocations ORDER BY id`,
-		"checkpoints": `SELECT id || '=' || account_id || '/' || commodity_id || '/' || status || '/' ||
-				statement_date || '/' || statement_account_sequence || '/' ||
-				statement_balance_value || 'e-' || statement_balance_scale
-			FROM reconciliation_checkpoints ORDER BY id`,
-		"checkpoint_postings": `SELECT checkpoint_id || '=' || posting_version_id FROM reconciliation_checkpoint_postings
-			ORDER BY checkpoint_id, posting_version_id`,
-		"accounts": `SELECT a.id || '=' || coalesce(a.system_role, '-') || '/' || av.version_seq || '/' ||
-				av.account_class || '/' || av.account_kind || '/' || av.status || '/' || av.opened_on || '/' ||
-				coalesce(av.default_commodity_id, 0) || '/' || coalesce(av.quantity_scale_override, -1)
-			FROM account_versions av JOIN accounts a ON a.id = av.account_id ORDER BY av.id`,
-		"commodities": `SELECT c.id || '=' || c.code || '/' || c.kind || '/' || cv.standard_scale || '/' || cv.max_quantity_scale
-			FROM commodity_versions cv JOIN commodities c ON c.id = cv.commodity_id ORDER BY cv.id`,
-		"prices": `SELECT id || '=' || series_id || '/' || valuation_date || '/' ||
-				price_value || 'e-' || price_scale || '/' || coalesce(voided_at, '-')
-			FROM price_observations ORDER BY id`,
-		"budget_targets": `SELECT id || '=' || category_account_id || '/' || commodity_id || '/' || period_start || '/' ||
-				quantity_value || 'e-' || quantity_scale
-			FROM budget_targets ORDER BY id`,
-		"recurring": `SELECT rt.id || '=' || rt.name || '/' || rt.frequency || '/' || rt.starts_on || '/' ||
-				rtp.account_id || '/' || rtp.quantity_value || 'e-' || rtp.quantity_scale
-			FROM recurring_template_postings rtp JOIN recurring_templates rt ON rt.id = rtp.template_id
-			ORDER BY rtp.id`,
-		"tag_links": `SELECT 'txn:' || transaction_id || '=' || tag_id FROM transaction_tags ORDER BY transaction_id, tag_id`,
-		"audit":     `SELECT id || '=' || operation || '/' || origin_type || '/' || occurred_at FROM audit_events ORDER BY id`,
-		"deletions": `SELECT id || '=' || transaction_id || '/' || action || '/' || occurred_at
-			FROM transaction_deletion_events ORDER BY id`,
-	} {
-		state[key] = joinQueryRows(t, database, query)
-	}
-
-	for table, query := range map[string]string{
-		"import_posting_links": `SELECT json_array(id, identity_id, book_id, transaction_id, posting_line_id,
-				replaces_link_id, created_audit_event_id, created_at, linked_posting_version_id)
-			FROM import_posting_links ORDER BY id`,
-		"import_posting_link_retirements": `SELECT json_array(link_id, book_id, reason, retired_audit_event_id, retired_at)
-			FROM import_posting_link_retirements ORDER BY link_id`,
-		"investment_allocation_revisions": `SELECT json_array(id, book_id, saved_at, created_by_user_id, audit_event_id,
-				account_ids_json, targets_json)
-			FROM investment_allocation_revisions ORDER BY id`,
-		"reconciliation_policies": `SELECT json_array(id, book_id, out_of_date_after_days, created_at, created_by_user_id,
-				updated_at, updated_by_user_id, created_audit_event_id, updated_audit_event_id)
-			FROM reconciliation_policies ORDER BY id`,
-		"request_keys": `SELECT json_array(id, book_id, request_key, route, request_hash, claim_token,
-				audit_event_id, created_at, response_status, response_body)
-			FROM request_keys ORDER BY id`,
-	} {
-		if count := state["count:"+table]; count != "" && count != "0" {
-			state[table] = joinQueryRows(t, database, query)
-		}
-	}
-	if slices.Contains(readTableColumns(t, database, "journal_entries"), "conversion_side") {
-		sides := joinQueryRows(t, database, `SELECT json_array(id, transaction_version_id, entry_date, entry_kind,
-				conversion_side, fee_paid_by) FROM journal_entries
-			WHERE conversion_side IS NOT NULL OR fee_paid_by IS NOT NULL ORDER BY id`)
-		if sides != "" {
-			state["transfer_sides"] = sides
-		}
-	}
-
-	return state
-}
-
-func joinQueryRows(t *testing.T, database *sql.DB, query string) string {
-	t.Helper()
-	rows, err := database.QueryContext(context.Background(), query)
-	require.NoError(t, err, query)
-	defer rows.Close()
-	var lines []string
-	for rows.Next() {
-		var line string
-		require.NoError(t, rows.Scan(&line))
-		lines = append(lines, line)
-	}
-	require.NoError(t, rows.Err())
-	return strings.Join(lines, "\n")
 }
 
 // assertUpgradedBookIsIntact restates the book's own invariants against the

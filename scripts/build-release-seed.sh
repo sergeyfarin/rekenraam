@@ -51,7 +51,7 @@ if current is not None:
 
 # Rows the migration inserts itself would collide; goose's bookkeeping belongs
 # to the migration run; the FTS5 shadow tables are rebuilt by triggers.
-SKIP = {"goose_db_version", "account_kinds", "market_data_sources", "setup_steps"}
+SKIP = {"goose_db_version", "account_kinds", "market_data_sources"}
 inserts, books = [], None
 for statement in statements:
     table = statement.split()[2].strip('"')
@@ -94,7 +94,7 @@ header = f"""-- Frozen synthetic book written through the HTTP API at migration 
 -- new files with scripts/build-release-seed.sh.
 --
 -- Excluded: rows the migration inserts itself (account_kinds,
--- market_data_sources, setup_steps), goose's own bookkeeping, and the FTS5
+-- market_data_sources), goose's own bookkeeping, and the FTS5
 -- shadow tables, which the triggers rebuild from the base rows below.
 --
 -- The loader defers foreign keys to COMMIT. Saved FX work and the book's
@@ -105,7 +105,14 @@ header = f"""-- Frozen synthetic book written through the HTTP API at migration 
 def explicit_columns(statement):
     table = statement.split()[2].strip('"')
     columns = [row[0] for row in connection.execute("SELECT name FROM pragma_table_info(?)", (table,))]
-    return statement.replace(" VALUES(", " (" + ", ".join(columns) + ") VALUES(", 1)
+    statement = statement.replace(" VALUES(", " (" + ", ".join(columns) + ") VALUES(", 1)
+    if table == "setup_steps":
+        # The migration pre-creates these rows. Restore their saved progress.
+        statement = statement.removesuffix(";") + (
+            " ON CONFLICT (step_key) DO UPDATE SET completed_at = excluded.completed_at,"
+            " completed_audit_event_id = excluded.completed_audit_event_id;"
+        )
+    return statement
 # Restore the default as soon as its commodity exists. Waiting until the end
 # would let account/posting triggers enqueue foreign-currency work for the
 # book's own currency while the pointer is temporarily NULL.

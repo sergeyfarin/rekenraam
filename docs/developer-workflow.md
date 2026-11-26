@@ -1040,8 +1040,9 @@ The e2e database resets itself on every self-managed run and needs no manual res
   numbers. Release notes record the highest migration included in each release.
 - CI covers fresh installs and upgrades from the seeded migration 0001 book.
   `TestMigrateSupportedHouseholdDatabase` loads a separate HTTP-generated seed
-  at migration 0016. It applies later migrations and checks that the book
-  retains its data and the resulting schema matches a fresh install.
+  at migration 0016. It applies later migrations and compares every original
+  row and column of each application table, preserving SQLite value types and
+  duplicate rows. It also compares the resulting schema with a fresh install.
 - **Upgrade seed fixtures are frozen.** Each represents data written at a
   particular schema version. A new installed release gets a new seed file, built with
   `./scripts/build-release-seed.sh <out.sql>` — which drives the real HTTP API

@@ -84,8 +84,8 @@ Later builds, including the public `v0.1.0` release, must accept databases from
 the supported household preview and earlier installed releases.
 `TestMigrateSupportedHouseholdDatabase` loads a frozen synthetic book written
 by the app at migration 0016. It applies forward migrations including a
-test-only append, then checks that the book survives and the upgraded schema
-matches a fresh install. The
+test-only append, then compares every original row and column in the book and
+checks that the upgraded schema matches a fresh install. The
 [2026-10-18 deployment audit](reviews/deployment-audit-2026-10-18.md) separately
 records an actual candidate-image upgrade from migrations 14 to 18 and rollback
 by verified pre-upgrade backup. That synthetic drill does not establish support

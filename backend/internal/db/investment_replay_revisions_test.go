@@ -259,7 +259,7 @@ func TestInvestmentReplayReconstructsMissingLotState(t *testing.T) {
 		3, 31, 1, "2026-09-13T11:34:58Z", intents, projection))
 	require.NoError(t, tx.Commit())
 	after := captureLedgerState(t, database)
-	for _, key := range []string{"lot_events", "transactions", "postings"} {
+	for _, key := range []string{"investment_lot_events", "transactions", "transaction_versions", "posting_versions"} {
 		require.Equal(t, before[key], after[key], key)
 	}
 	rebuilt, err := NewInvestmentRepository(database).ListLots(ctx, 1, 15, 2)
