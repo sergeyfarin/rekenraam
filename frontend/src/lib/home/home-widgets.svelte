@@ -1,20 +1,17 @@
 <script lang="ts">
   import type { Home } from '#lib/api/home.ts';
   import { m } from '#lib/paraglide/messages.js';
-  import { getLocale } from '#lib/paraglide/runtime.js';
   import HomeWidgetCard from './home-widget-card.svelte';
-  import { homeWidgets, widgetTitles } from './widgets.ts';
+  import { widgetTitles, type WidgetView } from './widgets.ts';
 
   type Props = {
     home: Home | undefined;
+    widgets: WidgetView[] | undefined;
     /** The Home read failed: the briefing above says so; cards keep their places. */
     failed: boolean;
     onRetry: () => void;
   };
-  let { home, failed, onRetry }: Props = $props();
-
-  const locale = $derived(getLocale());
-  const widgets = $derived(home ? homeWidgets(home, locale) : null);
+  let { home, widgets, failed, onRetry }: Props = $props();
 
   const cardClass = 'flex min-w-0 flex-col rounded-(--radius-panel) border border-border bg-surface px-4 pt-3 pb-2 text-sm';
 </script>
@@ -25,9 +22,9 @@
   <p role="status" class="mt-8 text-sm text-muted" data-testid="home-widgets-changing">{m.home_widgets_changing()}</p>
 {/if}
 <section aria-label={m.home_widgets_label()} class="{home && !home.consistent ? 'mt-3' : 'mt-8'} grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3" data-testid="home-widgets">
-  {#if widgets}
+  {#if home && widgets}
     {#each widgets as widget (widget.id)}
-      <HomeWidgetCard {widget} {onRetry} />
+      <HomeWidgetCard {widget} {onRetry} state={home.personalization} />
     {/each}
   {:else if !failed}
     {#each widgetTitles() as placeholder (placeholder.id)}

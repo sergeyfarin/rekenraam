@@ -9,12 +9,21 @@ import { expectNoAccessibilityViolations } from './support/a11y';
 test('an empty book starts with an account, not a briefing of zeroes', async ({ page }) => {
   await readyForLedger(page);
   // Browser setup leaves the book with an account, so the empty answer is stubbed.
-  await page.route('**/api/v1/home', route => route.fulfill({ json: {
-    as_of: '2026-10-30', start_boundary: '2026-09-30', reporting_currency: null, empty_book: true,
-    headlines: ['net_worth', 'cash'].map(id => ({ id, account_count: 0, value: null, start_value: null, change: null, unavailable: 'no_accounts', missing: [], stale: [] })),
-    widgets: Object.fromEntries(['spending', 'budgets', 'accounts', 'recurring', 'net_worth_trend', 'cashflow', 'holdings', 'returns', 'allocation', 'income', 'backups', 'reconciliation'].map(id => [id, { status: 'failed', summary: null }])),
-    commodities: [], consistent: true
-  } }));
+  await page.route('**/api/v1/home', async route => {
+    const response = await route.fetch();
+    const home = await response.json();
+    await route.fulfill({ response, json: {
+      ...home,
+      reporting_currency: null,
+      empty_book: true,
+      headlines: home.headlines.map((headline: { id: string }) => ({
+        id: headline.id, account_count: 0, value: null, start_value: null, change: null, unavailable: 'no_accounts', missing: [], stale: []
+      })),
+      widgets: Object.fromEntries(Object.keys(home.widgets).map(id => [id, { status: 'failed', summary: null }])),
+      commodities: [],
+      personalization: { ...home.personalization, accounts: [] }
+    } });
+  });
   await page.goto('/app');
   await expect(page.getByRole('heading', { name: 'Start with an account' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Add an account' })).toHaveAttribute('href', '/app/ledger');

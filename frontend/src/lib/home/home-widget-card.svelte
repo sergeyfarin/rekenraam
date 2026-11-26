@@ -1,15 +1,18 @@
 <script lang="ts">
+  import type { HomeLayoutState } from '#lib/api/home.ts';
+  import HomeWidgetActions from './home-widget-actions.svelte';
   import { m } from '#lib/paraglide/messages.js';
   import type { WidgetView } from './widgets.ts';
 
   type Props = {
     widget: WidgetView;
+    state: HomeLayoutState;
     /** Retries the Home read; a card that reads elsewhere brings its own. */
     onRetry: () => void;
     /** In More to explore: the same card at real size, dashed and muted until hovered or focused. */
     explore?: boolean;
   };
-  let { widget, onRetry, explore = false }: Props = $props();
+  let { widget, state, onRetry, explore = false }: Props = $props();
 
   const zone = $derived(explore ? 'explore' : 'home');
 
@@ -38,7 +41,7 @@
   aria-labelledby="{zone}-widget-{widget.id}-title"
   data-testid="{zone}-widget-{widget.id}"
   data-state={widget.state}
-  class="flex min-w-0 flex-col rounded-(--radius-panel) border bg-surface px-4 pt-3 pb-2 text-sm {widget.wide ? 'md:col-span-2' : ''}
+  class="relative flex min-w-0 flex-col focus-within:z-10 rounded-(--radius-panel) border bg-surface px-4 pt-3 pb-2 text-sm {widget.wide ? 'md:col-span-2' : ''}
     {explore ? 'border-dashed border-muted text-muted saturate-50 transition-[filter,color] focus-within:text-foreground focus-within:saturate-100 hover:text-foreground hover:saturate-100' : 'border-border'}"
 >
   <div class="flex items-baseline justify-between gap-2">
@@ -92,7 +95,8 @@
       <p class="mt-3"><a href={widget.action.href} class="inline-flex min-h-11 items-center rounded-(--radius-control) border border-border bg-control px-3 text-sm font-semibold">{widget.action.text}</a></p>
     {/if}
   {/if}
-  <p class="mt-auto flex justify-end pt-1">
+  <div class="mt-auto flex flex-wrap items-center justify-end gap-x-2 pt-1">
+    <HomeWidgetActions {widget} {state} {explore} />
     <a href={widget.open.href} class="inline-flex min-h-11 items-center font-medium text-accent underline-offset-4 hover:underline">{widget.open.text}&nbsp;→</a>
-  </p>
+  </div>
 </article>

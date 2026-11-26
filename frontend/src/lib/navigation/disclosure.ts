@@ -10,7 +10,7 @@ import type { Attachment } from 'svelte/attachments';
 export function dismissible(isOpen: () => boolean, close: (restoreFocus: boolean) => void): Attachment<HTMLElement> {
   return (root) => {
     const onKeydown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || !isOpen()) return;
+      if (event.defaultPrevented || event.key !== 'Escape' || !isOpen()) return;
       event.preventDefault();
       close(true);
     };

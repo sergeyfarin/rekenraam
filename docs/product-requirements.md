@@ -235,6 +235,9 @@ These apply across all feature phases.
 - Desktop and mobile layouts must both be intentional and usable.
 - Accessibility is required: keyboard navigation, focus states, readable contrast, form labels, and screen-reader-friendly structure.
 - Loading, empty, error, and success states must be designed explicitly rather than left implicit.
+- Home layout choices are saved per owner and book, included in backups and
+  applied across sessions. Owners can restore defaults. Layout writes preserve
+  financial records and must reject a stale revision.
 
 ### Product Trust
 

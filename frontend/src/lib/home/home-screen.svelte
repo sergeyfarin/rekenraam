@@ -9,6 +9,9 @@
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import SearchField from '#lib/search/search-field.svelte';
+  import HomeLayoutFeedback from './home-layout-feedback.svelte';
+  import { personalizedWidgets } from './explore.ts';
+  import { useHomePersonalization } from './personalization.svelte.ts';
   import HomeExplore from './home-explore.svelte';
   import HomeShortcuts from './home-shortcuts.svelte';
   import HomeWidgets from './home-widgets.svelte';
@@ -19,12 +22,14 @@
   const homeQuery = createQuery(() => homeQueryOptions(ownerToday()));
   const locale = $derived(getLocale());
 
-  // Not remembered: choosing and keeping the headline is personalization (#438).
-  let choice = $state<HeadlineChoice>('auto');
+  const personalization = useHomePersonalization();
   let menuOpen = $state(false);
   let menuButton = $state<HTMLButtonElement>();
 
   const home = $derived(homeQuery.data);
+  const layout = $derived(home?.personalization);
+  const choice = $derived(layout?.layout.headline ?? 'auto');
+  const cards = $derived(home ? personalizedWidgets(home, locale, attention()) : undefined);
   const shown = $derived(home ? shownHeadlineID(home, choice) : null);
   const headline = $derived(home && shown ? briefingHeadline(home, shown, locale) : null);
   const options = $derived(home ? headlineOptions(home, locale) : []);
@@ -36,8 +41,8 @@
   }
 
   function choose(id: HeadlineChoice) {
-    choice = id;
     closeMenu(true);
+    if (layout && id !== choice) void personalization.save(layout, { ...layout.layout, headline: id });
   }
 </script>
 
@@ -92,7 +97,8 @@
           {#each options as option (option.id)}
             <button
               type="button"
-              aria-pressed={shown === option.id}
+              aria-pressed={choice === option.id || (choice === 'auto' && shown === option.id)}
+              disabled={personalization.pending}
               onclick={() => choose(option.id)}
               class="flex min-h-11 w-full flex-col justify-center rounded-(--radius-control) px-3 py-1 text-left hover:bg-control-hover aria-pressed:bg-surface-strong"
             >
@@ -100,12 +106,14 @@
               <span class="text-xs text-muted">{option.scope}</span>
             </button>
           {/each}
+          <button type="button" onclick={() => { closeMenu(true); personalization.open(); }}
+            class="flex min-h-11 w-full items-center rounded-(--radius-control) px-3 text-left hover:bg-control-hover">{m.home_customize()}</button>
         </div>
       {/if}
     </div>
   {/if}
 
-  {#if home && !home.empty_book && !homeQuery.isError}
+  {#if home && !home.empty_book && !homeQuery.isError && !status.hidden}
     <!-- Without a headline (cash lacks a rate too) the status line is the heading. -->
     <svelte:element this={headline ? 'p' : 'h2'} class="mt-1 text-lg font-normal leading-8 text-muted sm:text-xl" data-testid="home-status">
       <a href={status.lead.href} class="underline-offset-4 hover:underline {status.tone === 'failed' ? 'text-danger' : status.tone === 'attention' ? 'text-foreground' : ''}">{status.lead.text}{#if !status.more}&nbsp;→{/if}</a>{#if status.more}<span aria-hidden="true"> · </span><a href={status.more.href} aria-label={status.more.label} class="whitespace-nowrap underline-offset-4 hover:underline">{status.more.text}&nbsp;→</a>{/if}
@@ -118,6 +126,7 @@
 <div class="mx-auto max-w-[45rem]">
   <SearchField variant="home" />
 </div>
-<HomeShortcuts />
-<HomeWidgets home={homeQuery.data} failed={homeQuery.isError && !homeQuery.data} onRetry={() => homeQuery.refetch()} />
-<HomeExplore home={homeQuery.data} failed={homeQuery.isError && !homeQuery.data} onRetry={() => homeQuery.refetch()} />
+<HomeShortcuts state={layout} />
+<div class="mx-auto max-w-[45rem]"><HomeLayoutFeedback /></div>
+<HomeWidgets {home} widgets={cards?.active} failed={homeQuery.isError && !home} onRetry={() => homeQuery.refetch()} />
+<HomeExplore state={layout} groups={cards?.explore} failed={homeQuery.isError && !home} onRetry={() => homeQuery.refetch()} />

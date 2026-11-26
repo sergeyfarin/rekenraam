@@ -1,0 +1,63 @@
+get:
+  summary: Read Home personalization
+  operationId: getHomeLayout
+  security:
+    - CookieSession: []
+  responses:
+    '200':
+      description: Effective layout, defaults and available accounts for the current owner and book.
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/HomeLayoutState'
+    '401': &authError
+      description: Authentication required.
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+put:
+  summary: Replace or reset Home personalization
+  operationId: saveHomeLayout
+  security:
+    - CookieSession: []
+  parameters:
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../openapi.yaml#/components/schemas/HomeLayoutWrite'
+  responses:
+    '200':
+      description: Saved layout with the new revision.
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/HomeLayoutState'
+    '400':
+      description: Invalid layout document.
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    '401': *authError
+    '403':
+      description: Origin or CSRF validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    '409':
+      description: CONFLICT. The expected revision is stale. Reload the current layout before making another change.
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    '413':
+      $ref: '../openapi.yaml#/components/responses/JSONBodyTooLarge'

@@ -33,6 +33,7 @@ type homeHeadlineResponse struct {
 }
 
 type homeResponse struct {
+	Personalization   app.HomeLayoutState             `json:"personalization"`
 	AsOf              string                          `json:"as_of"`
 	StartBoundary     string                          `json:"start_boundary"`
 	ReportingCurrency *homeReportingCurrencyResponse  `json:"reporting_currency"`
@@ -162,12 +163,13 @@ type homeBackupsSummaryResponse struct {
 }
 
 type homeSpendingSummaryResponse struct {
-	StartDate       string                         `json:"start_date"`
-	EndDate         string                         `json:"end_date"`
-	Total           *balanceQuantityResponse       `json:"total"`
-	CommodityTotals []balanceQuantityResponse      `json:"commodity_totals"`
-	Categories      []homeSpendingCategoryResponse `json:"categories"`
-	CategoryCount   int                            `json:"category_count"`
+	ResolvedAccountIDs []int64                        `json:"resolved_account_ids,omitempty"`
+	StartDate          string                         `json:"start_date"`
+	EndDate            string                         `json:"end_date"`
+	Total              *balanceQuantityResponse       `json:"total"`
+	CommodityTotals    []balanceQuantityResponse      `json:"commodity_totals"`
+	Categories         []homeSpendingCategoryResponse `json:"categories"`
+	CategoryCount      int                            `json:"category_count"`
 }
 
 type homeSpendingCategoryResponse struct {
@@ -254,7 +256,7 @@ func homeRead(logger *slog.Logger, authService *app.AuthService, homeService *ap
 			return
 		}
 		result := home.Briefing
-		response := homeResponse{AsOf: result.AsOf, StartBoundary: result.StartBoundary, EmptyBook: result.EmptyBook, Consistent: home.Consistent, Headlines: []homeHeadlineResponse{}, Commodities: []homeReportingCurrencyResponse{}}
+		response := homeResponse{Personalization: result.Layout, AsOf: result.AsOf, StartBoundary: result.StartBoundary, EmptyBook: result.EmptyBook, Consistent: home.Consistent, Headlines: []homeHeadlineResponse{}, Commodities: []homeReportingCurrencyResponse{}}
 		if currency := result.ReportingCurrency; currency != nil {
 			response.ReportingCurrency = &homeReportingCurrencyResponse{CommodityID: currency.ID, Code: currency.Code, Kind: currency.Kind, Symbol: currency.DisplaySymbol, Scale: currency.StandardScale}
 		}
@@ -304,7 +306,7 @@ func toHomeValuationInputs(inputs []app.HomeValuationInput) []homeValuationInput
 }
 
 func toHomeSpendingSummary(summary app.HomeSpendingSummary) homeSpendingSummaryResponse {
-	response := homeSpendingSummaryResponse{StartDate: summary.StartDate, EndDate: summary.EndDate, Total: toBalanceQuantityPointer(summary.Total),
+	response := homeSpendingSummaryResponse{ResolvedAccountIDs: summary.ResolvedAccountIDs, StartDate: summary.StartDate, EndDate: summary.EndDate, Total: toBalanceQuantityPointer(summary.Total),
 		CommodityTotals: toBalanceQuantityResponses(summary.CommodityTotals), Categories: []homeSpendingCategoryResponse{}, CategoryCount: summary.CategoryCount}
 	for _, category := range summary.Categories {
 		response.Categories = append(response.Categories, homeSpendingCategoryResponse{CategoryID: category.CategoryID, Code: category.Code, Name: category.Name, BuiltinKey: optionalHomeString(category.BuiltinKey),

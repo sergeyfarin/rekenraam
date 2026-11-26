@@ -42,7 +42,8 @@ for (const theme of ['light', 'dark'] as const) {
     // New transaction leads, in the accent colour, then Transfer (#481);
     // every tile shows on desktop.
     const tiles = shortcuts(page).getByRole('listitem');
-    await expect(tiles).toHaveCount(5);
+    await expect(tiles).toHaveCount(6);
+    await expect(shortcuts(page).getByRole('button', { name: 'Add shortcut', exact: true })).toBeVisible();
     await expect(tiles.first()).toHaveText('New transaction');
     await expect(shortcuts(page).getByRole('button', { name: 'Transfer', exact: true })).toBeVisible();
     for (const name of ['Import file', 'Transactions', 'Spending by category']) {

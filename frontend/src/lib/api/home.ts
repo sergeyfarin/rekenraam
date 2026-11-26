@@ -32,3 +32,39 @@ export async function getHome(): Promise<Home> {
     throw toNetworkError(error);
   }
 }
+
+export type HomeLayout = components['schemas']['HomeLayout'];
+export type HomeLayoutShortcut = components['schemas']['HomeLayoutShortcut'];
+export type HomeLayoutAccount = components['schemas']['HomeLayoutAccount'];
+export type HomeLayoutState = components['schemas']['HomeLayoutState'];
+export type HomeWidgetID = components['schemas']['HomeWidgetID'];
+export type HomeWidgetOptions = components['schemas']['HomeWidgetOptions'];
+
+export const homeLayoutQueryOptions = {
+  queryKey: ['api', 'home-layout'] as const,
+  staleTime: 0,
+  queryFn: async (): Promise<HomeLayoutState> => {
+    try {
+      const { data, error, response } = await apiClient.GET('/api/v1/home/layout');
+      if (data !== undefined) return data;
+      throw toAPIClientError(response, error);
+    } catch (error) {
+      if (error instanceof APIClientError) throw error;
+      throw toNetworkError(error);
+    }
+  }
+};
+
+export async function putHomeLayout(expectedRevision: number, layout: HomeLayout | null, csrfToken: string): Promise<HomeLayoutState> {
+  try {
+    const { data, error, response } = await apiClient.PUT('/api/v1/home/layout', {
+      params: { header: { 'X-CSRF-Token': csrfToken } },
+      body: { expected_revision: expectedRevision, layout }
+    });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}

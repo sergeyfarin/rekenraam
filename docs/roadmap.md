@@ -217,9 +217,7 @@ Deliver incrementally, tracked in #441, in this order:
 5. **Object navigation (#442):** the switcher as scoped search, pinned
    accounts and breadcrumbs, after #448 and the owner-run real-book count
    (#449).
-6. **Personalization (#438):** server-persisted layout and revision-checked
-   API, headline choices, Customize panel (also in Settings › Preferences),
-   item actions with Undo, sizes and settings.
+6. **Personalization (#438):** delivered.
 7. **Search depth (#439):** prefilled expense entry from a payee result with
    its last-used category, and full-text transaction search.
 8. **Widget depth (#440):** lazy expanded returns, allocation and forecast

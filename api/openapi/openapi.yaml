@@ -113,6 +113,8 @@ paths:
     $ref: "./paths/attention.yaml"
   /api/v1/home:
     $ref: "./paths/home.yaml"
+  /api/v1/home/layout:
+    $ref: './paths/home-layout.yaml'
   /api/v1/planning/overview:
     $ref: "./paths/planning-overview.yaml"
   /api/v1/reports/overview:
@@ -1100,6 +1102,20 @@ components:
       $ref: "./components/schemas/ledger.yaml#/LedgerStatus"
     BalanceQuantity:
       $ref: "./components/schemas/ledger.yaml#/BalanceQuantity"
+    HomeLayout:
+      $ref: './components/schemas/home.yaml#/HomeLayout'
+    HomeLayoutShortcut:
+      $ref: './components/schemas/home.yaml#/HomeLayoutShortcut'
+    HomeWidgetID:
+      $ref: './components/schemas/home.yaml#/HomeWidgetID'
+    HomeWidgetOptions:
+      $ref: './components/schemas/home.yaml#/HomeWidgetOptions'
+    HomeLayoutAccount:
+      $ref: './components/schemas/home.yaml#/HomeLayoutAccount'
+    HomeLayoutState:
+      $ref: './components/schemas/home.yaml#/HomeLayoutState'
+    HomeLayoutWrite:
+      $ref: './components/schemas/home.yaml#/HomeLayoutWrite'
     HomeResponse:
       $ref: "./components/schemas/home.yaml#/HomeResponse"
     PlanningOverview:

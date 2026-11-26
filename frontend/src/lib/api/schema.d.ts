@@ -5127,7 +5127,7 @@ export interface paths {
         };
         /**
          * Home briefing and widgets
-         * @description Home's composed read for owner-local today. Each headline is the Net worth report's figure for the same accounts in the book's default currency, at today and at the end of the previous month. A headline is complete-only: a missing price or rate leaves value null and lists what is missing, never a partial figure. Out-of-date inputs (valued from an earlier observation inside the staleness window) are listed separately and do not block the value. The default My Home widgets (spending this month, budgets, accounts, recurring, net worth trend) are bounded summaries of their canonical reads; each fails on its own (status failed) without failing the briefing. Never starts work or contacts providers. Session-only; no personal-access-token grant.
+         * @description Home's composed read for owner-local today includes the effective layout and its revision. Each headline is the Net worth report's figure for the same accounts in the book's default currency, at today and at the end of the previous month. A headline is complete-only: a missing price or rate leaves value null and lists what is missing, never a partial figure. Out-of-date inputs (valued from an earlier observation inside the staleness window) are listed separately and do not block the value. The default My Home widgets (spending this month, budgets, accounts, recurring, net worth trend) are bounded summaries of their canonical reads; each fails on its own (status failed) without failing the briefing. Never starts work or contacts providers. Session-only; no personal-access-token grant.
          */
         get: {
             parameters: {
@@ -5159,6 +5159,24 @@ export interface paths {
             };
         };
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/home/layout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Home personalization */
+        get: operations["getHomeLayout"];
+        /** Replace or reset Home personalization */
+        put: operations["saveHomeLayout"];
         post?: never;
         delete?: never;
         options?: never;
@@ -30392,7 +30410,79 @@ export interface components {
             /** @description Lossless class-normalized integer coefficient. Liability, equity, and income balances are sign-flipped for display/reporting. */
             normal_quantity_value: string;
         };
+        HomeLayout: {
+            /** @constant */
+            version: 1;
+            /** @enum {string} */
+            headline: "auto" | "net_worth" | "cash" | "account" | "account_set";
+            /** Format: int64 */
+            account_id?: number;
+            account_set?: {
+                name: string;
+                account_ids: number[];
+            };
+            show_review: boolean;
+            /**
+             * Format: int64
+             * @description Owner-selected default register, retained if the tile is removed.
+             */
+            shortcut_account_id?: number;
+            shortcuts: components["schemas"]["HomeLayoutShortcut"][];
+            widgets: components["schemas"]["HomeWidgetID"][];
+            widget_options: {
+                [key: string]: components["schemas"]["HomeWidgetOptions"];
+            };
+            explore_open: boolean;
+        };
+        HomeLayoutShortcut: {
+            /** @enum {string} */
+            id: "add" | "transfer" | "import" | "transactions" | "spending" | "reconcile" | "account";
+            /**
+             * Format: int64
+             * @description Required for the account shortcut only.
+             */
+            account_id?: number;
+            label?: string;
+        };
+        /** @enum {string} */
+        HomeWidgetID: "spending" | "budgets" | "accounts" | "recurring" | "net_worth_trend" | "cashflow" | "holdings" | "returns" | "allocation" | "income" | "forecast" | "imports" | "prices" | "reconciliation" | "backups";
+        HomeWidgetOptions: {
+            /** @enum {string} */
+            size?: "standard" | "wide";
+            /**
+             * @description Cashflow only.
+             * @enum {string}
+             */
+            period?: "this_month" | "last_month";
+            /** @description Spending only. An empty list restores the report's default scope. */
+            account_ids?: number[];
+        };
+        HomeLayoutAccount: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            code: string;
+            starter_key?: string;
+            currency_code?: string;
+        };
+        HomeLayoutState: {
+            /**
+             * Format: int64
+             * @description Zero until the owner first writes a layout.
+             */
+            revision: number;
+            layout: components["schemas"]["HomeLayout"];
+            defaults: components["schemas"]["HomeLayout"];
+            accounts: components["schemas"]["HomeLayoutAccount"][];
+        };
+        HomeLayoutWrite: {
+            /** Format: int64 */
+            expected_revision: number;
+            /** @description Complete replacement document. Null resets Home and advances the revision. */
+            layout: components["schemas"]["HomeLayout"] | null;
+        };
         HomeResponse: {
+            personalization: components["schemas"]["HomeLayoutState"];
             /**
              * Format: date
              * @description Owner-local today.
@@ -30503,7 +30593,7 @@ export interface components {
              * @description cash is open checking, savings, cash and other money accounts, which need no price.
              * @enum {string}
              */
-            id: "net_worth" | "cash";
+            id: "net_worth" | "cash" | "account" | "account_set";
             /** @description Open asset and liability accounts in scope, without system or per-instrument holding accounts. Zero with a value when net worth is held only in closed accounts. */
             account_count: number;
             /** @description Converted total at as_of; null when unavailable. */
@@ -30599,8 +30689,10 @@ export interface components {
                 summary: components["schemas"]["HomeReconciliationSummary"] | null;
             };
         };
-        /** @description The Spending report for this month to date, by category, over every account, in the default currency. */
+        /** @description The Spending report for this month to date, by category, in the default currency and with the configured account scope. */
         HomeSpendingSummary: {
+            /** @description Effective explicit account scope including descendants, omitted for the default scope. */
+            resolved_account_ids?: number[];
             /** Format: date */
             start_date: string;
             /** Format: date */
@@ -37035,6 +37127,98 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+        };
+    };
+    getHomeLayout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Effective layout, defaults and available accounts for the current owner and book. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HomeLayoutState"];
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    saveHomeLayout: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-CSRF-Token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HomeLayoutWrite"];
+            };
+        };
+        responses: {
+            /** @description Saved layout with the new revision. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HomeLayoutState"];
+                };
+            };
+            /** @description Invalid layout document. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Origin or CSRF validation failed. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description CONFLICT. The expected revision is stale. Reload the current layout before making another change. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            413: components["responses"]["JSONBodyTooLarge"];
         };
     };
     getAccountReconciliation: {

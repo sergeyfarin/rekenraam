@@ -4,6 +4,7 @@ import type { Home, HomeHeadline, HomeValuationInput } from '#lib/api/home.ts';
 import type { AttentionState } from '#lib/attention/model.ts';
 import { formatHomeMoney, hiddenAmount, joinCommodityAmount } from '#lib/money/format.ts';
 import { amountPrivacy } from '#lib/money/privacy.svelte.ts';
+import { layoutAccountLabel } from './layout-model.ts';
 import { m } from '#lib/paraglide/messages.js';
 
 /**
@@ -31,6 +32,7 @@ export type BriefingStatus = {
   tone: 'neutral' | 'attention' | 'failed';
   lead: StatusLink;
   more: StatusLink | null;
+  hidden?: boolean;
 };
 
 const reviewHref = '/app/review';
@@ -39,8 +41,15 @@ function headlineFor(home: Home, id: HeadlineID): HomeHeadline | undefined {
   return home.headlines.find(headline => headline.id === id);
 }
 
-function headlineLabel(id: HeadlineID): string {
-  return id === 'cash' ? m.briefing_headline_cash() : m.briefing_headline_net_worth();
+function headlineLabel(home: Home, id: HeadlineID): string {
+  if (id === 'cash') return m.briefing_headline_cash();
+  const personalization = home.personalization;
+  if (id === 'account') {
+    const account = personalization?.accounts.find(item => item.id === personalization.layout.account_id);
+    return account ? layoutAccountLabel(account) : m.home_layout_account();
+  }
+  if (id === 'account_set') return personalization?.layout.account_set?.name ?? m.home_layout_account_set();
+  return m.briefing_headline_net_worth();
 }
 
 /** The headline to show. Auto never shows an unavailable figure: it falls back
@@ -59,8 +68,10 @@ export function headlineOptions(home: Home, locale: string): HeadlineOption[] {
     .map(headline => {
       const n = new Intl.NumberFormat(locale).format(headline.account_count);
       const count = headline.account_count;
-      const scope = count === 0 ? m.briefing_scope_closed() : headline.id === 'cash' ? m.briefing_scope_cash({ count, n }) : m.briefing_scope_all({ count, n });
-      return { id: headline.id, label: headlineLabel(headline.id), scope };
+      const scope = headline.id === 'account' || headline.id === 'account_set'
+        ? m.home_layout_scope_count({ n })
+        : count === 0 ? m.briefing_scope_closed() : headline.id === 'cash' ? m.briefing_scope_cash({ count, n }) : m.briefing_scope_all({ count, n });
+      return { id: headline.id, label: headlineLabel(home, headline.id), scope };
     });
 }
 
@@ -76,7 +87,7 @@ export function briefingHeadline(home: Home, id: HeadlineID, locale: string): Br
   const headline = headlineFor(home, id);
   const currency = home.reporting_currency;
   if (!headline) return null;
-  const label = headlineLabel(id);
+  const label = headlineLabel(home, id);
   if (!headline.value || !currency) return { id, label, amount: null, change: null };
   const money = (value: string, scale: number) => joinCommodityAmount(currency.symbol || currency.code, formatHomeMoney(value, scale, currency.scale, locale));
   const amount = value(headline.value.quantity_value, headline.value.quantity_scale, money);
@@ -176,16 +187,27 @@ function sourceCount(sources: readonly AttentionSource[], ids: readonly Attentio
  */
 export function briefingStatus(home: Home | undefined, shown: HeadlineID | null, choice: HeadlineChoice, attention: AttentionState, locale: string): BriefingStatus {
   // A failed refresh keeps the last data; it must not keep saying all clear.
+  const showReview = home?.personalization?.layout.show_review ?? true;
   const data = attention.data;
   if (attention.isError) {
     return { tone: 'failed', lead: { text: m.briefing_check_failed(), href: reviewHref }, more: null };
   }
   const sources = data?.sources ?? [];
-  const total = data?.total_known ?? 0;
+  const total = showReview ? data?.total_known ?? 0 : 0;
 
   const failed = sources.find(source => source.state === 'error' || source.failed);
   if (failed) {
     return { tone: 'failed', lead: { text: failureText(failed, locale), href: reviewHref }, more: more(total - (failed.count ?? 0), locale) };
+  }
+
+  if (home && (shown === 'account' || shown === 'account_set')) {
+    const selected = headlineFor(home, shown);
+    if (selected?.missing.length) {
+      return { tone: 'attention', lead: {
+        text: m.home_layout_headline_gaps({ label: headlineLabel(home, shown) }),
+        href: valuationHref(selected.missing, 'missing')
+      }, more: more(total - sourceCount(sources, ['prices', 'rates']), locale) };
+    }
   }
 
   const netWorth = home?.headlines.find(headline => headline.id === 'net_worth');
@@ -200,13 +222,15 @@ export function briefingStatus(home: Home | undefined, shown: HeadlineID | null,
     if (netWorth.missing.length > 0) {
       // A chosen headline that needs no price is never replaced; the line then
       // reports the missing inputs without blaming the headline.
-      const style = choice === 'cash' && shown === 'cash' ? 'missing' : 'needs';
+      const style = ((choice === 'cash' || choice === 'account' || choice === 'account_set') && shown !== null) ? 'missing' : 'needs';
       return { tone: 'attention', lead: { text: valuationText(netWorth.missing, style, locale), href: valuationHref(netWorth.missing, 'missing') }, more: rest };
     }
     if (netWorth.stale.length > 0) {
       return { tone: 'attention', lead: { text: valuationText(netWorth.stale, 'stale', locale), href: valuationHref(netWorth.stale, 'stale') }, more: rest };
     }
   }
+
+  if (!showReview) return { tone: 'neutral', lead: { text: '', href: reviewHref }, more: null, hidden: true };
 
   const work = sources.filter(source => workSources.includes(source.id) && (source.count ?? 0) > 0);
   if (work.length === 2 && total === sourceCount(work, work.map(source => source.id))) {

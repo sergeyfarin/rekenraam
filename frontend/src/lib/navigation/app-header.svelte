@@ -6,6 +6,8 @@
   import EyeOff from '@lucide/svelte/icons/eye-off';
   import { amountPrivacy, setAmountsHidden } from '#lib/money/privacy.svelte.ts';
   import Menu from '@lucide/svelte/icons/menu';
+  import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
+  import { useHomePersonalization } from '#lib/home/personalization.svelte.ts';
   import X from '@lucide/svelte/icons/x';
   import { m } from '#lib/paraglide/messages.js';
   import { dismissible } from './disclosure';
@@ -33,6 +35,7 @@
     onSignOut: () => void;
   } = $props();
 
+  const personalization = useHomePersonalization();
   const section = $derived(entry?.section);
   const onHome = $derived(entry?.route === '/app');
   const onReview = $derived(entry?.route === '/app/review');
@@ -163,6 +166,13 @@
           class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-muted transition hover:bg-control-hover hover:text-foreground">
           {#if amountPrivacy.hidden}<EyeOff size={18} aria-hidden="true" />{:else}<Eye size={18} aria-hidden="true" />{/if}
         </button>
+        {#if onHome}
+          <button type="button" aria-label={m.home_customize()} title={m.home_customize()}
+            onclick={() => personalization.open()}
+            class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-muted transition hover:bg-control-hover hover:text-foreground">
+            <SlidersHorizontal size={18} aria-hidden="true" />
+          </button>
+        {/if}
         <SettingsMenu currentRoute={entry?.route} {signOutPending} {signOutError} {onSignOut} />
       </div>
     </header>

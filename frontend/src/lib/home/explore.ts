@@ -8,7 +8,7 @@ import { reconciliationAgeView } from '#lib/reconcile/reconciliation-age.ts';
 import { accountLabelFromParts } from '#lib/accounts/account-labels.ts';
 import { valuationHref, valuationText } from './briefing.ts';
 import {
-  commodityMap, day, failed, money, noData, number, range, reportQuery, sign,
+  commodityMap, day, failed, homeWidgets, money, noData, number, range, reportQuery, sign, widgetTitles,
   type Quantity, type WidgetID, type WidgetLink, type WidgetRow, type WidgetView
 } from './widgets.ts';
 
@@ -27,6 +27,10 @@ export const exploreCategories: readonly { id: ExploreCategoryID; widgets: reado
   { id: 'planning', widgets: ['forecast'] },
   { id: 'data', widgets: ['imports', 'prices', 'reconciliation', 'backups'] }
 ];
+
+const returnedWidgets: Record<ExploreCategoryID, readonly WidgetID[]> = {
+  everyday: ['spending', 'accounts'], wealth: ['net_worth_trend'], planning: ['budgets', 'recurring'], data: []
+};
 
 export function categoryTitle(id: ExploreCategoryID): string {
   return { everyday: m.home_explore_everyday, wealth: m.home_explore_wealth, planning: m.home_explore_planning, data: m.home_explore_data }[id]();
@@ -426,4 +430,27 @@ export function exploreTitles(): { id: ExploreCategoryID; title: string; widgets
     title: categoryTitle(category.id),
     widgets: category.widgets.map(id => ({ id, title: titles[id]?.() ?? '' }))
   }));
+}
+
+export function widgetCatalog(): { id: WidgetID; title: string }[] {
+  return [...widgetTitles(), ...exploreTitles().flatMap(group => group.widgets)];
+}
+
+/** One source for both placements. The saved order and sizes only affect presentation. */
+export function personalizedWidgets(home: Home, locale: string, attention: AttentionState) {
+  const layout = home.personalization.layout;
+  const defaultCards = homeWidgets(home, locale);
+  const previews = exploreWidgets(home, locale, attention);
+  const cards = new Map([...defaultCards, ...previews.flatMap(group => group.widgets)].map(card => [
+    card.id, { ...card, wide: layout.widget_options[card.id]?.size === 'wide' }
+  ]));
+  const chosen = new Set(layout.widgets);
+  const inOrder = (ids: readonly WidgetID[]) => ids.flatMap(id => cards.get(id) ?? []);
+  return {
+    active: inOrder(layout.widgets),
+    explore: previews.map(group => ({
+      ...group,
+      widgets: inOrder([...returnedWidgets[group.id], ...group.widgets.map(card => card.id)].filter(id => !chosen.has(id)))
+    })).filter(group => group.widgets.length)
+  };
 }

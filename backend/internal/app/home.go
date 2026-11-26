@@ -103,6 +103,7 @@ type HomeBriefing struct {
 	// owner created, open or closed.
 	EmptyBook bool
 	Headlines []HomeHeadline
+	Layout    HomeLayoutState
 }
 
 // HomeBriefing answers Home's two briefing headlines for owner-local today.
@@ -128,7 +129,12 @@ func (s *TransactionService) HomeBriefing(ctx context.Context, ownerUserID int64
 		return HomeBriefing{}, fmt.Errorf("read home accounts: %w", err)
 	}
 
-	briefing := HomeBriefing{AsOf: asOf, StartBoundary: startBoundary, TrendStart: trendStart, NetWorthTrend: []HomeTrendPoint{}, Accounts: []AccountBalance{}, EmptyBook: true}
+	layout, err := s.readHomeLayout(ctx, ownerUserID, homeLayoutAccounts(accounts))
+	if err != nil {
+		return HomeBriefing{}, err
+	}
+
+	briefing := HomeBriefing{Layout: layout, AsOf: asOf, StartBoundary: startBoundary, TrendStart: trendStart, NetWorthTrend: []HomeTrendPoint{}, Accounts: []AccountBalance{}, EmptyBook: true}
 	netWorthCount := 0
 	cashAccountIDs := make([]int64, 0)
 	for _, account := range accounts {
@@ -164,14 +170,22 @@ func (s *TransactionService) HomeBriefing(ctx context.Context, ownerUserID int64
 	// The count is what the owner has open; whether to value is whether the
 	// scope holds anything. Closed balances stay in net worth, so a book whose
 	// accounts are all closed still has one. Cash is open money accounts only.
-	scopes := []struct {
-		id         string
-		count      int
-		valued     bool
-		accountIDs []int64
-	}{
-		{HomeHeadlineNetWorth, netWorthCount, !briefing.EmptyBook, nil},
-		{HomeHeadlineCash, len(cashAccountIDs), len(cashAccountIDs) > 0, cashAccountIDs},
+	type headlineScope struct {
+		id                 string
+		count              int
+		valued             bool
+		accountIDs         []int64
+		includeDescendants bool
+	}
+	scopes := []headlineScope{
+		{HomeHeadlineNetWorth, netWorthCount, !briefing.EmptyBook, nil, false},
+		{HomeHeadlineCash, len(cashAccountIDs), len(cashAccountIDs) > 0, cashAccountIDs, false},
+	}
+	if id := layout.Layout.AccountID; id != 0 {
+		scopes = append(scopes, headlineScope{HomeHeadlineAccount, 1, true, []int64{id}, true})
+	}
+	if set := layout.Layout.AccountSet; set != nil {
+		scopes = append(scopes, headlineScope{HomeHeadlineAccountSet, len(set.AccountIDs), true, set.AccountIDs, true})
 	}
 	valued := make([]*HomeHeadline, 0, len(scopes))
 	filters := make([]ReportFilters, 0, len(scopes))
@@ -186,7 +200,7 @@ func (s *TransactionService) HomeBriefing(ctx context.Context, ownerUserID int64
 			headline.Unavailable = HomeUnavailableNoReportingCurrency
 		default:
 			valued = append(valued, headline)
-			filters = append(filters, ReportFilters{AccountIDs: scope.accountIDs})
+			filters = append(filters, ReportFilters{AccountIDs: scope.accountIDs, IncludeDescendants: scope.includeDescendants})
 		}
 	}
 	if briefing.EmptyBook {

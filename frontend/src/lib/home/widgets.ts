@@ -1,6 +1,6 @@
 import { parseISO } from 'date-fns';
 import { accountLabelFromParts } from '#lib/accounts/account-labels.ts';
-import type { Home, HomeCommodity, HomeWidgets } from '#lib/api/home.ts';
+import type { Home, HomeCommodity, HomeWidgetID } from '#lib/api/home.ts';
 import { builtinCategoryLabel } from '#lib/categories/category-labels.ts';
 import { formatHomeMoney, hiddenAmount, joinCommodityAmount } from '#lib/money/format.ts';
 import { amountPrivacy } from '#lib/money/privacy.svelte.ts';
@@ -15,7 +15,7 @@ import { spendingDrillDownHref, type SpendingRow } from '#lib/reports/spending.t
  */
 
 /** Home read summaries, plus cards that read data Home already has. */
-export type WidgetID = keyof HomeWidgets | 'forecast' | 'imports' | 'prices';
+export type WidgetID = HomeWidgetID;
 
 /** The designed states (docs/design/home-and-navigation.md → Widgets). */
 export type WidgetState = 'ready' | 'zero' | 'no_data' | 'not_set_up' | 'partial' | 'stale' | 'failed';
@@ -143,13 +143,20 @@ export function spendingWidget(home: Home, locale: string): WidgetView {
   const title = m.home_spending_title();
   const widget = home.widgets.spending;
   const monthStart = `${home.as_of.slice(0, 8)}01`;
-  const open = { text: m.home_spending_open(), href: `/app/reports/spending?${reportQuery(widget.summary?.start_date ?? monthStart, widget.summary?.end_date ?? home.as_of, home)}` };
+  const params = new URLSearchParams(reportQuery(widget.summary?.start_date ?? monthStart, widget.summary?.end_date ?? home.as_of, home));
+  const scopeIDs = home.personalization?.layout.widget_options.spending?.account_ids ?? [];
+  for (const id of scopeIDs) params.append('account_id', String(id));
+  if (scopeIDs.length) params.set('include_descendants', 'true');
+  const open = { text: m.home_spending_open(), href: `/app/reports/spending?${params}` };
   if (home.empty_book) return noData('spending', title, open);
   const summary = widget.summary;
   if (widget.status === 'failed' || !summary) return failed('spending', title, open);
   const commodities = commodityMap(home);
   const currency = home.reporting_currency?.code ?? '';
-  const period = range(summary.start_date, summary.end_date, locale, { day: 'numeric', month: 'short' });
+  const dates = range(summary.start_date, summary.end_date, locale, { day: 'numeric', month: 'short' });
+  const accounts = scopeIDs.length ? m.home_layout_scope_count({ n: number(scopeIDs.length, locale) }) : null;
+  const period = [dates, accounts].filter(Boolean).join(' · ');
+  const scoped = (description: string) => accounts ? `${description} · ${accounts}` : description;
   const rowAmounts = summary.categories.map(category => category.converted ?? (category.totals.length === 1 ? category.totals[0] : null));
   // Bars compare rows only in one currency; an unconverted row in another
   // currency is listed without one, as the Spending report does.
@@ -160,7 +167,7 @@ export function spendingWidget(home: Home, locale: string): WidgetView {
     const drillDown: SpendingRow = {
       key: String(category.category_id), categoryID: category.category_id, code: category.code, name: category.name, commodityID: 0,
       quantityValue: '0', quantityScale: 0, unattributed: false, converted: false,
-      drillDown: { start_date: summary.start_date, end_date: summary.end_date, category_id: category.category_id, account_ids: [] }
+      drillDown: { start_date: summary.start_date, end_date: summary.end_date, category_id: category.category_id, account_ids: summary.resolved_account_ids ?? [] }
     };
     return {
       key: String(category.category_id),
@@ -175,17 +182,17 @@ export function spendingWidget(home: Home, locale: string): WidgetView {
   const base = { id: 'spending' as const, title, wide: false, rows, more, chart: null, action: null, open };
   if (summary.total) {
     const zero = summary.categories.length === 0 && sign(summary.total.quantity_value) === 0;
-    return { ...base, state: zero ? 'zero' : 'ready', fact: money(summary.total, commodities, locale), scope: zero ? m.home_spending_zero() : m.home_spending_scope({ period, currency }) };
+    return { ...base, state: zero ? 'zero' : 'ready', fact: money(summary.total, commodities, locale), scope: zero ? scoped(m.home_spending_zero()) : m.home_spending_scope({ period, currency }) };
   }
   if (summary.commodity_totals.length === 0) {
-    return { ...base, state: 'zero', fact: null, scope: m.home_spending_zero() };
+    return { ...base, state: 'zero', fact: null, scope: scoped(m.home_spending_zero()) };
   }
   // No total in one currency: each currency's exact total, never a partial sum.
   return {
     ...base,
     state: 'partial',
     fact: summary.commodity_totals.map(total => money(total, commodities, locale)).join(' · '),
-    scope: home.reporting_currency ? m.home_spending_partial({ currency }) : m.home_widget_no_currency()
+    scope: scoped(home.reporting_currency ? m.home_spending_partial({ currency }) : m.home_widget_no_currency())
   };
 }
 

@@ -1,4 +1,4 @@
-import type { Home, HomeWidgets } from '#lib/api/home.ts';
+import type { Home, HomeLayout, HomeWidgets } from '#lib/api/home.ts';
 
 /** A Home read for unit tests: every figure is hand-picked, so a view model's output can be checked by eye. */
 
@@ -93,6 +93,15 @@ export function widgets(overrides: Partial<HomeWidgets> = {}): HomeWidgets {
   };
 }
 
+export function homeLayout(): HomeLayout {
+  return {
+    version: 1, headline: 'auto', show_review: true, explore_open: true,
+    shortcuts: [{ id: 'add' }, { id: 'transfer' }, { id: 'import' }, { id: 'transactions' }, { id: 'spending' }],
+    widgets: ['spending', 'budgets', 'accounts', 'recurring', 'net_worth_trend'],
+    widget_options: { net_worth_trend: { size: 'wide' } }
+  };
+}
+
 export function home(overrides: Partial<HomeWidgets> = {}, extra: Partial<Home> = {}): Home {
   return {
     as_of: '2026-10-15', start_boundary: '2026-09-30', empty_book: false,
@@ -105,6 +114,7 @@ export function home(overrides: Partial<HomeWidgets> = {}, extra: Partial<Home> 
       { commodity_id: TEST, code: 'TEST', kind: 'security', symbol: 'TEST', scale: 0 }
     ],
     consistent: true,
+    personalization: { revision: 0, layout: homeLayout(), defaults: homeLayout(), accounts: [] },
     ...extra
   };
 }
