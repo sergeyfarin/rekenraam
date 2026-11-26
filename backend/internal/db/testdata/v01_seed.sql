@@ -1,7 +1,6 @@
--- Frozen v0.1 seed: a realistic book built through the real HTTP API against
--- migration 0001, then dumped. TestMigrateSeededBaselineMatchesFreshSchema
--- loads it into the unused candidate baseline and checks repeated migration
--- admission, schema equivalence and preservation of every durable figure.
+-- Frozen migration-0001 seed written through the HTTP API. The baseline test
+-- loads it at migration 0001 and applies all remaining embedded migrations.
+-- The supported household schema has its own fixture, household_0016_seed.sql.
 -- Rebased for #405 on 2026-10-26 without changing original financial facts.
 -- Reviewed for #192's whole-value canonical CHECKs (2026-10-12): its exact
 -- coefficient data remains valid without changing any financial figures.

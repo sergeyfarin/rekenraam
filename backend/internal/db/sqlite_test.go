@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -269,7 +270,7 @@ func TestMigrateSupportedHouseholdDatabase(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	const householdVersion int64 = 16
-	household := seededBaselineDatabase(t)
+	household := openTestDatabase(t)
 	provider, err := goose.NewProvider(goose.DialectSQLite3, household, migrations.FS)
 	require.NoError(t, err)
 	_, err = provider.UpTo(ctx, householdVersion)
@@ -277,7 +278,21 @@ func TestMigrateSupportedHouseholdDatabase(t *testing.T) {
 	version, err := provider.GetDBVersion(ctx)
 	require.NoError(t, err)
 	require.Equal(t, householdVersion, version)
+	seed, err := os.ReadFile(filepath.Join("testdata", "household_0016_seed.sql"))
+	require.NoError(t, err)
+	loadReleaseSeed(t, household, seed)
 	before := captureLedgerState(t, household)
+	for _, fact := range []string{
+		"import_posting_links", "import_posting_link_retirements", "investment_allocation_revisions",
+		"reconciliation_policies", "request_keys", "transfer_sides",
+	} {
+		require.NotEmpty(t, before[fact], "the household fixture must exercise %s", fact)
+	}
+	var hasTransferSides bool
+	require.NoError(t, household.QueryRowContext(ctx, `SELECT EXISTS (
+		SELECT 1 FROM journal_entries WHERE conversion_side IS NOT NULL AND fee_paid_by IS NOT NULL
+	)`).Scan(&hasTransferSides))
+	require.True(t, hasTransferSides, "the household fixture must record both transfer choices")
 
 	head, err := EmbeddedMigrationVersion()
 	require.NoError(t, err)
@@ -325,18 +340,25 @@ func seededBaselineDatabase(t *testing.T) *sql.DB {
 
 	seed, err := os.ReadFile(filepath.Join("testdata", "v01_seed.sql"))
 	require.NoError(t, err)
+	loadReleaseSeed(t, seeded, seed)
+	return seeded
+}
+
+func loadReleaseSeed(t *testing.T, database *sql.DB, seed []byte) {
+	t.Helper()
+	ctx := context.Background()
 	// The dump is in table order, not dependency order, so a row can reference
 	// one that has not been inserted yet. defer_foreign_keys holds every check
 	// until COMMIT — which still enforces them, just once the whole book is
 	// present. Turning foreign keys off outright would not.
-	loadTx, err := seeded.BeginTx(ctx, nil)
+	loadTx, err := database.BeginTx(ctx, nil)
 	require.NoError(t, err)
+	defer rollbackTx(ctx, loadTx)
 	_, err = loadTx.ExecContext(ctx, `PRAGMA defer_foreign_keys = ON`)
 	require.NoError(t, err)
 	_, err = loadTx.ExecContext(ctx, string(seed))
 	require.NoError(t, err, "the frozen seed must load into the frozen baseline")
 	require.NoError(t, loadTx.Commit(), "the frozen seed must satisfy every foreign key")
-	return seeded
 }
 
 // captureLedgerState reads every durable figure the seed carries, keyed so a
@@ -429,6 +451,35 @@ func captureLedgerState(t *testing.T, database *sql.DB) map[string]string {
 			FROM transaction_deletion_events ORDER BY id`,
 	} {
 		state[key] = joinQueryRows(t, database, query)
+	}
+
+	for table, query := range map[string]string{
+		"import_posting_links": `SELECT json_array(id, identity_id, book_id, transaction_id, posting_line_id,
+				replaces_link_id, created_audit_event_id, created_at, linked_posting_version_id)
+			FROM import_posting_links ORDER BY id`,
+		"import_posting_link_retirements": `SELECT json_array(link_id, book_id, reason, retired_audit_event_id, retired_at)
+			FROM import_posting_link_retirements ORDER BY link_id`,
+		"investment_allocation_revisions": `SELECT json_array(id, book_id, saved_at, created_by_user_id, audit_event_id,
+				account_ids_json, targets_json)
+			FROM investment_allocation_revisions ORDER BY id`,
+		"reconciliation_policies": `SELECT json_array(id, book_id, out_of_date_after_days, created_at, created_by_user_id,
+				updated_at, updated_by_user_id, created_audit_event_id, updated_audit_event_id)
+			FROM reconciliation_policies ORDER BY id`,
+		"request_keys": `SELECT json_array(id, book_id, request_key, route, request_hash, claim_token,
+				audit_event_id, created_at, response_status, response_body)
+			FROM request_keys ORDER BY id`,
+	} {
+		if count := state["count:"+table]; count != "" && count != "0" {
+			state[table] = joinQueryRows(t, database, query)
+		}
+	}
+	if slices.Contains(readTableColumns(t, database, "journal_entries"), "conversion_side") {
+		sides := joinQueryRows(t, database, `SELECT json_array(id, transaction_version_id, entry_date, entry_kind,
+				conversion_side, fee_paid_by) FROM journal_entries
+			WHERE conversion_side IS NOT NULL OR fee_paid_by IS NOT NULL ORDER BY id`)
+		if sides != "" {
+			state["transfer_sides"] = sides
+		}
 	}
 
 	return state
