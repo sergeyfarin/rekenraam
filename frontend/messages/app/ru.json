@@ -1572,7 +1572,9 @@
   "home_layout_remove": "Удалить",
   "home_layout_settings": "Настройки",
   "home_layout_rename": "Переименовать",
-  "home_layout_label": "Название ярлыка",
+  "home_layout_remove_account_headline": "Удалить счёт из сводки",
+  "home_layout_remove_account_set": "Удалить именованную группу счетов",
+  "home_layout_label": "Название для {item}",
   "home_layout_actions": "Действия для «{item}»",
   "home_layout_moved": "«{item}» перемещён на позицию {position} из {total}.",
   "home_layout_size": "Размер",
@@ -1597,6 +1599,7 @@
   "home_widget_no_currency": "Укажите основную валюту, чтобы видеть это в одной валюте.",
   "home_widget_set_currency": "Указать основную валюту",
   "home_spending_title": "Расходы за месяц",
+  "home_spending_selected_scope": "{period} · {accounts} · {currency}",
   "home_spending_scope": "{period} · все счета · {currency}",
   "home_spending_zero": "В этом месяце расходов пока нет",
   "home_spending_partial": "Не все расходы пересчитываются в {currency}; итоги по валютам",
@@ -1821,7 +1824,7 @@
       }
     }
   ],
-  "home_cashflow_zero": "В этом месяце пока нет поступлений и списаний",
+  "home_cashflow_zero": "Нет поступлений и списаний",
   "home_cashflow_in": "Поступления",
   "home_cashflow_out": "Списания",
   "home_cashflow_transfers": "Переводы, нетто",

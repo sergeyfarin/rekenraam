@@ -127,3 +127,98 @@ test('Customize refuses a stale whole layout and reloads the other tab’s revis
   expect(saved.revision).toBe(latest.revision + 2);
   await other.close();
 });
+
+test('Customize can remove both saved headline scopes without resetting the layout', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const account = await createCashAccount(page, csrfToken, 'Headline Checking', currencyID);
+  const initial = await apiJSON<HomeLayoutState>(page, 'GET', '/api/v1/home/layout');
+  await apiJSON(page, 'PUT', '/api/v1/home/layout', csrfToken, {
+    expected_revision: initial.revision,
+    layout: {
+      ...initial.layout,
+      headline: 'account_set',
+      account_id: account.id,
+      account_set: { name: 'Saved group', account_ids: [account.id] },
+      explore_open: false
+    }
+  });
+
+  await page.goto('/app');
+  await page.getByRole('button', { name: 'Customize Home' }).click();
+  const panel = page.getByRole('dialog', { name: 'Customize Home' });
+  const headline = panel.getByRole('combobox', { name: 'Headline', exact: true });
+  await panel.getByLabel('Group name').clear();
+  await expect(panel.getByRole('button', { name: 'Save layout' })).toBeDisabled();
+  await headline.selectOption('cash');
+  await panel.getByRole('button', { name: 'Remove account headline' }).click();
+  await expect(headline).toBeFocused();
+  await panel.getByRole('button', { name: 'Save layout' }).click();
+  await expect(panel).toHaveCount(0);
+
+  const saved = await apiJSON<HomeLayoutState>(page, 'GET', '/api/v1/home/layout');
+  expect(saved.layout.account_id).toBeUndefined();
+  expect(saved.layout.account_set).toBeUndefined();
+  expect(saved.layout).toMatchObject({ headline: 'cash', explore_open: false });
+  const currentHeadline = page.getByTestId('home-headline');
+  await currentHeadline.getByRole('button').click();
+  const choices = currentHeadline.locator('..');
+  await expect(choices.getByRole('button', { name: /Saved group|Headline Checking/ })).toHaveCount(0);
+});
+
+test('Customize keeps focus on the move control through repeated keyboard moves', async ({ page }) => {
+  await readyForLedger(page);
+  await page.goto('/app');
+  await page.getByRole('button', { name: 'Customize Home' }).click();
+  const panel = page.getByRole('dialog', { name: 'Customize Home' });
+  await expect(panel.getByRole('textbox', { name: 'Label for Transfer' })).toBeVisible();
+  const widgets = panel.getByRole('region', { name: 'My Home' });
+  const accounts = widgets.getByRole('listitem').filter({ hasText: 'Accounts' });
+  const up = accounts.getByRole('button', { name: 'Move up' });
+  const down = accounts.getByRole('button', { name: 'Move down' });
+  await up.press('Enter');
+  await expect(up).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(widgets.getByRole('listitem').first()).toContainText('Accounts');
+  await expect(down).toBeFocused();
+  await expect(panel.getByText('Accounts moved to position 1 of 5.')).toHaveAttribute('aria-live', 'polite');
+  await panel.getByRole('button', { name: 'Save layout' }).click();
+  await expect(page.getByTestId('home-widgets').locator('article').first()).toHaveAttribute('id', 'home-widget-accounts');
+});
+
+test('changing the Spending account scope reloads figures and the report link together', async ({ page }) => {
+  const { currencyID } = await readyForLedger(page);
+  await apiJSON(page, 'POST', `/api/v1/currencies/${currencyID}/default`, await csrfTokenFor(page), undefined, [200]);
+  const csrfToken = await csrfTokenFor(page);
+  const checking = await createCashAccount(page, csrfToken, 'Spending Checking', currencyID);
+  const savings = await createCashAccount(page, csrfToken, 'Spending Savings', currencyID);
+  const category = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/categories', csrfToken, {
+    name: 'Scoped groceries', category_type: 'expense'
+  });
+  const { owner_today: date } = await apiJSON<{ owner_today: string }>(page, 'GET', '/api/v1/auth/session');
+  for (const [account, cents] of [[checking.id, 12300], [savings.id, 45600]]) {
+    await apiJSON(page, 'POST', '/api/v1/transactions', csrfToken, {
+      status: 'posted', transaction_date: date, journal_entries: [{ entry_date: date, postings: [
+        { account_id: account, commodity_id: currencyID, quantity_value: String(-cents), quantity_scale: 2 },
+        { account_id: category.id, commodity_id: currencyID, quantity_value: String(cents), quantity_scale: 2 }
+      ] }]
+    });
+  }
+
+  await page.goto('/app');
+  const spending = page.getByTestId('home-widget-spending');
+  await expect(spending).toContainText('$579');
+  await spending.getByRole('button', { name: /^Actions for Spending/ }).click();
+  await spending.getByRole('button', { name: 'Settings' }).click();
+  const panel = page.getByRole('dialog', { name: 'Spending this month', exact: true });
+  await panel.getByRole('checkbox', { name: checking.name }).check();
+  const reread = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/home' && response.ok());
+  await panel.getByRole('button', { name: 'Save layout' }).click();
+  await reread;
+  await expect(panel).toHaveCount(0);
+  await expect(spending).toContainText('$123');
+  await expect(spending).toContainText('Accounts selected: 1');
+  await expect(spending).not.toContainText('$579');
+  const url = new URL((await spending.getByRole('link', { name: /Open spending report/ }).getAttribute('href'))!, page.url());
+  expect(url.searchParams.get('account_id')).toBe(String(checking.id));
+  expect(url.searchParams.get('include_descendants')).toBe('true');
+});

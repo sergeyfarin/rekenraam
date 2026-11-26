@@ -1544,7 +1544,9 @@
   "home_layout_remove": "Quitar",
   "home_layout_settings": "Ajustes",
   "home_layout_rename": "Renombrar",
-  "home_layout_label": "Nombre del acceso directo",
+  "home_layout_remove_account_headline": "Quitar la cuenta del titular",
+  "home_layout_remove_account_set": "Quitar el grupo de cuentas",
+  "home_layout_label": "Etiqueta de {item}",
   "home_layout_actions": "Acciones para {item}",
   "home_layout_moved": "{item} se movió a la posición {position} de {total}.",
   "home_layout_size": "Tamaño",
@@ -1569,6 +1571,7 @@
   "home_widget_no_currency": "Define una moneda predeterminada para verlo en una sola moneda.",
   "home_widget_set_currency": "Definir moneda predeterminada",
   "home_spending_title": "Gasto de este mes",
+  "home_spending_selected_scope": "{period} · {accounts} · {currency}",
   "home_spending_scope": "{period} · todas las cuentas · {currency}",
   "home_spending_zero": "Aún no hay gastos este mes",
   "home_spending_partial": "No todo el gasto se convierte a {currency}; totales por moneda",
@@ -1773,7 +1776,7 @@
       }
     }
   ],
-  "home_cashflow_zero": "Aún no hay entradas ni salidas este mes",
+  "home_cashflow_zero": "No hay entradas ni salidas",
   "home_cashflow_in": "Entradas",
   "home_cashflow_out": "Salidas",
   "home_cashflow_transfers": "Transferencias, neto",

@@ -952,7 +952,8 @@ Customize dialog. Account and named account set headlines select active
 owner-visible accounts, with their subtrees valued through the Net worth
 report at both boundaries. The default headline uses net worth with a cash
 fallback. Turning off review notes hides routine review counts while keeping
-failure and valuation warnings.
+failure and valuation warnings. Customize can remove a saved account or named
+set from the headline menu independently of the selected headline.
 
 Each widget occupies one location. Adding or moving focuses its actions,
 and reordering announces its new position. Button reordering works on all
@@ -976,7 +977,8 @@ Unknown widget and shortcut keys are ignored while usable choices retain
 their order. An unavailable account resets a dependent headline or widget
 scope as a whole so an account set never shows a partial figure under its
 previous name. The native SQLite backup preserves the layout table and
-revision, and restore reinstates both.
+revision, and restore reinstates both. The ledger export bundle lists owner
+preferences, including the Home layout, among its exclusions.
 
 ## Accessibility and responsiveness
 

@@ -12,6 +12,18 @@ describe('home shortcuts', () => {
     for (const shortcut of shortcuts.slice(2)) expect(pages.has(shortcut.href!)).toBe(true);
   });
 
+  it('uses saved order and labels and skips registers without an available account', () => {
+    const shortcuts = homeShortcuts([
+      { id: 'spending', label: 'Expenses' }, { id: 'account', account_id: 21 }, { id: 'add' }
+    ], [{ id: 21, name: 'Checking', code: 'CHECK' }]);
+    expect(shortcuts).toEqual([
+      { id: 'spending', label: 'Expenses', href: '/app/reports/spending' },
+      { id: 'account', label: 'Checking', href: '/app/ledger/accounts/21/register' },
+      { id: 'add', label: 'New transaction' }
+    ]);
+    expect(homeShortcuts([{ id: 'account', account_id: 21 }], [])).toEqual([]);
+  });
+
   it('show three on phones and list the rest, in order, behind More', () => {
     expect(splitShortcuts(['a', 'b', 'c', 'd', 'e'])).toEqual({ shown: ['a', 'b', 'c'], more: ['d', 'e'] });
     expect(splitShortcuts(['a', 'b'])).toEqual({ shown: ['a', 'b'], more: [] });

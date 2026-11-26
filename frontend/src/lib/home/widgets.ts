@@ -155,7 +155,7 @@ export function spendingWidget(home: Home, locale: string): WidgetView {
   const currency = home.reporting_currency?.code ?? '';
   const dates = range(summary.start_date, summary.end_date, locale, { day: 'numeric', month: 'short' });
   const accounts = scopeIDs.length ? m.home_layout_scope_count({ n: number(scopeIDs.length, locale) }) : null;
-  const period = [dates, accounts].filter(Boolean).join(' · ');
+  const scope = accounts ? m.home_spending_selected_scope({ period: dates, accounts, currency }) : m.home_spending_scope({ period: dates, currency });
   const scoped = (description: string) => accounts ? `${description} · ${accounts}` : description;
   const rowAmounts = summary.categories.map(category => category.converted ?? (category.totals.length === 1 ? category.totals[0] : null));
   // Bars compare rows only in one currency; an unconverted row in another
@@ -182,7 +182,7 @@ export function spendingWidget(home: Home, locale: string): WidgetView {
   const base = { id: 'spending' as const, title, wide: false, rows, more, chart: null, action: null, open };
   if (summary.total) {
     const zero = summary.categories.length === 0 && sign(summary.total.quantity_value) === 0;
-    return { ...base, state: zero ? 'zero' : 'ready', fact: money(summary.total, commodities, locale), scope: zero ? scoped(m.home_spending_zero()) : m.home_spending_scope({ period, currency }) };
+    return { ...base, state: zero ? 'zero' : 'ready', fact: money(summary.total, commodities, locale), scope: zero ? scoped(m.home_spending_zero()) : scope };
   }
   if (summary.commodity_totals.length === 0) {
     return { ...base, state: 'zero', fact: null, scope: scoped(m.home_spending_zero()) };

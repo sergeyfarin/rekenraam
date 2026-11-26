@@ -1,5 +1,5 @@
 import { accountLabelFromParts } from '#lib/accounts/account-labels.ts';
-import type { HomeLayoutAccount, HomeWidgetID } from '#lib/api/home.ts';
+import type { HomeLayout, HomeLayoutAccount, HomeWidgetID } from '#lib/api/home.ts';
 
 export const wideWidgets: readonly HomeWidgetID[] = ['spending', 'net_worth_trend', 'cashflow', 'holdings', 'allocation'];
 
@@ -17,4 +17,12 @@ export function moveHomeItem<T>(items: readonly T[], from: number, to: number): 
 
 export function focusHomeControl(id: string) {
   document.getElementById(id)?.focus();
+}
+
+export function sameFigureScopes(before: HomeLayout, after: HomeLayout): boolean {
+  const sameIDs = (a: number[] = [], b: number[] = []) => a.length === b.length && a.every((id, index) => id === b[index]);
+  return before.account_id === after.account_id &&
+    sameIDs(before.account_set?.account_ids, after.account_set?.account_ids) &&
+    sameIDs(before.widget_options.spending?.account_ids, after.widget_options.spending?.account_ids) &&
+    (before.widget_options.cashflow?.period ?? 'this_month') === (after.widget_options.cashflow?.period ?? 'this_month');
 }

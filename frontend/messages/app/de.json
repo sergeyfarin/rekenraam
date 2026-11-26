@@ -1544,7 +1544,9 @@
   "home_layout_remove": "Entfernen",
   "home_layout_settings": "Einstellungen",
   "home_layout_rename": "Umbenennen",
-  "home_layout_label": "Name der Verknüpfung",
+  "home_layout_remove_account_headline": "Konto-Schlagzeile entfernen",
+  "home_layout_remove_account_set": "Benannte Kontogruppe entfernen",
+  "home_layout_label": "Name für {item}",
   "home_layout_actions": "Aktionen für {item}",
   "home_layout_moved": "{item} wurde an Position {position} von {total} verschoben.",
   "home_layout_size": "Größe",
@@ -1569,6 +1571,7 @@
   "home_widget_no_currency": "Legen Sie eine Standardwährung fest, um dies in einer Währung zu sehen.",
   "home_widget_set_currency": "Standardwährung festlegen",
   "home_spending_title": "Ausgaben diesen Monat",
+  "home_spending_selected_scope": "{period} · {accounts} · {currency}",
   "home_spending_scope": "{period} · alle Konten · {currency}",
   "home_spending_zero": "Diesen Monat noch keine Ausgaben",
   "home_spending_partial": "Nicht alle Ausgaben lassen sich in {currency} umrechnen; Summen je Währung",
@@ -1773,7 +1776,7 @@
       }
     }
   ],
-  "home_cashflow_zero": "Diesen Monat noch keine Ein- oder Ausgänge",
+  "home_cashflow_zero": "Keine Ein- oder Ausgänge",
   "home_cashflow_in": "Eingänge",
   "home_cashflow_out": "Ausgänge",
   "home_cashflow_transfers": "Überträge, netto",

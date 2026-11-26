@@ -4,6 +4,8 @@ import { createContext } from 'svelte';
 import { APIClientError } from '#lib/api/client.ts';
 import { homeLayoutQueryOptions, homeQueryKey, putHomeLayout, type Home, type HomeLayout, type HomeLayoutState, type HomeWidgetID } from '#lib/api/home.ts';
 
+import { sameFigureScopes } from './layout-model.ts';
+
 export type CustomizeTarget = 'all' | 'shortcuts' | 'reset' | HomeWidgetID;
 type SaveResult = { status: 'saved' | 'conflict'; state: HomeLayoutState } | { status: 'failed' };
 
@@ -103,12 +105,4 @@ export function createHomePersonalization(csrfToken: () => string | undefined) {
   };
   provideHomePersonalization(controller);
   return controller;
-}
-
-function sameFigureScopes(before: HomeLayout, after: HomeLayout): boolean {
-  const sameIDs = (a: number[] = [], b: number[] = []) => a.length === b.length && a.every((id, index) => id === b[index]);
-  return before.account_id === after.account_id &&
-    sameIDs(before.account_set?.account_ids, after.account_set?.account_ids) &&
-    sameIDs(before.widget_options.spending?.account_ids, after.widget_options.spending?.account_ids) &&
-    (before.widget_options.cashflow?.period ?? 'this_month') === (after.widget_options.cashflow?.period ?? 'this_month');
 }

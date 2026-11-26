@@ -1544,7 +1544,9 @@
   "home_layout_remove": "Retirer",
   "home_layout_settings": "Réglages",
   "home_layout_rename": "Renommer",
-  "home_layout_label": "Libellé du raccourci",
+  "home_layout_remove_account_headline": "Retirer le compte du titre",
+  "home_layout_remove_account_set": "Retirer le groupe de comptes",
+  "home_layout_label": "Libellé de {item}",
   "home_layout_actions": "Actions pour {item}",
   "home_layout_moved": "{item} a été déplacé en position {position} sur {total}.",
   "home_layout_size": "Taille",
@@ -1569,6 +1571,7 @@
   "home_widget_no_currency": "Définissez une devise par défaut pour voir ceci dans une seule devise.",
   "home_widget_set_currency": "Définir la devise par défaut",
   "home_spending_title": "Dépenses ce mois-ci",
+  "home_spending_selected_scope": "{period} · {accounts} · {currency}",
   "home_spending_scope": "{period} · tous les comptes · {currency}",
   "home_spending_zero": "Aucune dépense ce mois-ci pour l’instant",
   "home_spending_partial": "Toutes les dépenses ne se convertissent pas en {currency} ; totaux par devise",
@@ -1773,7 +1776,7 @@
       }
     }
   ],
-  "home_cashflow_zero": "Aucune entrée ni sortie ce mois-ci",
+  "home_cashflow_zero": "Aucune entrée ni sortie",
   "home_cashflow_in": "Entrées",
   "home_cashflow_out": "Sorties",
   "home_cashflow_transfers": "Virements, net",

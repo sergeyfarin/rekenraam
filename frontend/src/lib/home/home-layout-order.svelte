@@ -11,12 +11,16 @@
   } = $props();
   let dragging = $state<number | null>(null);
 
-  async function move(from: number, to: number) {
+  async function move(from: number, to: number, direction?: 'up' | 'down') {
     if (to < 0 || to >= items.length || from === to) return;
     const item = items[from];
     onMove(from, to);
     await tick();
-    focusHomeControl(`${id}-${item}`);
+    const rowID = `${id}-${item}`;
+    const control = direction === 'up' && to === 0 ? 'down'
+      : direction === 'down' && to === items.length - 1 ? 'up'
+      : direction;
+    focusHomeControl(control ? `${rowID}-${control}` : rowID);
   }
 
   function startDrag(event: DragEvent, index: number) {
@@ -45,9 +49,9 @@
         class="hidden cursor-grab touch-none p-1 text-muted lg:[@media(pointer:fine)]:block"><GripVertical size={16} /></span>
       <div class="min-w-0 flex-1">{@render children(item)}</div>
       <div class="flex shrink-0">
-        <button type="button" aria-label={m.home_layout_move_up()} disabled={index === 0} onclick={() => move(index, index - 1)}
+        <button id="{id}-{item}-up" type="button" aria-label={m.home_layout_move_up()} disabled={index === 0} onclick={() => move(index, index - 1, 'up')}
           class="grid size-11 place-items-center rounded-(--radius-control) hover:bg-control-hover disabled:opacity-40"><ChevronUp size={17} aria-hidden="true" /></button>
-        <button type="button" aria-label={m.home_layout_move_down()} disabled={index === items.length - 1} onclick={() => move(index, index + 1)}
+        <button id="{id}-{item}-down" type="button" aria-label={m.home_layout_move_down()} disabled={index === items.length - 1} onclick={() => move(index, index + 1, 'down')}
           class="grid size-11 place-items-center rounded-(--radius-control) hover:bg-control-hover disabled:opacity-40"><ChevronDown size={17} aria-hidden="true" /></button>
       </div>
     </li>

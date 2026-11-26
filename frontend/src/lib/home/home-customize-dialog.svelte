@@ -10,7 +10,7 @@
   import { widgetCatalog } from './explore.ts';
   import HomeLayoutFeedback from './home-layout-feedback.svelte';
   import HomeLayoutOrder from './home-layout-order.svelte';
-  import { layoutAccountLabel, moveHomeItem, wideWidgets } from './layout-model.ts';
+  import { focusHomeControl, layoutAccountLabel, moveHomeItem, wideWidgets } from './layout-model.ts';
   import { useHomePersonalization, type CustomizeTarget } from './personalization.svelte.ts';
   import { homeShortcuts, shortcutCatalog, type ShortcutID } from './shortcuts.ts';
 
@@ -36,7 +36,7 @@
     source = state;
     draft = structuredClone(state.layout);
     groupName = state.layout.account_set?.name ?? '';
-    groupAccounts = state.layout.account_set?.account_ids ?? [];
+    groupAccounts = [...(state.layout.account_set?.account_ids ?? [])];
     shortcutToAdd = '';
     shortcutAccount = undefined;
     widgetToAdd = '';
@@ -47,20 +47,33 @@
     if (query.data && !query.isFetching && !query.isError && !untrack(() => source)) replaceDraft(query.data);
   });
 
+  const hasGroup = $derived(!!groupName.trim() && groupAccounts.length > 0);
   const canSave = $derived(draft && (draft.headline !== 'account' || !!draft.account_id) &&
-    (draft.headline !== 'account_set' || (!!groupName.trim() && groupAccounts.length > 0 && groupAccounts.length <= 100)) &&
+    (draft.headline !== 'account_set' || hasGroup) && (!hasGroup || groupAccounts.length <= 100) &&
     (draft.widget_options.spending?.account_ids?.length ?? 0) <= 100);
 
   async function save(reset: boolean) {
     if (!source || !draft || (!reset && !canSave)) return;
     const next = $state.snapshot(draft);
-    if (groupName.trim() && groupAccounts.length) next.account_set = { name: groupName.trim(), account_ids: $state.snapshot(groupAccounts) };
+    next.account_set = hasGroup ? { name: groupName.trim(), account_ids: $state.snapshot(groupAccounts) } : undefined;
     for (const item of next.shortcuts) {
       item.label = item.label?.trim() || undefined;
     }
     const result = await personalization.save(source, reset ? null : next);
     if (result.status === 'saved') personalization.close();
     if (result.status === 'conflict') replaceDraft(result.state);
+  }
+
+  function removeHeadlineScope(kind: 'account' | 'account_set') {
+    if (!draft) return;
+    if (kind === 'account') {
+      draft.account_id = undefined;
+    } else {
+      groupName = '';
+      groupAccounts = [];
+    }
+    if (draft.headline === kind) draft.headline = 'auto';
+    focusHomeControl('home-customize-headline');
   }
 
   function widgetTitle(id: HomeWidgetID): string {
@@ -125,7 +138,7 @@
             <section class="space-y-3">
               <label class="block space-y-1">
                 <span class="font-semibold">{m.home_layout_headline()}</span>
-                <select bind:value={draft.headline} class={fieldClass}>
+                <select id="home-customize-headline" bind:value={draft.headline} class={fieldClass}>
                   <option value="auto">{m.home_layout_auto()}</option>
                   <option value="net_worth">{m.briefing_headline_net_worth()}</option>
                   <option value="cash">{m.briefing_headline_cash()}</option>
@@ -158,6 +171,16 @@
                   {/each}
                 </fieldset>
               {/if}
+              {#if draft.account_id || hasGroup}
+                <div class="flex flex-wrap gap-2">
+                  {#if draft.account_id}
+                    <button type="button" class={buttonClass} onclick={() => removeHeadlineScope('account')}>{m.home_layout_remove_account_headline()}</button>
+                  {/if}
+                  {#if hasGroup}
+                    <button type="button" class={buttonClass} onclick={() => removeHeadlineScope('account_set')}>{m.home_layout_remove_account_set()}</button>
+                  {/if}
+                </div>
+              {/if}
             </section>
           {/if}
 
@@ -175,7 +198,7 @@
                     {@const base = homeShortcuts([{ ...item, label: undefined }], source?.accounts)[0]?.label ?? ''}
                     <div class="flex flex-wrap items-center gap-1">
                       <input type="text" bind:value={item.label} maxlength="80" placeholder={base}
-                        aria-label={m.home_layout_actions({ item: base }) + ' · ' + m.home_layout_label()} class="{fieldClass} flex-1" />
+                        aria-label={m.home_layout_label({ item: base })} class="{fieldClass} flex-1" />
                       {#if id !== 'add'}
                         <button type="button" class={actionClass} onclick={() => { if (draft) draft.shortcuts = draft.shortcuts.filter(shortcut => shortcut.id !== id); }}>{m.home_layout_remove()}</button>
                       {/if}

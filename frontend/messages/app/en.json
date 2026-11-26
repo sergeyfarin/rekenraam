@@ -1552,7 +1552,9 @@
   "home_layout_remove": "Remove",
   "home_layout_settings": "Settings",
   "home_layout_rename": "Rename",
-  "home_layout_label": "Shortcut label",
+  "home_layout_remove_account_headline": "Remove account headline",
+  "home_layout_remove_account_set": "Remove named account set",
+  "home_layout_label": "Label for {item}",
   "home_layout_actions": "Actions for {item}",
   "home_layout_moved": "{item} moved to position {position} of {total}.",
   "home_layout_size": "Size",
@@ -1577,6 +1579,7 @@
   "home_widget_no_currency": "Set a default currency to see this in one currency.",
   "home_widget_set_currency": "Set default currency",
   "home_spending_title": "Spending this month",
+  "home_spending_selected_scope": "{period} · {accounts} · {currency}",
   "home_spending_scope": "{period} · all accounts · {currency}",
   "home_spending_zero": "Nothing spent yet this month",
   "home_spending_partial": "Not all spending converts to {currency}; totals by currency",
@@ -1781,7 +1784,7 @@
       }
     }
   ],
-  "home_cashflow_zero": "No money in or out yet this month",
+  "home_cashflow_zero": "No money in or out",
   "home_cashflow_in": "Money in",
   "home_cashflow_out": "Money out",
   "home_cashflow_transfers": "Transfers, net",

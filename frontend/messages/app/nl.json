@@ -1552,7 +1552,9 @@
   "home_layout_remove": "Verwijderen",
   "home_layout_settings": "Instellingen",
   "home_layout_rename": "Naam wijzigen",
-  "home_layout_label": "Naam van snelkoppeling",
+  "home_layout_remove_account_headline": "Rekeningkop verwijderen",
+  "home_layout_remove_account_set": "Benoemde rekeninggroep verwijderen",
+  "home_layout_label": "Naam voor {item}",
   "home_layout_actions": "Acties voor {item}",
   "home_layout_moved": "{item} verplaatst naar positie {position} van {total}.",
   "home_layout_size": "Grootte",
@@ -1577,6 +1579,7 @@
   "home_widget_no_currency": "Stel een standaardvaluta in om dit in één valuta te zien.",
   "home_widget_set_currency": "Standaardvaluta instellen",
   "home_spending_title": "Uitgaven deze maand",
+  "home_spending_selected_scope": "{period} · {accounts} · {currency}",
   "home_spending_scope": "{period} · alle rekeningen · {currency}",
   "home_spending_zero": "Deze maand nog niets uitgegeven",
   "home_spending_partial": "Niet alle uitgaven zijn om te rekenen naar {currency}; totalen per valuta",
@@ -1781,7 +1784,7 @@
       }
     }
   ],
-  "home_cashflow_zero": "Deze maand nog niets in of uit",
+  "home_cashflow_zero": "Geen geld in of uit",
   "home_cashflow_in": "Inkomend",
   "home_cashflow_out": "Uitgaand",
   "home_cashflow_transfers": "Overboekingen, netto",
