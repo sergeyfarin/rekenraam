@@ -1,17 +1,7 @@
 #!/usr/bin/env bash
-# Regenerates a frozen release seed fixture for the historical-upgrade test.
-#
-# The existing fixture describes the consolidated candidate baseline, not an
-# installed release. TestMigrateSeededBaselineMatchesFreshSchema loads it into
-# migration 0001, repeats migration admission, and asserts every durable
-# figure survived.
-#
-# #405 rebased the unused candidate fixture under ADR 0013; no installed or
-# legacy database exists. All installed-release fixtures remain frozen.
-# EXISTING FIXTURES ARE FROZEN. Regenerating v01_seed.sql against a later schema
-# defeats the test it feeds: the point is to migrate data written by the OLD
-# app, which current code may no longer be able to produce. Use this to create
-# the seed for a NEW release, into a new file.
+# Creates a frozen release seed for the schema at the current checkout's HEAD.
+# Write a new file for each supported installation's starting schema. Preserve
+# earlier seeds so their tests exercise data written by the corresponding app.
 #
 # Output is not byte-reproducible: the book carries real timestamps, request
 # UUIDs, and a session token hash. Two runs produce equivalent books, not
@@ -26,6 +16,10 @@ if [ $# -ne 1 ]; then
   exit 2
 fi
 OUT="$(python3 -c 'import pathlib, sys; print(pathlib.Path(sys.argv[1]).resolve())' "$1")"
+if [ -e "$OUT" ]; then
+  echo "release seed output already exists: $OUT" >&2
+  exit 1
+fi
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -57,7 +51,7 @@ if current is not None:
 
 # Rows the migration inserts itself would collide; goose's bookkeeping belongs
 # to the migration run; the FTS5 shadow tables are rebuilt by triggers.
-SKIP = {"goose_db_version", "account_kinds", "market_data_sources", "setup_steps"}
+SKIP = {"goose_db_version", "account_kinds", "market_data_sources"}
 inserts, books = [], None
 for statement in statements:
     table = statement.split()[2].strip('"')
@@ -69,6 +63,11 @@ for statement in statements:
         inserts.append(statement)
 if books is None:
     raise SystemExit("dump has no books row")
+
+# Restore the saved queue immediately after its book. Replaying account and
+# posting triggers can then see their existing FX work and deduplicate it.
+work_items = [s for s in inserts if s.split()[2].strip('"') == "background_work_items"]
+inserts = work_items + [s for s in inserts if s.split()[2].strip('"') != "background_work_items"]
 
 # FK deferral does not defer admission triggers. A lot's opening-operation
 # guard needs its audited operation header already present; clearing allocations
@@ -85,31 +84,35 @@ inserts[lot_index:lot_index] = operations
 fields = re.match(r"INSERT INTO books VALUES\((.*)\);$", books, re.S).group(1).split(",")
 currency, fields[4] = fields[4], "NULL"
 
-header = """-- Frozen v0.1 seed: a realistic book built through the real HTTP API against
--- migration 0001, then dumped. TestMigrateSeededBaselineMatchesFreshSchema
--- replays it into the current baseline and repeats admission. This is a
--- candidate-baseline fixture, not evidence of an installed-release upgrade.
+connection = sqlite3.connect(source)
+generation = connection.execute("PRAGMA user_version").fetchone()[0]
+head = connection.execute("SELECT max(version_id) FROM goose_db_version WHERE is_applied = 1").fetchone()[0]
+header = f"""-- Frozen synthetic book written through the HTTP API at migration {head:04d}
+-- (baseline generation {generation}). Load after applying migrations through {head:04d}.
 --
--- FROZEN. Regenerating this against a later schema would defeat the test: the
--- point is to migrate data written by the OLD app, which current code may no
--- longer be able to produce. Add a second seed for a later release instead.
--- Rebuild with scripts/build-release-seed.sh.
+-- Preserve this file for upgrades from this schema. Create later fixtures in
+-- new files with scripts/build-release-seed.sh.
 --
 -- Excluded: rows the migration inserts itself (account_kinds,
--- market_data_sources, setup_steps), goose's own bookkeeping, and the FTS5
+-- market_data_sources), goose's own bookkeeping, and the FTS5
 -- shadow tables, which the triggers rebuild from the base rows below.
 --
--- Two ordering accommodations, because a dump is in table order and a book is
--- not a tree: the loader defers foreign keys to COMMIT, and the book's default
--- currency is restored after commodity rows, before account/posting triggers run.
+-- The loader defers foreign keys to COMMIT. Saved FX work and the book's
+-- default currency are restored before account and posting triggers run.
 """
 # Explicit column lists keep a frozen fixture's meaning independent of later
 # additive columns, while still loading every original field verbatim.
-connection = sqlite3.connect(source)
 def explicit_columns(statement):
     table = statement.split()[2].strip('"')
     columns = [row[0] for row in connection.execute("SELECT name FROM pragma_table_info(?)", (table,))]
-    return statement.replace(" VALUES(", " (" + ", ".join(columns) + ") VALUES(", 1)
+    statement = statement.replace(" VALUES(", " (" + ", ".join(columns) + ") VALUES(", 1)
+    if table == "setup_steps":
+        # The migration pre-creates these rows. Restore their saved progress.
+        statement = statement.removesuffix(";") + (
+            " ON CONFLICT (step_key) DO UPDATE SET completed_at = excluded.completed_at,"
+            " completed_audit_event_id = excluded.completed_audit_event_id;"
+        )
+    return statement
 # Restore the default as soon as its commodity exists. Waiting until the end
 # would let account/posting triggers enqueue foreign-currency work for the
 # book's own currency while the pointer is temporarily NULL.
@@ -129,5 +132,5 @@ PY
 # a proposed fixture only after it loads; do not replace an installed fixture.
 (SEED_INPUT="$WORK/candidate.sql" SEED_SOURCE="$WORK/seed.sqlite" "$ROOT/scripts/go-backend.sh" test ./internal/db \
   -run '^TestValidateReleaseSeedFixture$' -count=1)
-cp -- "$WORK/candidate.sql" "$OUT"
+(set -o noclobber; cat "$WORK/candidate.sql" > "$OUT")
 echo "wrote validated seed: $OUT"

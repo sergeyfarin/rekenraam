@@ -35,6 +35,10 @@ checks; CI must not need a separate warm-up or skip catalog validation.
 | User journeys | `./scripts/test-e2e.sh` (self-contained: builds app once, one instance + fresh SQLite per worker under `backend/var/e2e/`, ports from 127.0.0.1:16900; `E2E_SKIP_BUILD=1` to reuse the binary). Playwright covers critical journeys, not every UI branch; pure logic gets a Go or Vitest test. |
 | `.github/workflows/**`, CI scripts | Read *GitHub Actions* in `docs/developer-workflow.md` before editing, then `python3 scripts/test-ci-events.py`. `Backend Tests`, `Frontend Check` and `Integrated Build` are required checks on `main`: never add path filters or a job-level `if:` to `ci.yml`, because a skipped job leaves them pending. Go comes from `go-version-file: backend/go.mod`, Node and pnpm from the versions the repo pins; never a literal. |
 
+For migrations, keep the household baseline generation and checksum pins
+intact (#576). Add a checksum for each new migration in the same PR, and run
+the backend gate with the seeded household upgrade regression.
+
 For a full local browser trace, set `E2E_FULL_TRACE=1` on a focused test.
 See [E2E](../../../docs/developer-workflow.md#e2e) for the light defaults and
 diagnostic commands.

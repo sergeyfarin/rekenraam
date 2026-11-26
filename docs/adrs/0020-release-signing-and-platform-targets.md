@@ -4,6 +4,8 @@
 
 Accepted 2026-10-28 by the owner for
 [#333](https://github.com/sergeyfarin/rekenraam/issues/333).
+The owner moved the migration freeze to the first supported household
+installation ([#576](https://github.com/sergeyfarin/rekenraam/issues/576)).
 
 ## Context
 
@@ -46,10 +48,10 @@ separate deployment, household and advisory gates.
    assets, then immutable publication. A future publication workflow must
    verify the approved source/tag, use an exact release-tag signing identity
    and retain the signature bundle. Do not claim a branch-signed candidate
-   was signed under a release tag. Before the first installed `v0.1.0`, pin
-   **all** included migration checksums in the freeze test and activate the
-   documented installed-release upgrade and branch/PR policies. Candidate
-   preparation alone does not freeze the development baseline.
+   was signed under a release tag. The household preview uses the commit that
+   freezes migrations on `main` or a later commit. Pin every appended
+   migration as it lands and preserve the baseline generation so the household
+   database upgrades in place.
 6. Keep platform build/package steps separate from common manifest signing.
    A future Windows/Wails target adds native build and WebView2 installer
    validation, Authenticode signing and timestamping of the executable, then
