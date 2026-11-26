@@ -244,18 +244,10 @@ func TestMigrateSeededBaselineMatchesFreshSchema(t *testing.T) {
 	sources := readMarketDataSourceCodes(t, seeded)
 	require.NoError(t, Migrate(ctx, seeded))
 	after := captureLedgerState(t, seeded)
-	// A table a forward migration creates (#485's import_posting_links)
-	// starts empty; it holds no figure the baseline book had.
-	for key, value := range after {
-		if _, existed := before[key]; !existed && strings.HasPrefix(key, "count:") {
-			assert.Equalf(t, "0", value, "%s is created by a forward migration and must start empty", key)
-			delete(after, key)
-		}
-	}
 	// #615 adds one built-in provider without changing the seeded book.
 	assert.ElementsMatch(t, append(sources, "massive"), readMarketDataSourceCodes(t, seeded))
 	before["count:market_data_sources"] = fmt.Sprint(len(sources) + 1)
-	assert.Equal(t, before, after, "upgrading must not change a single durable figure")
+	assertReleaseSeedStatePreserved(t, before, after)
 
 	// Stated separately from the snapshot comparison so a failure names what
 	// broke rather than dumping two large maps side by side.
@@ -307,18 +299,30 @@ func TestMigrateSupportedHouseholdDatabase(t *testing.T) {
 		next[name] = &fstest.MapFile{Data: contents}
 	}
 	next[fmt.Sprintf("%04d_household_upgrade_probe.sql", head+1)] = &fstest.MapFile{
-		Data: []byte("-- +goose Up\nCREATE INDEX household_upgrade_probe ON payees (created_at);\n"),
+		Data: []byte("-- +goose Up\nCREATE TABLE household_upgrade_probe (id INTEGER PRIMARY KEY);\n"),
 	}
 
 	require.NoError(t, migrateFromFS(ctx, household, next))
-	assert.True(t, sqliteObjectExists(t, household, "index", "household_upgrade_probe"))
+	assert.True(t, sqliteObjectExists(t, household, "table", "household_upgrade_probe"))
 	require.NoError(t, migrateFromFS(ctx, household, next), "the upgraded database must pass admission on restart")
-	assert.Equal(t, before, captureLedgerState(t, household))
+	assertReleaseSeedStatePreserved(t, before, captureLedgerState(t, household))
 	assertUpgradedBookIsIntact(t, household)
 
 	fresh := openTestDatabase(t)
 	require.NoError(t, migrateFromFS(ctx, fresh, next))
 	assert.Equal(t, schemaFingerprint(t, fresh), schemaFingerprint(t, household))
+}
+
+func assertReleaseSeedStatePreserved(t *testing.T, before, after map[string]string) {
+	t.Helper()
+	// A newly created table may start empty. Counts and exact values for
+	// every table the book already used are still compared.
+	for key, value := range after {
+		if _, existed := before[key]; !existed && strings.HasPrefix(key, "count:") && value == "0" {
+			delete(after, key)
+		}
+	}
+	assert.Equal(t, before, after, "upgrading must preserve the seeded book")
 }
 
 // seededBaselineDatabase loads the frozen v0.1 seed into migration 0001 alone,
