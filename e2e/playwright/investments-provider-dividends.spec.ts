@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, test } from './support/fixtures';
+import { expect, test } from './support/owned-book';
 import process from 'node:process';
 import { randomUUID } from 'node:crypto';
 import { apiJSON } from './support/api';
@@ -10,6 +10,8 @@ import { setProviderDividendDate } from './support/provider-dividends';
 
 // #111: a provider dividend announcement is staged through the durable queue
 // and posts only after the owner completes it from the statement, on a phone.
+// Each journey owns its book because checking for dividends queues every
+// listing. Four older listings can fill the worker's first batch.
 test.use({ viewport: { width: 390, height: 844 } });
 test.skip(Boolean(process.env.E2E_BASE_URL), 'needs the local market-data stub for Twelve Data dividends');
 
@@ -58,7 +60,7 @@ test('[acceptance] a provider dividend is reviewed, completed and posted through
   await page.goto('/app/investments');
   await page.getByRole('link', { name: /^Suggestions/ }).click();
   await page.getByRole('button', { name: 'Check provider dividends', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Dividend check queued for listings:' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Dividend check queued for listings: 1.' })).toBeVisible();
 
   const card = page.getByTestId('event-suggestion').filter({ hasText: name });
   await expect(card).toBeVisible({ timeout: 30_000 });
@@ -73,6 +75,10 @@ test('[acceptance] a provider dividend is reviewed, completed and posted through
 
   await card.getByRole('button', { name: 'Complete and post', exact: true }).click();
   const form = card.getByRole('form', { name: 'Dividend from your statement' });
+  const postDividend = form.getByRole('button', { name: 'Post dividend', exact: true });
+  await expect(postDividend).toBeDisabled();
+  // An enabled button must not spend any frames at its disabled opacity.
+  await expect(postDividend).not.toHaveCSS('transition-property', /\b(?:all|opacity)\b/);
   await expect(form.getByLabel('Payment date')).toHaveValue(exDate);
   await form.getByLabel('Payment date').fill(paymentDate);
   await form.getByLabel('Cash account').selectOption(String(cash.id));
@@ -81,8 +87,16 @@ test('[acceptance] a provider dividend is reviewed, completed and posted through
   await expect(form.getByLabel(/Gross amount received/)).toHaveValue('5.00');
   await expect(form.getByText('Pre-filled from the estimate; check it against your statement.')).toBeVisible();
   await form.getByLabel(/Gross amount received/).fill('4.80');
-  await expectNoAccessibilityViolations(page, 'Provider dividend completion on a phone');
-  await form.getByRole('button', { name: 'Post dividend', exact: true }).click();
+  await expect(postDividend).toBeEnabled();
+  await expect(postDividend).toHaveCSS('opacity', '1');
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', colorScheme);
+    await postDividend.hover();
+    await expect(postDividend).toHaveCSS('opacity', '1');
+    await expectNoAccessibilityViolations(page, `Provider dividend completion with Post dividend hovered in ${colorScheme}`);
+  }
+  await postDividend.click();
 
   const settled = page.getByRole('listitem').filter({ hasText: name }).filter({ hasText: 'Accepted' });
   await expect(settled).toBeVisible();

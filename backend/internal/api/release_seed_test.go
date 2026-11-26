@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"rekenraam/backend/internal/app"
+	"rekenraam/backend/internal/db"
 	"rekenraam/backend/internal/exact"
 )
 
@@ -74,11 +76,24 @@ func TestBuildReleaseSeedFixture(t *testing.T) {
 			`+posting(f.incomeAccount.ID, -1500, 2, f.commodityID)+`,
 			`+posting(card.ID, -3000, 2, f.commodityID)+`]}]}`, http.StatusCreated)
 
-	createTransactionForSession(t, handler, session, csrf, `{
-		"transaction_date":"2026-01-20","description":"transfer to savings",
+	transfer := createTransactionForSession(t, handler, session, csrf, `{
+		"transaction_kind":"transfer","transaction_date":"2026-01-20","description":"transfer to savings",
 		"journal_entries":[{"entry_date":"2026-01-20","postings":[
 			`+posting(savings.ID, 50000, 2, f.commodityID)+`,
 			`+posting(f.cashAccount.ID, -50000, 2, f.commodityID)+`]}]}`, http.StatusCreated)
+	seedRetiredStatementLink(t, handler, f, transfer, groceries.ID)
+
+	euro := createCurrencyForSession(t, handler, session, csrf, `{"code":"EUR","name":"Euro"}`)
+	euroCash := createLedgerAccount(t, handler, session, csrf, "Euro checking", "asset", "checking", euro.ID, 2)
+	fees := createCategoryForSession(t, handler, session, csrf, `{"name":"Bank fees","category_type":"expense"}`)
+	createTransactionForSession(t, handler, session, csrf, `{
+		"transaction_kind":"transfer","transaction_date":"2026-01-21","description":"exchange with fee",
+		"journal_entries":[{"entry_kind":"exchange","conversion_side":"receiving","fee_paid_by":"sending","postings":[
+			`+posting(f.cashAccount.ID, -10250, 2, f.commodityID)+`,
+			`+posting(euroCash.ID, 9200, 2, euro.ID)+`,
+			`+posting(fees.ID, 250, 2, f.commodityID)+`]}]}`, http.StatusCreated)
+	sendKeyed(t, handler, session, csrf, "/api/v1/transactions",
+		requestKeyTransactionBody(f, "entry with a saved response"), "household-seed-entry", http.StatusCreated)
 
 	// --- Lifecycle states ------------------------------------------------
 	voided := createTransactionForSession(t, handler, session, csrf, `{
@@ -112,10 +127,17 @@ func TestBuildReleaseSeedFixture(t *testing.T) {
 	// --- Reconciliation --------------------------------------------------
 	openingPosting := postingByAccount(t, opening, f.cashAccount.ID)
 	reconcilePostingForSession(t, handler, session, csrf, f.cashAccount.ID, f.commodityID, openingPosting, "2026-01-02")
+	doInvestmentRequest(t, handler, session, csrf, http.MethodPut, "/api/v1/reconciliation/policy",
+		map[string]int{"out_of_date_after_days": 30}, http.StatusOK)
 
 	// --- Investments -----------------------------------------------------
 	instrument := createInstrumentForSession(t, handler, f, "SEEDCO")
 	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	doInvestmentRequest(t, handler, session, csrf, http.MethodPut, "/api/v1/investments/allocation", map[string]any{
+		"expected_revision": 0,
+		"account_ids":       []int64{f.cashAccount.ID, holding.ID},
+		"targets":           []db.AllocationTarget{{CommodityID: instrument.CommodityID, Units: 600000}, {Units: 400000}},
+	}, http.StatusOK)
 
 	buyOne := tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 100000)
 	buyOne.TransactionDate = "2026-02-02"
@@ -178,4 +200,39 @@ func TestBuildReleaseSeedFixture(t *testing.T) {
 	_, err := database.ExecContext(context.Background(), `VACUUM INTO ?`, out)
 	require.NoError(t, err)
 	t.Logf("seed written to %s", out)
+}
+
+func seedRetiredStatementLink(t *testing.T, handler http.Handler, f investmentAPITestFixture, transfer transactionResponse, categoryID int64) {
+	t.Helper()
+	statement := startQIFImportForSession(t, handler, f.sessionCookie, f.csrfToken, "seed-bank.qif",
+		qifRow("20/01/26", "-500.00", "Transfer to savings"), http.StatusCreated)
+	require.Len(t, statement.Rows, 1)
+	row := statement.Rows[0]
+	line := postingByAccount(t, transfer, f.cashAccount.ID)
+	resolution, err := json.Marshal(app.ImportRowResolution{
+		AccountID: f.cashAccount.ID, CommodityID: f.commodityID, CategoryID: &categoryID,
+		Match: &app.ImportMatchChoice{
+			Decision: app.ImportMatchDecisionLink, TransactionID: transfer.ID,
+			LineKey: line.LineKey, PostedOn: "2026-01-20",
+		},
+	})
+	require.NoError(t, err)
+	patch, err := json.Marshal(patchImportBatchRequest{RowResolutions: []rowResolutionPatchRequest{
+		{RowID: row.ID, ResolutionJSON: string(resolution)},
+	}})
+	require.NoError(t, err)
+	patchImportBatchForSession(t, handler, f.sessionCookie, f.csrfToken, statement.Batch.ID, string(patch), http.StatusNoContent)
+	result := commitImportBatchForSession(t, handler, f.sessionCookie, f.csrfToken, statement.Batch.ID, "", http.StatusOK)
+	require.Equal(t, 1, result.LinkedCount)
+
+	response := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet,
+		fmt.Sprintf("/api/v1/transactions/%d/statement-links", transfer.ID), nil, http.StatusOK)
+	var listed listStatementLinksResponse
+	require.NoError(t, json.NewDecoder(response.Body).Decode(&listed))
+	require.Len(t, listed.Links, 1)
+	link := listed.Links[0]
+	require.True(t, link.Active)
+	mutateBackup(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		fmt.Sprintf("/api/v1/import-identities/%d/unlink", link.IdentityID),
+		fmt.Sprintf(`{"expected_link_id":%d,"expected_link_active":true,"reason":"Statement row was linked in error"}`, link.LinkID), http.StatusNoContent)
 }

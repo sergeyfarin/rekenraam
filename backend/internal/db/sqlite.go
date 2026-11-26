@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/url"
 	"os"
@@ -163,10 +164,14 @@ func EnforceSQLiteFilePermissions(databaseURL string) error {
 }
 
 func Migrate(ctx context.Context, database *sql.DB) error {
+	return migrateFromFS(ctx, database, migrations.FS)
+}
+
+func migrateFromFS(ctx context.Context, database *sql.DB, source fs.FS) error {
 	if err := requireCompatibleBaseline(ctx, database); err != nil {
 		return err
 	}
-	provider, err := goose.NewProvider(goose.DialectSQLite3, database, migrations.FS)
+	provider, err := goose.NewProvider(goose.DialectSQLite3, database, source)
 	if err != nil {
 		return fmt.Errorf("create sqlite migration provider: %w", err)
 	}

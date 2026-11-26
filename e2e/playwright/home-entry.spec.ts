@@ -143,12 +143,16 @@ test.describe('on a touch phone', () => {
     test(`phone Home: full-screen search, three tiles plus More and a full-screen entry sheet in ${theme}`, async ({ page }) => {
       await readyForLedger(page);
       await setTheme(page, theme);
+      observePageRequests(page);
       await page.goto('/app');
+      // The loaded briefing can move the command bar during a touch gesture.
+      await waitForPageReady(page);
 
       // The command bar opens the same search full screen.
       const trigger = page.getByRole('button', { name: 'Search pages, accounts, commands…', exact: true });
       await trigger.tap();
       const searchDialog = page.getByRole('dialog', { name: 'Search', exact: true });
+      await expect(searchDialog).toBeVisible();
       await expect.poll(() => searchDialog.evaluate(node => Math.round(node.getBoundingClientRect().width))).toBe(390);
       await page.getByRole('button', { name: 'Close search', exact: true }).tap();
       await expect(searchDialog).toHaveCount(0);

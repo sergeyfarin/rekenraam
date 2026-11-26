@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted
+Accepted. The migration policy was updated for the first supported household
+installation ([#576](https://github.com/sergeyfarin/rekenraam/issues/576)).
 
 ## Date
 
@@ -18,8 +19,8 @@ security transfers, basis adjustments, corporate actions, and corrections.
 These operations cannot safely be inferred from the sign of a journal posting
 or a provider event name.
 
-The v0.1 release candidate has not been installed or used as a durable user
-database. The owner explicitly authorized schema redesign before release. The
+When this ADR was accepted, no release candidate held a durable user database.
+The owner authorized schema redesign during that period. The
 general journal and ADR 0012's four-layer boundary remain the foundation.
 
 ## Decision
@@ -123,13 +124,11 @@ named reporting profiles and alternative read-side projections.
 
 ## Migration Policy For This Pre-Release Redesign
 
-Because no supported v0.1 installation exists, the baseline schema may be
-revised if that produces a simpler durable model. Such a rewrite is declared
-`BREAKING DEV DATABASE`, updates the schema checksum and release fixtures, and
-requires disposable development databases to be reset. A forward migration is
-equally valid when it gives the same model with less disruption. Once a release
-with actual installations ships, its migrations are immutable and upgrades
-must preserve data.
+The pre-installation redesign period ended with the household migration freeze
+(#576). From the commit that lands that freeze on `main`, migrations on
+`main` are append-only and the baseline generation stays fixed. The household
+database upgrades in place through the public `v0.1.0` release and later
+releases. See [Migration Immutability](../conventions.md#project-lifecycle-and-migration-immutability).
 
 ## Disposal-Clearing Attribution Refinement (2026-09-30)
 

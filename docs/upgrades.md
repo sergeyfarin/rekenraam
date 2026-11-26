@@ -1,18 +1,16 @@
 # Upgrade Policy And Operator Guide
 
-The current v0.1 candidate schema baseline is migration `0001` (generation
-`20261122` after #584 tightened calendar-date checks). Previous development files
-and backups are incompatible, including earlier files numbered 1. Export with
-their original build before updating, then reset only disposable development
-data using the [developer procedure](developer-workflow.md#migrations-and-resetting-your-database).
-Startup and restore refuse a baseline mismatch before migration or replacement.
-No legacy or installed database exists.
+The first supported household installation uses baseline generation `20261122`
+and the frozen migration chain `0001`–`0016` (#576). Build it from the commit
+that lands the freeze on `main` or a later one. Later builds preserve the
+baseline generation and upgrade this installation in place.
 
-The unused candidate baseline may be
-redesigned before the first installed release under ADR 0013; disposable
-development databases then need a reset. Rekenraam applies pending embedded
-Goose migrations automatically before the HTTP server starts. A migration
-failure stops startup; the app never serves against a partially upgraded schema.
+Startup and restore refuse databases or backups from earlier baseline
+generations. To recover data from one of those development files, export it
+with its original build. Follow the
+[developer reset procedure](developer-workflow.md#migrations-and-resetting-your-database)
+only for disposable data. Rekenraam applies pending Goose migrations before
+the HTTP server starts and stops startup if migration fails.
 
 ## Before upgrading
 
@@ -82,14 +80,12 @@ Self-check and retain the pre-upgrade backup until the result is `passed`, or
 stays `incomplete`; the unavailable count should match what it was before the
 upgrade). Keep the backup after any `failed` result.
 
-The first installed release has no earlier supported release to upgrade from.
-Later releases must accept a database from any earlier installed release.
-No legacy databases currently exist. CI's
-`TestMigrateSeededBaselineMatchesFreshSchema` loads the current consolidated
-baseline with frozen seeded user data, applies any later embedded migrations,
-repeats migration admission, and asserts
-data preservation and schema equivalence with a fresh install. Installed-release
-upgrade fixtures will be required once those releases exist. The
+Later builds, including the public `v0.1.0` release, must accept databases from
+the supported household preview and earlier installed releases.
+`TestMigrateSupportedHouseholdDatabase` loads a frozen synthetic book written
+by the app at migration 0016. It applies forward migrations including a
+test-only append, then compares every original row and column in the book and
+checks that the upgraded schema matches a fresh install. The
 [2026-10-18 deployment audit](reviews/deployment-audit-2026-10-18.md) separately
 records an actual candidate-image upgrade from migrations 14 to 18 and rollback
 by verified pre-upgrade backup. That synthetic drill does not establish support
@@ -109,12 +105,10 @@ or a schema newer than the binary understands.
 
 ## Maintainer release checklist
 
-- Add schema changes as the next sequential migration unless ADR 0013's
-  pre-release baseline redesign is explicitly declared and tested.
+- Add the next sequential migration and its SHA-256 to
+  `backend/migrations/freeze_test.go` in the same PR.
 - Run `./scripts/test-backend.sh`; checksum and historical upgrade tests must
-  pass, updating the candidate checksum and fixture when its baseline changes.
-- Add every newly released migration and its SHA-256 to
-  `backend/migrations/freeze_test.go` in the release commit.
+  pass. Preserve the household baseline generation and frozen fixtures.
 - State the highest migration included in the release notes.
 - Walk *Before upgrading* against the release build (`pnpm build`, then
   `dist/rekenraam`) on a throwaway database: back up from the running app,

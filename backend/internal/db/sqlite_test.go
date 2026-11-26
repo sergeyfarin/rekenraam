@@ -4,9 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
-	"strconv"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -232,38 +233,91 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 	assert.True(t, sqliteObjectExists(t, database, "table", "reconciliation_checkpoint_postings"))
 }
 
-// No legacy installations exist. The consolidated candidate baseline must load
-// the frozen book, preserve it on repeated migration admission, and produce the
-// same schema as a fresh database.
+// The original synthetic book must survive upgrades from migration 0001 and
+// reach the same schema as a fresh database.
 func TestMigrateSeededBaselineMatchesFreshSchema(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	seeded := seededBaselineDatabase(t)
 
 	before := captureLedgerState(t, seeded)
-	sources := readMarketDataSourceCodes(t, seeded)
+	// #480 removed this historical pricing preference. Compare the other
+	// fields as written rather than weakening the supported upgrade check.
+	pricing := before["pricing_policies"]
+	pricing.columns = slices.DeleteFunc(pricing.columns, func(name string) bool {
+		return name == "base_commodity_id"
+	})
+	pricing.rows = readLedgerRows(t, seeded, "pricing_policies", pricing.columns, "")
+	before["pricing_policies"] = pricing
+
 	require.NoError(t, Migrate(ctx, seeded))
-	after := captureLedgerState(t, seeded)
-	// A table a forward migration creates (#485's import_posting_links)
-	// starts empty; it holds no figure the baseline book had.
-	for key, value := range after {
-		if _, existed := before[key]; !existed && strings.HasPrefix(key, "count:") {
-			assert.Equalf(t, "0", value, "%s is created by a forward migration and must start empty", key)
-			delete(after, key)
-		}
-	}
-	// #615 adds one built-in provider without changing the seeded book.
-	assert.ElementsMatch(t, append(sources, "massive"), readMarketDataSourceCodes(t, seeded))
-	before["count:market_data_sources"] = fmt.Sprint(len(sources) + 1)
-	assert.Equal(t, before, after, "upgrading must not change a single durable figure")
-
-	// Stated separately from the snapshot comparison so a failure names what
-	// broke rather than dumping two large maps side by side.
-	assertUpgradedBookIsIntact(t, seeded)
-
 	fresh := openTestDatabase(t)
 	require.NoError(t, Migrate(ctx, fresh))
+	// #615 adds one built-in provider. Its row is known from a fresh install.
+	sources := before["market_data_sources"]
+	added := readLedgerRows(t, fresh, "market_data_sources", sources.columns, " WHERE code = ?", "massive")
+	require.Len(t, added, 1)
+	sources.rows = append(sources.rows, added...)
+	slices.Sort(sources.rows)
+	before["market_data_sources"] = sources
+	assertReleaseSeedStatePreserved(t, before, seeded)
+	assertUpgradedBookIsIntact(t, seeded)
 	assert.Equal(t, schemaFingerprint(t, fresh), schemaFingerprint(t, seeded))
+}
+
+func TestMigrateSupportedHouseholdDatabase(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	const householdVersion int64 = 16
+	household := openTestDatabase(t)
+	provider, err := goose.NewProvider(goose.DialectSQLite3, household, migrations.FS)
+	require.NoError(t, err)
+	_, err = provider.UpTo(ctx, householdVersion)
+	require.NoError(t, err)
+	version, err := provider.GetDBVersion(ctx)
+	require.NoError(t, err)
+	require.Equal(t, householdVersion, version)
+	seed, err := os.ReadFile(filepath.Join("testdata", "household_0016_seed.sql"))
+	require.NoError(t, err)
+	loadReleaseSeed(t, household, seed)
+	before := captureLedgerState(t, household)
+	for _, fact := range []string{
+		"import_posting_links", "import_posting_link_retirements", "investment_allocation_revisions",
+		"reconciliation_policies", "request_keys",
+	} {
+		require.NotEmpty(t, before[fact].rows, "the household fixture must exercise %s", fact)
+	}
+	var hasTransferSides bool
+	require.NoError(t, household.QueryRowContext(ctx, `SELECT EXISTS (
+		SELECT 1 FROM journal_entries WHERE conversion_side IS NOT NULL AND fee_paid_by IS NOT NULL
+	)`).Scan(&hasTransferSides))
+	require.True(t, hasTransferSides, "the household fixture must record both transfer choices")
+
+	head, err := EmbeddedMigrationVersion()
+	require.NoError(t, err)
+	// Always exercise at least one pending migration, even when the household
+	// freeze is still the latest version. The probe exists only in this test.
+	names, err := fs.Glob(migrations.FS, "*.sql")
+	require.NoError(t, err)
+	next := make(fstest.MapFS, len(names)+1)
+	for _, name := range names {
+		contents, err := migrations.FS.ReadFile(name)
+		require.NoError(t, err)
+		next[name] = &fstest.MapFile{Data: contents}
+	}
+	next[fmt.Sprintf("%04d_household_upgrade_probe.sql", head+1)] = &fstest.MapFile{
+		Data: []byte("-- +goose Up\nCREATE TABLE household_upgrade_probe (id INTEGER PRIMARY KEY);\n"),
+	}
+
+	require.NoError(t, migrateFromFS(ctx, household, next))
+	assert.True(t, sqliteObjectExists(t, household, "table", "household_upgrade_probe"))
+	require.NoError(t, migrateFromFS(ctx, household, next), "the upgraded database must pass admission on restart")
+	assertReleaseSeedStatePreserved(t, before, household)
+	assertUpgradedBookIsIntact(t, household)
+
+	fresh := openTestDatabase(t)
+	require.NoError(t, migrateFromFS(ctx, fresh, next))
+	assert.Equal(t, schemaFingerprint(t, fresh), schemaFingerprint(t, household))
 }
 
 // seededBaselineDatabase loads the frozen v0.1 seed into migration 0001 alone,
@@ -273,8 +327,8 @@ func seededBaselineDatabase(t *testing.T) *sql.DB {
 	ctx := context.Background()
 	seeded := openTestDatabase(t)
 
-	// Start at baseline 1 even after future forward migrations are added. This
-	// fixture will represent an installed v0.1 database once that release exists.
+	// Start at migration 1 even after future forward migrations are added.
+	// This fixture predates the supported household installation at migration 16.
 	baseline, err := migrations.FS.ReadFile("0001_initial_schema.sql")
 	require.NoError(t, err)
 	baselineFS := fstest.MapFS{"0001_initial_schema.sql": {Data: baseline}}
@@ -285,128 +339,25 @@ func seededBaselineDatabase(t *testing.T) *sql.DB {
 
 	seed, err := os.ReadFile(filepath.Join("testdata", "v01_seed.sql"))
 	require.NoError(t, err)
+	loadReleaseSeed(t, seeded, seed)
+	return seeded
+}
+
+func loadReleaseSeed(t *testing.T, database *sql.DB, seed []byte) {
+	t.Helper()
+	ctx := context.Background()
 	// The dump is in table order, not dependency order, so a row can reference
 	// one that has not been inserted yet. defer_foreign_keys holds every check
 	// until COMMIT — which still enforces them, just once the whole book is
 	// present. Turning foreign keys off outright would not.
-	loadTx, err := seeded.BeginTx(ctx, nil)
+	loadTx, err := database.BeginTx(ctx, nil)
 	require.NoError(t, err)
+	defer rollbackTx(ctx, loadTx)
 	_, err = loadTx.ExecContext(ctx, `PRAGMA defer_foreign_keys = ON`)
 	require.NoError(t, err)
 	_, err = loadTx.ExecContext(ctx, string(seed))
 	require.NoError(t, err, "the frozen seed must load into the frozen baseline")
 	require.NoError(t, loadTx.Commit(), "the frozen seed must satisfy every foreign key")
-	return seeded
-}
-
-// captureLedgerState reads every durable figure the seed carries, keyed so a
-// diff points at the row that moved. Counting rows is not enough: a migration
-// that rebuilt a table and mangled a coefficient, a scale, or a lifecycle flag
-// would leave every count identical.
-func captureLedgerState(t *testing.T, database *sql.DB) map[string]string {
-	t.Helper()
-	ctx := context.Background()
-	state := map[string]string{}
-
-	// Row counts across every table that carries user data, so a table that
-	// loses or gains rows is caught even where no query below inspects it.
-	// Goose's own history grows with each forward migration; it is not data.
-	rows, err := database.QueryContext(ctx, `
-		SELECT name FROM sqlite_master
-		WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'transaction_search%'
-			AND name != 'goose_db_version'
-		ORDER BY name
-	`)
-	require.NoError(t, err)
-	var tables []string
-	for rows.Next() {
-		var name string
-		require.NoError(t, rows.Scan(&name))
-		tables = append(tables, name)
-	}
-	require.NoError(t, rows.Err())
-	require.NoError(t, rows.Close())
-	for _, table := range tables {
-		var count int64
-		require.NoError(t, database.QueryRowContext(ctx, `SELECT count(*) FROM "`+table+`"`).Scan(&count))
-		state["count:"+table] = strconv.FormatInt(count, 10)
-	}
-
-	// Exact figures, as strings, so a rescaled or rounded value is a diff
-	// rather than an equal number at a different precision.
-	for key, query := range map[string]string{
-		"postings": `SELECT pl.id || '=' || pv.account_id || '/' || pv.commodity_id || '/' ||
-				pv.quantity_value || 'e-' || pv.quantity_scale || '/' || pv.reconciliation_status
-			FROM posting_versions pv JOIN posting_lines pl ON pl.id = pv.posting_line_id
-			ORDER BY pv.id`,
-		"transactions": `SELECT t.id || '=' || tv.version_seq || '/' || tv.status || '/' ||
-				tv.transaction_date || '/' || coalesce(t.deleted_at, '-')
-			FROM transaction_versions tv JOIN transactions t ON t.id = tv.transaction_id
-			ORDER BY tv.id`,
-		"lots": `SELECT id || '=' || opened_on || '/' || COALESCE(status, 'missing') || '/' ||
-				quantity_value || 'e-' || quantity_scale || '/' ||
-				COALESCE(remaining_quantity_value, 'missing') || 'e-' || COALESCE(remaining_quantity_scale, -1) || '/' ||
-				cost_basis_value || 'e-' || cost_basis_scale || '/' ||
-				COALESCE(remaining_cost_basis_value, 'missing') || 'e-' || COALESCE(remaining_cost_basis_scale, -1)
-			FROM current_investment_lots ORDER BY id`,
-		"lot_openings": `SELECT id || '=' || operation_id || '/' || source_transaction_id || '/' || created_audit_event_id
-			FROM investment_lots ORDER BY id`,
-		"lot_events": `SELECT id || '=' || lot_id || '/' || event_kind || '/' || event_date || '/' ||
-				quantity_value || 'e-' || quantity_scale || '/' || cost_basis_value || 'e-' || cost_basis_scale ||
-				'/' || coalesce(cost_basis_method, '-')
-			FROM investment_lot_events ORDER BY id`,
-		"disposal_decisions": `SELECT id || '=' || decision_seq || '/' || event_date || '/' || cost_basis_method || '/' || resolution_tier || '/' ||
-				quantity_value || 'e-' || quantity_scale || '/' || disposed_basis_value || 'e-' || disposed_basis_scale
-			FROM investment_disposal_decisions ORDER BY id`,
-		"disposal_allocations": `SELECT id || '=' || lot_id || '/' || quantity_value || 'e-' || quantity_scale || '/' ||
-				cost_basis_value || 'e-' || cost_basis_scale || '/' || proceeds_value || 'e-' || proceeds_scale
-			FROM investment_disposal_allocations ORDER BY id`,
-		"checkpoints": `SELECT id || '=' || account_id || '/' || commodity_id || '/' || status || '/' ||
-				statement_date || '/' || statement_account_sequence || '/' ||
-				statement_balance_value || 'e-' || statement_balance_scale
-			FROM reconciliation_checkpoints ORDER BY id`,
-		"checkpoint_postings": `SELECT checkpoint_id || '=' || posting_version_id FROM reconciliation_checkpoint_postings
-			ORDER BY checkpoint_id, posting_version_id`,
-		"accounts": `SELECT a.id || '=' || coalesce(a.system_role, '-') || '/' || av.version_seq || '/' ||
-				av.account_class || '/' || av.account_kind || '/' || av.status || '/' || av.opened_on || '/' ||
-				coalesce(av.default_commodity_id, 0) || '/' || coalesce(av.quantity_scale_override, -1)
-			FROM account_versions av JOIN accounts a ON a.id = av.account_id ORDER BY av.id`,
-		"commodities": `SELECT c.id || '=' || c.code || '/' || c.kind || '/' || cv.standard_scale || '/' || cv.max_quantity_scale
-			FROM commodity_versions cv JOIN commodities c ON c.id = cv.commodity_id ORDER BY cv.id`,
-		"prices": `SELECT id || '=' || series_id || '/' || valuation_date || '/' ||
-				price_value || 'e-' || price_scale || '/' || coalesce(voided_at, '-')
-			FROM price_observations ORDER BY id`,
-		"budget_targets": `SELECT id || '=' || category_account_id || '/' || commodity_id || '/' || period_start || '/' ||
-				quantity_value || 'e-' || quantity_scale
-			FROM budget_targets ORDER BY id`,
-		"recurring": `SELECT rt.id || '=' || rt.name || '/' || rt.frequency || '/' || rt.starts_on || '/' ||
-				rtp.account_id || '/' || rtp.quantity_value || 'e-' || rtp.quantity_scale
-			FROM recurring_template_postings rtp JOIN recurring_templates rt ON rt.id = rtp.template_id
-			ORDER BY rtp.id`,
-		"tag_links": `SELECT 'txn:' || transaction_id || '=' || tag_id FROM transaction_tags ORDER BY transaction_id, tag_id`,
-		"audit":     `SELECT id || '=' || operation || '/' || origin_type || '/' || occurred_at FROM audit_events ORDER BY id`,
-		"deletions": `SELECT id || '=' || transaction_id || '/' || action || '/' || occurred_at
-			FROM transaction_deletion_events ORDER BY id`,
-	} {
-		state[key] = joinQueryRows(t, database, query)
-	}
-
-	return state
-}
-
-func joinQueryRows(t *testing.T, database *sql.DB, query string) string {
-	t.Helper()
-	rows, err := database.QueryContext(context.Background(), query)
-	require.NoError(t, err, query)
-	defer rows.Close()
-	var lines []string
-	for rows.Next() {
-		var line string
-		require.NoError(t, rows.Scan(&line))
-		lines = append(lines, line)
-	}
-	require.NoError(t, rows.Err())
-	return strings.Join(lines, "\n")
 }
 
 // assertUpgradedBookIsIntact restates the book's own invariants against the

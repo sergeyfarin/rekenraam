@@ -446,10 +446,9 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Soft-deletion uses a nullable `deleted_at` timestamp for current state and append-only deletion/restoration events for auditable history. Do not represent soft-delete as a lifecycle status. The transaction implementation is the reference pattern: it hides a transaction from ordinary views while keeping the row durable for audit and recovery.
 - Schema changes require explicit migrations under `backend/migrations`.
 - The migration runner is **`pressly/goose`** with embedded SQL files. Migrations are sequential numbered `.sql` files under `backend/migrations/`. Run at startup; goose tracks applied versions in the database.
-- The v0.1 baseline generation is `20261122` (`PRAGMA user_version`),
-  independent of Goose's forward migration sequence. Additive migrations retain
-  it. An incompatible pre-release rewrite must change it and its refusal/reset
-  tests; installed releases never rewrite their baseline. Startup and restore
+- The supported household baseline generation is `20261122`
+  (`PRAGMA user_version`), independent of Goose's forward migration sequence.
+  Forward migrations preserve that generation. Startup and restore
   reject mismatched generations, including obsolete files also numbered 1.
 
 - ADR 0014 selects **`github.com/mattn/go-sqlite3`** with bundled native SQLite
@@ -489,22 +488,20 @@ When a feature introduces a durable new rule, update one of those documents in t
 
 ## Project Lifecycle And Migration Immutability
 
-The earlier release-candidate freeze of `0001_initial_schema.sql` preceded any
-installed or used v0.1 database. ADR 0013 permits an explicitly declared
-pre-release redesign of that baseline. Such a change updates the checksum and
-release fixture, carries `BREAKING DEV DATABASE` in the commit body, and tells
-developers to reset disposable local databases. Prefer a forward migration
-when it produces an equally clear model with less disruption. Once a release
-has actual installations, its migration files are immutable.
+The first household installation is supported before the public release
+([#576](https://github.com/sergeyfarin/rekenraam/issues/576)). The freeze starts
+on the commit that lands the checksum pins for migrations 0001–0016 on
+`main`. Build the household preview from that commit or a later one.
 
-- **Installed release migrations are append-only.** Never edit, consolidate,
-  split, renumber, or delete one. Every later schema change uses the next
-  sequential file.
+- **Migrations on `main` are append-only.** Never edit, consolidate, split,
+  renumber, or delete one. Add the next sequential file and its SHA-256 to
+  `backend/migrations/freeze_test.go` in the same PR. Keep the baseline
+  generation (`PRAGMA user_version`, currently `20261122`) fixed.
 - **Every installed release supports forward upgrade from every earlier
   installed release.** The migration suite preserves sentinel data while
-  migrating old baselines to `HEAD` and compares the result with a fresh
-  `HEAD` schema. Add a release migration's checksum to the freeze test when
-  its release is cut.
+  migrating earlier schema versions to `HEAD` and compares the result with a fresh
+  `HEAD` schema. This applies to the household installation and its backups
+  from the freeze commit onward.
 - **Upgrade, do not roll back schema.** Startup applies pending migrations before
   serving. Take and verify a backup before replacing a binary. If the upgrade
   fails, restore that backup and the previous binary; do not rely on Goose down
@@ -515,11 +512,11 @@ has actual installations, its migration files are immutable.
   number. Rebase on the latest `main` first; if your `00NN_` is taken,
   renumber **your own** file to the next free number before merging — the
   branch merged second renumbers itself. Never merge two files sharing a
-  number, and never renumber a installed-release migration already on `main`.
+  number, and never renumber a migration already on `main`.
 - **Migration numbers do not encode product releases.** They are a single
-  monotonic database ordering sequence. After `v0.1.0`, each schema change takes
-  the next integer regardless of which release eventually contains it; release
-  notes record the highest migration included in a release. This avoids
+  monotonic database ordering sequence. After the freeze, each schema change
+  takes the next integer regardless of which release eventually contains it.
+  Release notes record the highest included migration. This avoids
   renumbering an immutable migration when work moves between releases.
 
 ## API Conventions
