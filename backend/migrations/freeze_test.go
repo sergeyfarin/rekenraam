@@ -29,6 +29,7 @@ var frozenMigrationChecksums = map[string]string{
 	"0014_massive_split_source.sql":                "bf05a55c87678064ff17a990f4160dc0756a16ccf7171222d0ebd4ab0d774248",
 	"0015_request_keys.sql":                        "527c00cac33a3bd3fc5a187eb3ae48ce24efd98d73edc250d43d3fcae22ef8ea",
 	"0016_category_disable_day.sql":                "443074aaa93675230123bad07f58bcb5f862f0a7d2dee7f335eb484345cc0e22",
+	"0017_home_layout.sql":                         "f9ac4b87616ad567c4d57921dd555d55498fd90e66a94373405c1522b6e33818",
 }
 
 func TestPinnedMigrationChecksums(t *testing.T) {
