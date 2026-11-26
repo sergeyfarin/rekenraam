@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -155,6 +156,14 @@ func TestRestoreDrillMatchesSourceTrialBalance(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.Migrate(ctx, source))
 	seedRestoreLedger(t, source)
+	layout := DefaultHomeLayout()
+	layout.Headline = HomeHeadlineCash
+	layout.Widgets = []string{"cashflow", "accounts"}
+	document, err := json.Marshal(layout)
+	require.NoError(t, err)
+	revision, err := db.NewTransactionRepository(source).SaveHomeLayout(ctx, BookID, 1, 0, string(document))
+	require.NoError(t, err)
+	require.Equal(t, int64(1), revision)
 	require.FileExists(t, filepath.Join(root, "source.sqlite"))
 
 	readOnly, err := db.OpenReadOnly(ctx, sourceURL)
@@ -186,6 +195,9 @@ func TestRestoreDrillMatchesSourceTrialBalance(t *testing.T) {
 	require.NoError(t, err)
 	defer restored.Close()
 	require.NoError(t, db.Migrate(ctx, restored))
+	restoredLayout, err := db.NewTransactionRepository(restored).ReadHomeLayout(ctx, BookID, 1)
+	require.NoError(t, err)
+	assert.Equal(t, db.HomeLayoutRecord{Revision: revision, Document: string(document)}, restoredLayout)
 }
 
 // The case that makes the WAL handling matter: transactions committed but not

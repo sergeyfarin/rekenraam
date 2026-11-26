@@ -3,6 +3,7 @@ import type { AttentionSource } from '#lib/api/attention.ts';
 import type { Home, HomeHeadline } from '#lib/api/home.ts';
 import type { AttentionState } from '#lib/attention/model.ts';
 import { amountPrivacy } from '#lib/money/privacy.svelte.ts';
+import { homeLayout } from './home-fixture.ts';
 import { briefingHeadline, briefingStatus, headlineOptions, shownHeadlineID } from './briefing.ts';
 
 const euro = (value: string) => ({ commodity_id: 1, quantity_value: value, quantity_scale: 2, normal_quantity_value: value });
@@ -25,7 +26,8 @@ function home(netWorth: Partial<HomeHeadline> = {}, cash: Partial<HomeHeadline> 
       reconciliation: { status: 'failed', summary: null }
     },
     commodities: [],
-    consistent: true
+    consistent: true,
+    personalization: { revision: 0, layout: homeLayout(), defaults: homeLayout(), accounts: [] }
   };
 }
 
@@ -45,6 +47,20 @@ function attention(sources: AttentionSource[], overrides: Partial<AttentionState
 const missingPrices = (count: number) => Array.from({ length: count }, (_, index) => ({ commodity_id: 10 + index, code: `SEC${index}`, kind: 'price' as const }));
 
 afterEach(() => { amountPrivacy.hidden = false; });
+
+it('hides routine review notes without hiding failures or valuation gaps', () => {
+  const book = home();
+  book.personalization.layout.show_review = false;
+  expect(briefingStatus(book, 'net_worth', 'auto', attention([source('imports', 1)]), 'en').hidden).toBe(true);
+  const failed = briefingStatus(book, 'net_worth', 'auto', attention([source('backups', 1, { failed: true })]), 'en');
+  expect(failed.tone).toBe('failed');
+  expect(failed.hidden).toBeUndefined();
+  book.headlines[0].missing = missingPrices(3);
+  const valuation = briefingStatus(book, 'cash', 'auto', attention([source('imports', 1)]), 'en');
+  expect(valuation.tone).toBe('attention');
+  expect(valuation.lead.text).toBe('Net worth needs 3 prices');
+  expect(valuation.more).toBeNull();
+});
 
 describe('headline', () => {
   it('shows net worth rounded for Home, with a signed month change and both boundaries', () => {

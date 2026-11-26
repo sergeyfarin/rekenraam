@@ -10,6 +10,8 @@
   import RefreshCw from '@lucide/svelte/icons/refresh-cw';
   import { attentionQueryKey, attentionQueryOptions } from '#lib/api/attention.ts';
   import { homeQueryKey } from '#lib/api/home.ts';
+  import { createHomePersonalization } from '#lib/home/personalization.svelte.ts';
+  import HomeCustomizeDialog from '#lib/home/home-customize-dialog.svelte';
   import { tagDirectoryQueryKey, tagsQueryKey } from '#lib/api/tags.ts';
   import { payeeDirectoryQueryKey, payeesQueryKey } from '#lib/api/payees.ts';
   import { searchCatalogQueryKey } from '#lib/api/search.ts';
@@ -36,6 +38,8 @@
 
   const setupQuery = createQuery(() => setupStatusQueryOptions());
   const sessionQuery = createQuery(() => authSessionQueryOptions());
+
+  const personalization = createHomePersonalization(() => sessionQuery.data?.csrf_token);
 
   provideOwnerToday(() => sessionOwnerToday(sessionQuery.data!));
 
@@ -101,13 +105,13 @@
   onMount(() => {
     const middleware: Middleware = {
       async onResponse({ request, response }) {
-        if (response.ok && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
+        const path = new URL(request.url).pathname;
+        if (path !== '/api/v1/home/layout' && response.ok && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
           void queryClient.invalidateQueries({ queryKey: attentionQueryKey });
           void queryClient.invalidateQueries({ queryKey: homeQueryKey });
           void queryClient.invalidateQueries({ queryKey: ledgerQueryKey });
           void queryClient.invalidateQueries({ queryKey: payeeDirectoryQueryKey });
           void queryClient.invalidateQueries({ queryKey: tagDirectoryQueryKey });
-          const path = new URL(request.url).pathname;
           if (path === '/api/v1/tags' || path.startsWith('/api/v1/tags/')) {
             void queryClient.invalidateQueries({ queryKey: tagsQueryKey });
           }
@@ -221,6 +225,9 @@
     </div>
   </main>
   <KeyboardHelp />
+  {#if personalization.target}
+    <HomeCustomizeDialog target={personalization.target} />
+  {/if}
 {/if}
 
 <!-- Outside the shell's states: a failed background session or setup refresh

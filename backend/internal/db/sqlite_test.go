@@ -148,6 +148,7 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 		"reason",
 		"metadata_json",
 	})
+	assert.Equal(t, []string{"book_id", "owner_user_id", "revision", "document_json"}, readTableColumns(t, database, "home_layouts"))
 	assert.Contains(t, readTableColumns(t, database, "books"), "updated_by_user_id")
 	assert.Contains(t, readTableColumns(t, database, "books"), "created_audit_event_id")
 	assert.Contains(t, readTableColumns(t, database, "books"), "updated_audit_event_id")
@@ -1176,7 +1177,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 
 	version, err := EmbeddedMigrationVersion()
 	require.NoError(t, err)
-	assert.Equal(t, int64(16), version, "the latest forward migration keeps a disabled category's disable day (#664)")
+	assert.Equal(t, int64(17), version, "the latest forward migration adds the owner Home layout (#438)")
 
 	ctx := context.Background()
 	database, err := Open(ctx, SQLiteFileURL(filepath.Join(t.TempDir(), "schema.sqlite")))
@@ -1206,7 +1207,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 	}
 	assert.Equal(t, map[string]int{
 		"index":   112,
-		"table":   121,
+		"table":   122,
 		"trigger": 181,
 		"view":    17,
 	}, objectCounts, "the migrated head must retain every schema object")

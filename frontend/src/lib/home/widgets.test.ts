@@ -42,6 +42,23 @@ describe('spending', () => {
     expect(view.open.href).toBe('/app/reports/spending?start_date=2026-10-01&end_date=2026-10-15&bucket=month&reporting_currency_id=1');
   });
 
+  it('identifies a scoped total and sends the selected roots to the report', () => {
+    const summary = { ...widgets().spending.summary!, resolved_account_ids: [21, 22, 23] };
+    const book = home({ spending: { status: 'ok', summary } });
+    book.personalization.layout.widget_options.spending = { account_ids: [21, 23] };
+    const view = spendingWidget(book, 'en');
+
+    expect(view.scope).toBe('Oct 1\u2009–\u200915 · Accounts selected: 2 · EUR');
+    const url = new URL(view.open.href, 'https://example.test');
+    expect(url.pathname).toBe('/app/reports/spending');
+    expect(url.searchParams.getAll('account_id')).toEqual(['21', '23']);
+    expect(url.searchParams.get('include_descendants')).toBe('true');
+    expect(url.searchParams.get('start_date')).toBe('2026-10-01');
+    expect(url.searchParams.get('end_date')).toBe('2026-10-15');
+    expect(url.searchParams.get('reporting_currency_id')).toBe('1');
+    expect(view.rows.every(row => row.href === undefined)).toBe(true);
+  });
+
   it('shows each currency exactly when the total cannot convert, never a partial sum', () => {
     const view = spendingWidget(home({ spending: { status: 'ok', summary: { ...widgets().spending.summary!, total: null, commodity_totals: [q('167000'), q('2000', USD)] } } }), 'en');
     expect(view.state).toBe('partial');

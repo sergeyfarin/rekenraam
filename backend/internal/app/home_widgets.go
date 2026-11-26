@@ -85,8 +85,9 @@ type Home struct {
 // HomeSpendingSummary is the Spending report for this month to date, grouped
 // by category, in the book's default currency, over every account.
 type HomeSpendingSummary struct {
-	StartDate string
-	EndDate   string
+	ResolvedAccountIDs []int64
+	StartDate          string
+	EndDate            string
 	// Total is the report's converted total; nil when there is no default
 	// currency or any posting cannot be converted, never partial.
 	Total           *BalanceQuantity
@@ -243,7 +244,7 @@ func (s *HomeService) compose(ctx context.Context, ownerUserID int64) (Home, err
 	}
 
 	s.read("briefing")
-	home.Spending = readCard(s.spendingSummary(ctx, briefing.AsOf, reportingID))
+	home.Spending = readCard(s.spendingSummary(ctx, briefing.AsOf, reportingID, briefing.Layout.Layout.WidgetOptions["spending"]))
 	s.read("spending")
 	home.Budgets = readCard(s.budgetSummary(ctx, briefing.AsOf, reportingID))
 	s.read("budgets")
@@ -258,7 +259,7 @@ func (s *HomeService) compose(ctx context.Context, ownerUserID int64) (Home, err
 	home.Recurring = readCard(s.recurringSummary(ctx, ownerUserID, briefing.AsOf))
 	s.read("recurring")
 	home.NetWorthTrend = readCard(netWorthTrendSummary(briefing))
-	home.Cashflow = readCard(s.cashflowSummary(ctx, briefing.AsOf, reportingID))
+	home.Cashflow = readCard(s.cashflowSummary(ctx, briefing.AsOf, reportingID, briefing.Layout.Layout.WidgetOptions["cashflow"]))
 	s.read("cashflow")
 	returns, allocation, returnsErr := s.returnsSummaries(ctx)
 	home.Returns, home.Allocation = readCard(returns, returnsErr), readCard(allocation, returnsErr)
@@ -317,12 +318,14 @@ func (s *HomeService) labelHomeCategories(ctx context.Context, home Home) error 
 	return nil
 }
 
-func (s *HomeService) spendingSummary(ctx context.Context, asOf string, reportingID int64) (*HomeSpendingSummary, error) {
-	report, err := s.transactions.Spending(ctx, monthToDateSpending(asOf, optionalReportingCurrency(reportingID)))
+func (s *HomeService) spendingSummary(ctx context.Context, asOf string, reportingID int64, options HomeWidgetOptions) (*HomeSpendingSummary, error) {
+	input := monthToDateSpending(asOf, optionalReportingCurrency(reportingID))
+	input.Filters = ReportFilters{AccountIDs: options.AccountIDs, IncludeDescendants: len(options.AccountIDs) > 0}
+	report, err := s.transactions.Spending(ctx, input)
 	if err != nil {
 		return nil, fmt.Errorf("home spending: %w", err)
 	}
-	summary := &HomeSpendingSummary{StartDate: report.StartDate, EndDate: report.EndDate, Total: report.ConvertedTotal,
+	summary := &HomeSpendingSummary{ResolvedAccountIDs: report.Filters.ResolvedAccountIDs, StartDate: report.StartDate, EndDate: report.EndDate, Total: report.ConvertedTotal,
 		CommodityTotals: report.CommodityTotals, Categories: []HomeSpendingCategory{}, CategoryCount: len(report.Groups)}
 	for _, group := range report.Groups[:min(len(report.Groups), homeSpendingRows)] {
 		category := HomeSpendingCategory{Code: group.Code, Name: group.Name, Converted: group.Converted, Totals: make([]BalanceQuantity, 0, len(group.Totals))}

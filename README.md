@@ -164,14 +164,15 @@ deployment secrets. [Split source configuration](docs/developer-workflow.md#mass
 
 Use a backup to restore Rekenraam. Exports are for use outside the app.
 
-- **Backups** (Settings → Data → Backups) contain the database, including the
-  ledger, investments, budgets, recurring items, reconciliations and settings.
+- **Backups** (Settings → Data and backups) contain the database, including the
+  ledger, investments, budgets, recurring items, reconciliations and settings,
+  including Home personalization.
   Rekenraam makes one every night and on request, and verifies each before
   keeping it. The separate `REKENRAAM_SECRET_KEY` is not included; retain it
   to recover encrypted connection and two-factor secrets. Stop the app before
   restoring with `rekenraam restore --from <backup>`, following the
   [restore guide](docs/upgrades.md).
-- **Exports** (Settings → Data → Export) are ledger CSV, QIF, or a full archive
+- **Exports** (Reports → Export) are ledger CSV, QIF, or a full archive
   for spreadsheets and other finance tools. They are for reading elsewhere and
   **cannot be imported back** into Rekenraam as a restore.
 

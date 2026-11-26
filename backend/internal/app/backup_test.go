@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"os"
@@ -126,6 +127,12 @@ func TestBackupUsesOnlineBackupAPI(t *testing.T) {
 	t.Parallel()
 
 	harness := newBackupHarness(t)
+	layout := DefaultHomeLayout()
+	layout.Widgets = []string{"cashflow"}
+	content, err := json.Marshal(layout)
+	require.NoError(t, err)
+	revision, err := db.NewTransactionRepository(harness.writer).SaveHomeLayout(context.Background(), BookID, 1, 0, string(content))
+	require.NoError(t, err)
 	run := harness.runManualBackup(t)
 
 	assert.Equal(t, "completed", run.Status)
@@ -143,6 +150,13 @@ func TestBackupUsesOnlineBackupAPI(t *testing.T) {
 	copied, err := sql.Open("sqlite", db.SQLiteFileURL(run.TargetPath)+"?mode=ro")
 	require.NoError(t, err)
 	defer copied.Close()
+
+	var table string
+	require.NoError(t, copied.QueryRow("SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'home_layouts'").Scan(&table))
+	assert.Equal(t, "home_layouts", table)
+	backedUp, err := db.NewTransactionRepository(copied).ReadHomeLayout(context.Background(), BookID, 1)
+	require.NoError(t, err)
+	assert.Equal(t, db.HomeLayoutRecord{Revision: revision, Document: string(content)}, backedUp)
 	var books int
 	require.NoError(t, copied.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM books").Scan(&books))
 	assert.Equal(t, 1, books)

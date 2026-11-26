@@ -4,7 +4,7 @@ import type { AttentionState } from '#lib/attention/model.ts';
 import { amountPrivacy } from '#lib/money/privacy.svelte.ts';
 import {
   allocationWidget, backupsWidget, cashflowWidget, exploreCategories, exploreWidgets, forecastWidget, holdingsWidget, importsWidget,
-  incomeWidget, pricesWidget, reconciliationWidget, returnsWidget
+  incomeWidget, personalizedWidgets, pricesWidget, reconciliationWidget, returnsWidget, widgetCatalog
 } from './explore.ts';
 import { home, q, TEST, USD, widgets } from './home-fixture.ts';
 import { defaultWidgetOrder } from './widgets.ts';
@@ -32,6 +32,21 @@ describe('More to explore', () => {
     expect(ids).toEqual(['cashflow', 'holdings', 'returns', 'allocation', 'income', 'forecast', 'imports', 'prices', 'reconciliation', 'backups']);
     expect(ids.filter(id => (defaultWidgetOrder as readonly string[]).includes(id))).toEqual([]);
     expect(exploreCategories.flatMap(category => category.widgets)).toEqual(ids);
+  });
+
+  it('moves each widget to its saved location and applies sizes in both places', () => {
+    const book = home();
+    const layout = book.personalization.layout;
+    layout.widgets = ['cashflow', 'accounts'];
+    layout.widget_options.cashflow = { size: 'wide' };
+    layout.widget_options.net_worth_trend = { size: 'standard' };
+
+    const views = personalizedWidgets(book, 'en', attention([imports(0)]));
+    expect(views.active.map(({ id, wide }) => [id, wide])).toEqual([['cashflow', true], ['accounts', false]]);
+    const available = views.explore.flatMap(group => group.widgets);
+    expect(available.find(widget => widget.id === 'net_worth_trend')?.wide).toBe(false);
+    const ids = [...views.active, ...available].map(widget => widget.id);
+    expect(ids.sort()).toEqual(widgetCatalog().map(widget => widget.id).sort());
   });
 
   it('shows no data in an empty book, except backups, which protect it anyway', () => {
@@ -106,6 +121,15 @@ describe('cashflow', () => {
     const none = cashflowWidget(home({ cashflow: { status: 'ok', summary: { ...quiet, account_count: 0 } } }), 'en');
     expect(none.state).toBe('not_set_up');
     expect(none.action?.href).toBe('/app/ledger');
+  });
+
+  it('describes zero cashflow in the selected prior month', () => {
+    const summary = { ...widgets().cashflow.summary!, start_date: '2026-09-01', end_date: '2026-09-30',
+      inflow: [], outflow: [], transfer_net: [], operating_net: [], converted_transfer_net: q('0') };
+    const view = cashflowWidget(home({ cashflow: { status: 'ok', summary } }), 'en');
+    expect(view.title).toBe('Cashflow · September');
+    expect(view.state).toBe('zero');
+    expect(view.scope).toBe('No money in or out');
   });
 
   it('masks amounts while they are hidden', () => {

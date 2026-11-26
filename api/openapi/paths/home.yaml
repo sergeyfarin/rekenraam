@@ -1,7 +1,8 @@
 get:
   summary: Home briefing and widgets
   description: >-
-    Home's composed read for owner-local today. Each headline is the Net worth
+    Home's composed read for owner-local today includes the effective layout and
+    its revision. Each headline is the Net worth
     report's figure for the same accounts in the book's default currency, at
     today and at the end of the previous month. A headline is complete-only: a
     missing price or rate leaves value null and lists what is missing, never a

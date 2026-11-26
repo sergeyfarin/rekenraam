@@ -72,6 +72,7 @@ test('More to explore shows every other widget from the same reads, collapses, a
   await expect(page.getByTestId('explore-widget-cashflow')).toHaveCount(0);
   await explore.getByRole('button', { name: 'Show all' }).click();
   await expect(page.getByTestId('explore-widget-cashflow')).toBeVisible();
+  // Presentation-only changes write the layout and reuse the composed figures.
   expect(reads.filter(path => path === '/api/v1/home')).toHaveLength(1);
 
   await cashflow.getByRole('link', { name: /Open cashflow report/ }).click();

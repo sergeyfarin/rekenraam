@@ -178,8 +178,16 @@ func (s *HomeService) reconciliationSummary(ctx context.Context, ownerUserID int
 	return summary, nil
 }
 
-func (s *HomeService) cashflowSummary(ctx context.Context, asOf string, reportingID int64) (*HomeCashflowSummary, error) {
-	report, err := s.transactions.Cashflow(ctx, monthToDateCashflow(asOf, optionalReportingCurrency(reportingID)))
+func (s *HomeService) cashflowSummary(ctx context.Context, asOf string, reportingID int64, options HomeWidgetOptions) (*HomeCashflowSummary, error) {
+	input := monthToDateCashflow(asOf, optionalReportingCurrency(reportingID))
+	if options.Period == "last_month" {
+		end, err := previousMonthEnd(asOf)
+		if err != nil {
+			return nil, err
+		}
+		input.StartDate, input.EndDate = monthStart(end), end
+	}
+	report, err := s.transactions.Cashflow(ctx, input)
 	if err != nil {
 		return nil, fmt.Errorf("home cashflow: %w", err)
 	}

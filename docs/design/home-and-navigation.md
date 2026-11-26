@@ -206,8 +206,9 @@ results are not squeezed under a keyboard.
 ### Briefing contract (#476)
 
 `GET /api/v1/home` is session-only and starts no work. For owner-local today
-it returns two headlines, `net_worth` and `cash`, each read through the Net
-worth report's series for the same accounts in the book's default currency:
+it returns `net_worth`, `cash` and any configured account and named account
+set headlines. Each uses the Net worth report's series for the same accounts
+in the book's default currency:
 `value` at today, `start_value` at the end of the previous month and `change`
 between them. A headline is complete-only; `unavailable` names why it has no
 value (`valuation_gaps`, `unclassified_short`, `no_reporting_currency`,
@@ -890,12 +891,12 @@ so the app can localize unnamed starter accounts.
 
 ### More to explore contract (#479)
 
-More to explore lists every widget not on My Home, by category, from the same
-`GET /api/v1/home` and the shell's attention read: mounting or expanding it
-starts no request and no returns or forecast calculation. Cards are the My
-Home cards at real size with a dashed outline, muted text and half
-saturation (full colour on hover or focus); the section collapses (the state
-is remembered with #438) and *Add to Home* arrives with #438.
+More to explore lists every widget outside My Home, by category, from the same
+`GET /api/v1/home` and the shell's attention read. Cards start no feature requests or calculations
+when mounted. They are the My Home cards at real size with a dashed outline,
+muted text and half saturation, with full colour on hover or focus. Expanding
+or collapsing the section saves the layout and reuses the composed figures.
+Changes that select a new account scope or period refresh the composed read.
 
 | Category | Widget | Source | Summary |
 |---|---|---|---|
@@ -944,6 +945,40 @@ and section state. It is written whole with a revision number so two tabs
 cannot silently overwrite each other, validated on the server, and tolerant
 of unknown widgets, archived accounts or removed routes, falling back to
 defaults. Because it lives in the database it is included in backups.
+
+Delivered in #438. The sliders in the Home header, the headline disclosure,
+the phone's More tile and Settings › Preferences › Home page open the same
+Customize dialog. Account and named account set headlines select active
+owner-visible accounts, with their subtrees valued through the Net worth
+report at both boundaries. The default headline uses net worth with a cash
+fallback. Turning off review notes hides routine review counts while keeping
+failure and valuation warnings. Customize can remove a saved account or named
+set from the headline menu independently of the selected headline.
+
+Each widget occupies one location. Adding or moving focuses its actions,
+and reordering announces its new position. Button reordering works on all
+screens, with drag handles in Customize for desktop pointers. Spending can
+use a selected account scope, including descendants, and Cashflow can show
+the prior calendar month. Their links retain the effective scope or period.
+Widgets with period or account settings and the wide-capable widgets expose
+those controls from their actions. Transfer is a default shortcut. Until
+pins are available, adding an account register establishes the owner's
+default register. Reset restores that tile with its current account label
+while the account remains active, and restores the default order and other
+settings.
+
+`home_layouts` holds the document and revision from migration 0017. A new
+book reads its defaults at revision zero without inserting a row. The
+session-only `GET /api/v1/home/layout` serves editing from Preferences and
+the composed Home read includes the layout with its figures. A whole-document
+`PUT` needs the revision the owner edited. A stale revision returns 409, and
+the client reloads before the next edit. Reset and Undo use the same check.
+Unknown widget and shortcut keys are ignored while usable choices retain
+their order. An unavailable account resets a dependent headline or widget
+scope as a whole so an account set never shows a partial figure under its
+previous name. The native SQLite backup preserves the layout table and
+revision, and restore reinstates both. The ledger export bundle lists owner
+preferences, including the Home layout, among its exclusions.
 
 ## Accessibility and responsiveness
 
