@@ -404,6 +404,16 @@ holdings per broker, closed accounts, categories by depth, payees, and
 postings per account over 90 days. A short read-only script against a backup
 copy is enough. Record the result here.
 
+**Script (#449, 2026-11-28):** `python3 scripts/count-book.py <copy of a
+backup>` prints these counts and nothing identifying; see [Real-book count
+(D11)](../developer-workflow.md#real-book-count-d11). Pins are offered from
+`postings_in_window.active_account_index_rows`, where a brokerage counts its
+cash and holdings as one row.
+
+**Result:** waiting for the owner's run. Record the output here, and note on
+#442 and #448 any change it forces to the pin limit, the switcher grouping or
+the Ledger overview grouping.
+
 ### D12. Page shell
 
 - **Page header:** breadcrumb (detail pages), title or object switcher, a

@@ -544,6 +544,29 @@ Only use the emergency override when backup creation or verification is impossib
 printf '%s\n' 'new-password' | DATABASE_URL=file:var/dev.sqlite ./scripts/go-backend.sh run ./cmd/rekenraam recover-owner --password-stdin --allow-no-backup
 ```
 
+### Real-book count (D11)
+
+`scripts/count-book.py` counts the shape of a book for the navigation
+review's [D11](reviews/navigation-and-pages-options-2026-10-29.md#d11-check-the-estimates-against-a-real-book)
+(#449): accounts by class, kind and status, account-index rows, holdings per
+brokerage, institutions, categories by depth, tags, payees, instruments held
+and not held, and postings per account over the last 90 days. It prints counts
+only, never names, codes, symbols or amounts, so the output can be pasted into
+the review. It needs Python 3 and nothing else.
+
+Run it on a copy of a backup file (Settings › Data and backups shows where
+backups are written), never on the live database:
+
+```sh
+cp /path/to/backups/rekenraam-manual-<stamp>.sqlite ~/book-count/copy.sqlite
+python3 scripts/count-book.py ~/book-count/copy.sqlite
+```
+
+It refuses a file with a `.lock`, `-wal` or `-shm` file beside it, and opens
+the copy read-only and immutable, so nothing is written next to it. `--json`
+prints JSON; `--as-of YYYY-MM-DD` takes the counts on another day (default:
+today). `book_count_script_test.go` runs it on a backup of the reference book.
+
 ### Online Provider Secret Key
 
 `REKENRAAM_SECRET_KEY` encrypts online provider credentials **and the two-factor
