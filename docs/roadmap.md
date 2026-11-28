@@ -210,7 +210,8 @@ Deliver incrementally, tracked in #441, in this order:
    2026-11-25.
 5. **Object navigation (#442):** the switcher as scoped search, pinned
    accounts and breadcrumbs, after #448 and the owner-run real-book count
-   (#449).
+   (#449). The count script is ready (`scripts/count-book.py`); the owner's
+   run and its recorded result remain.
 6. **Personalization (#438):** delivered.
 7. **Search depth (#439):** prefilled expense entry from a payee result with
    its last-used category, and full-text transaction search.

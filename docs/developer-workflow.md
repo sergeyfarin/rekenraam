@@ -544,6 +544,38 @@ Only use the emergency override when backup creation or verification is impossib
 printf '%s\n' 'new-password' | DATABASE_URL=file:var/dev.sqlite ./scripts/go-backend.sh run ./cmd/rekenraam recover-owner --password-stdin --allow-no-backup
 ```
 
+### Real-book count (D11)
+
+`scripts/count-book.py` counts the shape of a book for the navigation
+review's [D11](reviews/navigation-and-pages-options-2026-10-29.md#d11-check-the-estimates-against-a-real-book)
+(#449): accounts by class, kind and status, account-index rows, holdings per
+brokerage, institutions, categories by depth, tags, payees, instruments held
+and not held, and postings per account over the last 90 days. It prints counts
+only, never names, codes, symbols or amounts, so the output can be pasted into
+the review. It needs Python 3.9 or later (for `zoneinfo`) and a time zone
+database: the system's, as on Linux and macOS, or the `tzdata` package
+(`pip install tzdata`, needed on Windows). Apart from `tzdata` where it is
+needed, it uses only the standard library.
+
+Run it on a copy of a backup file (Settings › Data and backups shows where
+backups are written), never on the live database:
+
+```sh
+cp /path/to/backups/rekenraam-manual-<stamp>.sqlite ~/book-count/copy.sqlite
+python3 scripts/count-book.py ~/book-count/copy.sqlite
+```
+
+It follows symbolic links to the real file and refuses one with a `.lock`,
+`-wal` or `-shm` file beside it or a second hard-linked name, then opens the
+copy read-only and immutable, so nothing is written next to it. The `snapshot`
+part counts objects as the backup holds them (each object's version in force
+on the owner's today, and its open lots). `postings_in_window` counts the 90
+days ending on `--window-end YYYY-MM-DD` (default: the owner's today, earliest
+0001-03-31), which moves nothing else. The owner's today comes from the time
+zone saved in the backup (UTC when none is saved), not from the machine that
+runs the script; a zone Python cannot load is refused. `--json` prints JSON.
+`book_count_script_test.go` runs it on a backup of the reference book.
+
 ### Online Provider Secret Key
 
 `REKENRAAM_SECRET_KEY` encrypts online provider credentials **and the two-factor
