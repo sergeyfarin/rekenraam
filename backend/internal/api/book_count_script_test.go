@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -91,13 +92,20 @@ func runBookCount(t *testing.T, args ...string) (string, string, error) {
 	return stdout.String(), stderr.String(), err
 }
 
-func bookCountReport(t *testing.T, copied, asOf string) map[string]json.RawMessage {
+func bookCountReport(t *testing.T, copied string, args ...string) map[string]json.RawMessage {
 	t.Helper()
-	out, stderr, err := runBookCount(t, "--json", "--as-of", asOf, copied)
+	out, stderr, err := runBookCount(t, append(append([]string{"--json"}, args...), copied)...)
 	require.NoError(t, err, stderr)
 	var report map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal([]byte(out), &report))
 	return report
+}
+
+func bookCountSection(t *testing.T, report map[string]json.RawMessage, key string) map[string]json.RawMessage {
+	t.Helper()
+	var section map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(report[key], &section), key)
+	return section
 }
 
 func TestBookCountScriptCountsTheBackupByHand(t *testing.T) {
@@ -106,10 +114,13 @@ func TestBookCountScriptCountsTheBackupByHand(t *testing.T) {
 	before, err := os.ReadFile(copied)
 	require.NoError(t, err)
 
-	// Far enough ahead that every version is in force (the archives above take
-	// effect on the server's today) and the posting window is empty.
-	report := bookCountReport(t, copied, "2099-12-31")
+	// The snapshot takes every object as it stands in the backup: its version
+	// in force today, when the archives above took effect, and its open lots.
+	// The default window ends today, months after the last posting.
+	report := bookCountReport(t, copied)
 	assert.JSONEq(t, `1`, string(report["books"]))
+	snapshot := bookCountSection(t, report, "snapshot")
+	assert.JSONEq(t, `"`+time.Now().Format(time.DateOnly)+`"`, string(snapshot["versions_in_force_on"]))
 	var schemaVersion int
 	require.NoError(t, json.Unmarshal(report["schema_version"], &schemaVersion))
 	assert.Positive(t, schemaVersion, "the copy's migration head")
@@ -150,7 +161,7 @@ func TestBookCountScriptCountsTheBackupByHand(t *testing.T) {
 		"brokerages": 1,
 		"holdings_per_brokerage": [[2, 0]],
 		"holdings_outside_a_brokerage": {"active": 4}
-	}`, string(report["accounts"]))
+	}`, string(snapshot["accounts"]))
 	// Count bank holds the current account, Count broker the brokerage, and the
 	// archived bank nothing; the other 13 rows have no institution.
 	assert.JSONEq(t, `{
@@ -158,7 +169,7 @@ func TestBookCountScriptCountsTheBackupByHand(t *testing.T) {
 		"by_kind_and_status": {"bank": {"active": 1, "archived": 1}, "brokerage": {"active": 1}},
 		"account_index_rows_per_institution": [1, 1, 0],
 		"account_index_rows_without_institution": 13
-	}`, string(report["institutions"]))
+	}`, string(snapshot["institutions"]))
 	// Groceries, dining, travel, borrow costs and Count housing at the top,
 	// Count energy below housing; salary and dividends.
 	assert.JSONEq(t, `{
@@ -167,44 +178,56 @@ func TestBookCountScriptCountsTheBackupByHand(t *testing.T) {
 			"expense": {"depth_1": {"active": 5}, "depth_2": {"active": 1}},
 			"income": {"depth_1": {"active": 2}}
 		}
-	}`, string(report["categories"]))
-	assert.JSONEq(t, `{"total": 2, "by_kind_and_status": {"flag": {"archived": 1}, "project": {"active": 1}}}`, string(report["tags"]))
-	assert.JSONEq(t, `{"total": 2, "by_status": {"active": 1, "archived": 1}}`, string(report["payees"]))
+	}`, string(snapshot["categories"]))
+	assert.JSONEq(t, `{"total": 2, "by_kind_and_status": {"flag": {"archived": 1}, "project": {"active": 1}}}`, string(snapshot["tags"]))
+	assert.JSONEq(t, `{"total": 2, "by_status": {"active": 1, "archived": 1}}`, string(snapshot["payees"]))
 	// REF keeps open long lots, SHRT only the short left after the partial
 	// cover, and IDLE has a holding account but was never bought.
 	assert.JSONEq(t, `{
 		"total": 3,
 		"by_holding_and_status": {"held": {"active": 1}, "held_short": {"active": 1}, "not_held": {"active": 1}},
 		"by_type": {"etf": 1, "stock": 2}
-	}`, string(report["instruments"]))
-	assert.JSONEq(t, `{
-		"transactions": 0, "postings": 0,
-		"active_account_index_rows": {"0": 14, "1-4": 0, "5-19": 0, "20-49": 0, "50-99": 0, "100+": 0},
-		"active_account_index_rows_largest_first": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-		"active_categories": {"0": 8, "1-4": 0, "5-19": 0, "20-49": 0, "50-99": 0, "100+": 0}
-	}`, string(report["postings_in_window"]))
+	}`, string(snapshot["instruments"]))
+	// Pins are offered from the ten active rows that are not holdings (D7): the
+	// 14 active index rows less the four reference holdings listed on their own.
+	window := bookCountSection(t, report, "postings_in_window")
+	assert.JSONEq(t, `0`, string(window["transactions"]))
+	assert.JSONEq(t, `{"0": 10, "1-4": 0, "5-19": 0, "20-49": 0, "50-99": 0, "100+": 0}`, string(window["pin_eligible_account_rows"]))
+	assert.JSONEq(t, `[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]`, string(window["pin_eligible_account_rows_largest_first"]))
 
-	// The window is the 90 days ending on the as-of day. The last reference
+	// The window is the 90 days ending on --window-end. The last reference
 	// posting is dated 2026-03-16, so a window starting 2026-03-17 holds only
 	// the extras' buy of 2026-03-20: the holding, the brokerage cash and the two
-	// system trading lines. The brokerage counts its holding and cash as one row.
+	// system trading lines. The brokerage counts its holding and cash as one
+	// row; the reference holdings, whose sales fall before the window, are not
+	// pin candidates at all.
 	onlyTheBuy := `{
 		"transactions": 1, "postings": 4,
-		"active_account_index_rows": {"0": 13, "1-4": 1, "5-19": 0, "20-49": 0, "50-99": 0, "100+": 0},
-		"active_account_index_rows_largest_first": [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+		"pin_eligible_account_rows": {"0": 9, "1-4": 1, "5-19": 0, "20-49": 0, "50-99": 0, "100+": 0},
+		"pin_eligible_account_rows_largest_first": [2, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 		"active_categories": {"0": 8, "1-4": 0, "5-19": 0, "20-49": 0, "50-99": 0, "100+": 0}
 	}`
-	for asOf, window := range map[string]string{
-		"2026-06-14": `{"from": "2026-03-17", "to": "2026-06-14", "days": 90}`,
-		"2026-06-17": `{"from": "2026-03-20", "to": "2026-06-17", "days": 90}`,
-	} {
-		figures := bookCountReport(t, copied, asOf)
-		assert.JSONEq(t, window, string(figures["posting_window"]), asOf)
-		assert.JSONEq(t, onlyTheBuy, string(figures["postings_in_window"]), asOf)
+	for end, from := range map[string]string{"2026-06-14": "2026-03-17", "2026-06-17": "2026-03-20"} {
+		figures := bookCountReport(t, copied, "--window-end", end)
+		window := bookCountSection(t, figures, "postings_in_window")
+		assert.JSONEq(t, `"`+from+`"`, string(window["from"]), end)
+		assert.JSONEq(t, `"`+end+`"`, string(window["to"]), end)
+		assert.JSONEq(t, `90`, string(window["days"]), end)
+		for _, key := range []string{"from", "to", "days"} {
+			delete(window, key)
+		}
+		rest, err := json.Marshal(window)
+		require.NoError(t, err)
+		assert.JSONEq(t, onlyTheBuy, string(rest), end)
 	}
-	past := bookCountReport(t, copied, "2026-06-18")
-	assert.JSONEq(t, `{"from": "2026-03-21", "to": "2026-06-18", "days": 90}`, string(past["posting_window"]))
-	assert.Contains(t, string(past["postings_in_window"]), `"transactions": 0`, "the buy's day has left the window")
+	past := bookCountSection(t, bookCountReport(t, copied, "--window-end", "2026-06-18"), "postings_in_window")
+	assert.JSONEq(t, `"2026-03-21"`, string(past["from"]))
+	assert.JSONEq(t, `0`, string(past["transactions"]), "the buy's day has left the window")
+
+	// The window end moves only the window. On 2026-01-01 no position was open
+	// yet, but the snapshot still reports the backup's open lots, labelled as such.
+	early := bookCountReport(t, copied, "--window-end", "2026-01-01")
+	assert.JSONEq(t, string(report["snapshot"]), string(early["snapshot"]))
 
 	after, err := os.ReadFile(copied)
 	require.NoError(t, err)
@@ -264,9 +287,9 @@ func TestBookCountScriptPrintsNoNamesOrAmounts(t *testing.T) {
 	require.Contains(t, secrets, "250000")
 
 	for _, asOf := range []string{"2026-03-31", "2099-12-31"} {
-		text, stderr, err := runBookCount(t, "--as-of", asOf, copied)
+		text, stderr, err := runBookCount(t, "--window-end", asOf, copied)
 		require.NoError(t, err, stderr)
-		jsonOut, stderr, err := runBookCount(t, "--json", "--as-of", asOf, copied)
+		jsonOut, stderr, err := runBookCount(t, "--json", "--window-end", asOf, copied)
 		require.NoError(t, err, stderr)
 		for secret := range secrets {
 			// Short digit runs are counts; only amounts of four digits or more are
@@ -317,6 +340,39 @@ func TestBookCountScriptRefusesALiveDatabase(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, stderr, "refused:")
 	assert.Contains(t, stderr, "looks like a live database")
+
+	// A link elsewhere has no sidecars of its own beside it. A symbolic link is
+	// followed to the live file; a hard link is the live file under a second name.
+	links := t.TempDir()
+	symlink := filepath.Join(links, "symlink.sqlite")
+	require.NoError(t, os.Symlink(b.databasePath, symlink))
+	out, stderr, err := runBookCount(t, symlink)
+	assert.Error(t, err)
+	assert.Empty(t, out)
+	assert.Contains(t, stderr, b.databasePath+"-wal exists")
+	hardlink := filepath.Join(filepath.Dir(b.databasePath), "second-name.sqlite")
+	if err := os.Link(b.databasePath, hardlink); err == nil {
+		t.Cleanup(func() { _ = os.Remove(hardlink) })
+		out, stderr, err = runBookCount(t, hardlink)
+		assert.Error(t, err)
+		assert.Empty(t, out)
+		assert.Contains(t, stderr, "has another name")
+	} else {
+		t.Logf("hard link not possible here: %v", err)
+	}
+	// A symbolic link to a clean copy is fine: what counts is the file it reaches.
+	copyLink := filepath.Join(links, "copy-link.sqlite")
+	require.NoError(t, os.Symlink(copied, copyLink))
+	_, stderr, err = runBookCount(t, copyLink)
+	assert.NoError(t, err, stderr)
+
+	// SQLite compares dates as text, so only canonical days are accepted.
+	for _, day := range []string{"20260319", "2026-3-19", "2026-02-30"} {
+		out, stderr, err := runBookCount(t, "--window-end", day, copied)
+		assert.Error(t, err, day)
+		assert.Empty(t, out, day)
+		assert.Contains(t, stderr, "--window-end must be a YYYY-MM-DD date", day)
+	}
 
 	for _, suffix := range []string{".lock", "-wal", "-shm"} {
 		require.NoError(t, os.WriteFile(copied+suffix, nil, 0o600))

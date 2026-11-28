@@ -6,19 +6,25 @@ them on a copy of the owner's book so the switcher grouping and the pin limit
 of #442 can be fixed against real numbers:
 
     python3 scripts/count-book.py /path/to/copy-of-backup.sqlite
-    python3 scripts/count-book.py --json --as-of 2026-11-28 copy.sqlite
+    python3 scripts/count-book.py --json --window-end 2026-11-28 copy.sqlite
 
 It prints counts only: no names, codes, symbols, notes or amounts, and every
 label it prints is a fixed schema code (account class, kind, status). The
 result is safe to paste into the review.
 
-Run it on a copy of a backup, never on the live database. It refuses a file
-that has a `.lock`, `-wal` or `-shm` file beside it (the server's lock file
-stays next to a live database even while the server is stopped), and it opens
-the copy read-only and immutable, so SQLite writes nothing, not even a journal.
+Run it on a copy of a backup, never on the live database. It follows symbolic
+links to the real file and refuses one that has a `.lock`, `-wal` or `-shm`
+file beside it (the server's lock file stays next to a live database even
+while the server is stopped) or a second hard-linked name. It opens the copy
+read-only and immutable, so SQLite writes nothing, not even a journal.
+
+The output has two parts. `snapshot` counts the objects as they stand in the
+backup: each object's version in force on the day the script runs, and the
+open lots it holds. `postings_in_window` counts postings in the 90 days ending
+on `--window-end` (default: today); that option moves nothing else.
 
 Definitions follow the app:
-- an account's facts are its version in force on the as-of day;
+- an object's facts are its version in force on the snapshot day;
 - a category is an income or expense account whose kind equals its class and
   whose metadata says so (db.categoryAccountPredicate);
 - holdings are security_holding and fund_holding accounts; a brokerage is one
@@ -26,8 +32,10 @@ Definitions follow the app:
   brokerage above it is its own row (app.LedgerOverview);
 - a posting counts when its transaction's current version is posted, the
   transaction is not deleted, and its journal entry date falls in the window;
-- an instrument is held when it has an open lot with quantity left today
-  (long or short).
+- an instrument is held when the backup has an open lot of it with quantity
+  left (long or short);
+- pins are offered from active account-index rows that are not holdings
+  (review D7), a brokerage counting the postings of its cash and holdings.
 
 Standard library only, so it runs wherever Python 3 does.
 """
@@ -39,7 +47,7 @@ import sqlite3
 import sys
 import urllib.parse
 
-SCRIPT_VERSION = 1
+SCRIPT_VERSION = 2
 WINDOW_DAYS = 90
 HOLDING_KINDS = {"security_holding", "fund_holding"}
 BALANCE_SHEET = {"asset", "liability"}
@@ -68,16 +76,23 @@ class Refused(Exception):
     """The file is not a safe, recognisable backup copy."""
 
 
-def open_copy(path):
+def open_copy(given):
+    # SQLite finds a database's sidecars by the name it opens, so check and
+    # open the real file: a symbolic link elsewhere has no sidecars beside it.
+    path = os.path.realpath(given)
     if not os.path.isfile(path):
-        raise Refused(f"{path} is not a file")
+        raise Refused(f"{given} is not a file")
     for suffix in (".lock", "-wal", "-shm"):
         if os.path.exists(path + suffix):
             raise Refused(
                 f"{path}{suffix} exists, so this looks like a live database. "
                 "Copy a backup file to another folder and count the copy."
             )
-    uri = "file:" + urllib.parse.quote(os.path.abspath(path)) + "?mode=ro&immutable=1"
+    # A hard link is the same file under a second name, which may be the live
+    # one with its sidecars; a copy has one name.
+    if os.stat(path).st_nlink > 1:
+        raise Refused(f"{path} has another name (a hard link), so it may be a live database. Count a copy.")
+    uri = "file:" + urllib.parse.quote(path) + "?mode=ro&immutable=1"
     try:
         conn = sqlite3.connect(uri, uri=True)
         conn.execute("PRAGMA query_only = ON")
@@ -103,6 +118,13 @@ def current_versions(conn, table, key, as_of, columns):
         if object_id not in result or effective_from <= as_of:
             result[object_id] = dict(zip(columns, values))
     return result
+
+
+def canonical_day(text):
+    try:
+        return dt.date.fromisoformat(text).isoformat() == text
+    except ValueError:
+        return False
 
 
 def bump(counter, *keys):
@@ -133,15 +155,15 @@ def is_category(version):
     return isinstance(category, dict) and category.get("type") == version["account_class"]
 
 
-def count_book(conn, as_of):
-    window_start = (dt.date.fromisoformat(as_of) - dt.timedelta(days=WINDOW_DAYS - 1)).isoformat()
+def count_book(conn, snapshot_day, window_end):
+    window_start = (dt.date.fromisoformat(window_end) - dt.timedelta(days=WINDOW_DAYS - 1)).isoformat()
     report = {
         "script_version": SCRIPT_VERSION,
-        "as_of": as_of,
-        "posting_window": {"from": window_start, "to": as_of, "days": WINDOW_DAYS},
         "schema_version": conn.execute("SELECT MAX(version_id) FROM goose_db_version").fetchone()[0],
         "books": conn.execute("SELECT COUNT(*) FROM books").fetchone()[0],
     }
+    snapshot = {"versions_in_force_on": snapshot_day}
+    as_of = snapshot_day
 
     system_roles = dict(conn.execute("SELECT id, system_role FROM accounts").fetchall())
     versions = current_versions(
@@ -212,7 +234,7 @@ def count_book(conn, as_of):
         else:
             bump(holdings_outside, a["status"])
     brokerages = [row for row in index_rows if ledger[row]["account_kind"] == "brokerage"]
-    report["accounts"] = {
+    snapshot["accounts"] = {
         "by_group_and_status": by_group,
         "postable_by_class_kind_status": postable,
         "non_postable_money_accounts": grouping,
@@ -243,7 +265,7 @@ def count_book(conn, as_of):
             per_institution[institution] += 1
         else:
             without += 1
-    report["institutions"] = {
+    snapshot["institutions"] = {
         "total": len(institutions),
         "by_kind_and_status": by_kind,
         "account_index_rows_per_institution": sorted(per_institution.values(), reverse=True),
@@ -263,18 +285,18 @@ def count_book(conn, as_of):
     by_depth = {}
     for account_id, a in categories.items():
         bump(by_depth, a["account_class"], f"depth_{depth(account_id)}", a["status"])
-    report["categories"] = {"total": len(categories), "by_type_depth_status": by_depth}
+    snapshot["categories"] = {"total": len(categories), "by_type_depth_status": by_depth}
 
     tags = {}
     for kind, status in conn.execute("SELECT kind, status FROM tags"):
         bump(tags, kind, status)
-    report["tags"] = {"total": sum(sum(s.values()) for s in tags.values()), "by_kind_and_status": tags}
+    snapshot["tags"] = {"total": sum(sum(s.values()) for s in tags.values()), "by_kind_and_status": tags}
 
     payees = current_versions(conn, "payee_versions", "payee_id", as_of, ["status"])
     payee_status = {}
     for version in payees.values():
         bump(payee_status, version["status"])
-    report["payees"] = {"total": len(payees), "by_status": payee_status}
+    snapshot["payees"] = {"total": len(payees), "by_status": payee_status}
 
     instruments = current_versions(conn, "investment_instrument_versions", "instrument_id", as_of, ["status", "instrument_type"])
     commodity_of = dict(conn.execute("SELECT id, commodity_id FROM investment_instruments").fetchall())
@@ -296,7 +318,7 @@ def count_book(conn, as_of):
     by_type = {}
     for version in instruments.values():
         bump(by_type, version["instrument_type"])
-    report["instruments"] = {"total": len(instruments), "by_holding_and_status": instrument_counts, "by_type": by_type}
+    snapshot["instruments"] = {"total": len(instruments), "by_holding_and_status": instrument_counts, "by_type": by_type}
 
     postings = {}
     transactions = set()
@@ -310,7 +332,7 @@ def count_book(conn, as_of):
         WHERE tv.status = 'posted' AND t.deleted_at IS NULL
           AND je.entry_date BETWEEN ? AND ?
         """,
-        (window_start, as_of),
+        (window_start, window_end),
     ):
         postings[account_id] = postings.get(account_id, 0) + 1
         transactions.add(transaction_id)
@@ -318,15 +340,19 @@ def count_book(conn, as_of):
     for account_id, count in postings.items():
         if account_id in owners:
             per_row[owners[account_id]] += count
-    active_rows = [row for row in index_rows if ledger[row]["status"] == "active"]
+    # Holdings are never pinned (D7); a brokerage row still carries the
+    # postings of the holdings inside it.
+    pin_rows = [row for row in index_rows if ledger[row]["status"] == "active" and ledger[row]["group"] != "holding"]
     active_categories = [i for i, a in categories.items() if a["status"] == "active"]
+    report["snapshot"] = snapshot
     report["postings_in_window"] = {
+        "from": window_start,
+        "to": window_end,
+        "days": WINDOW_DAYS,
         "transactions": len(transactions),
         "postings": sum(postings.values()),
-        # Pins are offered from these: active account-index rows, a brokerage
-        # counting its cash and holdings.
-        "active_account_index_rows": distribution(per_row[row] for row in active_rows),
-        "active_account_index_rows_largest_first": sorted((per_row[row] for row in active_rows), reverse=True),
+        "pin_eligible_account_rows": distribution(per_row[row] for row in pin_rows),
+        "pin_eligible_account_rows_largest_first": sorted((per_row[row] for row in pin_rows), reverse=True),
         "active_categories": distribution(postings.get(i, 0) for i in active_categories),
     }
     return report
@@ -348,20 +374,21 @@ def print_text(report, out):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Count a Rekenraam backup copy for the D11 review (#449).")
     parser.add_argument("database", help="a COPY of a backup file, never the live database")
-    parser.add_argument("--as-of", default=dt.date.today().isoformat(), help="day the counts are taken on (default: today)")
+    today = dt.date.today().isoformat()
+    parser.add_argument("--window-end", default=today, help="last day of the 90-day posting window (default: today); moves nothing else")
     parser.add_argument("--json", action="store_true", help="print JSON instead of text")
     args = parser.parse_args(argv)
-    try:
-        dt.date.fromisoformat(args.as_of)
-    except ValueError:
-        parser.error("--as-of must be a YYYY-MM-DD date")
+    # Dates are compared as text in SQLite, so only the canonical form will do:
+    # fromisoformat alone also accepts 20260319.
+    if not canonical_day(args.window_end):
+        parser.error("--window-end must be a YYYY-MM-DD date")
     try:
         conn = open_copy(args.database)
     except Refused as err:
         print(f"refused: {err}", file=sys.stderr)
         return 2
     try:
-        report = count_book(conn, args.as_of)
+        report = count_book(conn, today, args.window_end)
     finally:
         conn.close()
     if args.json:

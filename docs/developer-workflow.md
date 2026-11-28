@@ -562,10 +562,14 @@ cp /path/to/backups/rekenraam-manual-<stamp>.sqlite ~/book-count/copy.sqlite
 python3 scripts/count-book.py ~/book-count/copy.sqlite
 ```
 
-It refuses a file with a `.lock`, `-wal` or `-shm` file beside it, and opens
-the copy read-only and immutable, so nothing is written next to it. `--json`
-prints JSON; `--as-of YYYY-MM-DD` takes the counts on another day (default:
-today). `book_count_script_test.go` runs it on a backup of the reference book.
+It follows symbolic links to the real file and refuses one with a `.lock`,
+`-wal` or `-shm` file beside it or a second hard-linked name, then opens the
+copy read-only and immutable, so nothing is written next to it. The `snapshot`
+part counts objects as the backup holds them (each object's version in force
+on the day you run it, and its open lots). `postings_in_window` counts the 90
+days ending on `--window-end YYYY-MM-DD` (default: today), which moves nothing
+else. `--json` prints JSON. `book_count_script_test.go` runs it on a backup of
+the reference book.
 
 ### Online Provider Secret Key
 
