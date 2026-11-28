@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -13,6 +14,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"rekenraam/backend/internal/db"
 )
 
 // The D11 count script (#449) is run by the owner on a copy of a backup of
@@ -23,11 +26,28 @@ import (
 
 const bookCountScript = "../../../scripts/count-book.py"
 
+// The owner lives at UTC+14 and every script run happens at UTC-12, so the
+// runner's date is always one or two days behind the owner's.
+const (
+	bookCountOwnerZone  = "Pacific/Kiritimati"
+	bookCountRunnerZone = "Etc/GMT+12"
+)
+
+// bookCountOwnerDay is the owner's calendar day now, as the app's OwnerToday.
+func bookCountOwnerDay(t *testing.T, zone string) string {
+	t.Helper()
+	location, err := time.LoadLocation(zone)
+	require.NoError(t, err)
+	return time.Now().In(location).Format(time.DateOnly)
+}
+
 // bookCountExtras adds what the reference book does not have. Names start with
-// "Count" so the privacy check can look for them in the output.
+// "Count" so the privacy check can look for them in the output. The owner's
+// zone is set first, so the archives below take effect on the owner's today.
 var bookCountExtras = []struct {
 	method, path, body, capture string
 }{
+	{"PUT", "/api/v1/settings/preferences", `{"time_zone":"` + bookCountOwnerZone + `","change_reason":"count"}`, ""},
 	{"POST", "/api/v1/institutions", `{"name":"Count bank","kind":"bank","country_code":"NL"}`, "count_bank"},
 	{"POST", "/api/v1/institutions", `{"name":"Count broker","kind":"brokerage","country_code":"IE"}`, "count_broker"},
 	{"POST", "/api/v1/institutions", `{"name":"Count old bank","kind":"bank"}`, "count_old_bank"},
@@ -86,6 +106,7 @@ func runBookCount(t *testing.T, args ...string) (string, string, error) {
 	python, err := exec.LookPath("python3")
 	require.NoError(t, err, "the D11 script needs python3, as the owner's run does")
 	cmd := exec.Command(python, append([]string{"-I", bookCountScript}, args...)...)
+	cmd.Env = append(os.Environ(), "TZ="+bookCountRunnerZone)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	err = cmd.Run()
@@ -115,12 +136,16 @@ func TestBookCountScriptCountsTheBackupByHand(t *testing.T) {
 	require.NoError(t, err)
 
 	// The snapshot takes every object as it stands in the backup: its version
-	// in force today, when the archives above took effect, and its open lots.
-	// The default window ends today, months after the last posting.
+	// in force on the owner's today, when the archives above took effect, and
+	// its open lots. The runner's own date is a day or two earlier, and on it
+	// the archived institution and payee would still count as active. The
+	// default window also ends on the owner's today, months after the last posting.
+	ownerDay := bookCountOwnerDay(t, bookCountOwnerZone)
 	report := bookCountReport(t, copied)
 	assert.JSONEq(t, `1`, string(report["books"]))
 	snapshot := bookCountSection(t, report, "snapshot")
-	assert.JSONEq(t, `"`+time.Now().Format(time.DateOnly)+`"`, string(snapshot["versions_in_force_on"]))
+	assert.JSONEq(t, `"`+ownerDay+`"`, string(snapshot["versions_in_force_on"]))
+	assert.JSONEq(t, `"`+ownerDay+`"`, string(bookCountSection(t, report, "postings_in_window")["to"]))
 	var schemaVersion int
 	require.NoError(t, json.Unmarshal(report["schema_version"], &schemaVersion))
 	assert.Positive(t, schemaVersion, "the copy's migration head")
@@ -383,9 +408,51 @@ func TestBookCountScriptRefusesALiveDatabase(t *testing.T) {
 		require.NoError(t, os.Remove(copied+suffix))
 	}
 
+	// The window must fit after 0001-01-01; refused the usual way, not a traceback.
+	for _, day := range []string{"0001-01-01", "0001-03-30"} {
+		out, stderr, err := runBookCount(t, "--window-end", day, copied)
+		assert.Error(t, err, day)
+		assert.Empty(t, out, day)
+		assert.Contains(t, stderr, "--window-end must be on or after 0001-03-31", day)
+		assert.NotContains(t, stderr, "Traceback", day)
+	}
+	earliest := bookCountSection(t, bookCountReport(t, copied, "--window-end", "0001-03-31"), "postings_in_window")
+	assert.JSONEq(t, `"0001-01-01"`, string(earliest["from"]))
+
 	empty := filepath.Join(t.TempDir(), "other.sqlite")
 	require.NoError(t, os.WriteFile(empty, nil, 0o600))
 	_, stderr, err = runBookCount(t, empty)
 	assert.Error(t, err)
 	assert.Contains(t, stderr, "is not a Rekenraam database")
+}
+
+// TestBookCountScriptFollowsTheOwnerZone covers the app's fallbacks: no saved
+// preferences means the UTC day, and a zone the script cannot load is refused
+// rather than replaced by the runner's date.
+func TestBookCountScriptFollowsTheOwnerZone(t *testing.T) {
+	t.Parallel()
+	copied, _ := bookCountBackup(t)
+	edit := func(statement string) {
+		t.Helper()
+		database, err := db.Open(context.Background(), db.SQLiteFileURL(copied))
+		require.NoError(t, err)
+		_, err = database.Exec(statement)
+		require.NoError(t, err)
+		require.NoError(t, database.Close())
+		for _, suffix := range []string{"-wal", "-shm"} {
+			_ = os.Remove(copied + suffix)
+		}
+	}
+
+	edit(`UPDATE user_preferences SET time_zone = 'Mars/Olympus_Mons'`)
+	out, stderr, err := runBookCount(t, copied)
+	assert.Error(t, err)
+	assert.Empty(t, out)
+	assert.Contains(t, stderr, "cannot load the owner's time zone")
+
+	edit(`DELETE FROM user_preferences`)
+	report := bookCountReport(t, copied)
+	utcDay := bookCountOwnerDay(t, "UTC")
+	assert.JSONEq(t, `"`+utcDay+`"`, string(bookCountSection(t, report, "snapshot")["versions_in_force_on"]))
+	assert.JSONEq(t, `"`+utcDay+`"`, string(bookCountSection(t, report, "postings_in_window")["to"]))
 }

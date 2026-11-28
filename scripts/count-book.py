@@ -19,12 +19,15 @@ while the server is stopped) or a second hard-linked name. It opens the copy
 read-only and immutable, so SQLite writes nothing, not even a journal.
 
 The output has two parts. `snapshot` counts the objects as they stand in the
-backup: each object's version in force on the day the script runs, and the
-open lots it holds. `postings_in_window` counts postings in the 90 days ending
-on `--window-end` (default: today); that option moves nothing else.
+backup: each object's version in force on the owner's today, and the open lots
+it holds. `postings_in_window` counts postings in the 90 days ending on
+`--window-end` (default: the owner's today); that option moves nothing else.
+The owner's today is the date now in the time zone saved in the backup, or the
+UTC date when none is saved, as the app's OwnerToday has it, not the date of
+the machine running the script.
 
 Definitions follow the app:
-- an object's facts are its version in force on the snapshot day;
+- an object's facts are its version in force on the owner's today;
 - a category is an income or expense account whose kind equals its class and
   whose metadata says so (db.categoryAccountPredicate);
 - holdings are security_holding and fund_holding accounts; a brokerage is one
@@ -46,9 +49,12 @@ import os
 import sqlite3
 import sys
 import urllib.parse
+import zoneinfo
 
-SCRIPT_VERSION = 2
+SCRIPT_VERSION = 3
 WINDOW_DAYS = 90
+# The earliest window end whose whole window is a real date.
+EARLIEST_WINDOW_END = dt.date.min + dt.timedelta(days=WINDOW_DAYS - 1)
 HOLDING_KINDS = {"security_holding", "fund_holding"}
 BALANCE_SHEET = {"asset", "liability"}
 # Posting-count buckets for the pin suggestion: (label, lowest count).
@@ -69,6 +75,7 @@ REQUIRED_TABLES = {
     "transactions",
     "journal_entries",
     "posting_versions",
+    "user_preferences",
 }
 
 
@@ -118,6 +125,29 @@ def current_versions(conn, table, key, as_of, columns):
         if object_id not in result or effective_from <= as_of:
             result[object_id] = dict(zip(columns, values))
     return result
+
+
+def owner_today(conn):
+    """The owner's calendar day now: the saved zone, or UTC without one (app.OwnerTodayAt)."""
+    row = conn.execute(
+        """
+        SELECT preferences.time_zone
+        FROM books LEFT JOIN user_preferences preferences ON preferences.user_id = books.owner_user_id
+        ORDER BY books.id LIMIT 1
+        """
+    ).fetchone()
+    zone = row[0] if row and row[0] else "UTC"
+    try:
+        location = zoneinfo.ZoneInfo(zone)
+    except (zoneinfo.ZoneInfoNotFoundError, ValueError) as err:
+        # The app refuses an unloadable zone too; the runner's date is not a
+        # stand-in for the owner's. The zone is not printed: it says where the
+        # owner lives.
+        raise Refused(
+            "cannot load the owner's time zone saved in the backup. If Python has no time zone "
+            "database here, install one (for example `pip install tzdata`) and run again."
+        ) from err
+    return dt.datetime.now(location).date().isoformat()
 
 
 def canonical_day(text):
@@ -374,21 +404,29 @@ def print_text(report, out):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Count a Rekenraam backup copy for the D11 review (#449).")
     parser.add_argument("database", help="a COPY of a backup file, never the live database")
-    today = dt.date.today().isoformat()
-    parser.add_argument("--window-end", default=today, help="last day of the 90-day posting window (default: today); moves nothing else")
+    parser.add_argument(
+        "--window-end", help="last day of the 90-day posting window (default: the owner's today); moves nothing else"
+    )
     parser.add_argument("--json", action="store_true", help="print JSON instead of text")
     args = parser.parse_args(argv)
     # Dates are compared as text in SQLite, so only the canonical form will do:
     # fromisoformat alone also accepts 20260319.
-    if not canonical_day(args.window_end):
-        parser.error("--window-end must be a YYYY-MM-DD date")
+    if args.window_end is not None:
+        if not canonical_day(args.window_end):
+            parser.error("--window-end must be a YYYY-MM-DD date")
+        if dt.date.fromisoformat(args.window_end) < EARLIEST_WINDOW_END:
+            parser.error(f"--window-end must be on or after {EARLIEST_WINDOW_END.isoformat()} so the 90-day window fits")
     try:
         conn = open_copy(args.database)
     except Refused as err:
         print(f"refused: {err}", file=sys.stderr)
         return 2
     try:
-        report = count_book(conn, today, args.window_end)
+        today = owner_today(conn)
+        report = count_book(conn, today, args.window_end or today)
+    except Refused as err:
+        print(f"refused: {err}", file=sys.stderr)
+        return 2
     finally:
         conn.close()
     if args.json:

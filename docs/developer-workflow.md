@@ -566,10 +566,13 @@ It follows symbolic links to the real file and refuses one with a `.lock`,
 `-wal` or `-shm` file beside it or a second hard-linked name, then opens the
 copy read-only and immutable, so nothing is written next to it. The `snapshot`
 part counts objects as the backup holds them (each object's version in force
-on the day you run it, and its open lots). `postings_in_window` counts the 90
-days ending on `--window-end YYYY-MM-DD` (default: today), which moves nothing
-else. `--json` prints JSON. `book_count_script_test.go` runs it on a backup of
-the reference book.
+on the owner's today, and its open lots). `postings_in_window` counts the 90
+days ending on `--window-end YYYY-MM-DD` (default: the owner's today, earliest
+0001-03-31), which moves nothing else. The owner's today comes from the time
+zone saved in the backup (UTC when none is saved), not from the machine that
+runs the script; a zone Python cannot load is refused, so install `tzdata`
+where Python has no time zone database. `--json` prints JSON.
+`book_count_script_test.go` runs it on a backup of the reference book.
 
 ### Online Provider Secret Key
 
