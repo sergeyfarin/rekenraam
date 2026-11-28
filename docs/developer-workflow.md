@@ -552,7 +552,10 @@ review's [D11](reviews/navigation-and-pages-options-2026-10-29.md#d11-check-the-
 brokerage, institutions, categories by depth, tags, payees, instruments held
 and not held, and postings per account over the last 90 days. It prints counts
 only, never names, codes, symbols or amounts, so the output can be pasted into
-the review. It needs Python 3 and nothing else.
+the review. It needs Python 3.9 or later (for `zoneinfo`) and a time zone
+database: the system's, as on Linux and macOS, or the `tzdata` package
+(`pip install tzdata`, needed on Windows). Apart from `tzdata` where it is
+needed, it uses only the standard library.
 
 Run it on a copy of a backup file (Settings › Data and backups shows where
 backups are written), never on the live database:
@@ -570,8 +573,7 @@ on the owner's today, and its open lots). `postings_in_window` counts the 90
 days ending on `--window-end YYYY-MM-DD` (default: the owner's today, earliest
 0001-03-31), which moves nothing else. The owner's today comes from the time
 zone saved in the backup (UTC when none is saved), not from the machine that
-runs the script; a zone Python cannot load is refused, so install `tzdata`
-where Python has no time zone database. `--json` prints JSON.
+runs the script; a zone Python cannot load is refused. `--json` prints JSON.
 `book_count_script_test.go` runs it on a backup of the reference book.
 
 ### Online Provider Secret Key

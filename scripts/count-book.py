@@ -40,7 +40,9 @@ Definitions follow the app:
 - pins are offered from active account-index rows that are not holdings
   (review D7), a brokerage counting the postings of its cash and holdings.
 
-Standard library only, so it runs wherever Python 3 does.
+Needs Python 3.9 or later (zoneinfo) and a time zone database: the system's,
+or the tzdata package (`pip install tzdata`) where there is none, as on
+Windows. Apart from tzdata where needed, standard library only.
 """
 import argparse
 import datetime as dt
